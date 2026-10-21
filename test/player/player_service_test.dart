@@ -407,6 +407,18 @@ void main() {
       expect(backend.calls, ['pause', 'play', 'seek:42000']);
     });
 
+    test('rapid togglePlay taps are serialised: pause then play', () async {
+      await player.playQueue([a]);
+      backend.clearCalls();
+
+      final first = player.togglePlay();
+      final second = player.togglePlay();
+      await Future.wait([first, second]);
+
+      expect(backend.calls, ['pause', 'play']);
+      expect(player.state.playing, isTrue);
+    });
+
     test('play after the queue ended restarts the last track', () async {
       await player.playQueue([a, b], startIndex: 1);
       backend.complete();

@@ -179,25 +179,13 @@ class PlayerService {
     await _startFirstPlayable(_candidates(start, wrap: _wraps));
   });
 
-  Future<void> play() => _locked(() async {
-    final entry = _currentEntry;
-    if (entry == null) return;
-    if (!_loaded) {
-      await _startFirstPlayable([entry]);
-      return;
-    }
-    _wasCompleted = false;
-    await _backend.play();
-    _emit(_state.copyWith(playing: true));
-  });
+  Future<void> play() => _locked(_playNow);
 
-  Future<void> pause() => _locked(() async {
-    if (!_loaded) return;
-    await _backend.pause();
-    _emit(_state.copyWith(playing: false));
-  });
+  Future<void> pause() => _locked(_pauseNow);
 
-  Future<void> togglePlay() => _state.playing ? pause() : play();
+  /// Decides inside the lock, so rapid taps alternate instead of repeating.
+  Future<void> togglePlay() =>
+      _locked(() => _state.playing ? _pauseNow() : _playNow());
 
   /// Manual next. Ignores repeat-one; at the end of the queue it wraps (repeat
   /// all) or stops (otherwise).
@@ -411,6 +399,24 @@ class PlayerService {
       );
     }
     return false;
+  }
+
+  Future<void> _playNow() async {
+    final entry = _currentEntry;
+    if (entry == null) return;
+    if (!_loaded) {
+      await _startFirstPlayable([entry]);
+      return;
+    }
+    _wasCompleted = false;
+    await _backend.play();
+    _emit(_state.copyWith(playing: true));
+  }
+
+  Future<void> _pauseNow() async {
+    if (!_loaded) return;
+    await _backend.pause();
+    _emit(_state.copyWith(playing: false));
   }
 
   Future<bool> _tryStart(_Entry entry) async {
