@@ -119,6 +119,10 @@ void main() {
         overrides: [
           playerServiceProvider.overrideWithValue(player),
           playlistsProvider.overrideWith((ref) => Stream.value(_playlists)),
+          recentPlaylistIdsProvider.overrideWith(
+            (ref) => Stream.value(const []),
+          ),
+          recentTracksProvider.overrideWith((ref) => Stream.value(const [])),
           playlistTracksProvider.overrideWith(
             (ref, id) => Stream.value(const []),
           ),
@@ -278,8 +282,16 @@ void main() {
       expect(tester.getSize(find.byKey(const Key('titleBar'))).height, 36);
       expect(tester.getSize(find.byKey(const Key('sidebar'))).width, 260);
       expect(tester.getSize(find.byKey(const Key('playerBar'))).height, 72);
-      expect(find.text('Gym Mix'), findsOneWidget);
-      expect(find.text('Road trip'), findsOneWidget);
+      // The sidebar lists them (Home shows the playlists too).
+      final sidebar = find.byKey(const Key('sidebar'));
+      expect(
+        find.descendant(of: sidebar, matching: find.text('Gym Mix')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: sidebar, matching: find.text('Road trip')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('chevron collapses the sidebar to a 72 px rail', (
@@ -289,7 +301,13 @@ void main() {
       await tester.tap(find.byKey(const Key('sidebar.toggle')));
       await tester.pumpAndSettle();
       expect(tester.getSize(find.byKey(const Key('sidebar'))).width, 72);
-      expect(find.text('Gym Mix'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('sidebar')),
+          matching: find.text('Gym Mix'),
+        ),
+        findsNothing,
+      );
 
       await tester.tap(find.byKey(const Key('sidebar.toggle')));
       await tester.pumpAndSettle();

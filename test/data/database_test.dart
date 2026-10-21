@@ -46,6 +46,7 @@ void main() {
           'local_files',
           'library_folders',
           'settings',
+          'play_history',
         ]),
       );
     });

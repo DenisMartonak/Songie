@@ -42,6 +42,8 @@ Future<GoRouter> pumpRouter(WidgetTester tester) async {
         ),
         // The playlist page reads the library; an empty one is enough here.
         playlistsProvider.overrideWith((ref) => Stream.value(const [])),
+        recentPlaylistIdsProvider.overrideWith((ref) => Stream.value(const [])),
+        recentTracksProvider.overrideWith((ref) => Stream.value(const [])),
       ],
       child: MaterialApp.router(
         theme: buildThemeData(ThemeSpec.builtInDefault),

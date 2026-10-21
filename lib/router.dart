@@ -43,10 +43,7 @@ GoRouter buildRouter() => GoRouter(
         ),
       ],
     ),
-    GoRoute(
-      path: nowPlayingLocation,
-      builder: (_, _) => const NowPlayingPage(),
-    ),
+    GoRoute(path: nowPlayingLocation, pageBuilder: nowPlayingPage),
   ],
 );
 

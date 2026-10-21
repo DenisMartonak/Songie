@@ -8,6 +8,7 @@ import 'data/sync_stamp.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
 import 'library/library_scanner.dart';
+import 'library/play_history_repository.dart';
 import 'library/scan_queue.dart';
 import 'library/search_repository.dart';
 import 'player/player_service.dart';
@@ -33,6 +34,10 @@ final syncStampProvider = Provider<SyncStamp>(
 
 final libraryRepositoryProvider = Provider<LibraryRepository>(
   (ref) => _unwired('libraryRepositoryProvider'),
+);
+
+final playHistoryRepositoryProvider = Provider<PlayHistoryRepository>(
+  (ref) => _unwired('playHistoryRepositoryProvider'),
 );
 
 final searchRepositoryProvider = Provider<SearchRepository>(
@@ -89,6 +94,33 @@ final playlistTracksProvider = StreamProvider.autoDispose
     .family<List<PlaylistTrack>, String>(
       (ref, playlistId) =>
           ref.watch(libraryRepositoryProvider).watchPlaylistTracks(playlistId),
+    );
+
+/// The current time; tests override it (e.g. for Home's greeting).
+final nowProvider = Provider<DateTime Function()>((_) => DateTime.now);
+
+/// The last 10 distinct tracks played, newest first.
+final recentTracksProvider = StreamProvider<List<Track>>(
+  (ref) => ref.watch(playHistoryRepositoryProvider).recentTracks(10),
+);
+
+/// The playlists most recently played from, newest first (enough to fill
+/// Home's quick tiles).
+final recentPlaylistIdsProvider = StreamProvider<List<String>>(
+  (ref) => ref.watch(playHistoryRepositoryProvider).recentPlaylistIds(6),
+);
+
+/// Live tracks matching a search query.
+final searchTracksProvider = StreamProvider.autoDispose
+    .family<List<Track>, String>(
+      (ref, query) => ref.watch(searchRepositoryProvider).searchTracks(query),
+    );
+
+/// Live playlists matching a search query.
+final searchPlaylistsProvider = StreamProvider.autoDispose
+    .family<List<PlaylistSummary>, String>(
+      (ref, query) =>
+          ref.watch(searchRepositoryProvider).searchPlaylists(query),
     );
 
 /// The text in the search field. The desktop title-bar field and the phone

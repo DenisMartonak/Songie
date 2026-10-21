@@ -10,6 +10,7 @@ import 'package:songies/data/database.dart';
 import 'package:songies/data/sync_stamp.dart';
 import 'package:songies/library/library_repository.dart';
 import 'package:songies/library/library_scanner.dart';
+import 'package:songies/library/play_history_repository.dart';
 import 'package:songies/library/search_repository.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/player_service.dart';
@@ -65,18 +66,27 @@ class FakeScanner implements LibraryScanner {
 /// An in-memory app: database, repositories, a player on a fake backend and a
 /// fake scanner, ready to be wired into a [ProviderScope].
 class UiHarness {
-  UiHarness._(this.db, this.stamp, this.backend)
-    : player = PlayerService(backend, _FileResolver());
+  UiHarness._(this.db, this.stamp, this.backend, this.history)
+    : player = PlayerService(
+        backend,
+        _FileResolver(),
+        onTrackStarted: (track, playlistId) =>
+            history.record(track.id, playlistId),
+      );
 
   final AppDatabase db;
   final SyncStamp stamp;
   late final LibraryRepository repo = LibraryRepository(db, stamp);
   late final SearchRepository search = SearchRepository(db);
+  final PlayHistoryRepository history;
   final FakeAudioBackend backend;
   // Created eagerly: its command queue must start on the real clock, or
   // dispose() would wait on a microtask that the fake test clock never runs.
   final PlayerService player;
   final FakeScanner scanner = FakeScanner();
+
+  /// The app's clock; tests move it to exercise time-dependent text.
+  DateTime Function() now = DateTime.now;
 
   /// Replaced per test to fake the native dialogs.
   Future<String?> Function() folderPicker = () async => null;
@@ -88,7 +98,12 @@ class UiHarness {
 
   static Future<UiHarness> create() async {
     final db = testDb();
-    return UiHarness._(db, await SyncStamp.load(db), FakeAudioBackend());
+    return UiHarness._(
+      db,
+      await SyncStamp.load(db),
+      FakeAudioBackend(),
+      PlayHistoryRepository(db),
+    );
   }
 
   Future<void> dispose() async {
@@ -101,6 +116,8 @@ class UiHarness {
   List<Override> get overrides => [
     libraryRepositoryProvider.overrideWithValue(repo),
     searchRepositoryProvider.overrideWithValue(search),
+    playHistoryRepositoryProvider.overrideWithValue(history),
+    nowProvider.overrideWithValue(() => now()),
     libraryScannerProvider.overrideWithValue(scanner),
     playerServiceProvider.overrideWithValue(player),
     folderPickerProvider.overrideWithValue(() => folderPicker()),
@@ -110,11 +127,15 @@ class UiHarness {
   ];
 
   /// An app showing [routes], starting at [initialLocation].
-  Widget app({required String initialLocation, required List<GoRoute> routes}) {
+  Widget app({
+    required String initialLocation,
+    required List<GoRoute> routes,
+    ThemeSpec theme = ThemeSpec.builtInDefault,
+  }) {
     return ProviderScope(
       overrides: overrides,
       child: MaterialApp.router(
-        theme: buildThemeData(ThemeSpec.builtInDefault),
+        theme: buildThemeData(theme),
         routerConfig: GoRouter(
           initialLocation: initialLocation,
           routes: routes,

@@ -14,6 +14,7 @@ import 'data/sync_stamp.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
 import 'library/library_scanner.dart';
+import 'library/play_history_repository.dart';
 import 'library/search_repository.dart';
 import 'library/tag_reader.dart';
 import 'player/audio_session_binding.dart';
@@ -40,6 +41,7 @@ Future<void> main() async {
 
   final library = LibraryRepository(db, stamp);
   final search = SearchRepository(db);
+  final history = PlayHistoryRepository(db);
   final artCache = ArtCache(paths.art);
   final scanner = LibraryScanner(
     db,
@@ -54,6 +56,7 @@ Future<void> main() async {
     backend,
     LocalTrackResolver(db),
     onMissing: scanner.markMissing,
+    onTrackStarted: (track, playlistId) => history.record(track.id, playlistId),
   );
   bindAudioSession(
     becomingNoisy: backend.becomingNoisy,
@@ -77,6 +80,7 @@ Future<void> main() async {
         syncStampProvider.overrideWithValue(stamp),
         libraryRepositoryProvider.overrideWithValue(library),
         searchRepositoryProvider.overrideWithValue(search),
+        playHistoryRepositoryProvider.overrideWithValue(history),
         libraryScannerProvider.overrideWithValue(scanner),
         artCacheProvider.overrideWithValue(artCache),
         playerServiceProvider.overrideWithValue(player),

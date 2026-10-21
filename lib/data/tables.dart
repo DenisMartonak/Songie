@@ -87,3 +87,15 @@ class Settings extends Table {
   @override
   Set<Column> get primaryKey => {key};
 }
+
+/// Device-local: which track started playing, from which playlist and when.
+/// Not synced. Only the newest [maxRows] rows are kept (see
+/// `PlayHistoryRepository`).
+@DataClassName('PlayHistoryEntry')
+class PlayHistory extends Table {
+  /// Monotonic, so "newest" never depends on the clock's resolution.
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get trackId => text()();
+  TextColumn get playlistId => text().nullable()();
+  DateTimeColumn get playedAt => dateTime()();
+}
