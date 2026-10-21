@@ -9,6 +9,7 @@ import 'library/library_scanner.dart';
 import 'library/search_repository.dart';
 import 'player/player_service.dart';
 import 'theme/theme_spec.dart';
+import 'ui/shell/window_controls.dart';
 
 /// Singletons are created in `main()` and injected with
 /// `ProviderScope.overrides`; reading one without an override is a wiring bug.
@@ -49,13 +50,46 @@ final playerServiceProvider = Provider<PlayerService>(
 
 /// The player's state, starting with its current value (the service's own
 /// stream only emits changes).
-final playerStateProvider = StreamProvider<PlayerState>((ref) async* {
+///
+/// Subscribes first and seeds afterwards, so an update emitted in between is
+/// delivered rather than lost.
+final playerStateProvider = StreamProvider<PlayerState>((ref) {
   final player = ref.watch(playerServiceProvider);
-  yield player.state;
-  yield* player.states;
+  return Stream<PlayerState>.multi((controller) {
+    final sub = player.states.listen(
+      controller.addSync,
+      onError: controller.addErrorSync,
+      onDone: controller.closeSync,
+    );
+    controller.addSync(player.state);
+    controller.onCancel = sub.cancel;
+  });
 });
+
+/// Every live playlist, for the sidebar and the library.
+final playlistsProvider = StreamProvider<List<PlaylistSummary>>(
+  (ref) => ref.watch(libraryRepositoryProvider).watchPlaylists(),
+);
+
+/// The text in the search field. The desktop title-bar field and the phone
+/// search page both write it; the search page reads it.
+class SearchQuery extends Notifier<String> {
+  @override
+  String build() => '';
+
+  void set(String query) => state = query;
+}
+
+final searchQueryProvider = NotifierProvider<SearchQuery, String>(
+  SearchQuery.new,
+);
 
 /// The active theme. Always the built-in Default in this plan.
 final themeSpecProvider = Provider<ThemeSpec>(
   (ref) => ThemeSpec.builtInDefault,
+);
+
+/// The native window's minimize / maximize / close actions (desktop only).
+final windowControlsProvider = Provider<WindowControls>(
+  (ref) => WindowManagerControls(),
 );

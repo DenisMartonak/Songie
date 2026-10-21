@@ -21,6 +21,7 @@ class PlayerState {
     this.duration,
     this.shuffle = false,
     this.repeat = RepeatMode.off,
+    this.volume = 1.0,
     this.sourcePlaylistId,
     this.error,
   });
@@ -33,6 +34,9 @@ class PlayerState {
   final Duration? duration;
   final bool shuffle;
   final RepeatMode repeat;
+
+  /// Output gain 0..1; not persisted.
+  final double volume;
   final String? sourcePlaylistId;
   final String? error;
 
@@ -52,6 +56,7 @@ class PlayerState {
     Object? duration = _keep,
     bool? shuffle,
     RepeatMode? repeat,
+    double? volume,
     Object? sourcePlaylistId = _keep,
     Object? error = _keep,
   }) {
@@ -66,6 +71,7 @@ class PlayerState {
           : duration as Duration?,
       shuffle: shuffle ?? this.shuffle,
       repeat: repeat ?? this.repeat,
+      volume: volume ?? this.volume,
       sourcePlaylistId: identical(sourcePlaylistId, _keep)
           ? this.sourcePlaylistId
           : sourcePlaylistId as String?,
@@ -214,6 +220,14 @@ class PlayerService {
     _wasCompleted = false;
     await _backend.seek(d);
     _emit(_state.copyWith(position: d));
+  });
+
+  /// Sets the output gain, clamped to 0..1 (NaN is ignored).
+  Future<void> setVolume(double volume) => _locked(() async {
+    if (volume.isNaN) return;
+    final v = volume.clamp(0.0, 1.0);
+    await _backend.setVolume(v);
+    _emit(_state.copyWith(volume: v));
   });
 
   Future<void> playAt(int index) => _locked(() async {

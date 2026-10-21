@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:songies/player/audio_backend.dart';
 
 /// In-memory [AudioBackend] for tests. Records every call in [calls] as
-/// `setSource:<path or url>`, `play`, `pause`, `seek:<ms>`, `stop`, `dispose`.
+/// `setSource:<path or url>`, `play`, `pause`, `seek:<ms>`, `stop`, `setVolume:<v>`, `dispose`.
 ///
 /// Like a real engine, it clears `completed` when a new source is loaded or the
 /// position is moved, and reports its own `playing` flag.
@@ -119,6 +119,12 @@ class FakeAudioBackend implements AudioBackend {
         duration: _state.duration,
       ),
     );
+  }
+
+  @override
+  Future<void> setVolume(double volume) async {
+    calls.add('setVolume:$volume');
+    _maybeFail('setVolume');
   }
 
   @override

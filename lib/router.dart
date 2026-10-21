@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'ui/home/home_page.dart';
@@ -7,6 +6,7 @@ import 'ui/library/playlist_page.dart';
 import 'ui/now_playing/now_playing_page.dart';
 import 'ui/search/search_page.dart';
 import 'ui/settings/settings_page.dart';
+import 'ui/shell/adaptive_shell.dart';
 
 const String nowPlayingLocation = '/now-playing';
 
@@ -16,23 +16,7 @@ GoRouter buildRouter() => GoRouter(
   initialLocation: '/home',
   routes: [
     StatefulShellRoute.indexedStack(
-      // Placeholder host; Task 12 replaces it with the AdaptiveShell.
-      builder: (context, state, shell) => Scaffold(
-        body: shell,
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: shell.currentIndex,
-          onTap: (i) =>
-              shell.goBranch(i, initialLocation: i == shell.currentIndex),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-            BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Search'),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.library_music),
-              label: 'Library',
-            ),
-          ],
-        ),
-      ),
+      builder: (context, state, shell) => AdaptiveShell(shell),
       branches: [
         StatefulShellBranch(
           routes: [GoRoute(path: '/home', builder: (_, _) => const HomePage())],

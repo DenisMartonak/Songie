@@ -114,6 +114,9 @@ class JustAudioBackend implements AudioBackend {
   Future<void> stop() => _player.stop();
 
   @override
+  Future<void> setVolume(double volume) => _player.setVolume(volume);
+
+  @override
   Future<void> dispose() async {
     for (final sub in _subs) {
       await sub.cancel();

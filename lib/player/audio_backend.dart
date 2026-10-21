@@ -59,6 +59,9 @@ abstract class AudioBackend {
   Future<void> pause();
   Future<void> seek(Duration d);
   Future<void> stop();
+
+  /// Output gain, 0.0 (silent) to 1.0 (full).
+  Future<void> setVolume(double volume);
   Stream<BackendState> get states;
   Future<void> dispose();
 }

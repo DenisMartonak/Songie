@@ -688,4 +688,45 @@ void main() {
       expect(player.state.repeat, RepeatMode.off);
     });
   });
+
+  group('volume', () {
+    test('defaults to 1.0', () {
+      expect(player.state.volume, 1.0);
+    });
+
+    test('sets the backend volume and the state', () async {
+      await player.setVolume(0.4);
+      expect(backend.calls, ['setVolume:0.4']);
+      expect(player.state.volume, 0.4);
+    });
+
+    test('clamps to 0..1 and ignores NaN', () async {
+      await player.setVolume(1.7);
+      expect(player.state.volume, 1.0);
+      await player.setVolume(-0.5);
+      expect(player.state.volume, 0.0);
+      backend.clearCalls();
+      await player.setVolume(double.nan);
+      expect(backend.calls, isEmpty);
+      expect(player.state.volume, 0.0);
+    });
+
+    test('is serialized with other commands', () async {
+      resolver.gate = Completer<void>();
+      final started = player.playQueue([a]);
+      final vol = player.setVolume(0.5);
+      await settle();
+      expect(backend.calls, isNot(contains('setVolume:0.5')));
+      resolver.gate!.complete();
+      await started;
+      await vol;
+      expect(backend.calls.last, 'setVolume:0.5');
+    });
+
+    test('survives a queue change', () async {
+      await player.setVolume(0.3);
+      await player.playQueue([a, b]);
+      expect(player.state.volume, 0.3);
+    });
+  });
 }
