@@ -64,7 +64,8 @@ void main() {
     router.go('/settings');
     await tester.pumpAndSettle();
     expect(find.byType(SettingsPage), findsOneWidget);
-    expect(find.byType(BottomNav), findsNothing);
+    // Settings lives in the shell, so the phone keeps its bottom nav.
+    expect(find.byType(BottomNav), findsOneWidget);
   });
 
   testWidgets('openNowPlaying pushes once, then does nothing', (tester) async {

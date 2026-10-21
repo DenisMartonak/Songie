@@ -31,6 +31,9 @@ class Sidebar extends ConsumerWidget {
     final path = GoRouterState.of(context).uri.path;
     final playlists = ref.watch(playlistsProvider).value ?? const [];
     final current = shell.currentIndex;
+    // Settings shares Home's branch but is not Home.
+    final onSettings = path == '/settings';
+    final homeSelected = current == 0 && !onSettings;
     final boxColor = Color.alphaBlend(
       Colors.white.withAlpha(10),
       Color.alphaBlend(Colors.black.withAlpha(90), colors.background),
@@ -61,14 +64,14 @@ class Sidebar extends ConsumerWidget {
                       key: const Key('sidebar.home'),
                       label: 'Home',
                       collapsed: collapsed,
-                      selected: current == 0,
+                      selected: homeSelected,
                       icon: SvgPicture.asset(
-                        current == 0
+                        homeSelected
                             ? 'assets/icons/home_filled.svg'
                             : 'assets/icons/home_outline.svg',
                         width: 22,
                         height: 22,
-                        colorFilter: _tint(colors, current == 0),
+                        colorFilter: _tint(colors, homeSelected),
                       ),
                       onTap: () => shell.goBranch(0),
                     ),
@@ -174,7 +177,7 @@ class Sidebar extends ConsumerWidget {
                   key: const Key('sidebar.settings'),
                   label: 'Settings',
                   collapsed: collapsed,
-                  selected: path == '/settings',
+                  selected: onSettings,
                   icon: Icon(
                     Icons.settings_outlined,
                     size: 22,

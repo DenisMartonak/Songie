@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/paths.dart';
@@ -92,4 +94,11 @@ final themeSpecProvider = Provider<ThemeSpec>(
 /// The native window's minimize / maximize / close actions (desktop only).
 final windowControlsProvider = Provider<WindowControls>(
   (ref) => WindowManagerControls(),
+);
+
+/// Whether the window draws its own title bar (Windows and Linux, where
+/// `main()` hides the native one). Wide Android windows have no such bar and no
+/// window_manager plugin.
+final hasCustomTitleBarProvider = Provider<bool>(
+  (ref) => Platform.isWindows || Platform.isLinux,
 );

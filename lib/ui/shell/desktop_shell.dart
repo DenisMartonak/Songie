@@ -101,6 +101,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final player = ref.read(playerServiceProvider);
+    final hasTitleBar = ref.watch(hasCustomTitleBarProvider);
     // Keep the field in step when something else sets the query.
     ref.listen(searchQueryProvider, (_, query) {
       if (_searchController.text != query) _searchController.text = query;
@@ -140,13 +141,14 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
             autofocus: true,
             child: Column(
               children: [
-                TitleBar(
-                  searchController: _searchController,
-                  searchFocus: _searchFocus,
-                  onQueryChanged: _onQueryChanged,
-                  onSubmitted: _onQueryChanged,
-                  onTapOutsideSearch: _rootFocus.requestFocus,
-                ),
+                if (hasTitleBar)
+                  TitleBar(
+                    searchController: _searchController,
+                    searchFocus: _searchFocus,
+                    onQueryChanged: _onQueryChanged,
+                    onSubmitted: _onQueryChanged,
+                    onTapOutsideSearch: _rootFocus.requestFocus,
+                  ),
                 Expanded(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -171,7 +173,19 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                             ),
                             child: ColoredBox(
                               color: colors.background,
-                              child: widget.shell,
+                              child: hasTitleBar
+                                  ? widget.shell
+                                  : Column(
+                                      children: [
+                                        _SearchRow(
+                                          controller: _searchController,
+                                          focus: _searchFocus,
+                                          onChanged: _onQueryChanged,
+                                          onTapOutside: _rootFocus.requestFocus,
+                                        ),
+                                        Expanded(child: widget.shell),
+                                      ],
+                                    ),
                             ),
                           ),
                         ),
@@ -182,6 +196,44 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                 const ExcludeFocus(child: PlayerBar()),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The search field at the top of the main pane, for windows without a custom
+/// title bar.
+class _SearchRow extends StatelessWidget {
+  const _SearchRow({
+    required this.controller,
+    required this.focus,
+    required this.onChanged,
+    required this.onTapOutside,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focus;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onTapOutside;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: ShellSearchField(
+            controller: controller,
+            focusNode: focus,
+            onChanged: onChanged,
+            onSubmitted: onChanged,
+            onTapOutside: onTapOutside,
+            colors: colors,
           ),
         ),
       ),

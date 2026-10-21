@@ -21,6 +21,7 @@ import 'package:songies/ui/search/search_page.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/shell/bottom_nav.dart';
 import 'package:songies/ui/shell/desktop_shell.dart';
+import 'package:songies/ui/shell/title_bar.dart';
 import 'package:songies/ui/shell/mini_player.dart';
 import 'package:songies/ui/shell/window_controls.dart';
 
@@ -48,6 +49,7 @@ class _Resolver implements TrackResolver {
 
 class _FakeWindowControls implements WindowControls {
   final List<String> calls = [];
+  bool maximizedQueried = false;
   final StreamController<bool> _changes = StreamController<bool>.broadcast();
 
   @override
@@ -57,7 +59,11 @@ class _FakeWindowControls implements WindowControls {
   @override
   Future<void> close() async => calls.add('close');
   @override
-  Future<bool> isMaximized() async => false;
+  Future<bool> isMaximized() async {
+    maximizedQueried = true;
+    return false;
+  }
+
   @override
   Stream<bool> get maximizedChanges => _changes.stream;
 }
@@ -93,7 +99,11 @@ void main() {
   late _FakeWindowControls window;
   late GoRouter router;
 
-  Future<void> pumpApp(WidgetTester tester, Size size) async {
+  Future<void> pumpApp(
+    WidgetTester tester,
+    Size size, {
+    bool customTitleBar = true,
+  }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -110,6 +120,7 @@ void main() {
           playerServiceProvider.overrideWithValue(player),
           playlistsProvider.overrideWith((ref) => Stream.value(_playlists)),
           windowControlsProvider.overrideWithValue(window),
+          hasCustomTitleBarProvider.overrideWithValue(customTitleBar),
         ],
         child: MaterialApp.router(
           theme: buildThemeData(ThemeSpec.builtInDefault),
@@ -306,6 +317,10 @@ void main() {
       await tester.tap(find.byKey(const Key('sidebar.settings')));
       await tester.pumpAndSettle();
       expect(find.byType(SettingsPage), findsOneWidget);
+      // Settings renders inside the shell: chrome stays.
+      expect(find.byType(TitleBar), findsOneWidget);
+      expect(find.byKey(const Key('sidebar')), findsOneWidget);
+      expect(find.byKey(const Key('playerBar')), findsOneWidget);
     });
 
     testWidgets(
@@ -325,6 +340,32 @@ void main() {
         expect(router.state.uri.path, '/search');
       },
     );
+
+    testWidgets('without a custom title bar (wide Android) there is no title '
+        'bar, no window plugin use, and search moves to the main pane', (
+      tester,
+    ) async {
+      await pumpApp(tester, desktop, customTitleBar: false);
+      expect(find.byType(TitleBar), findsNothing);
+      expect(find.byKey(const Key('window.close')), findsNothing);
+      expect(window.maximizedQueried, isFalse);
+      // The search field is still there, below the top edge, and works.
+      final field = find.byKey(const Key('shell.search'));
+      expect(field, findsOneWidget);
+      expect(
+        tester.getRect(field).left,
+        greaterThan(tester.getSize(find.byKey(const Key('sidebar'))).width),
+      );
+      await tester.enterText(field, 'abc');
+      await tester.pumpAndSettle();
+      expect(router.state.uri.path, '/search');
+    });
+
+    testWidgets('title bar is present when the flag is on', (tester) async {
+      await pumpApp(tester, desktop);
+      expect(find.byType(TitleBar), findsOneWidget);
+      expect(window.maximizedQueried, isTrue);
+    });
 
     testWidgets('window buttons call the window controls', (tester) async {
       await pumpApp(tester, desktop);

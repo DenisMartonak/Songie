@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../core/log.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import 'window_controls.dart';
@@ -58,7 +59,7 @@ class TitleBar extends ConsumerWidget {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 380),
-                    child: _SearchField(
+                    child: ShellSearchField(
                       controller: searchController,
                       focusNode: searchFocus,
                       onChanged: onQueryChanged,
@@ -82,14 +83,17 @@ class TitleBar extends ConsumerWidget {
   }
 }
 
-class _SearchField extends StatelessWidget {
-  const _SearchField({
+/// The global search field (key `shell.search`), shared by the title bar and
+/// the main-pane search row used when there is no custom title bar.
+class ShellSearchField extends StatelessWidget {
+  const ShellSearchField({
     required this.controller,
     required this.focusNode,
     required this.onChanged,
     required this.onSubmitted,
     required this.onTapOutside,
     required this.colors,
+    super.key,
   });
 
   final TextEditingController controller;
@@ -156,9 +160,14 @@ class _WindowButtonsState extends State<_WindowButtons> {
     _sub = widget.controls.maximizedChanges.listen((m) {
       if (mounted) setState(() => _maximized = m);
     });
-    widget.controls.isMaximized().then((m) {
-      if (mounted) setState(() => _maximized = m);
-    });
+    widget.controls
+        .isMaximized()
+        .then((m) {
+          if (mounted) setState(() => _maximized = m);
+        })
+        .catchError((Object e, StackTrace st) {
+          AppLog.w('Could not read the window state', e, st);
+        });
   }
 
   @override

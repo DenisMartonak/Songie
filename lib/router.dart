@@ -19,7 +19,12 @@ GoRouter buildRouter() => GoRouter(
       builder: (context, state, shell) => AdaptiveShell(shell),
       branches: [
         StatefulShellBranch(
-          routes: [GoRoute(path: '/home', builder: (_, _) => const HomePage())],
+          routes: [
+            GoRoute(path: '/home', builder: (_, _) => const HomePage()),
+            // Inside the shell so desktop keeps its title bar, sidebar and
+            // player bar; Settings is not a tab, so it shares Home's branch.
+            GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
+          ],
         ),
         StatefulShellBranch(
           routes: [
@@ -42,7 +47,6 @@ GoRouter buildRouter() => GoRouter(
       path: nowPlayingLocation,
       builder: (_, _) => const NowPlayingPage(),
     ),
-    GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
   ],
 );
 
