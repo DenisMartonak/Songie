@@ -11,6 +11,10 @@ void main() {
   test('collapses whitespace and trims', () {
     expect(normalizeForSearch('  A\t\nB  '), 'a b');
   });
+  test('drops combining marks from decomposed input', () {
+    expect(normalizeForSearch('Beyoncé'), 'beyonce');
+    expect(normalizeForSearch('Ångström'), 'angstrom');
+  });
   test('expands ligatures and sharp s', () {
     expect(normalizeForSearch('Straße Æon'), 'strasse aeon');
   });

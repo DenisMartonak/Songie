@@ -1,8 +1,11 @@
-/// Folds Latin-1 / Latin Extended-A diacritics, lowercases and collapses
-/// whitespace so search matches `Beyoncé` when the user types `beyonce`.
+/// Folds Latin-1 / Latin Extended-A diacritics, drops combining marks
+/// (U+0300-U+036F, so decomposed `e` + U+0301 folds too), lowercases and
+/// collapses whitespace so search matches `Beyoncé` when the user types
+/// `beyonce`.
 String normalizeForSearch(String s) {
   final folded = StringBuffer();
   for (final rune in s.runes) {
+    if (rune >= 0x0300 && rune <= 0x036F) continue;
     final ch = String.fromCharCode(rune);
     folded.write(_fold[ch] ?? ch);
   }

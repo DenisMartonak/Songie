@@ -50,6 +50,43 @@ class PlaylistTrack {
   final bool fileMissing;
 }
 
+/// Live playlists with their entry count, total duration and cover, ordered
+/// by name (case-insensitive). Shared by the playlist list and playlist search.
+Stream<List<PlaylistSummary>> watchPlaylistSummaries(AppDatabase db) {
+  const liveEntries =
+      'FROM playlist_entries e JOIN tracks t ON t.id = e.track_id '
+      'WHERE e.playlist_id = p.id AND e.deleted = 0 AND t.deleted = 0';
+  final query = db.customSelect(
+    'SELECT p.id, p.name, p.source, p.cover_ref, '
+    '(SELECT COUNT(*) $liveEntries) AS track_count, '
+    '(SELECT COALESCE(SUM(t.duration_ms), 0) $liveEntries) AS duration_ms, '
+    '(SELECT t.artwork_ref $liveEntries '
+    'ORDER BY e.position, e.id LIMIT 1) AS first_artwork '
+    'FROM playlists p WHERE p.deleted = 0',
+    readsFrom: {db.playlists, db.playlistEntries, db.tracks},
+  );
+  return query.watch().map((rows) {
+    final list = [
+      for (final r in rows)
+        PlaylistSummary(
+          id: r.read<String>('id'),
+          name: r.read<String>('name'),
+          source: r.read<String>('source'),
+          trackCount: r.read<int>('track_count'),
+          durationMs: r.read<int>('duration_ms'),
+          coverRef:
+              r.readNullable<String>('cover_ref') ??
+              r.readNullable<String>('first_artwork'),
+        ),
+    ];
+    list.sort((a, b) {
+      final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      return byName != 0 ? byName : a.id.compareTo(b.id);
+    });
+    return list;
+  });
+}
+
 /// The only writer of playlist data. Every write stamps sync metadata
 /// (`clock`, `originDevice`, `localSeq`) with one [SyncStamp.next] per row and
 /// runs in a single transaction.
@@ -59,40 +96,7 @@ class LibraryRepository {
   final AppDatabase _db;
   final SyncStamp _stamp;
 
-  Stream<List<PlaylistSummary>> watchPlaylists() {
-    const liveEntries =
-        'FROM playlist_entries e JOIN tracks t ON t.id = e.track_id '
-        'WHERE e.playlist_id = p.id AND e.deleted = 0 AND t.deleted = 0';
-    final query = _db.customSelect(
-      'SELECT p.id, p.name, p.source, p.cover_ref, '
-      '(SELECT COUNT(*) $liveEntries) AS track_count, '
-      '(SELECT COALESCE(SUM(t.duration_ms), 0) $liveEntries) AS duration_ms, '
-      '(SELECT t.artwork_ref $liveEntries '
-      'ORDER BY e.position, e.id LIMIT 1) AS first_artwork '
-      'FROM playlists p WHERE p.deleted = 0',
-      readsFrom: {_db.playlists, _db.playlistEntries, _db.tracks},
-    );
-    return query.watch().map((rows) {
-      final list = [
-        for (final r in rows)
-          PlaylistSummary(
-            id: r.read<String>('id'),
-            name: r.read<String>('name'),
-            source: r.read<String>('source'),
-            trackCount: r.read<int>('track_count'),
-            durationMs: r.read<int>('duration_ms'),
-            coverRef:
-                r.readNullable<String>('cover_ref') ??
-                r.readNullable<String>('first_artwork'),
-          ),
-      ];
-      list.sort((a, b) {
-        final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
-        return byName != 0 ? byName : a.id.compareTo(b.id);
-      });
-      return list;
-    });
-  }
+  Stream<List<PlaylistSummary>> watchPlaylists() => watchPlaylistSummaries(_db);
 
   Stream<List<PlaylistTrack>> watchPlaylistTracks(String playlistId) {
     final query =
