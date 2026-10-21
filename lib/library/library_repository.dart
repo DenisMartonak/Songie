@@ -1,10 +1,9 @@
 import 'package:drift/drift.dart';
-import 'package:drift/isolate.dart' show DriftRemoteException;
-import 'package:sqlite3/sqlite3.dart' show SqliteException;
 
 import '../core/fractional_index.dart';
 import '../core/result.dart';
 import '../data/database.dart';
+import '../data/db_guard.dart';
 import '../data/sync_stamp.dart';
 
 const _maxNameLength = 100;
@@ -133,7 +132,7 @@ class LibraryRepository {
   Future<Result<String>> createPlaylist(String name) async {
     final clean = _cleanName(name);
     if (clean == null) return _badName<String>();
-    return _guard(() async {
+    return guardDb(_db, () async {
       final stamp = await _stamp.next();
       await _db
           .into(_db.playlists)
@@ -154,7 +153,7 @@ class LibraryRepository {
   Future<Result<void>> renamePlaylist(String id, String name) async {
     final clean = _cleanName(name);
     if (clean == null) return _badName<void>();
-    return _guard(() async {
+    return guardDb(_db, () async {
       if (await _livePlaylist(id) == null) return _notFound('playlist $id');
       final stamp = await _stamp.next();
       await (_db.update(_db.playlists)..where((p) => p.id.equals(id))).write(
@@ -171,7 +170,7 @@ class LibraryRepository {
 
   /// Tombstones the playlist and all its live entries, each with its own stamp.
   Future<Result<void>> deletePlaylist(String id) {
-    return _guard(() async {
+    return guardDb(_db, () async {
       if (await _livePlaylist(id) == null) return _notFound('playlist $id');
       final entryIds =
           await (_db.selectOnly(_db.playlistEntries)
@@ -200,7 +199,7 @@ class LibraryRepository {
 
   /// Appends [trackIds] (duplicates allowed) after the playlist's last entry.
   Future<Result<void>> addTracks(String playlistId, List<String> trackIds) {
-    return _guard(() async {
+    return guardDb(_db, () async {
       if (await _livePlaylist(playlistId) == null) {
         return _notFound('playlist $playlistId');
       }
@@ -262,7 +261,7 @@ class LibraryRepository {
     String? afterEntryId,
     String? beforeEntryId,
   }) {
-    return _guard(() async {
+    return guardDb(_db, () async {
       final entry = await _liveEntry(entryId);
       if (entry == null) return _notFound('entry $entryId');
 
@@ -316,7 +315,7 @@ class LibraryRepository {
   }
 
   Future<Result<void>> removeEntry(String entryId) {
-    return _guard(() async {
+    return guardDb(_db, () async {
       if (await _liveEntry(entryId) == null) return _notFound('entry $entryId');
       await _tombstoneEntry(entryId);
       return const Ok(null);
@@ -330,25 +329,6 @@ class LibraryRepository {
   }
 
   // --- helpers -------------------------------------------------------------
-
-  /// Runs [body] in one transaction, turning database errors into [Err].
-  Future<Result<T>> _guard<T>(Future<Result<T>> Function() body) async {
-    try {
-      return await _db.transaction(body);
-    } on SqliteException catch (e) {
-      return Err(
-        Failure(FailureKind.io, 'Database error: ${e.message}', cause: e),
-      );
-    } on DriftRemoteException catch (e) {
-      // The app database runs in a drift isolate (AppDatabase.open), where
-      // sqlite failures arrive wrapped instead of as a SqliteException.
-      final cause = e.remoteCause;
-      final message = cause is SqliteException ? cause.message : '$cause';
-      return Err(
-        Failure(FailureKind.io, 'Database error: $message', cause: cause),
-      );
-    }
-  }
 
   Future<Playlist?> _livePlaylist(String id) {
     return (_db.select(_db.playlists)
