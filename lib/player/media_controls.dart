@@ -59,7 +59,10 @@ class _AudioServiceBinding implements MediaControlsBinding {
     ArtCache art,
   ) async {
     final handler = await AudioService.init(
-      builder: () => SongiesAudioHandler(player, art),
+      // MPRIS shows the last published position as-is, so Linux must keep
+      // publishing progress; Android's MediaSession projects it itself.
+      builder: () =>
+          SongiesAudioHandler(player, art, publishProgress: Platform.isLinux),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.songies.playback',
         androidNotificationChannelName: 'Playback',

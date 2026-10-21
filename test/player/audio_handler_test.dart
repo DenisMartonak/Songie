@@ -133,6 +133,47 @@ void main() {
       );
     });
 
+    test('progress mode republishes every second of progress', () async {
+      handler.dispose();
+      handler = SongiesAudioHandler(player, art, publishProgress: true);
+      await player.playQueue([a]);
+      await settle();
+      final first = handler.playbackState.value;
+
+      backend.setPosition(const Duration(milliseconds: 800));
+      await settle();
+      expect(identical(handler.playbackState.value, first), isTrue);
+
+      backend.setPosition(const Duration(milliseconds: 1200));
+      await settle();
+      expect(
+        handler.playbackState.value.updatePosition,
+        const Duration(milliseconds: 1200),
+      );
+
+      final second = handler.playbackState.value;
+      backend.setPosition(const Duration(milliseconds: 1600));
+      await settle();
+      expect(identical(handler.playbackState.value, second), isTrue);
+
+      backend.setPosition(const Duration(milliseconds: 2300));
+      await settle();
+      expect(
+        handler.playbackState.value.updatePosition,
+        const Duration(milliseconds: 2300),
+      );
+    });
+
+    test('default mode leaves progress to the system', () async {
+      await player.playQueue([a]);
+      await settle();
+      final first = handler.playbackState.value;
+
+      backend.setPosition(const Duration(milliseconds: 800));
+      await settle();
+      expect(identical(handler.playbackState.value, first), isTrue);
+    });
+
     test('shuffle and repeat toggles show in the controls', () async {
       await player.playQueue([a, b]);
       player.setShuffle(true);

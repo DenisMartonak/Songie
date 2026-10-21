@@ -16,6 +16,7 @@ class SongiesAudioHandler extends BaseAudioHandler with SeekHandler {
     this._player,
     this._art, {
     this.idleStop = const Duration(minutes: 10),
+    this.publishProgress = false,
   }) {
     _sub = _player.states.listen(_onState);
     _onState(_player.state);
@@ -24,11 +25,19 @@ class SongiesAudioHandler extends BaseAudioHandler with SeekHandler {
   /// How long playback may stay paused before the session is released.
   final Duration idleStop;
 
+  /// Also republish [playbackState] each time the position has moved by
+  /// [_seekJump] since the last publish, driven by the position events the
+  /// player already emits (no timer). Needed where the platform plugin does not
+  /// project the position itself: Linux MPRIS reports the last published
+  /// position verbatim. Android's MediaSession projects it, so it stays off.
+  final bool publishProgress;
+
   static const String shuffleAction = 'shuffle';
   static const String repeatAction = 'repeat';
 
   /// A position update this far from where the last one projects to counts as
-  /// a seek and is published; ordinary progress is left to the system clock.
+  /// a seek and is always published. Without [publishProgress], ordinary
+  /// progress is left to the platform (Android projects it from the clock).
   static const Duration _seekJump = Duration(seconds: 1);
 
   final PlayerService _player;
@@ -118,7 +127,10 @@ class SongiesAudioHandler extends BaseAudioHandler with SeekHandler {
     final key = (processing, s.playing, s.index, s.shuffle, s.repeat);
     final previous = playbackState.value;
     final jumped = (s.position - previous.position).abs() > _seekJump;
-    if (key == _lastKey && !jumped) return;
+    final advanced =
+        publishProgress &&
+        (s.position - previous.updatePosition).abs() >= _seekJump;
+    if (key == _lastKey && !jumped && !advanced) return;
     _lastKey = key;
 
     playbackState.add(
