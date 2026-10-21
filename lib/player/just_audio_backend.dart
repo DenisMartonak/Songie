@@ -27,10 +27,16 @@ class JustAudioBackend implements AudioBackend {
         _processing = s.processingState;
         _emit();
       }),
-      _player.positionStream.listen((p) {
-        _position = p;
-        _emit();
-      }),
+      // Fixed 200 ms ticks (default is 16-200 ms) to keep CPU and UI work low.
+      _player
+          .createPositionStream(
+            minPeriod: const Duration(milliseconds: 200),
+            maxPeriod: const Duration(milliseconds: 200),
+          )
+          .listen((p) {
+            _position = p;
+            _emit();
+          }),
       _player.durationStream.listen((d) {
         _duration = d;
         _emit();
@@ -38,7 +44,9 @@ class JustAudioBackend implements AudioBackend {
     ];
   }
 
-  final AudioPlayer _player = AudioPlayer();
+  // handleInterruptions is off: PlayerService owns the playing flag, so pausing
+  // and resuming on session events is done by bindAudioSession, not by the engine.
+  final AudioPlayer _player = AudioPlayer(handleInterruptions: false);
   late final List<StreamSubscription<Object?>> _subs;
   final StreamController<BackendState> _controller =
       StreamController<BackendState>.broadcast();
@@ -67,14 +75,14 @@ class JustAudioBackend implements AudioBackend {
   Stream<BackendState> get states => _controller.stream;
 
   /// Headphones unplugged / Bluetooth lost (Android).
-  Stream<void> get becomingNoisy => Stream.fromFuture(
-    AudioSession.instance,
-  ).asyncExpand((s) => s.becomingNoisyEventStream);
+  Stream<void> get becomingNoisy =>
+      Stream.fromFuture(AudioSession.instance)
+          .asyncExpand((s) => s.becomingNoisyEventStream);
 
   /// Another app took or released audio focus.
-  Stream<AudioInterruptionEvent> get interruptions => Stream.fromFuture(
-    AudioSession.instance,
-  ).asyncExpand((s) => s.interruptionEventStream);
+  Stream<AudioInterruptionEvent> get interruptions =>
+      Stream.fromFuture(AudioSession.instance)
+          .asyncExpand((s) => s.interruptionEventStream);
 
   @override
   Future<void> setSource(AudioSourceRef s) async {
@@ -100,7 +108,8 @@ class JustAudioBackend implements AudioBackend {
   @override
   Future<void> seek(Duration d) => _player.seek(d);
 
-  /// Unloads the source; a later [setSource] reuses the same player.
+  /// Stops playback and releases decoders. just_audio keeps the source state, so
+  /// the player is reusable; PlayerService calls [setSource] again before playing.
   @override
   Future<void> stop() => _player.stop();
 
