@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/result.dart';
@@ -491,6 +493,27 @@ void main() {
   test('database errors become Err(io) instead of throwing', () async {
     await db.customStatement('DROP TABLE playlists');
     final r = await repo.createPlaylist('x');
+    expect(failureOf(r), FailureKind.io);
+  });
+
+  test('database errors from a background isolate become Err(io)', () async {
+    // AppDatabase.open runs sqlite in a drift isolate, where failures reach
+    // the caller wrapped in DriftRemoteException instead of SqliteException.
+    // The shared in-memory db from setUp is open too; silence drift's warning.
+    final previousWarn = driftRuntimeOptions.dontWarnAboutMultipleDatabases;
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    addTearDown(
+      () => driftRuntimeOptions.dontWarnAboutMultipleDatabases = previousWarn,
+    );
+    final dir = await Directory.systemTemp.createTemp('songies_repo_test');
+    final bgDb = AppDatabase.open(File('${dir.path}/test.db'));
+    addTearDown(() async {
+      await bgDb.close();
+      await dir.delete(recursive: true);
+    });
+    final bgRepo = LibraryRepository(bgDb, await SyncStamp.load(bgDb));
+    await bgDb.customStatement('DROP TABLE playlists');
+    final r = await bgRepo.createPlaylist('x');
     expect(failureOf(r), FailureKind.io);
   });
 }
