@@ -2,7 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import 'ui/home/home_page.dart';
 import 'ui/library/library_page.dart';
-import 'ui/library/playlist_page.dart';
+import 'ui/playlist/playlist_page.dart';
 import 'ui/now_playing/now_playing_page.dart';
 import 'ui/search/search_page.dart';
 import 'ui/settings/settings_page.dart';

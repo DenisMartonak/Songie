@@ -16,7 +16,7 @@ import 'package:songies/providers.dart';
 import 'package:songies/router.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
-import 'package:songies/ui/library/playlist_page.dart';
+import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/search/search_page.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/shell/bottom_nav.dart';
@@ -119,6 +119,9 @@ void main() {
         overrides: [
           playerServiceProvider.overrideWithValue(player),
           playlistsProvider.overrideWith((ref) => Stream.value(_playlists)),
+          playlistTracksProvider.overrideWith(
+            (ref, id) => Stream.value(const []),
+          ),
           windowControlsProvider.overrideWithValue(window),
           hasCustomTitleBarProvider.overrideWithValue(customTitleBar),
         ],

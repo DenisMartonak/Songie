@@ -482,6 +482,70 @@ void main() {
     });
   });
 
+  group('replaceEntryTrack', () {
+    test('points the entry at the new track and re-stamps only it', () async {
+      await insertTracks(['t1', 't2', 't3']);
+      final p = await newPlaylist();
+      await repo.addTracks(p, ['t1', 't2']);
+      final before = await tracksOf(p);
+      final untouchedBefore = await entryRow(before[1].entryId);
+      final movedBefore = await entryRow(before[0].entryId);
+
+      expect(
+        await repo.replaceEntryTrack(before[0].entryId, 't3'),
+        isA<Ok<void>>(),
+      );
+
+      expect(await trackIdsOf(p), ['t3', 't2']);
+      final after = await tracksOf(p);
+      expect(after[0].entryId, before[0].entryId);
+      expect(after[0].position, before[0].position);
+      final moved = await entryRow(before[0].entryId);
+      expect(moved.localSeq, greaterThan(movedBefore.localSeq));
+      expect(moved.clock.compareTo(movedBefore.clock), greaterThan(0));
+      expect(moved.originDevice, stamp.deviceId);
+      expect(
+        (await entryRow(before[1].entryId)).localSeq,
+        untouchedBefore.localSeq,
+      );
+    });
+
+    test('unknown or deleted entry is notFound', () async {
+      await insertTracks(['t1', 't2']);
+      final p = await newPlaylist();
+      await repo.addTracks(p, ['t1']);
+      final entry = (await tracksOf(p)).single.entryId;
+      expect(
+        failureOf(await repo.replaceEntryTrack('nope', 't2')),
+        FailureKind.notFound,
+      );
+      await repo.removeEntry(entry);
+      expect(
+        failureOf(await repo.replaceEntryTrack(entry, 't2')),
+        FailureKind.notFound,
+      );
+    });
+
+    test('unknown or deleted track is notFound and changes nothing', () async {
+      await insertTracks(['t1', 't2']);
+      final p = await newPlaylist();
+      await repo.addTracks(p, ['t1']);
+      final entry = (await tracksOf(p)).single.entryId;
+      expect(
+        failureOf(await repo.replaceEntryTrack(entry, 'nope')),
+        FailureKind.notFound,
+      );
+      await (db.update(db.tracks)..where((t) => t.id.equals('t2'))).write(
+        const TracksCompanion(deleted: Value(true)),
+      );
+      expect(
+        failureOf(await repo.replaceEntryTrack(entry, 't2')),
+        FailureKind.notFound,
+      );
+      expect(await trackIdsOf(p), ['t1']);
+    });
+  });
+
   group('trackById', () {
     test('returns the track or null', () async {
       await insertTracks(['t1']);

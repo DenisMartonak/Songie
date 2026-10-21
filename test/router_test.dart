@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +12,7 @@ import 'package:songies/player/track_resolver.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/router.dart';
 import 'package:songies/ui/home/home_page.dart';
-import 'package:songies/ui/library/playlist_page.dart';
+import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
 import 'package:songies/ui/search/search_page.dart';
 import 'package:songies/ui/settings/settings_page.dart';
@@ -38,6 +40,8 @@ Future<GoRouter> pumpRouter(WidgetTester tester) async {
         playerServiceProvider.overrideWithValue(
           PlayerService(FakeAudioBackend(), _NoTracks()),
         ),
+        // The playlist page reads the library; an empty one is enough here.
+        playlistsProvider.overrideWith((ref) => Stream.value(const [])),
       ],
       child: MaterialApp.router(
         theme: buildThemeData(ThemeSpec.builtInDefault),
@@ -59,7 +63,7 @@ void main() {
 
     router.go('/playlist/abc');
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(PlaylistPage, 'Playlist abc'), findsOneWidget);
+    expect(find.byType(PlaylistPage), findsOneWidget);
 
     router.go('/settings');
     await tester.pumpAndSettle();

@@ -8,6 +8,7 @@ import 'data/sync_stamp.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
 import 'library/library_scanner.dart';
+import 'library/scan_queue.dart';
 import 'library/search_repository.dart';
 import 'player/player_service.dart';
 import 'theme/theme_spec.dart';
@@ -42,6 +43,16 @@ final libraryScannerProvider = Provider<LibraryScanner>(
   (ref) => _unwired('libraryScannerProvider'),
 );
 
+/// Serialises folder scans; shared by the Library page and Settings.
+final scanQueueProvider = Provider<ScanQueue>(
+  (ref) => ScanQueue(ref.watch(libraryScannerProvider).scanFolder),
+);
+
+/// Progress of the running scan; null when none is running.
+final scanProgressProvider = StreamProvider<ScanProgress?>(
+  (ref) => ref.watch(scanQueueProvider).current,
+);
+
 final artCacheProvider = Provider<ArtCache>(
   (ref) => _unwired('artCacheProvider'),
 );
@@ -72,6 +83,13 @@ final playerStateProvider = StreamProvider<PlayerState>((ref) {
 final playlistsProvider = StreamProvider<List<PlaylistSummary>>(
   (ref) => ref.watch(libraryRepositoryProvider).watchPlaylists(),
 );
+
+/// One playlist's entries in order.
+final playlistTracksProvider = StreamProvider.autoDispose
+    .family<List<PlaylistTrack>, String>(
+      (ref, playlistId) =>
+          ref.watch(libraryRepositoryProvider).watchPlaylistTracks(playlistId),
+    );
 
 /// The text in the search field. The desktop title-bar field and the phone
 /// search page both write it; the search page reads it.

@@ -326,6 +326,27 @@ class LibraryRepository {
     });
   }
 
+  /// Points [entryId] at a different track (e.g. after the user located a
+  /// moved file). Err(notFound) for an unknown or deleted entry or track.
+  Future<Result<void>> replaceEntryTrack(String entryId, String trackId) {
+    return guardDb(_db, () async {
+      if (await _liveEntry(entryId) == null) return _notFound('entry $entryId');
+      if (await trackById(trackId) == null) return _notFound('track $trackId');
+      final stamp = await _stamp.next();
+      await (_db.update(
+        _db.playlistEntries,
+      )..where((e) => e.id.equals(entryId))).write(
+        PlaylistEntriesCompanion(
+          trackId: Value(trackId),
+          clock: Value(stamp.clock),
+          originDevice: Value(stamp.originDevice),
+          localSeq: Value(stamp.localSeq),
+        ),
+      );
+      return const Ok(null);
+    });
+  }
+
   Future<Track?> trackById(String id) {
     return (_db.select(_db.tracks)
           ..where((t) => t.id.equals(id) & t.deleted.equals(false)))
