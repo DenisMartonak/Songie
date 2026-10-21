@@ -109,7 +109,16 @@ void main() {
       expect(await titles('100%'), ['100% Pure']);
       expect(await titles('%'), ['100% Pure']);
       expect(await titles('some_thing'), ['Some_Thing']);
-      expect(await titles('\\'), isEmpty);
+    });
+
+    test('backslash is matched literally', () async {
+      await addTrack('2', r'AC\DC', 'Band');
+      await addTrack('3', 'ACDC', 'Band');
+      await addTrack('4', '100% Pure', 'Ends With %');
+      await addTrack('5', 'ab', 'Z');
+      expect(await titles(r'ac\dc'), [r'AC\DC']);
+      expect(await titles('\\'), [r'AC\DC']);
+      expect(await titles(r'a\b'), isEmpty);
     });
 
     test('orders by title case-insensitively', () async {

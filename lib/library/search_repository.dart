@@ -76,5 +76,5 @@ class SearchRepository {
 
   /// Escapes `%`, `_` and the escape character for `LIKE ... ESCAPE '\'`.
   static String _escapeLike(String token) =>
-      token.replaceAllMapped(RegExp(r'[\%_]'), (m) => '$_escape${m[0]}');
+      token.replaceAllMapped(RegExp(r'[\\%_]'), (m) => '$_escape${m[0]}');
 }
