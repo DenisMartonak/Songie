@@ -269,7 +269,11 @@ Layout is fixed and Spotify-leaning; themes change only colors, fonts, radius an
 - *Search:* local library search (songs, artists, playlists). Instant filtering, using SQLite FTS5.
 - *Library:* playlists list with filter chips (All · YouTube · Local · Downloaded) and a "+" menu: New playlist, Import from YouTube, Add music folder.
 - *Playlist:* hero (cover, name, source, count, duration, offline size, last YT sync), actions (Play, Shuffle, **Sync with YouTube** for YT playlists, **Download** toggle, ⋯). Track rows with drag-to-reorder, swipe actions, and the "removed on YT" state.
-- *Mini-player:* above the nav, tinted by theme/cover, with a thin progress line. Tap to expand.
+- *Bottom nav:* Spotify-style tabs, each an icon above its label (Home · Search · Library).
+  - Active tab: white label, and either the filled icon (Home = filled house) or a bolder stroke (Search magnifier, Library "books on a shelf").
+  - Inactive tabs: grey outline icons.
+  - The nav sits on a gradient fade into the background.
+- *Mini-player:* floats above the nav with an ~8 px gap. It's tinted by theme/cover, has a thin progress line, and expands on tap.
 - *Now Playing:* blurred cover background, large art, title/artist, downloaded indicator, scrubber, shuffle/prev/play/next/repeat, Queue and Lyrics tabs. Swipe down to collapse.
 - *Sync Devices, Theme Editor, Settings:* reached from the Home header avatar/gear.
 
