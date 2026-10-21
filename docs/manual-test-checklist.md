@@ -22,3 +22,46 @@ Windows
 Linux (Nobara)
 - [ ] The KDE or GNOME media applet shows the art, title and artist, with previous / play-pause / next.
 - [ ] Seeking from the applet works, and media keys work through the desktop.
+- [ ] The applet's progress bar advances while playing.
+
+## Plan 1 end-to-end
+
+Do each item on every platform listed. Build with `flutter run -d windows`, `flutter run --release -d <android>` and `flutter run -d linux` (Nobara).
+
+1. Add a real music folder with "create playlist" (Your Library, then Add, then Add music folder; or Settings, then Add folder): the playlist appears with art.
+  - [ ] Windows
+  - [ ] Android
+  - [ ] Linux
+2. Reorder, remove + undo, and rename in the playlist.
+  - [ ] Windows
+  - [ ] Android
+  - [ ] Linux
+3. Play, then next / previous, shuffle and repeat-one.
+  - [ ] Windows
+  - [ ] Android
+  - [ ] Linux
+4. Search with an accented artist (e.g. type the name without the accent).
+  - [ ] Windows
+  - [ ] Android
+  - [ ] Linux
+5. Delete one MP3 on disk, then rescan (Settings, Rescan): the song shows "File missing", and playback skips it.
+  - [ ] Windows
+  - [ ] Android
+  - [ ] Linux
+6. Tick the Media controls checklist above for the platform.
+  - [ ] Windows
+  - [ ] Android
+  - [ ] Linux
+7. Android only: screen off for 5 minutes while playing: it is still playing.
+  - [ ] Android
+8. Idle Windows RAM (Task Manager, paused, window open): record the number in the commit message. Target 150 MB or less.
+  - [ ] Windows
+
+Also check Settings on each platform:
+- [ ] Windows: sidebar Settings opens it; folder Rescan / Remove (with confirmation) / Add folder work; Storage shows sizes; Export log opens a save dialog.
+- [ ] Android: the Home gear opens it, and Back returns; Export log saves a file you can find in the chosen location.
+- [ ] Linux: sidebar Settings opens it; Export log opens a save dialog.
+
+## Known follow-ups
+
+- Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.

@@ -16,8 +16,15 @@ class NowPlayingQueue extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    final state = ref.watch(playerStateProvider).value;
-    final queue = state?.queue ?? const <Track>[];
+    // Only the queue and the playing index: watching the whole state would
+    // rebuild the list on every position tick, which can rebuild a swiped-away
+    // row before the queue update that removes it arrives.
+    final queue =
+        ref.watch(playerStateProvider.select((s) => s.value?.queue)) ??
+        const <Track>[];
+    final playingIndex = ref.watch(
+      playerStateProvider.select((s) => s.value?.index ?? -1),
+    );
     if (queue.isEmpty) {
       return Center(
         child: Text(
@@ -48,7 +55,7 @@ class NowPlayingQueue extends ConsumerWidget {
         child: _QueueRow(
           index: i,
           track: queue[i],
-          current: i == state!.index,
+          current: i == playingIndex,
           onTap: () => player.playAt(i),
         ),
       ),

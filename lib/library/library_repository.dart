@@ -98,6 +98,16 @@ class LibraryRepository {
 
   Stream<List<PlaylistSummary>> watchPlaylists() => watchPlaylistSummaries(_db);
 
+  /// The scanned music folders, by path.
+  Stream<List<LibraryFolder>> watchFolders() => (_db.select(
+    _db.libraryFolders,
+  )..orderBy([(f) => OrderingTerm.asc(f.path)])).watch();
+
+  /// Forgets a music folder. Its tracks stay in the library. The table is
+  /// device-local (not synced), so the row is deleted outright.
+  Future<void> removeFolder(String path) =>
+      (_db.delete(_db.libraryFolders)..where((f) => f.path.equals(path))).go();
+
   Stream<List<PlaylistTrack>> watchPlaylistTracks(String playlistId) {
     final query =
         _db.select(_db.playlistEntries).join([

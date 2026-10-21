@@ -89,6 +89,16 @@ final playlistsProvider = StreamProvider<List<PlaylistSummary>>(
   (ref) => ref.watch(libraryRepositoryProvider).watchPlaylists(),
 );
 
+/// The scanned music folders, for Settings.
+final libraryFoldersProvider = StreamProvider<List<LibraryFolder>>(
+  (ref) => ref.watch(libraryRepositoryProvider).watchFolders(),
+);
+
+/// This device's id, for Settings' About section.
+final deviceIdProvider = Provider<String>(
+  (ref) => ref.watch(syncStampProvider).deviceId,
+);
+
 /// One playlist's entries in order.
 final playlistTracksProvider = StreamProvider.autoDispose
     .family<List<PlaylistTrack>, String>(

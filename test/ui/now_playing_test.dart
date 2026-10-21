@@ -289,6 +289,45 @@ void main() {
       expect(queueIds(), ['t1', 't3']);
       expect(find.text('Song two'), findsNothing);
     });
+
+    uiTest('a position tick does not rebuild the list', (tester) async {
+      await pumpApp(tester);
+      await playThree(tester);
+      await openQueue(tester);
+
+      final before = tester.widget(find.byType(ReorderableListView));
+      h.backend.setPosition(const Duration(seconds: 5));
+      await flush(tester);
+      expect(h.player.state.position, const Duration(seconds: 5));
+      expect(tester.widget(find.byType(ReorderableListView)), same(before));
+    });
+
+    uiTest('swiping a row away while the position ticks does not throw', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await playThree(tester);
+      await openQueue(tester);
+
+      final swipe = await tester.startGesture(
+        tester.getCenter(find.text('Song two')),
+      );
+      for (var i = 0; i < 6; i++) {
+        await swipe.moveBy(const Offset(-100, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await swipe.up();
+      // The row slides out and is dismissed while the player ticks.
+      for (var i = 1; i <= 6; i++) {
+        h.backend.setPosition(Duration(seconds: i));
+        await flush(tester);
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await settle(tester);
+      expect(tester.takeException(), isNull);
+      expect(queueIds(), ['t1', 't3']);
+      expect(find.text('Song two'), findsNothing);
+    });
   });
 
   group('closing', () {

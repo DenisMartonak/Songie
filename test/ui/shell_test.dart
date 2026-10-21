@@ -19,6 +19,7 @@ import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/search/search_page.dart';
 import 'package:songies/ui/settings/settings_page.dart';
+import 'package:songies/ui/settings/storage_usage.dart';
 import 'package:songies/ui/shell/bottom_nav.dart';
 import 'package:songies/ui/shell/desktop_shell.dart';
 import 'package:songies/ui/shell/title_bar.dart';
@@ -123,6 +124,12 @@ void main() {
             (ref) => Stream.value(const []),
           ),
           recentTracksProvider.overrideWith((ref) => Stream.value(const [])),
+          // Settings reads these.
+          libraryFoldersProvider.overrideWith((ref) => Stream.value(const [])),
+          storageUsageProvider.overrideWith(
+            (ref) async => const StorageUsage(artBytes: 0, databaseBytes: 0),
+          ),
+          deviceIdProvider.overrideWithValue('0123456789abcdef'),
           playlistTracksProvider.overrideWith(
             (ref, id) => Stream.value(const []),
           ),

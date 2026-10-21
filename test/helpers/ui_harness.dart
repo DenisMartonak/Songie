@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:go_router/go_router.dart';
+import 'package:songies/core/paths.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/data/sync_stamp.dart';
@@ -96,6 +97,10 @@ class UiHarness {
   /// Whether Locate picks a folder (Android) instead of a single file.
   bool locateByFolder = false;
 
+  /// The app-data locations Settings measures and reads the log from; tests
+  /// that need them set it to a temporary directory.
+  AppPaths? paths;
+
   static Future<UiHarness> create() async {
     final db = testDb();
     return UiHarness._(
@@ -114,6 +119,9 @@ class UiHarness {
   }
 
   List<Override> get overrides => [
+    databaseProvider.overrideWithValue(db),
+    syncStampProvider.overrideWithValue(stamp),
+    if (paths case final paths?) appPathsProvider.overrideWithValue(paths),
     libraryRepositoryProvider.overrideWithValue(repo),
     searchRepositoryProvider.overrideWithValue(search),
     playHistoryRepositoryProvider.overrideWithValue(history),
@@ -131,9 +139,10 @@ class UiHarness {
     required String initialLocation,
     required List<GoRoute> routes,
     ThemeSpec theme = ThemeSpec.builtInDefault,
+    List<Override> extraOverrides = const [],
   }) {
     return ProviderScope(
-      overrides: overrides,
+      overrides: [...overrides, ...extraOverrides],
       child: MaterialApp.router(
         theme: buildThemeData(theme),
         routerConfig: GoRouter(
