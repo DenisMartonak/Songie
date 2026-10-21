@@ -1,0 +1,679 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:songies/core/result.dart';
+import 'package:songies/data/database.dart';
+import 'package:songies/player/audio_backend.dart';
+import 'package:songies/player/player_service.dart';
+import 'package:songies/player/track_resolver.dart';
+
+import '../helpers/fake_audio_backend.dart';
+
+Track track(String id, {int durationMs = 0}) => Track(
+  id: id,
+  clock: '0000000000001-00000-dev',
+  originDevice: 'dev',
+  deleted: false,
+  localSeq: 1,
+  source: 'local',
+  title: 'Title $id',
+  artist: 'Artist',
+  durationMs: durationMs,
+  unavailable: false,
+  searchText: 'title $id artist',
+);
+
+/// Resolves every track to `/music/<id>.mp3` unless listed in [missing].
+class FakeResolver implements TrackResolver {
+  final Set<String> missing = {};
+  final List<String> resolved = [];
+  Completer<void>? gate;
+
+  @override
+  Future<Result<AudioSourceRef>> resolve(Track t) async {
+    resolved.add(t.id);
+    final g = gate;
+    if (g != null) await g.future;
+    if (missing.contains(t.id)) {
+      return Err(Failure(FailureKind.notFound, 'missing ${t.id}'));
+    }
+    return Ok(FileSource('/music/${t.id}.mp3'));
+  }
+}
+
+Future<void> settle() => pumpEventQueue();
+
+void main() {
+  late FakeAudioBackend backend;
+  late FakeResolver resolver;
+  late List<String> missingReports;
+  late List<String> started;
+  late PlayerService player;
+  final a = track('a');
+  final b = track('b');
+  final c = track('c');
+  final d = track('d');
+  final e = track('e');
+
+  PlayerService build({int seed = 1}) => PlayerService(
+    backend,
+    resolver,
+    random: Random(seed),
+    onMissing: (id) async => missingReports.add(id),
+    onTrackStarted: (t, playlistId) async =>
+        started.add('${t.id}@${playlistId ?? '-'}'),
+  );
+
+  setUp(() {
+    backend = FakeAudioBackend();
+    resolver = FakeResolver();
+    missingReports = [];
+    started = [];
+    player = build();
+  });
+
+  tearDown(() async {
+    await player.dispose();
+  });
+
+  group('playQueue', () {
+    test('loads the start track then plays it', () async {
+      await player.playQueue([a, b, c], startIndex: 1, sourcePlaylistId: 'pl');
+
+      expect(backend.calls, ['setSource:/music/b.mp3', 'play']);
+      expect(player.state.current, b);
+      expect(player.state.index, 1);
+      expect(player.state.playing, isTrue);
+      expect(player.state.sourcePlaylistId, 'pl');
+      expect(started, ['b@pl']);
+    });
+
+    test('empty queue has index -1 and no current track', () async {
+      expect(player.state.index, -1);
+      expect(player.state.current, isNull);
+      await player.playQueue([a]);
+      await player.playQueue([]);
+      expect(player.state.queue, isEmpty);
+      expect(player.state.index, -1);
+      expect(player.state.current, isNull);
+      expect(player.state.playing, isFalse);
+      expect(backend.calls.last, 'stop');
+    });
+
+    test('out of range startIndex is clamped', () async {
+      await player.playQueue([a, b], startIndex: 9);
+      expect(player.state.current, b);
+    });
+
+    test(
+      'takes the duration from the track until the backend reports it',
+      () async {
+        await player.playQueue([track('a', durationMs: 5000)]);
+        expect(player.state.duration, const Duration(seconds: 5));
+        backend.setDuration(const Duration(seconds: 7));
+        expect(player.state.duration, const Duration(seconds: 7));
+      },
+    );
+  });
+
+  group('completion', () {
+    test(
+      'plays the next track, then stops at the end with repeat off',
+      () async {
+        await player.playQueue([a, b, c], startIndex: 1);
+        backend.clearCalls();
+
+        backend.complete();
+        await settle();
+        expect(backend.calls, ['setSource:/music/c.mp3', 'play']);
+        expect(player.state.current, c);
+
+        backend.clearCalls();
+        backend.complete();
+        await settle();
+        expect(backend.calls, ['stop']);
+        expect(player.state.playing, isFalse);
+        expect(player.state.index, 2);
+        expect(player.state.error, isNull);
+      },
+    );
+
+    test('repeat all wraps to the first track', () async {
+      player.cycleRepeat();
+      expect(player.state.repeat, RepeatMode.all);
+      await player.playQueue([a, b, c], startIndex: 2);
+      backend.clearCalls();
+
+      backend.complete();
+      await settle();
+
+      expect(backend.calls, ['setSource:/music/a.mp3', 'play']);
+      expect(player.state.index, 0);
+      expect(player.state.playing, isTrue);
+    });
+
+    test('repeat one replays the same track with seek(0) + play', () async {
+      player.cycleRepeat();
+      player.cycleRepeat();
+      expect(player.state.repeat, RepeatMode.one);
+      await player.playQueue([a, b], startIndex: 1);
+      backend.clearCalls();
+
+      backend.complete();
+      await settle();
+
+      expect(backend.calls, ['seek:0', 'play']);
+      expect(player.state.index, 1);
+      expect(player.state.playing, isTrue);
+      expect(started, ['b@-', 'b@-']);
+
+      backend.clearCalls();
+      backend.complete();
+      await settle();
+      expect(backend.calls, ['seek:0', 'play']);
+    });
+
+    test('a completion that arrives after a manual skip is ignored', () async {
+      await player.playQueue([a, b, c]);
+      resolver.gate = Completer<void>();
+      final skip = player.next();
+      await settle();
+      backend.complete(); // stale: belongs to a
+      await settle();
+      resolver.gate!.complete();
+      resolver.gate = null;
+      await skip;
+      await settle();
+
+      expect(player.state.current, b);
+      expect(backend.sources, ['/music/a.mp3', '/music/b.mp3']);
+    });
+
+    test('the same completed state repeated does not advance twice', () async {
+      await player.playQueue([a, b, c]);
+      backend.complete();
+      backend.emit(
+        const BackendState(completed: true, position: Duration(seconds: 3)),
+      );
+      await settle();
+      expect(player.state.current, b);
+    });
+  });
+
+  group('previous', () {
+    test('after more than 3 s restarts the current track', () async {
+      await player.playQueue([a, b, c], startIndex: 1);
+      backend.setPosition(const Duration(seconds: 5));
+      backend.clearCalls();
+
+      await player.previous();
+
+      expect(backend.calls, ['seek:0']);
+      expect(player.state.index, 1);
+      expect(player.state.position, Duration.zero);
+    });
+
+    test('within 3 s goes to the previous track', () async {
+      await player.playQueue([a, b, c], startIndex: 1);
+      backend.setPosition(const Duration(seconds: 2));
+      backend.clearCalls();
+
+      await player.previous();
+
+      expect(backend.calls, ['setSource:/music/a.mp3', 'play']);
+      expect(player.state.index, 0);
+    });
+
+    test('at index 0 within 3 s restarts the track', () async {
+      await player.playQueue([a, b]);
+      backend.setPosition(const Duration(seconds: 2));
+      backend.clearCalls();
+
+      await player.previous();
+
+      expect(backend.calls, ['seek:0']);
+      expect(player.state.index, 0);
+    });
+
+    test('exactly 3 s counts as early and goes back', () async {
+      await player.playQueue([a, b], startIndex: 1);
+      backend.setPosition(const Duration(seconds: 3));
+      await player.previous();
+      expect(player.state.index, 0);
+    });
+
+    test(
+      'skips missing earlier tracks backwards, keeps playing if none',
+      () async {
+        await player.playQueue([a, b, c], startIndex: 2);
+        resolver.missing.addAll({'a', 'b'});
+        backend.clearCalls();
+
+        await player.previous();
+
+        expect(missingReports, ['b', 'a']);
+        expect(player.state.index, 2);
+        expect(player.state.playing, isTrue);
+        expect(player.state.error, isNull);
+        expect(backend.calls, ['seek:0']);
+      },
+    );
+  });
+
+  group('next', () {
+    test('moves forward and ignores repeat one', () async {
+      player.cycleRepeat();
+      player.cycleRepeat();
+      await player.playQueue([a, b, c]);
+      await player.next();
+      expect(player.state.current, b);
+    });
+
+    test('at the end: repeat off stops, repeat all wraps', () async {
+      await player.playQueue([a, b], startIndex: 1);
+      backend.clearCalls();
+      await player.next();
+      expect(backend.calls, ['stop']);
+      expect(player.state.playing, isFalse);
+      expect(player.state.index, 1);
+
+      player.cycleRepeat();
+      await player.playQueue([a, b], startIndex: 1);
+      await player.next();
+      expect(player.state.index, 0);
+      expect(player.state.playing, isTrue);
+    });
+
+    test('skips a missing track and reports it', () async {
+      await player.playQueue([a, b, c]);
+      resolver.missing.add('b');
+      backend.clearCalls();
+
+      await player.next();
+
+      expect(missingReports, ['b']);
+      expect(player.state.current, c);
+      expect(backend.calls, ['setSource:/music/c.mp3', 'play']);
+      expect(player.state.error, isNull);
+    });
+
+    test('with every track missing it tries each once and gives up', () async {
+      resolver.missing.addAll({'a', 'b', 'c'});
+      await player.playQueue([a, b, c]);
+
+      expect(resolver.resolved, ['a', 'b', 'c']);
+      expect(missingReports, ['a', 'b', 'c']);
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, 'No playable files in queue');
+      expect(backend.sources, isEmpty);
+    });
+
+    test('repeat all with every track missing does not loop forever', () async {
+      player.cycleRepeat();
+      resolver.missing.addAll({'a', 'b', 'c'});
+      await player.playQueue([a, b, c], startIndex: 1);
+
+      expect(resolver.resolved, ['b', 'c', 'a']);
+      expect(player.state.error, 'No playable files in queue');
+    });
+
+    test('repeat all wraps around a missing tail to the first track', () async {
+      player.cycleRepeat();
+      await player.playQueue([a, b, c], startIndex: 1);
+      resolver.missing.add('c');
+      await player.next();
+      expect(player.state.current, a);
+    });
+
+    test('a successful start clears the error; play() retries', () async {
+      resolver.missing.addAll({'a'});
+      await player.playQueue([a]);
+      expect(player.state.error, isNotNull);
+
+      resolver.missing.clear();
+      await player.play();
+      expect(player.state.error, isNull);
+      expect(player.state.playing, isTrue);
+      expect(backend.sources, ['/music/a.mp3']);
+    });
+
+    test(
+      'skips a track whose source fails to load, without reporting it',
+      () async {
+        // The service logs the failure; keep the test output clean.
+        final original = debugPrint;
+        debugPrint = (String? message, {int? wrapWidth}) {};
+        addTearDown(() => debugPrint = original);
+        await player.playQueue([a, b, c]);
+        backend.failNext.add('setSource');
+        await player.next();
+        expect(player.state.current, c);
+        expect(missingReports, isEmpty);
+      },
+    );
+
+    test(
+      'rapid taps are serialised: setSource calls never interleave',
+      () async {
+        await player.playQueue([a, b, c, d, e]);
+        backend.clearCalls();
+        resolver.gate = Completer<void>();
+
+        final futures = [player.next(), player.next(), player.next()];
+        await settle();
+        resolver.gate!.complete();
+        await Future.wait(futures);
+
+        expect(backend.calls, [
+          'setSource:/music/b.mp3',
+          'play',
+          'setSource:/music/c.mp3',
+          'play',
+          'setSource:/music/d.mp3',
+          'play',
+        ]);
+        expect(player.state.current, d);
+      },
+    );
+  });
+
+  group('playAt', () {
+    test('jumps to the index; out of range is ignored', () async {
+      await player.playQueue([a, b, c]);
+      await player.playAt(2);
+      expect(player.state.current, c);
+      backend.clearCalls();
+      await player.playAt(7);
+      await player.playAt(-1);
+      expect(backend.calls, isEmpty);
+      expect(player.state.current, c);
+    });
+  });
+
+  group('transport', () {
+    test('toggle, pause, play and seek drive the backend', () async {
+      await player.playQueue([a]);
+      backend.clearCalls();
+
+      await player.togglePlay();
+      expect(player.state.playing, isFalse);
+      await player.togglePlay();
+      expect(player.state.playing, isTrue);
+      await player.seek(const Duration(seconds: 42));
+      expect(player.state.position, const Duration(seconds: 42));
+
+      expect(backend.calls, ['pause', 'play', 'seek:42000']);
+    });
+
+    test('play after the queue ended restarts the last track', () async {
+      await player.playQueue([a, b], startIndex: 1);
+      backend.complete();
+      await settle();
+      expect(player.state.playing, isFalse);
+
+      backend.clearCalls();
+      await player.play();
+      expect(backend.calls, ['setSource:/music/b.mp3', 'play']);
+      expect(player.state.playing, isTrue);
+    });
+
+    test('commands on an empty queue do nothing', () async {
+      await player.play();
+      await player.pause();
+      await player.next();
+      await player.previous();
+      await player.seek(const Duration(seconds: 1));
+      await player.togglePlay();
+      expect(backend.calls, isEmpty);
+      expect(player.state.playing, isFalse);
+    });
+
+    test(
+      'backend position and buffering updates reach the state stream',
+      () async {
+        await player.playQueue([a]);
+        final seen = <PlayerState>[];
+        final sub = player.states.listen(seen.add);
+
+        backend.setPosition(const Duration(seconds: 1));
+        backend.setBuffering(true);
+        await settle();
+        await sub.cancel();
+
+        expect(seen.length, greaterThanOrEqualTo(2));
+        expect(seen.last.position, const Duration(seconds: 1));
+        expect(seen.last.buffering, isTrue);
+        expect(player.state.position, const Duration(seconds: 1));
+      },
+    );
+  });
+
+  group('shuffle', () {
+    test(
+      'keeps the current track first and restores order when turned off',
+      () async {
+        await player.playQueue([a, b, c, d, e], startIndex: 2);
+
+        player.setShuffle(true);
+        expect(player.state.shuffle, isTrue);
+        expect(player.state.index, 0);
+        expect(player.state.current, c);
+        expect(player.state.queue.toSet(), {a, b, c, d, e});
+        expect(player.state.queue, hasLength(5));
+
+        player.setShuffle(false);
+        expect(player.state.shuffle, isFalse);
+        expect(player.state.queue, [a, b, c, d, e]);
+        expect(player.state.index, 2);
+        expect(player.state.current, c);
+        expect(backend.sources, ['/music/c.mp3']);
+      },
+    );
+
+    test('actually reorders (seeded)', () async {
+      final ids = List.generate(20, (i) => track('t$i'));
+      await player.playQueue(ids);
+      player.setShuffle(true);
+      expect(player.state.queue, isNot(ids));
+      expect(player.state.queue.first, ids.first);
+    });
+
+    test('on a one-track queue is harmless', () async {
+      await player.playQueue([a]);
+      player.setShuffle(true);
+      expect(player.state.queue, [a]);
+      expect(player.state.current, a);
+      player.setShuffle(false);
+      expect(player.state.current, a);
+      expect(backend.sources, ['/music/a.mp3']);
+    });
+
+    test('playQueue while shuffle is on shuffles the new queue', () async {
+      player.setShuffle(true);
+      final ids = List.generate(20, (i) => track('t$i'));
+      await player.playQueue(ids, startIndex: 5);
+      expect(player.state.current, ids[5]);
+      expect(player.state.index, 0);
+      expect(player.state.queue.toSet(), ids.toSet());
+      player.setShuffle(false);
+      expect(player.state.queue, ids);
+      expect(player.state.index, 5);
+    });
+
+    test('removed tracks stay removed when shuffle is turned off', () async {
+      await player.playQueue([a, b, c, d, e], startIndex: 2);
+      player.setShuffle(true);
+      final idx = player.state.queue.indexOf(d);
+      await player.removeAt(idx);
+      player.setShuffle(false);
+      expect(player.state.queue, [a, b, c, e]);
+      expect(player.state.current, c);
+    });
+
+    test('moves made while shuffled are dropped when turned off', () async {
+      await player.playQueue([a, b, c, d, e], startIndex: 2);
+      player.setShuffle(true);
+      player.move(0, 4);
+      player.setShuffle(false);
+      expect(player.state.queue, [a, b, c, d, e]);
+      expect(player.state.current, c);
+      expect(player.state.index, 2);
+    });
+  });
+
+  group('queue editing', () {
+    test('removeAt(current) while playing starts the next track', () async {
+      await player.playQueue([a, b, c]);
+      backend.clearCalls();
+
+      await player.removeAt(0);
+
+      expect(player.state.queue, [b, c]);
+      expect(player.state.current, b);
+      expect(player.state.index, 0);
+      expect(player.state.playing, isTrue);
+      expect(backend.calls, ['setSource:/music/b.mp3', 'play']);
+    });
+
+    test(
+      'removing the last remaining track stops with an empty queue',
+      () async {
+        await player.playQueue([a]);
+        backend.clearCalls();
+
+        await player.removeAt(0);
+
+        expect(player.state.queue, isEmpty);
+        expect(player.state.index, -1);
+        expect(player.state.current, isNull);
+        expect(player.state.playing, isFalse);
+        expect(backend.calls, ['stop']);
+      },
+    );
+
+    test(
+      'removing the current last track follows the end-of-queue rule',
+      () async {
+        await player.playQueue([a, b], startIndex: 1);
+        backend.clearCalls();
+        await player.removeAt(1);
+        expect(backend.calls, ['stop']);
+        expect(player.state.playing, isFalse);
+        expect(player.state.queue, [a]);
+        expect(player.state.index, 0);
+
+        player.cycleRepeat();
+        await player.playQueue([a, b], startIndex: 1);
+        await player.removeAt(1);
+        expect(player.state.current, a);
+        expect(player.state.playing, isTrue);
+      },
+    );
+
+    test('removing the current track while paused does not autoplay', () async {
+      await player.playQueue([a, b]);
+      await player.pause();
+      backend.clearCalls();
+
+      await player.removeAt(0);
+
+      expect(player.state.current, b);
+      expect(player.state.playing, isFalse);
+      expect(backend.calls, ['stop']);
+    });
+
+    test(
+      'removing a track before the current one shifts the index only',
+      () async {
+        await player.playQueue([a, b, c], startIndex: 2);
+        backend.clearCalls();
+
+        await player.removeAt(0);
+
+        expect(player.state.index, 1);
+        expect(player.state.current, c);
+        expect(backend.calls, isEmpty);
+      },
+    );
+
+    test(
+      'removing a track after the current one changes nothing else',
+      () async {
+        await player.playQueue([a, b, c]);
+        backend.clearCalls();
+        await player.removeAt(2);
+        expect(player.state.queue, [a, b]);
+        expect(player.state.index, 0);
+        expect(backend.calls, isEmpty);
+      },
+    );
+
+    test('move(0, 2) keeps the current track and updates the index', () async {
+      await player.playQueue([a, b, c]);
+      backend.clearCalls();
+
+      player.move(0, 2);
+
+      expect(player.state.queue, [b, c, a]);
+      expect(player.state.current, a);
+      expect(player.state.index, 2);
+      expect(backend.calls, isEmpty);
+    });
+
+    test(
+      'moving other tracks around the current one tracks its index',
+      () async {
+        await player.playQueue([a, b, c, d], startIndex: 1);
+        player.move(3, 0);
+        expect(player.state.queue, [d, a, b, c]);
+        expect(player.state.current, b);
+        expect(player.state.index, 2);
+        player.move(0, 3);
+        expect(player.state.queue, [a, b, c, d]);
+        expect(player.state.index, 1);
+      },
+    );
+
+    test('invalid moves and removals are ignored', () async {
+      await player.playQueue([a, b]);
+      player.move(-1, 1);
+      player.move(0, 5);
+      await player.removeAt(5);
+      await player.removeAt(-1);
+      expect(player.state.queue, [a, b]);
+    });
+
+    test('no queue mutation restarts the current track', () async {
+      await player.playQueue([a, b, c, d], startIndex: 1);
+      backend.clearCalls();
+
+      player.move(0, 3);
+      player.setShuffle(true);
+      player.setShuffle(false);
+      player.cycleRepeat();
+      await player.removeAt(player.state.queue.indexOf(d));
+
+      expect(backend.calls, isEmpty);
+      expect(player.state.current, b);
+    });
+
+    test('the queue exposed in state cannot be mutated by callers', () async {
+      await player.playQueue([a, b]);
+      expect(() => player.state.queue.add(c), throwsUnsupportedError);
+    });
+  });
+
+  group('repeat', () {
+    test('cycles off, all, one, off', () {
+      expect(player.state.repeat, RepeatMode.off);
+      player.cycleRepeat();
+      expect(player.state.repeat, RepeatMode.all);
+      player.cycleRepeat();
+      expect(player.state.repeat, RepeatMode.one);
+      player.cycleRepeat();
+      expect(player.state.repeat, RepeatMode.off);
+    });
+  });
+}
