@@ -49,3 +49,8 @@ Future<bool> requestMediaAccess() async {
 
 /// Opens the system settings page of this app (to grant a refused permission).
 Future<void> openMediaSettings() => openAppSettings();
+
+/// Whether "Locate" asks for a folder (and scans it) instead of one file.
+/// On Android the file picker returns a temporary copy of the file, which
+/// would break "referenced in place", so a folder scan is used there.
+final locateByFolderProvider = Provider<bool>((ref) => Platform.isAndroid);

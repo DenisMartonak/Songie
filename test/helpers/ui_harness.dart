@@ -83,6 +83,9 @@ class UiHarness {
   Future<String?> Function() filePicker = () async => null;
   Future<bool> Function() mediaAccess = () async => true;
 
+  /// Whether Locate picks a folder (Android) instead of a single file.
+  bool locateByFolder = false;
+
   static Future<UiHarness> create() async {
     final db = testDb();
     return UiHarness._(db, await SyncStamp.load(db), FakeAudioBackend());
@@ -103,6 +106,7 @@ class UiHarness {
     folderPickerProvider.overrideWithValue(() => folderPicker()),
     audioFilePickerProvider.overrideWithValue(() => filePicker()),
     mediaAccessProvider.overrideWithValue(() => mediaAccess()),
+    locateByFolderProvider.overrideWithValue(locateByFolder),
   ];
 
   /// An app showing [routes], starting at [initialLocation].

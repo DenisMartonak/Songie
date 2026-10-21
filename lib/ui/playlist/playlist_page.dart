@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
 
 import '../../core/log.dart';
 import '../../core/result.dart';
@@ -230,14 +231,34 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     final entries = await repo.watchPlaylistTracks(_id).first;
     final live = {for (final e in entries) e.entryId};
     final restored = entries.last.entryId; // appended last
-    await repo.moveEntry(
+    final after = live.contains(previous) ? previous : null;
+    final before = live.contains(next) ? next : null;
+
+    var moved = await repo.moveEntry(
       restored,
-      afterEntryId: live.contains(previous) ? previous : null,
-      beforeEntryId: live.contains(next) ? next : null,
+      afterEntryId: after,
+      beforeEntryId: before,
     );
+    if (moved is Err<void>) {
+      // The neighbours were reordered meanwhile and no longer bracket a slot:
+      // settle for one side of them.
+      if (after != null) {
+        moved = await repo.moveEntry(restored, afterEntryId: after);
+      } else if (before != null) {
+        moved = await repo.moveEntry(restored, beforeEntryId: before);
+      }
+    }
+    if (moved is Err<void>) _say("Couldn't restore the song's position");
   }
 
-  Future<void> _locate(PlaylistTrack row) async {
+  Future<void> _locate(PlaylistTrack row) {
+    return ref.read(locateByFolderProvider)
+        ? _locateInFolder(row)
+        : _locateFile(row);
+  }
+
+  /// Desktop: pick the moved file itself.
+  Future<void> _locateFile(PlaylistTrack row) async {
     final path = await ref.read(audioFilePickerProvider)();
     if (path == null || !mounted) return;
     final imported = await ref.read(libraryScannerProvider).importFile(path);
@@ -245,13 +266,39 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     switch (imported) {
       case Err(:final failure):
         AppLog.w('Locate failed for $path: ${failure.message}');
-        _say('Couldn\'t use that file');
+        _say("Couldn't use that file");
       case Ok(:final value):
         // The same content is already repaired; a different file is a different
         // track, so the entry has to point at it.
         if (value == row.track.id) return;
         final swapped = await _repo.replaceEntryTrack(row.entryId, value);
-        if (swapped is Err<void>) _say('Couldn\'t use that file');
+        if (swapped is Err<void>) _say("Couldn't use that file");
+    }
+  }
+
+  /// Android: the file picker would hand back a temporary copy, which breaks
+  /// "referenced in place". Scan a folder instead; the scan repairs a missing
+  /// file whose content it finds there.
+  Future<void> _locateInFolder(PlaylistTrack row) async {
+    final snacks = PageSnackBars.of(context);
+    final repo = _repo;
+    final queue = ref.read(scanQueueProvider);
+    final folder = await ref.read(folderPickerProvider)();
+    if (folder == null) return;
+    final name = p.basename(folder).isEmpty ? folder : p.basename(folder);
+    try {
+      await queue.enqueue(folder);
+    } catch (_) {
+      // ScanQueue has already logged the details.
+      snacks.show(content: Text("Couldn't scan $name"));
+      return;
+    }
+    final entries = await repo.watchPlaylistTracks(_id).first;
+    final stillMissing = entries.any(
+      (e) => e.entryId == row.entryId && e.fileMissing,
+    );
+    if (stillMissing) {
+      snacks.show(content: Text("Couldn't find that song in $name"));
     }
   }
 

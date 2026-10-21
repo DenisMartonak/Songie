@@ -1,7 +1,10 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/result.dart';
+import 'package:songies/data/database.dart';
+import 'package:songies/library/library_scanner.dart';
 import 'package:songies/ui/library/add_songs_sheet.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 
@@ -238,6 +241,132 @@ void main() {
     await tester.tap(find.text('Locate'));
     await settle(tester);
     expect(h.scanner.imported, isEmpty);
+  });
+
+  uiTest('undo still places the song after its old neighbour when the '
+      'neighbours were reordered meanwhile', (tester) async {
+    final id = await real(tester, () async {
+      for (final t in ['t1', 't2', 't3', 't4']) {
+        await h.addTrack(t);
+      }
+      return h.addPlaylist('P', ['t1', 't2', 't3', 't4']);
+    });
+    await pumpPage(tester, id);
+
+    await tester.drag(find.text('Song t2'), const Offset(-700, 0));
+    await settle(tester);
+    // t3 jumps in front of t1: the removed song's neighbours are now out of
+    // order (t1 is after t3).
+    await real(tester, () async {
+      final entries = await h.repo.watchPlaylistTracks(id).first;
+      final t1 = entries.firstWhere((e) => e.track.id == 't1').entryId;
+      final t3 = entries.firstWhere((e) => e.track.id == 't3').entryId;
+      await h.repo.moveEntry(t3, beforeEntryId: t1);
+    });
+    await settle(tester);
+    expect(await order(tester, id), ['t3', 't1', 't4']);
+
+    await tester.tap(find.text('Undo'));
+    await settle(tester);
+    expect(await order(tester, id), ['t3', 't1', 't2', 't4']);
+    expect(find.text("Couldn't restore the song's position"), findsNothing);
+  });
+
+  group('Locate on Android (folder based)', () {
+    uiTest('scans the chosen folder and stays quiet when the song is found', (
+      tester,
+    ) async {
+      h.locateByFolder = true;
+      final id = await real(tester, () async {
+        await h.addTrack('t1', missing: true);
+        return h.addPlaylist('P', ['t1']);
+      });
+      h.folderPicker = () async => '/storage/Music';
+      h.scanner.onScan = (folder, name) async* {
+        // The scan finds the file by content and repairs its local file row.
+        await (h.db.update(h.db.localFiles)
+              ..where((f) => f.trackId.equals('t1')))
+            .write(const LocalFilesCompanion(state: Value('done')));
+        yield const ScanProgress(
+          found: 1,
+          processed: 1,
+          added: 0,
+          unchanged: 1,
+          skipped: 0,
+          done: true,
+        );
+      };
+      await pumpPage(tester, id);
+
+      await tester.tap(find.text('Locate'));
+      await settle(tester);
+
+      expect(h.scanner.scannedFolders, ['/storage/Music']);
+      expect(h.scanner.playlistNames, [null]);
+      expect(h.scanner.imported, isEmpty, reason: 'no single-file import');
+      expect(find.text('File missing'), findsNothing);
+      expect(find.textContaining("Couldn't find"), findsNothing);
+      expect(await order(tester, id), ['t1']);
+    });
+
+    uiTest('says so when the song is not in the folder', (tester) async {
+      h.locateByFolder = true;
+      final id = await real(tester, () async {
+        await h.addTrack('t1', missing: true);
+        return h.addPlaylist('P', ['t1']);
+      });
+      h.folderPicker = () async => '/storage/Music';
+      h.scanner.onScan = (folder, name) => Stream.value(
+        const ScanProgress(
+          found: 3,
+          processed: 3,
+          added: 3,
+          unchanged: 0,
+          skipped: 0,
+          done: true,
+        ),
+      );
+      await pumpPage(tester, id);
+
+      await tester.tap(find.text('Locate'));
+      await settle(tester);
+
+      expect(find.text("Couldn't find that song in Music"), findsOneWidget);
+      expect(find.text('File missing'), findsOneWidget);
+    });
+
+    uiTest('does nothing when the folder picker is cancelled', (tester) async {
+      h.locateByFolder = true;
+      final id = await real(tester, () async {
+        await h.addTrack('t1', missing: true);
+        return h.addPlaylist('P', ['t1']);
+      });
+      await pumpPage(tester, id);
+
+      await tester.tap(find.text('Locate'));
+      await settle(tester);
+      expect(h.scanner.scannedFolders, isEmpty);
+      expect(h.scanner.imported, isEmpty);
+    });
+
+    uiTest('reports a scan that fails', (tester) async {
+      h.locateByFolder = true;
+      final id = await real(tester, () async {
+        await h.addTrack('t1', missing: true);
+        return h.addPlaylist('P', ['t1']);
+      });
+      h.folderPicker = () async => '/storage/Music';
+      h.scanner.onScan = (folder, name) => Stream.error(StateError('gone'));
+      await pumpPage(tester, id);
+
+      final originalDebugPrint = debugPrint;
+      debugPrint = (message, {wrapWidth}) {}; // AppLog echoes to the console.
+      await tester.tap(find.text('Locate'));
+      await settle(tester);
+      debugPrint = originalDebugPrint;
+
+      expect(find.text("Couldn't scan Music"), findsOneWidget);
+    });
   });
 
   uiTest('a 300 character title stays on one line without overflow', (
