@@ -284,6 +284,18 @@ Layout is fixed and Spotify-leaning; themes change only colors, fonts, radius an
 - Bottom player bar: now playing (left), transport + scrubber (center), Lyrics, Queue, volume (right).
 - Media keys via SMTC (Windows) / MPRIS (Linux). Keyboard: Space play/pause, Ctrl+←/→ prev/next.
 
+**System media controls ("now playing" notification)**
+- **Android:** a persistent media notification while a song is playing or paused, using `audio_service` with a MediaSession, like Spotify's. It shows:
+  - album art, title and artist, with the system tinting the card from the art on Android 12+
+  - a seek bar you can drag
+  - Previous · Play/Pause · Next, plus Shuffle and Repeat as custom actions (Android 13+ shows these in the expanded controls and Quick Settings media player)
+  - Tap opens Now Playing.
+  - The same controls appear on the **lock screen**, in the Quick Settings media panel, and work from **Bluetooth/wired headset buttons**. Headphones unplugging or Bluetooth disconnecting pauses playback.
+  - After 10 minutes paused, the service stops and the notification becomes dismissible, so nothing stays alive while idle. Pressing play on the headset or lock screen within that window resumes playback.
+- **Windows:** SMTC integration. Art, title, artist and prev/play/next appear in the volume/media flyout and on the lock screen, and the keyboard media keys control the app.
+- **Linux:** MPRIS integration. KDE Plasma's media applet and GNOME's top-bar media controls show art, title and artist with prev/play/next and seeking. Media keys work through the desktop environment.
+- Metadata and artwork update on every track change. Artwork is passed from the local art cache (no network fetch).
+
 **Feedback states:** skeleton loaders on import, inline progress on sync/download, snackbars for errors with a Retry action, empty states with a primary action (e.g. "Import a YouTube playlist").
 
 ## 12. Error handling (cross-cutting)
@@ -314,12 +326,12 @@ Layout is fixed and Spotify-leaning; themes change only colors, fonts, radius an
   - `FakeAudioBackend` for player-queue behavior
 - **Two-instance sync tests:** spin up two `PeerSyncService`s with separate DBs on localhost and run full pair → sync → conflict → resolve → file transfer scenarios.
 - **Widget tests** for key screens (playlist page states, theme editor live preview).
-- **Manual test checklist per release:** real import of a known public playlist, download with Wi-Fi-only on and off, phone↔Windows and phone↔Nobara sync, media keys on each OS, background playback with the screen off.
+- **Manual test checklist per release:** real import of a known public playlist, download with Wi-Fi-only on and off, phone↔Windows and phone↔Nobara sync, media keys on each OS, background playback with the screen off, notification/lock-screen/Bluetooth-headset controls on Android.
 
 ## 14. Milestones
 
 1. **Foundation:** Flutter project for Android/Windows/Linux, drift schema + migrations, Riverpod wiring, Default theme, navigation shell (phone + desktop layouts).
-2. **Local library + playback:** add folders/files, tag reading, local playlists (create, edit, reorder), player with queue/shuffle/repeat, background playback + media notification/keys, search.
+2. **Local library + playback:** add folders/files, tag reading, local playlists (create, edit, reorder), player with queue/shuffle/repeat, background playback, system media controls (Android notification + lock screen + headset buttons, Windows SMTC, Linux MPRIS), search.
 3. **YouTube import + sync + streaming:** yt-dlp adapters (Android platform channel, desktop binary), import flow + Android Share, Sync with YouTube, removed-on-YT UI, stream resolver with prefetch.
 4. **Downloads:** queue, per-device toggle, Wi-Fi only, failure handling, yt-dlp updater, storage readouts.
 5. **Themes + lyrics:** theme engine, editor, font import, follow-cover palette, lyrics service + UI.
