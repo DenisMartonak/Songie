@@ -5,8 +5,8 @@ _Last updated: 2026-10-22_
 ## Where things stand
 
 - **Branch:** `plan-1-foundation`. All Plan 1 work is here, split from `master` at `19a071c`. `master` holds only the spec and plan.
-- **Plan 1** ([plan](superpowers/plans/2026-10-21-songies-plan-1-foundation-local-playback.md), [spec](superpowers/specs/2026-10-21-songies-design.md)): **all 15 tasks are implemented and reviewed task by task.** The final whole-branch review is still to do.
-- **Tests:** 362 passing; `flutter analyze` is clean.
+- **Plan 1** ([plan](superpowers/plans/2026-10-21-songies-plan-1-foundation-local-playback.md), [spec](superpowers/specs/2026-10-21-songies-design.md)): **all 15 tasks are implemented and reviewed task by task, and the final whole-branch review is done.** Its findings were fixed in one batch, and that batch passed a re-check.
+- **Tests:** 382 passing; `flutter analyze` is clean.
 - **Builds:** `flutter build windows --debug`, `flutter build windows --release` and `flutter build apk --debug` all succeed.
 - **Windows release build:** about 128 MB of RAM when idle (target ≤ 150 MB).
 
@@ -35,13 +35,12 @@ _Last updated: 2026-10-22_
 
 ## Next steps (in order)
 
-1. **Final whole-branch review of Plan 1.** This is the step after Task 15 in the subagent-driven workflow. Review `git diff 19a071c..plan-1-foundation` against the spec and the plan, then fix whatever it finds.
-2. **Manual testing on real devices** using [manual-test-checklist.md](manual-test-checklist.md). This covers Android phone, Windows and Nobara. Agents couldn't do it because they had no audio, no phone and no Linux machine.
-3. **Merge** `plan-1-foundation` into `master`.
-4. **Write Plan 2** (YouTube import, Sync with YouTube, streaming), then Plans 3–6 (downloads, themes and lyrics, device sync, packaging). The roadmap is at the top of the Plan 1 file.
+1. **Manual testing on real devices** using [manual-test-checklist.md](manual-test-checklist.md). This covers Android phone, Windows and Nobara. Agents couldn't do it because they had no audio, no phone and no Linux machine.
+2. **Merge** `plan-1-foundation` into `master`.
+3. **Write Plan 2** (YouTube import, Sync with YouTube, streaming), then Plans 3–6 (downloads, themes and lyrics, device sync, packaging). The roadmap is at the top of the Plan 1 file.
 
 ### To resume in a new Claude session
-> Continue Songies Plan 1: run the final whole-branch review of `plan-1-foundation` (base `19a071c`) using superpowers subagent-driven-development, then finishing-a-development-branch. Context is in docs/PROGRESS.md.
+> Songies Plan 1 is complete and reviewed on branch `plan-1-foundation`. Next: merge it if not done yet, then write Plan 2 (YouTube import, sync and streaming) from docs/superpowers/specs/2026-10-21-songies-design.md. Start with a polish task covering the deferred minor items in docs/PROGRESS.md.
 
 ## Environment notes (this PC)
 
@@ -73,6 +72,19 @@ Each entry says what was decided and what it costs if it turns out wrong.
 - **R14: Settings and Now Playing routes.** Settings lives inside the shell, so desktop keeps the sidebar and player bar. Now Playing on desktop opens as an overlay with a close button. Cost if wrong: a small router change.
 - **R15: Locate on Android picks a folder.** It then rescans that folder, because Android's single-file picker copies the file into the app's cache, which breaks "files are referenced in place". Cost if wrong: Locate on Android is slightly less direct.
 
+## Final review fixes (after Task 15)
+
+1. **Android Back:** opening a playlist from Home or Search now pushes it inside that tab (`/home/playlist/:id`, `/search/playlist/:id`, `/library/playlist/:id`), so Back returns to where you came from instead of closing the app. The old `/playlist/:id` link redirects to the Library one.
+2. **Retagged MP3s:** editing a song's tags and rescanning now updates the same track in place, so playlist entries survive.
+3. **Playback errors** now show a snack bar, for example "Couldn't play — the song files are missing".
+4. **Files that come back:** a file that returns plays and clears its "File missing" flag. Tapping a greyed-out song now tries to play it.
+5. **Engine errors:** an engine error mid-song skips to the next track. Consecutive failures are capped so repeat-all can't loop forever.
+6. **Locate on Android** rescans the picked folder without adding it to Settings → Music folders.
+7. **App name** shows as "Songies" on Android, Windows and Linux. Template leftovers (README, pubspec description, `cupertino_icons`, the gradle TODO) are cleaned up.
+8. **Checklist:** three new manual checks for the items above.
+
+- **R16:** the final fix batch covered the 3 important findings plus 5 minor ones (items 4–8). The rest of the minor items are deferred to a polish task at the start of Plan 2. Cost if wrong: that polish waits.
+
 ## Known follow-ups and deferred minor items
 
 **Must address before later plans:**
@@ -81,10 +93,13 @@ Each entry says what was decided and what it costs if it turns out wrong.
 - **Remove** `dependency_overrides: flutter_rust_bridge: 2.11.1` once `smtc_windows` is rebuilt against flutter_rust_bridge ≥ 2.13.
 
 **Minor polish (none of it blocks use):**
+- **Playback error wording:** a single-song queue whose audio engine fails still says "files are missing".
+- **Shortcuts:** desktop shortcuts don't work while the Now Playing overlay is open.
+- **Duplicate code:** the scrubber is implemented twice (player bar and Now Playing).
+- **Duplicate songs:** a song that appears twice in a playlist highlights both rows while playing.
 - **Accessibility:**
   - Keyboard Tab access is excluded from the sidebar and player bar (`ExcludeFocus`).
   - The player-bar play/pause button lacks button semantics.
-- **Navigation:** the Playlist page has no back arrow when opened from Home or Search.
 - **Settings and scanning:**
   - Two progress indicators show when you add a folder from Settings.
   - Repeated Rescan taps queue duplicate scans.
@@ -103,4 +118,3 @@ Each entry says what was decided and what it costs if it turns out wrong.
   - Log format.
   - Database rollback paths.
   - Some UI branches.
-- **Template leftovers:** README, pubspec description, unused `cupertino_icons`, gradle TODO comment.
