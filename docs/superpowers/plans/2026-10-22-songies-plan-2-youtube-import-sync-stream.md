@@ -419,3 +419,42 @@ A probe whose output is **knowledge and fixtures, not app code**. YouTube change
   - new decisions
   - what's next (Plan 3: downloads)
 - [ ] **Step 5: Commit** `docs: Plan 2 verification and checklist`.
+
+---
+
+## Amendments from the Task 2 probe (binding for Tasks 3–9)
+
+Facts recorded in `docs/yt-dlp-notes.md` change these tasks:
+
+- **Task 3 — results and errors:**
+  - **Exit code first.** On failure yt-dlp exits 1 with `null` on stdout. Never JSON-decode stdout when the exit code isn't 0. Classify by the stderr `ERROR:` line.
+  - **Warnings are not failures.** Successful runs (exit 0) always print `WARNING:` lines on stderr: the "no JavaScript runtime" warning, and a "YouTube Music is not directly supported. Redirecting" warning for `music.youtube.com` links. Ignore stderr when the exit code is 0.
+  - **notAPlaylist:** a watch link given to `--flat-playlist -J` exits 0 with single-video JSON that has no `entries`. `fetchPlaylist` classifies exit 0 with missing `entries` as `notAPlaylist`.
+- **Task 3 — stderr mapping:**
+
+  | stderr contains | Kind |
+  |---|---|
+  | `The playlist does not exist`, `This video is unavailable`, `Private video`, `removed for violating` | `notFound` |
+  | `HTTP Error 400` (malformed id) | `notFound` |
+  | `Unable to connect`, or `Unable to download` without `HTTP Error 4xx` | `network` |
+  | non-YouTube `[generic]` 404 | `notFound` |
+  | other `ERROR:` lines | `extractor` |
+
+- **Task 3 — parsing:**
+  - Null `title`, `duration`, `channel` and `uploader` are tolerated.
+  - Unavailable = title `[Private video]` or `[Deleted video]`, or null duration and null channel. Don't use `availability`.
+  - Key entries by `id`. Don't assert `entries.length == playlist_count`.
+  - The " - Topic" artist cleanup is tested with an inline synthetic entry (the fixtures have none).
+  - Stream: read the top-level `url` and `http_headers` from `-J` (the selected format is merged at top level). `album` may be null. `title`, `artist` (channel or uploader) and `duration` also come from top level.
+- **Task 4:**
+  - Decode `Process.run` output explicitly as UTF-8 (`stdoutEncoding: utf8, stderrEncoding: utf8`), because titles contain accented characters.
+  - No short timeout: large playlists take minutes. Allow 10 min for a playlist fetch and 60 s for a stream resolve.
+  - Don't add a JS runtime now. The "may be missing formats" warning is tracked as a follow-up.
+- **Task 5:**
+  - Dependency: `io.github.junkfood02.youtubedl-android:library:0.18.1` from `mavenCentral()`.
+  - Packaging: `useLegacyPackaging = true` / `extractNativeLibs`.
+  - ABI filters: `arm64-v8a`, `armeabi-v7a`, `x86_64`.
+  - Check its minSdk against ours (24) while building. `execute` failures arrive as exceptions carrying stderr, which feed the same classifier.
+- **Task 7:**
+  - Stream URLs last about 6 h but are tied to the device's IP address. Clear the stream cache when the network changes (`NetworkStatus` change stream).
+  - If a cached URL fails to load (the engine errors right after `setSource`), resolve again once before skipping.

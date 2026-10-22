@@ -2,6 +2,18 @@
 
 _Last updated: 2026-10-22_
 
+## Plan 2 (YouTube) — in progress
+
+- **Branch:** `plan-2-youtube`, made from `plan-1-foundation`. Plan: [Plan 2](superpowers/plans/2026-10-22-songies-plan-2-youtube-import-sync-stream.md). Read its "Amendments from the Task 2 probe" section too.
+- **Done:**
+  - **Task 1:** the ripple-bleed fix (every page has its own surface), `formatBytes`, Rescan de-dupe, and the engine-failure message.
+  - **Task 2:** the yt-dlp probe. YouTube audio works with no extra components: yt-dlp 2026.10.21, Opus format 251. Details are in [yt-dlp-notes.md](yt-dlp-notes.md), with sample outputs in `test/fixtures/ytdlp/`.
+- **Next:** Tasks 3–10, starting with Task 3 (the yt-dlp client and link parsing). That's an estimated 3.5–5 hours of agent work.
+- **To resume in a new Claude session:**
+  > Continue Songies Plan 2 subagent-driven on branch `plan-2-youtube`, starting at Task 3. Tasks 1–2 are done. Read docs/PROGRESS.md and the plan's amendments section. Don't push or merge; build Windows and Android when finished.
+
+## Plan 1 status
+
 ## Where things stand
 
 - **Branch:** `plan-1-foundation`. All Plan 1 work is here, split from `master` at `19a071c`. `master` holds only the spec and plan.
@@ -39,7 +51,7 @@ _Last updated: 2026-10-22_
 2. **Merge** `plan-1-foundation` into `master`.
 3. **Write Plan 2** (YouTube import, Sync with YouTube, streaming), then Plans 3–6 (downloads, themes and lyrics, device sync, packaging). The roadmap is at the top of the Plan 1 file.
 
-### To resume in a new Claude session
+### Plan 1 resume note (superseded by Plan 2 above)
 > Songies Plan 1 is complete and reviewed on branch `plan-1-foundation`. Next: merge it if not done yet, then write Plan 2 (YouTube import, sync and streaming) from docs/superpowers/specs/2026-10-21-songies-design.md. Start with a polish task covering the deferred minor items in docs/PROGRESS.md.
 
 ## Environment notes (this PC)
