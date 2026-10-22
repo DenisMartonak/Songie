@@ -287,7 +287,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     if (folder == null) return;
     final name = p.basename(folder).isEmpty ? folder : p.basename(folder);
     try {
-      await queue.enqueue(folder);
+      await queue.enqueue(folder, registerFolder: false);
     } catch (_) {
       // ScanQueue has already logged the details.
       snacks.show(content: Text("Couldn't scan $name"));

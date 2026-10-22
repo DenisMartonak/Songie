@@ -20,6 +20,7 @@ class FakeScan {
   final String folder;
   final String? playlist;
   final controller = StreamController<ScanProgress>();
+  bool registerFolder = true;
 }
 
 void main() {
@@ -32,11 +33,27 @@ void main() {
     debugPrint = (message, {wrapWidth}) {};
     addTearDown(() => debugPrint = originalDebugPrint);
     started = [];
-    queue = ScanQueue((folder, {createPlaylistNamed}) {
-      final scan = FakeScan(folder, createPlaylistNamed);
+    queue = ScanQueue((folder, {createPlaylistNamed, registerFolder = true}) {
+      final scan = FakeScan(folder, createPlaylistNamed)
+        ..registerFolder = registerFolder;
       started.add(scan);
       return scan.controller.stream;
     });
+  });
+
+  test('passes registerFolder through, registering by default', () async {
+    unawaited(queue.enqueue('/a'));
+    unawaited(queue.enqueue('/b', registerFolder: false));
+    await pumpEventQueue();
+    expect(started.single.registerFolder, isTrue);
+    started[0].controller
+      ..add(progress(1, done: true))
+      ..close();
+    await pumpEventQueue();
+    expect(started[1].registerFolder, isFalse);
+    started[1].controller
+      ..add(progress(1, done: true))
+      ..close();
   });
 
   test('runs scans one at a time, in order', () async {
@@ -95,7 +112,8 @@ void main() {
 
   test('a scan function that throws immediately is surfaced too', () async {
     final throwing = ScanQueue(
-      (folder, {createPlaylistNamed}) => throw StateError('boom'),
+      (folder, {createPlaylistNamed, registerFolder = true}) =>
+          throw StateError('boom'),
     );
     await expectLater(throwing.enqueue('/x'), throwsA(isA<StateError>()));
     // And the queue is still usable.

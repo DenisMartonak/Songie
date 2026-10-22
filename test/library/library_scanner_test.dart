@@ -98,9 +98,17 @@ void main() {
     write('sub/c.mp3');
   }
 
-  Future<ScanProgress> scan(Directory dir, {String? playlist}) async {
+  Future<ScanProgress> scan(
+    Directory dir, {
+    String? playlist,
+    bool registerFolder = true,
+  }) async {
     final events = await scanner
-        .scanFolder(dir.path, createPlaylistNamed: playlist)
+        .scanFolder(
+          dir.path,
+          createPlaylistNamed: playlist,
+          registerFolder: registerFolder,
+        )
         .toList();
     return events.last;
   }
@@ -364,6 +372,30 @@ void main() {
       await scan(music);
       expect(hashCalls, 20);
       expect(maxInFlight, 2);
+    });
+
+    test('registerFolder: false repairs files but keeps no folder row and '
+        'marks nothing missing', () async {
+      write('a.mp3');
+      final other = Directory(p.join(tmp.path, 'other'))..createSync();
+      final e = write('e.mp3', dir: other);
+      await scan(other);
+      final trackE = (await allTracks()).single.id;
+      // e.mp3 moves into `music`; a stale 'done' row for a vanished file under
+      // `music` must stay untouched by a non-registering scan.
+      e.renameSync(p.join(music.path, 'e.mp3'));
+      final ghost = write('ghost.mp3');
+      await scan(music);
+      ghost.deleteSync();
+      await db.delete(db.libraryFolders).go();
+
+      final last = await scan(music, registerFolder: false);
+
+      expect(last.done, isTrue);
+      expect(await db.select(db.libraryFolders).get(), isEmpty);
+      expect((await localFileFor(trackE)).path, p.join(music.path, 'e.mp3'));
+      final locals = await db.select(db.localFiles).get();
+      expect(locals.every((l) => l.state == 'done'), isTrue);
     });
 
     test('upserts the folder with lastScanAt', () async {

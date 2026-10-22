@@ -7,6 +7,7 @@ import 'library_scanner.dart';
 typedef ScanFolder = Stream<ScanProgress> Function(
   String folder, {
   String? createPlaylistNamed,
+  bool registerFolder,
 });
 
 /// Runs folder scans one at a time: overlapping scans of the same library are
@@ -37,14 +38,27 @@ class ScanQueue {
   /// Scans [folder] after every earlier request has finished. Completes with
   /// the last progress (null if the scan reported none). A scan that fails is
   /// logged and rethrown to its caller; the queue carries on with the next.
-  Future<ScanProgress?> enqueue(String folder, {String? createPlaylistNamed}) {
+  ///
+  /// With [registerFolder] false the folder is only searched (see
+  /// [LibraryScanner.scanFolder]).
+  Future<ScanProgress?> enqueue(
+    String folder, {
+    String? createPlaylistNamed,
+    bool registerFolder = true,
+  }) {
     _waiting++;
-    final result = _tail.then((_) => _run(folder, createPlaylistNamed));
+    final result = _tail.then(
+      (_) => _run(folder, createPlaylistNamed, registerFolder),
+    );
     _tail = result.then<void>((_) {}, onError: (_) {});
     return result;
   }
 
-  Future<ScanProgress?> _run(String folder, String? playlistName) async {
+  Future<ScanProgress?> _run(
+    String folder,
+    String? playlistName,
+    bool registerFolder,
+  ) async {
     try {
       _publish(
         const ScanProgress(
@@ -60,6 +74,7 @@ class ScanQueue {
       await for (final progress in _scan(
         folder,
         createPlaylistNamed: playlistName,
+        registerFolder: registerFolder,
       )) {
         last = progress;
         _publish(progress);

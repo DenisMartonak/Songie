@@ -304,6 +304,8 @@ void main() {
 
       expect(h.scanner.scannedFolders, ['/storage/Music']);
       expect(h.scanner.playlistNames, [null]);
+      // The folder is only searched: it must not become a library folder.
+      expect(h.scanner.registerFolderFlags, [false]);
       expect(h.scanner.imported, isEmpty, reason: 'no single-file import');
       expect(find.text('File missing'), findsNothing);
       expect(find.textContaining("Couldn't find"), findsNothing);

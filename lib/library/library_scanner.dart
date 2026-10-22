@@ -96,9 +96,14 @@ class LibraryScanner {
   /// once the files in flight are finished; rows already written stay and the
   /// folder's `lastScanAt` is not updated. A folder that does not exist ends
   /// the stream with a [FileSystemException].
+  ///
+  /// With [registerFolder] false the folder is only searched: it is not added
+  /// to the library folders and files missing from it are not flagged. (Used
+  /// to look for one moved song in a folder the user did not add.)
   Stream<ScanProgress> scanFolder(
     String folderPath, {
     String? createPlaylistNamed,
+    bool registerFolder = true,
   }) {
     var cancelled = false;
     Future<void>? running;
@@ -108,6 +113,7 @@ class LibraryScanner {
         running = _scan(
           p.normalize(p.absolute(folderPath)),
           createPlaylistNamed,
+          registerFolder,
           out,
           () => cancelled,
         );
@@ -139,6 +145,7 @@ class LibraryScanner {
   Future<void> _scan(
     String folder,
     String? playlistName,
+    bool registerFolder,
     StreamController<ScanProgress> out,
     bool Function() cancelled,
   ) async {
@@ -184,15 +191,17 @@ class LibraryScanner {
       await Future.wait([for (var i = 0; i < _filesInFlight; i++) worker()]);
       if (cancelled()) return;
 
-      await _markVanished(folder, paths.toSet());
-      await _db
-          .into(_db.libraryFolders)
-          .insertOnConflictUpdate(
-            LibraryFoldersCompanion.insert(
-              path: folder,
-              lastScanAt: Value(DateTime.now()),
-            ),
-          );
+      if (registerFolder) {
+        await _markVanished(folder, paths.toSet());
+        await _db
+            .into(_db.libraryFolders)
+            .insertOnConflictUpdate(
+              LibraryFoldersCompanion.insert(
+                path: folder,
+                lastScanAt: Value(DateTime.now()),
+              ),
+            );
+      }
       if (playlistName != null) {
         await _createPlaylist(playlistName, trackIds.nonNulls.toSet());
       }

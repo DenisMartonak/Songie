@@ -35,6 +35,7 @@ class _FileResolver implements TrackResolver {
 class FakeScanner implements LibraryScanner {
   final List<String> scannedFolders = [];
   final List<String?> playlistNames = [];
+  final List<bool> registerFolderFlags = [];
   final List<String> imported = [];
 
   Stream<ScanProgress> Function(String folder, String? playlistName)? onScan;
@@ -44,8 +45,10 @@ class FakeScanner implements LibraryScanner {
   Stream<ScanProgress> scanFolder(
     String folderPath, {
     String? createPlaylistNamed,
+    bool registerFolder = true,
   }) {
     scannedFolders.add(folderPath);
+    registerFolderFlags.add(registerFolder);
     playlistNames.add(createPlaylistNamed);
     return onScan?.call(folderPath, createPlaylistNamed) ??
         const Stream.empty();
