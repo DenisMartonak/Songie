@@ -322,6 +322,18 @@ class LibraryScanner {
         }
 
         final d = draft ??= await _draft(file);
+
+        // The file at a known path was rewritten (typically retagged) into
+        // content no other track has: the track is the same song, so it is
+        // updated in place and keeps its id for playlist entries.
+        final rewritten = atPath == null
+            ? null
+            : await _liveTrackById(atPath.trackId);
+        if (rewritten != null) {
+          await _updateInPlace(rewritten.id, hash, d, path, bytes, mtimeMs);
+          return Ok(_Handled(rewritten.id, added: false));
+        }
+
         final stamp = await _stamp.next();
         await _db
             .into(_db.tracks)
@@ -365,6 +377,52 @@ class LibraryScanner {
       AppLog.w('Unexpected error handling $path', e, s);
       return Err(Failure(FailureKind.unknown, 'Failed on $path', cause: e));
     }
+  }
+
+  Future<Track?> _liveTrackById(String id) {
+    return (_db.select(_db.tracks)
+          ..where((t) => t.id.equals(id) & t.deleted.equals(false)))
+        .getSingleOrNull();
+  }
+
+  /// New content and tags for [trackId], with a fresh stamp, and its local
+  /// file row brought up to date.
+  Future<void> _updateInPlace(
+    String trackId,
+    String hash,
+    _Draft d,
+    String path,
+    int bytes,
+    int mtimeMs,
+  ) async {
+    final stamp = await _stamp.next();
+    await (_db.update(_db.tracks)..where((t) => t.id.equals(trackId))).write(
+      TracksCompanion(
+        title: Value(d.title),
+        artist: Value(d.artist),
+        album: Value(d.album),
+        durationMs: Value(d.durationMs),
+        artworkRef: Value(d.artworkRef),
+        fileHash: Value(hash),
+        searchText: Value(
+          normalizeForSearch('${d.title} ${d.artist} ${d.album ?? ''}'),
+        ),
+        clock: Value(stamp.clock),
+        originDevice: Value(stamp.originDevice),
+        localSeq: Value(stamp.localSeq),
+      ),
+    );
+    await _db
+        .into(_db.localFiles)
+        .insertOnConflictUpdate(
+          LocalFilesCompanion.insert(
+            trackId: trackId,
+            path: path,
+            state: 'done',
+            bytes: bytes,
+            mtimeMs: mtimeMs,
+          ),
+        );
   }
 
   Future<Track?> _liveTrackByHash(String hash) {

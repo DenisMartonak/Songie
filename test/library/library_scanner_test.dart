@@ -228,6 +228,61 @@ void main() {
       expect(local.state, 'done');
     });
 
+    test('same path, new content keeps the track id, updates tags and hash, '
+        'playlist entry not missing', () async {
+      final f = write('a.mp3', content: 'old audio');
+      tags.tags['a.mp3'] = const TrackTags(title: 'Old', artist: 'Band');
+      await scan(music);
+      final before = (await allTracks()).single;
+      final playlistId =
+          ((await repo.createPlaylist('Mix')) as Ok<String>).value;
+      await repo.addTracks(playlistId, [before.id]);
+
+      // A tagger rewrites the file: new bytes, new tags.
+      f.writeAsBytesSync(utf8.encode('old audio with retagged header'));
+      tags.tags['a.mp3'] = const TrackTags(
+        title: 'New Title',
+        artist: 'Beyoncé',
+        album: 'Album',
+        duration: Duration(seconds: 90),
+      );
+      final last = await scan(music);
+
+      expect(last.added, 0);
+      expect(last.unchanged, 1);
+      final after = (await allTracks()).single;
+      expect(after.id, before.id);
+      expect(after.fileHash, isNot(before.fileHash));
+      expect(after.title, 'New Title');
+      expect(after.artist, 'Beyoncé');
+      expect(after.album, 'Album');
+      expect(after.durationMs, 90000);
+      expect(after.searchText, contains('beyonce'));
+      expect(after.clock.compareTo(before.clock), greaterThan(0));
+      expect(after.localSeq, greaterThan(before.localSeq));
+      final local = await localFileFor(before.id);
+      expect(local.state, 'done');
+      expect(local.bytes, f.lengthSync());
+      expect(await db.select(db.localFiles).get(), hasLength(1));
+      final entries = await repo.watchPlaylistTracks(playlistId).first;
+      expect(entries.single.track.id, before.id);
+      expect(entries.single.fileMissing, isFalse);
+    });
+
+    test('same path, content that is another track keeps deduping', () async {
+      final a = write('a.mp3', content: 'first');
+      write('b.mp3', content: 'second');
+      await scan(music);
+      final ids = {for (final t in await allTracks()) t.title: t.id};
+      // a.mp3 now holds exactly what b.mp3 holds.
+      a.writeAsBytesSync(utf8.encode('second'));
+      final last = await scan(music);
+      expect(last.added, 0);
+      expect(await allTracks(), hasLength(2));
+      expect((await localFileFor(ids['a']!)).state, 'missing');
+      expect((await localFileFor(ids['b']!)).state, 'done');
+    });
+
     test('files that disappear are marked missing, and come back', () async {
       writeBasicFolder();
       await scan(music);
