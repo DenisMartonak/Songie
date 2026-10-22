@@ -379,6 +379,91 @@ void main() {
     );
   });
 
+  group('engine errors mid-track', () {
+    setUp(() {
+      // The service logs the failure; keep the test output clean.
+      final original = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) {};
+      addTearDown(() => debugPrint = original);
+    });
+
+    test('skip to the next playable track', () async {
+      await player.playQueue([a, b, c]);
+      resolver.missing.add('b');
+      backend.clearCalls();
+
+      backend.emitError();
+      await settle();
+
+      expect(player.state.current, c);
+      expect(player.state.playing, isTrue);
+      expect(backend.calls, ['setSource:/music/c.mp3', 'play']);
+      expect(missingReports, ['b']);
+    });
+
+    test('on the last track the queue ends like a normal end', () async {
+      await player.playQueue([a, b], startIndex: 1);
+
+      backend.emitError();
+      await settle();
+
+      expect(player.state.playing, isFalse);
+      expect(player.state.index, 1);
+      expect(player.state.error, PlayerService.playbackFailedError);
+    });
+
+    test('repeat all wraps to the first track', () async {
+      player.cycleRepeat();
+      await player.playQueue([a, b], startIndex: 1);
+
+      backend.emitError();
+      await settle();
+
+      expect(player.state.current, a);
+      expect(player.state.playing, isTrue);
+    });
+
+    test('a track that keeps failing does not loop forever', () async {
+      player.cycleRepeat();
+      await player.playQueue([a, b]);
+      // Every track fails right after it starts.
+      backend.onSetSource = (_) => scheduleMicrotask(backend.emitError);
+
+      backend.emitError();
+      await settle();
+      await settle();
+
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, PlayerService.noPlayableFilesError);
+      expect(backend.sources.length, lessThanOrEqualTo(3));
+    });
+
+    test('an error for a track the user already left is ignored', () async {
+      await player.playQueue([a, b, c]);
+      resolver.gate = Completer<void>();
+      final skip = player.next(); // waits on the gate
+      backend.emitError(); // reported for a, then the skip lands on b
+      await settle();
+      resolver.gate!.complete();
+      await skip;
+      await settle();
+
+      expect(player.state.current, b);
+    });
+
+    test('an error while stopped does nothing', () async {
+      await player.playQueue([a, b]);
+      await player.pause();
+      await player.playQueue([]);
+      backend.clearCalls();
+
+      backend.emitError();
+      await settle();
+
+      expect(backend.calls, isEmpty);
+    });
+  });
+
   group('playAt', () {
     test('jumps to the index; out of range is ignored', () async {
       await player.playQueue([a, b, c]);

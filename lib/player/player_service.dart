@@ -103,12 +103,14 @@ class PlayerService {
     Random? random,
   }) : _random = random ?? Random() {
     _sub = _backend.states.listen(_onBackendState);
+    _errorSub = _backend.errors.listen(_onBackendError);
   }
 
   /// Past this much progress, "previous" restarts the track instead.
   static const Duration restartThreshold = Duration(seconds: 3);
 
   static const String noPlayableFilesError = 'No playable files in queue';
+  static const String playbackFailedError = 'Playback failed';
 
   final AudioBackend _backend;
   final TrackResolver _resolver;
@@ -119,6 +121,7 @@ class PlayerService {
   final StreamController<PlayerState> _controller =
       StreamController<PlayerState>.broadcast();
   late final StreamSubscription<BackendState> _sub;
+  late final StreamSubscription<Object> _errorSub;
 
   PlayerState _state = const PlayerState();
 
@@ -134,6 +137,11 @@ class PlayerService {
   int _generation = 0;
   bool _wasCompleted = false;
   bool _disposed = false;
+
+  /// Tracks in a row the engine failed on mid-playback, to stop skipping when
+  /// the whole queue is unplayable. Reset when something plays to its end or
+  /// the user picks what to play.
+  int _engineFailures = 0;
   Future<void> _tail = Future<void>.value();
 
   Stream<PlayerState> get states => _controller.stream;
@@ -146,6 +154,7 @@ class PlayerService {
     int startIndex = 0,
     String? sourcePlaylistId,
   }) => _locked(() async {
+    _engineFailures = 0;
     final entries = [for (final t in tracks) _Entry(t)];
     _original
       ..clear()
@@ -195,9 +204,13 @@ class PlayerService {
 
   /// Manual next. Ignores repeat-one; at the end of the queue it wraps (repeat
   /// all) or stops (otherwise).
-  Future<void> next() => _locked(_advance);
+  Future<void> next() => _locked(() {
+    _engineFailures = 0;
+    return _advance();
+  });
 
   Future<void> previous() => _locked(() async {
+    _engineFailures = 0;
     final entry = _currentEntry;
     if (entry == null) return;
     final index = _state.index;
@@ -231,6 +244,7 @@ class PlayerService {
   });
 
   Future<void> playAt(int index) => _locked(() async {
+    _engineFailures = 0;
     if (index < 0 || index >= _queue.length) return;
     await _startFirstPlayable(_candidates(index, wrap: _wraps));
   });
@@ -338,6 +352,7 @@ class PlayerService {
     _disposed = true;
     await _tail;
     await _sub.cancel();
+    await _errorSub.cancel();
     await _controller.close();
     await _backend.dispose();
   }
@@ -577,9 +592,35 @@ class PlayerService {
     return t == null ? null : _durationOf(t);
   }
 
+  /// The engine failed while playing the current track: log it, then move on
+  /// as if the track had ended (next playable track, wrap, or stop).
+  void _onBackendError(Object error) {
+    if (_disposed) return;
+    final entry = _currentEntry;
+    if (entry == null) return;
+    _locked(() async {
+      // Stopped, or the user already moved on since this was reported.
+      if (!_loaded || !identical(_currentEntry, entry)) return;
+      AppLog.w('Playback of ${entry.track.id} failed: $error');
+      if (++_engineFailures >= _queue.length) {
+        await _stopBackend();
+        _markStopped();
+        _emit(_state.copyWith(error: noPlayableFilesError));
+        return;
+      }
+      await _advance();
+      if (!_state.playing && _state.error == null) {
+        _emit(_state.copyWith(error: playbackFailedError));
+      }
+    }).catchError((Object e, StackTrace st) {
+      AppLog.e('Handling a playback error failed', e, st);
+    });
+  }
+
   Future<void> _handleCompleted(int generation) async {
     // The user (or a queue edit) already moved on since this was reported.
     if (generation != _generation || !_loaded) return;
+    _engineFailures = 0;
     final track = _state.current;
     if (_state.repeat == RepeatMode.one && track != null) {
       _wasCompleted = false;

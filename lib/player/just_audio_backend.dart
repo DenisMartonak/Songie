@@ -41,6 +41,11 @@ class JustAudioBackend implements AudioBackend {
         _duration = d;
         _emit();
       }),
+      // Playback errors (decoder failure, file removed) arrive here after
+      // setSource/play have already returned.
+      _player.errorStream.listen((e) {
+        if (!_errors.isClosed) _errors.add(e);
+      }),
     ];
   }
 
@@ -50,6 +55,7 @@ class JustAudioBackend implements AudioBackend {
   late final List<StreamSubscription<Object?>> _subs;
   final StreamController<BackendState> _controller =
       StreamController<BackendState>.broadcast();
+  final StreamController<Object> _errors = StreamController<Object>.broadcast();
 
   bool _playing = false;
   ProcessingState _processing = ProcessingState.idle;
@@ -73,6 +79,9 @@ class JustAudioBackend implements AudioBackend {
 
   @override
   Stream<BackendState> get states => _controller.stream;
+
+  @override
+  Stream<Object> get errors => _errors.stream;
 
   /// Headphones unplugged / Bluetooth lost (Android).
   Stream<void> get becomingNoisy =>
@@ -122,6 +131,7 @@ class JustAudioBackend implements AudioBackend {
       await sub.cancel();
     }
     await _controller.close();
+    await _errors.close();
     await _player.dispose();
   }
 }

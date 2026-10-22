@@ -63,5 +63,9 @@ abstract class AudioBackend {
   /// Output gain, 0.0 (silent) to 1.0 (full).
   Future<void> setVolume(double volume);
   Stream<BackendState> get states;
+
+  /// Failures of the engine while it plays a loaded source (a decoder error, a
+  /// file that vanished). Errors of `setSource` / `play` are thrown by those.
+  Stream<Object> get errors;
   Future<void> dispose();
 }

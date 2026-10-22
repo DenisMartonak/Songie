@@ -18,6 +18,9 @@ class FakeAudioBackend implements AudioBackend {
 
   final StreamController<BackendState> _controller =
       StreamController<BackendState>.broadcast(sync: true);
+  final StreamController<Object> _errors = StreamController<Object>.broadcast(
+    sync: true,
+  );
   BackendState _state = const BackendState();
 
   /// Latest state this fake has reported.
@@ -34,6 +37,9 @@ class FakeAudioBackend implements AudioBackend {
     _state = s;
     _controller.add(s);
   }
+
+  /// The engine failed while playing the loaded source.
+  void emitError([Object error = 'fake playback error']) => _errors.add(error);
 
   /// The loaded source played to its end.
   void complete() => emit(
@@ -131,8 +137,12 @@ class FakeAudioBackend implements AudioBackend {
   Stream<BackendState> get states => _controller.stream;
 
   @override
+  Stream<Object> get errors => _errors.stream;
+
+  @override
   Future<void> dispose() async {
     calls.add('dispose');
     await _controller.close();
+    await _errors.close();
   }
 }
