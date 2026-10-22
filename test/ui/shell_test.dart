@@ -50,6 +50,12 @@ class _Resolver implements TrackResolver {
       Ok(FileSource('/music/${t.id}.mp3'));
 }
 
+class _MissingResolver implements TrackResolver {
+  @override
+  Future<Result<AudioSourceRef>> resolve(Track t) async =>
+      Err(Failure(FailureKind.notFound, 'gone'));
+}
+
 class _FakeWindowControls implements WindowControls {
   final List<String> calls = [];
   bool maximizedQueried = false;
@@ -106,6 +112,7 @@ void main() {
     WidgetTester tester,
     Size size, {
     bool customTitleBar = true,
+    TrackResolver? resolver,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -114,7 +121,7 @@ void main() {
     // test's fake-async zone to be driven by pump(). It holds only fakes, so
     // there is nothing to dispose.
     backend = FakeAudioBackend();
-    player = PlayerService(backend, _Resolver());
+    player = PlayerService(backend, resolver ?? _Resolver());
     window = _FakeWindowControls();
     router = buildRouter();
     await tester.pumpWidget(
@@ -591,6 +598,49 @@ void main() {
         find.byKey(const Key('shell.search')),
       );
       expect(field.focusNode?.hasFocus, isTrue);
+    });
+  });
+
+  group('playback errors', () {
+    const message = "Couldn't play — the song files are missing";
+
+    for (final (name, size) in [
+      ('phone', Size(400, 800)),
+      ('desktop', Size(1280, 800)),
+    ]) {
+      testWidgets('$name: all files missing shows one snack bar', (
+        tester,
+      ) async {
+        await pumpApp(tester, size, resolver: _MissingResolver());
+        unawaited(player.playQueue([track('a'), track('b')]));
+        await tester.pumpAndSettle();
+        expect(find.text(message), findsOneWidget);
+
+        // Later state ticks with the same error do not repeat it.
+        backend.setPosition(const Duration(seconds: 1));
+        player.setShuffle(true);
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+        expect(find.text(message), findsNothing);
+        expect(player.state.error, PlayerService.noPlayableFilesError);
+      });
+    }
+
+    testWidgets('a second failed attempt shows it again', (tester) async {
+      await pumpApp(tester, const Size(400, 800), resolver: _MissingResolver());
+      unawaited(player.playQueue([track('a')]));
+      await tester.pumpAndSettle();
+      expect(find.text(message), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.text(message), findsNothing); // timed out
+
+      unawaited(player.playQueue([track('a')]));
+      await tester.pumpAndSettle();
+      expect(find.text(message), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
     });
   });
 

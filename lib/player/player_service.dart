@@ -398,6 +398,8 @@ class PlayerService {
     List<_Entry> candidates, {
     bool giveUpOnFailure = true,
   }) async {
+    // A new attempt starts clean, so failing again is a new error to show.
+    if (_state.error != null) _emit(_state.copyWith(error: null));
     for (final entry in candidates) {
       if (await _tryStart(entry)) return true;
     }
