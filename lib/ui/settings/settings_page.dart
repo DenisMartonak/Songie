@@ -170,19 +170,31 @@ Future<void> _rescan(
 ) async {
   final snacks = PageSnackBars.of(context);
   final queue = ref.read(scanQueueProvider);
-  // Queue them all now; ScanQueue has already logged any failure.
-  final runs = [
-    for (final path in paths)
-      queue.enqueue(path).then<bool>((_) => true, onError: (_) => false),
-  ];
+  // Queue them all now; ScanQueue has already logged any failure. A folder
+  // already queued from this page is skipped until its scan has finished.
+  final queued = <String>[];
+  final runs = <Future<bool>>[];
+  for (final path in paths) {
+    if (!_pendingRescans.add(path)) continue;
+    queued.add(path);
+    runs.add(
+      queue
+          .enqueue(path)
+          .then<bool>((_) => true, onError: (_) => false)
+          .whenComplete(() => _pendingRescans.remove(path)),
+    );
+  }
   for (final (i, run) in runs.indexed) {
     if (!await run) {
       snacks.show(
-        content: Text("Couldn't scan ${folderDisplayName(paths[i])}"),
+        content: Text("Couldn't scan ${folderDisplayName(queued[i])}"),
       );
     }
   }
 }
+
+/// Folders queued for a rescan from this page whose scan has not finished.
+final Set<String> _pendingRescans = {};
 
 class _ScanProgress extends StatelessWidget {
   const _ScanProgress(this.progress);

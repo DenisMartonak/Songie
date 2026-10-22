@@ -434,7 +434,7 @@ void main() {
       await settle();
 
       expect(player.state.playing, isFalse);
-      expect(player.state.error, PlayerService.noPlayableFilesError);
+      expect(player.state.error, PlayerService.engineFailedError);
       expect(backend.sources.length, lessThanOrEqualTo(3));
     });
 

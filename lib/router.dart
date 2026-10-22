@@ -7,6 +7,7 @@ import 'ui/now_playing/now_playing_page.dart';
 import 'ui/search/search_page.dart';
 import 'ui/settings/settings_page.dart';
 import 'ui/shell/adaptive_shell.dart';
+import 'ui/widgets/page_surface.dart';
 
 const String nowPlayingLocation = '/now-playing';
 
@@ -22,19 +23,22 @@ GoRouter buildRouter() => GoRouter(
           routes: [
             GoRoute(
               path: '/home',
-              builder: (_, _) => const HomePage(),
+              builder: (_, _) => const PageSurface(child: HomePage()),
               routes: [_playlistRoute()],
             ),
             // Inside the shell so desktop keeps its title bar, sidebar and
             // player bar; Settings is not a tab, so it shares Home's branch.
-            GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
+            GoRoute(
+              path: '/settings',
+              builder: (_, _) => const PageSurface(child: SettingsPage()),
+            ),
           ],
         ),
         StatefulShellBranch(
           routes: [
             GoRoute(
               path: '/search',
-              builder: (_, _) => const SearchPage(),
+              builder: (_, _) => const PageSurface(child: SearchPage()),
               routes: [_playlistRoute()],
             ),
           ],
@@ -43,7 +47,7 @@ GoRouter buildRouter() => GoRouter(
           routes: [
             GoRoute(
               path: '/library',
-              builder: (_, _) => const LibraryPage(),
+              builder: (_, _) => const PageSurface(child: LibraryPage()),
               routes: [_playlistRoute()],
             ),
           ],
@@ -63,7 +67,8 @@ GoRouter buildRouter() => GoRouter(
 /// (with `push`) keeps the page it was opened from underneath for Back.
 GoRoute _playlistRoute() => GoRoute(
   path: 'playlist/:id',
-  builder: (_, state) => PlaylistPage(id: state.pathParameters['id']!),
+  builder: (_, state) =>
+      PageSurface(child: PlaylistPage(id: state.pathParameters['id']!)),
 );
 
 /// Shows Now Playing unless it is already the current page.

@@ -54,13 +54,15 @@ Future<int> _directorySize(Directory dir) async {
   return total;
 }
 
-/// "512 B", "2.0 KB", "12.3 MB", "3.0 GB".
+/// "512 B", "2.0 KB", "12.3 MB", "3.0 GB". The unit is chosen after rounding,
+/// so 1048575 bytes is "1.0 MB", not "1024.0 KB".
 String formatBytes(int bytes) {
   if (bytes < 1024) return '$bytes B';
   const units = ['KB', 'MB', 'GB'];
   var value = bytes / 1024;
   var unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
+  while (unit < units.length - 1 &&
+      double.parse(value.toStringAsFixed(1)) >= 1024) {
     value /= 1024;
     unit++;
   }

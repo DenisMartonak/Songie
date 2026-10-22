@@ -111,6 +111,7 @@ class PlayerService {
 
   static const String noPlayableFilesError = 'No playable files in queue';
   static const String playbackFailedError = 'Playback failed';
+  static const String engineFailedError = 'Engine failed on every track';
 
   final AudioBackend _backend;
   final TrackResolver _resolver;
@@ -605,7 +606,7 @@ class PlayerService {
       if (++_engineFailures >= _queue.length) {
         await _stopBackend();
         _markStopped();
-        _emit(_state.copyWith(error: noPlayableFilesError));
+        _emit(_state.copyWith(error: engineFailedError));
         return;
       }
       await _advance();

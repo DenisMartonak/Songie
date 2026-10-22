@@ -92,6 +92,30 @@ void main() {
       expect(h.scanner.playlistNames, [null]);
     });
 
+    uiTest('tapping Rescan twice queues the folder once while pending', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      h.scanner.onScan = (folder, _) async* {
+        await gate.future;
+      };
+      await seedFolders(tester, ['/music/a']);
+      await pumpSettings(tester);
+
+      await tester.tap(rescan('/music/a'));
+      await flush(tester);
+      await tester.tap(rescan('/music/a'));
+      await flush(tester);
+      gate.complete();
+      await flush(tester);
+      expect(h.scanner.scannedFolders, ['/music/a']);
+
+      // Once finished, it can be queued again.
+      await tester.tap(rescan('/music/a'));
+      await flush(tester);
+      expect(h.scanner.scannedFolders, ['/music/a', '/music/a']);
+    });
+
     uiTest('Rescan all scans every folder, one after the other', (
       tester,
     ) async {
@@ -252,6 +276,7 @@ void main() {
       expect(formatBytes(0), '0 B');
       expect(formatBytes(1023), '1023 B');
       expect(formatBytes(1024), '1.0 KB');
+      expect(formatBytes(1048575), '1.0 MB');
       expect(formatBytes(12 * 1024 * 1024 + 300 * 1024), '12.3 MB');
       expect(formatBytes(3 * 1024 * 1024 * 1024), '3.0 GB');
     });

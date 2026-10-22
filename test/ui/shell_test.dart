@@ -627,6 +627,22 @@ void main() {
       });
     }
 
+    testWidgets('an engine failing on every track says so', (tester) async {
+      await pumpApp(tester, const Size(400, 800));
+      unawaited(player.playQueue([track('a')]));
+      await tester.pumpAndSettle();
+      backend.emitError();
+      for (var i = 0; i < 4; i++) {
+        await tester.runAsync(() => pumpEventQueue());
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(player.state.error, PlayerService.engineFailedError);
+      expect(find.text("Couldn't play these songs"), findsOneWidget);
+      expect(find.text(message), findsNothing);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('a second failed attempt shows it again', (tester) async {
       await pumpApp(tester, const Size(400, 800), resolver: _MissingResolver());
       unawaited(player.playQueue([track('a')]));
