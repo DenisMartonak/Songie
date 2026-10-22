@@ -33,11 +33,12 @@ void main() {
             path: '/page',
             builder: (_, _) => Scaffold(body: page),
           ),
-          GoRoute(
-            path: '/playlist/:id',
-            builder: (_, s) =>
-                Scaffold(body: Text('Playlist ${s.pathParameters['id']}')),
-          ),
+          for (final branch in ['home', 'search'])
+            GoRoute(
+              path: '/$branch/playlist/:id',
+              builder: (_, s) =>
+                  Scaffold(body: Text('Playlist ${s.pathParameters['id']}')),
+            ),
           GoRoute(
             path: '/settings',
             builder: (_, _) => const Scaffold(body: Text('Settings stub')),

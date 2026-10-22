@@ -45,7 +45,7 @@ void main() {
             builder: (_, _) => const Scaffold(body: LibraryPage()),
           ),
           GoRoute(
-            path: '/playlist/:id',
+            path: '/library/playlist/:id',
             builder: (_, state) => Scaffold(
               body: Text('Playlist page ${state.pathParameters['id']}'),
             ),

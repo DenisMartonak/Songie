@@ -304,7 +304,7 @@ class _PlaylistRow extends StatelessWidget {
       seed: playlist.id,
       title: playlist.name,
       subtitle: 'Playlist · $songs',
-      onTap: () => context.go('/playlist/${playlist.id}'),
+      onTap: () => context.push('/search/playlist/${playlist.id}'),
     );
   }
 }

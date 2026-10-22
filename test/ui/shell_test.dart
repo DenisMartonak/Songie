@@ -16,6 +16,8 @@ import 'package:songies/providers.dart';
 import 'package:songies/router.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
+import 'package:songies/ui/home/home_page.dart';
+import 'package:songies/ui/library/library_page.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/search/search_page.dart';
 import 'package:songies/ui/settings/settings_page.dart';
@@ -133,6 +135,12 @@ void main() {
           playlistTracksProvider.overrideWith(
             (ref, id) => Stream.value(const []),
           ),
+          searchTracksProvider.overrideWith(
+            (ref, query) => Stream.value(const []),
+          ),
+          searchPlaylistsProvider.overrideWith(
+            (ref, query) => Stream.value(_playlists),
+          ),
           windowControlsProvider.overrideWithValue(window),
           hasCustomTitleBarProvider.overrideWithValue(customTitleBar),
         ],
@@ -211,6 +219,86 @@ void main() {
       await tester.tap(navLabel('Library'));
       await tester.pumpAndSettle();
       expect(assetOf(tester, 'nav.icon.2'), 'assets/icons/library_bold.svg');
+    });
+
+    group('playlist pages keep the page they came from underneath', () {
+      /// What Android's Back button does; false means the app would close.
+      Future<bool> systemBack(WidgetTester tester) async {
+        final handled = await WidgetsBinding.instance.handlePopRoute();
+        await tester.pumpAndSettle();
+        return handled;
+      }
+
+      testWidgets('Home quick tile: Back arrow and system Back return Home', (
+        tester,
+      ) async {
+        await pumpApp(tester, phone);
+        await tester.tap(find.byKey(const Key('home.tile.p1')));
+        await tester.pumpAndSettle();
+        expect(find.byType(PlaylistPage), findsOneWidget);
+        expect(find.byTooltip('Back'), findsOneWidget);
+
+        expect(await systemBack(tester), isTrue);
+        expect(find.byType(PlaylistPage), findsNothing);
+        expect(find.byType(HomePage), findsOneWidget);
+      });
+
+      testWidgets('Home card: the arrow returns Home', (tester) async {
+        await pumpApp(tester, phone);
+        final card = find.byKey(const Key('home.card.p2'));
+        await tester.ensureVisible(card);
+        await tester.pumpAndSettle();
+        await tester.tap(card);
+        await tester.pumpAndSettle();
+        expect(find.byType(PlaylistPage), findsOneWidget);
+
+        await tester.tap(find.byTooltip('Back'));
+        await tester.pumpAndSettle();
+        expect(find.byType(HomePage), findsOneWidget);
+      });
+
+      testWidgets('Search result: system Back returns to Search', (
+        tester,
+      ) async {
+        await pumpApp(tester, phone);
+        await tester.tap(navLabel('Search'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('search.field')), 'gym');
+        await tester.pump(searchDebounce);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('search.playlist.p1')));
+        await tester.pumpAndSettle();
+        expect(find.byType(PlaylistPage), findsOneWidget);
+        expect(find.byTooltip('Back'), findsOneWidget);
+
+        expect(await systemBack(tester), isTrue);
+        expect(find.byType(PlaylistPage), findsNothing);
+        expect(find.byType(SearchPage), findsOneWidget);
+      });
+
+      testWidgets('Library list: system Back returns to Library', (
+        tester,
+      ) async {
+        await pumpApp(tester, phone);
+        await tester.tap(navLabel('Library'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('library.playlist.p1')));
+        await tester.pumpAndSettle();
+        expect(find.byType(PlaylistPage), findsOneWidget);
+
+        expect(await systemBack(tester), isTrue);
+        expect(find.byType(LibraryPage), findsOneWidget);
+      });
+
+      testWidgets('the old /playlist/:id link still opens the playlist', (
+        tester,
+      ) async {
+        await pumpApp(tester, phone);
+        router.go('/playlist/p1');
+        await tester.pumpAndSettle();
+        expect(find.byType(PlaylistPage), findsOneWidget);
+        expect(router.state.uri.path, '/library/playlist/p1');
+      });
     });
 
     testWidgets('no mini-player while the queue is empty', (tester) async {
@@ -330,7 +418,7 @@ void main() {
 
       await tester.tap(find.text('Gym Mix'));
       await tester.pumpAndSettle();
-      expect(router.state.uri.path, '/playlist/p1');
+      expect(router.state.uri.path, '/library/playlist/p1');
       expect(find.byType(PlaylistPage), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('sidebar.home')));

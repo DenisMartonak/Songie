@@ -157,7 +157,7 @@ class _PlaylistTile extends StatelessWidget {
         : '${playlist.trackCount} songs';
     return InkWell(
       key: Key('library.playlist.${playlist.id}'),
-      onTap: () => context.push('/playlist/${playlist.id}'),
+      onTap: () => context.push('/library/playlist/${playlist.id}'),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(

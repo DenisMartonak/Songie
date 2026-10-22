@@ -246,7 +246,7 @@ class _QuickTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(colors.radius),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => context.go('/playlist/${playlist.id}'),
+        onTap: () => context.push('/home/playlist/${playlist.id}'),
         child: Row(
           children: [
             Artwork(
@@ -291,7 +291,7 @@ class _PlaylistCard extends StatelessWidget {
     return InkWell(
       key: Key('home.card.${playlist.id}'),
       borderRadius: BorderRadius.circular(colors.radius),
-      onTap: () => context.go('/playlist/${playlist.id}'),
+      onTap: () => context.push('/home/playlist/${playlist.id}'),
       child: SizedBox(
         width: art,
         child: Column(

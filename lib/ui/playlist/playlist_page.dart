@@ -341,6 +341,8 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
         if (!mounted) return;
         if (result is Err<void>) {
           _say('Couldn\'t delete the playlist');
+        } else if (Navigator.canPop(context)) {
+          context.pop(); // back to the page it was opened from
         } else {
           context.go('/library');
         }

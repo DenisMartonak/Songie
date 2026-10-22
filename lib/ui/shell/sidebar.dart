@@ -160,7 +160,7 @@ class Sidebar extends ConsumerWidget {
                         itemBuilder: (context, i) => _PlaylistRow(
                           playlist: playlists[i],
                           collapsed: collapsed,
-                          selected: path == '/playlist/${playlists[i].id}',
+                          selected: path.endsWith('/playlist/${playlists[i].id}'),
                           colors: colors,
                         ),
                       ),
@@ -301,7 +301,7 @@ class _PlaylistRow extends StatelessWidget {
       child: InkWell(
         key: Key('sidebar.playlist.${playlist.id}'),
         borderRadius: BorderRadius.circular(colors.radius),
-        onTap: () => context.go('/playlist/${playlist.id}'),
+        onTap: () => context.go('/library/playlist/${playlist.id}'),
         child: Container(
           height: 56,
           decoration: BoxDecoration(
