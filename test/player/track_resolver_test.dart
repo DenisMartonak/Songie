@@ -52,6 +52,26 @@ void main() {
     expect((r as Ok<AudioSourceRef>).value, FileSource(f.path));
   });
 
+  test('a file that is back flips its missing state to done', () async {
+    final f = File(p.join(tmp.path, 'back.mp3'))..writeAsBytesSync([1, 2, 3]);
+    await addFile('t1', f.path, state: 'missing');
+
+    final r = await resolver.resolve(await trackOf('t1'));
+
+    expect(r, isA<Ok<AudioSourceRef>>());
+    final row = await db.select(db.localFiles).getSingle();
+    expect(row.state, 'done');
+  });
+
+  test('a file that is still gone stays missing', () async {
+    await addFile('t1', p.join(tmp.path, 'gone.mp3'), state: 'missing');
+
+    await resolver.resolve(await trackOf('t1'));
+
+    final row = await db.select(db.localFiles).getSingle();
+    expect(row.state, 'missing');
+  });
+
   test('fails with notFound when the file is gone', () async {
     await addFile('t1', p.join(tmp.path, 'gone.mp3'));
 

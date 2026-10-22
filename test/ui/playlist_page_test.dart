@@ -154,7 +154,7 @@ void main() {
     expect(h.player.state.sourcePlaylistId, id);
   });
 
-  uiTest('a missing file is tagged and does not start playback', (
+  uiTest('a missing file is tagged, and tapping it still tries to play it', (
     tester,
   ) async {
     final id = await real(tester, () async {
@@ -167,12 +167,13 @@ void main() {
     expect(find.text('File missing'), findsOneWidget);
     expect(find.text('Locate'), findsOneWidget);
 
+    // The player (not the page) decides: it skips a file that is really gone
+    // and reports it, and plays one that came back.
     await tester.tap(find.text('Song t2'));
     await settle(tester);
-    await tester.tap(find.text('File missing'));
-    await settle(tester);
-    expect(h.player.state.queue, isEmpty);
-    expect(h.backend.calls, isEmpty);
+    expect(h.player.state.queue.map((t) => t.id), ['t1', 't2']);
+    expect(h.player.state.current?.id, 't2');
+    expect(h.backend.sources, ['/music/t2.mp3']);
   });
 
   uiTest('Locate with the same file only re-imports it', (tester) async {

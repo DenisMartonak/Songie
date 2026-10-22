@@ -144,8 +144,8 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
   // --- playback -------------------------------------------------------------
 
   Future<void> _playFrom(List<PlaylistTrack> rows, int index) {
-    // A missing file would only be skipped; the user has to Locate it first.
-    if (rows[index].fileMissing) return Future.value();
+    // Also for a row flagged missing: the file may be back, and the player
+    // skips and reports it if it is not.
     return ref
         .read(playerServiceProvider)
         .playQueue(
