@@ -57,6 +57,11 @@ Do each item on every platform listed. Build with `flutter run -d windows`, `flu
 8. Idle Windows RAM (Task Manager, paused, window open): record the number in the commit message. Target 150 MB or less.
   - [ ] Windows
 
+Also check these:
+- [ ] Android: open a playlist from a Home tile (and from a Search result), press the system Back button: it returns to Home (Search) and does not close the app.
+- [ ] Retag an MP3 in an external tagger, then rescan: the song keeps its place in its playlists, shows the new title / artist, and still plays (no "File missing").
+- [ ] Android: Locate on a "File missing" song by choosing a folder repairs the song, and the folder does not appear in Settings, Music folders.
+
 Also check Settings on each platform:
 - [ ] Windows: sidebar Settings opens it; folder Rescan / Remove (with confirmation) / Add folder work; Storage shows sizes; Export log opens a save dialog.
 - [ ] Android: the Home gear opens it, and Back returns; Export log saves a file you can find in the chosen location.

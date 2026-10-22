@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.songies" "\0"
-            VALUE "FileDescription", "songies" "\0"
+            VALUE "FileDescription", "Songies" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "songies" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.songies. All rights reserved." "\0"
             VALUE "OriginalFilename", "songies.exe" "\0"
-            VALUE "ProductName", "songies" "\0"
+            VALUE "ProductName", "Songies" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
