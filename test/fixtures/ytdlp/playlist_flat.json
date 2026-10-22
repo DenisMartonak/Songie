@@ -1,0 +1,167 @@
+{
+ "_type": "playlist",
+ "id": "PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI",
+ "title": "Popular Music Videos",
+ "availability": "public",
+ "playlist_count": 182,
+ "channel": "Music",
+ "channel_id": "UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+ "uploader": "Music",
+ "uploader_id": null,
+ "webpage_url": "https://www.youtube.com/playlist?list=PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI",
+ "extractor": "youtube:tab",
+ "extractor_key": "YoutubeTab",
+ "thumbnails": [
+  {
+   "url": "https://i.ytimg.com/vi/fOT0BUpITw8/hqdefault.jpg?sqp=-oaymwEXCPYBEIoBSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLDRkTUPE3vs1oZ4H75HwRxPMAEMCA",
+   "height": 138,
+   "width": 246,
+   "id": "2",
+   "resolution": "246x138"
+  },
+  {
+   "url": "https://i.ytimg.com/vi/fOT0BUpITw8/hqdefault.jpg?sqp=-oaymwEXCNACELwBSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLDjsUIQ80ddZ3EkanNxx85JVi-MFg",
+   "height": 188,
+   "width": 336,
+   "id": "3",
+   "resolution": "336x188"
+  }
+ ],
+ "entries": [
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "id": "fOT0BUpITw8",
+   "url": "https://www.youtube.com/watch?v=fOT0BUpITw8",
+   "title": "BELLAKEO (Video Oficial) - Peso Pluma, Anitta",
+   "duration": 235,
+   "channel_id": "UCzrM_068Odho89mTRrrxqbA",
+   "channel": "Peso Pluma",
+   "uploader": "Peso Pluma",
+   "uploader_id": null,
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/fOT0BUpITw8/hqdefault.jpg?sqp=-oaymwEcCPYBEIoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBXt_5d6_lv9Yku5kuRWaYffTGoYA",
+     "height": 138,
+     "width": 246
+    },
+    {
+     "url": "https://i.ytimg.com/vi/fOT0BUpITw8/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLDIUMo6wmNwCk7_4gaFgstLo8XRVQ",
+     "height": 188,
+     "width": 336
+    }
+   ],
+   "availability": null,
+   "view_count": 770000000,
+   "live_status": null
+  },
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "id": "NFvDHYMzj9U",
+   "url": "https://www.youtube.com/watch?v=NFvDHYMzj9U",
+   "title": "Arcángel - FN8 ( Video Lyric )",
+   "duration": 650,
+   "channel_id": "UCu4bj03KW4CwAsYtHSwMEsQ",
+   "channel": "Arcangel",
+   "uploader": "Arcangel",
+   "uploader_id": null,
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/NFvDHYMzj9U/hqdefault.jpg?sqp=-oaymwE2CPYBEIoBSFXyq4qpAygIARUAAIhCGAFwAcABBvABAfgB_gmAAtAFigIMCAAQARhjIGMoYzAP&rs=AOn4CLDl3LkZU45NcYw1_NqWtfa2zfWbBQ",
+     "height": 138,
+     "width": 246
+    },
+    {
+     "url": "https://i.ytimg.com/vi/NFvDHYMzj9U/hqdefault.jpg?sqp=-oaymwE2CNACELwBSFXyq4qpAygIARUAAIhCGAFwAcABBvABAfgB_gmAAtAFigIMCAAQARhjIGMoYzAP&rs=AOn4CLBfwrF8-B99YkS29S2MbyVfQrPfjQ",
+     "height": 188,
+     "width": 336
+    }
+   ],
+   "availability": null,
+   "view_count": 32000000,
+   "live_status": null
+  },
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "id": "8c7KOGxeY3w",
+   "url": "https://www.youtube.com/watch?v=8c7KOGxeY3w",
+   "title": "Becky G - POR EL CONTRARIO (Performance Video) ft. Ángela Aguilar, Leonardo Aguilar",
+   "duration": 235,
+   "channel_id": "UCgtNC51EUSgcZ6kKyVoPxKA",
+   "channel": "Becky G",
+   "uploader": "Becky G",
+   "uploader_id": null,
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/8c7KOGxeY3w/hqdefault.jpg?sqp=-oaymwEcCPYBEIoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLC8zyGkQa-YApPUH2crza1MzqfQZQ",
+     "height": 138,
+     "width": 246
+    },
+    {
+     "url": "https://i.ytimg.com/vi/8c7KOGxeY3w/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLAc8FMXFBxT72mBl7UTb-La5RqIWQ",
+     "height": 188,
+     "width": 336
+    }
+   ],
+   "availability": null,
+   "view_count": 787000000,
+   "live_status": null
+  },
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "id": "jWdxXdp8sZI",
+   "url": "https://www.youtube.com/watch?v=jWdxXdp8sZI",
+   "title": "Real Boston Richey - The Type (Official Music Video) ft. YTB Fatt",
+   "duration": 212,
+   "channel_id": "UCpkyspUtZwYhgUkepiREflg",
+   "channel": "Real Boston Richey",
+   "uploader": "Real Boston Richey",
+   "uploader_id": null,
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/jWdxXdp8sZI/hqdefault.jpg?sqp=-oaymwEcCPYBEIoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLC5DQX_movUSiDH5aGF7kdAUCcrvw",
+     "height": 138,
+     "width": 246
+    },
+    {
+     "url": "https://i.ytimg.com/vi/jWdxXdp8sZI/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCU4nNiLW-ejwKcP2XK93Pio-SQ_A",
+     "height": 188,
+     "width": 336
+    }
+   ],
+   "availability": null,
+   "view_count": 42000000,
+   "live_status": null
+  },
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "id": "s6cdjJvGM2o",
+   "url": "https://www.youtube.com/watch?v=s6cdjJvGM2o",
+   "title": "La Diabla",
+   "duration": 173,
+   "channel_id": "UCx0lY_L_o5vFPQaLAdBasmQ",
+   "channel": "Xavi Oficial",
+   "uploader": "Xavi Oficial",
+   "uploader_id": null,
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/s6cdjJvGM2o/hqdefault.jpg?sqp=-oaymwEcCPYBEIoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLDZ_tfqjewczbxqCYn3ePf8QbXFog",
+     "height": 138,
+     "width": 246
+    },
+    {
+     "url": "https://i.ytimg.com/vi/s6cdjJvGM2o/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLDGPlC5azB_kDun7NUUIUxe5nlG9A",
+     "height": 188,
+     "width": 336
+    }
+   ],
+   "availability": null,
+   "view_count": 244000000,
+   "live_status": null
+  }
+ ]
+}
