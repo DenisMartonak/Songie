@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import 'bottom_nav.dart';
+import 'go_tab.dart';
 import 'mini_player.dart';
 import 'player_error_snacks.dart';
 
@@ -58,13 +59,7 @@ class PhoneShell extends ConsumerWidget {
                     const MiniPlayer(),
                     const SizedBox(height: MiniPlayer.gapAboveNav),
                   ],
-                  BottomNav(
-                    shell.currentIndex,
-                    (i) => shell.goBranch(
-                      i,
-                      initialLocation: i == shell.currentIndex,
-                    ),
-                  ),
+                  BottomNav(shell.currentIndex, (i) => goTab(shell, i)),
                   ColoredBox(
                     color: colors.background,
                     child: SizedBox(

@@ -7,6 +7,7 @@ import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/artwork.dart';
+import 'go_tab.dart';
 
 /// The desktop sidebar: Home / Search / Sync devices, the playlist list and a
 /// Settings entry. 260 px wide, or a 72 px icon rail when [collapsed].
@@ -73,7 +74,7 @@ class Sidebar extends ConsumerWidget {
                         height: 22,
                         colorFilter: _tint(colors, homeSelected),
                       ),
-                      onTap: () => shell.goBranch(0),
+                      onTap: () => goTab(shell, 0),
                     ),
                     _NavItem(
                       key: const Key('sidebar.search'),
@@ -88,7 +89,7 @@ class Sidebar extends ConsumerWidget {
                         height: 22,
                         colorFilter: _tint(colors, current == 1),
                       ),
-                      onTap: () => shell.goBranch(1),
+                      onTap: () => goTab(shell, 1),
                     ),
                     _NavItem(
                       key: const Key('sidebar.sync'),
@@ -131,7 +132,7 @@ class Sidebar extends ConsumerWidget {
                                   height: 22,
                                   colorFilter: _tint(colors, current == 2),
                                 ),
-                                onTap: () => shell.goBranch(2),
+                                onTap: () => goTab(shell, 2),
                               ),
                             ),
                           if (collapsed) const Spacer(),

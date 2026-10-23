@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import 'go_tab.dart';
 import 'player_bar.dart';
 import 'player_error_snacks.dart';
 import 'sidebar.dart';
@@ -86,7 +87,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   void _onQueryChanged(String query) {
     ref.read(searchQueryProvider.notifier).set(query);
     if (widget.shell.currentIndex != _searchBranch) {
-      widget.shell.goBranch(_searchBranch);
+      goTab(widget.shell, _searchBranch);
     }
   }
 
