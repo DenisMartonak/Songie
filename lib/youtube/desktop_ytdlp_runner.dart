@@ -16,20 +16,6 @@ typedef YtDlpProcessStarter = Future<Process> Function(
 Future<Process> _defaultStart(String exe, List<String> args) =>
     Process.start(exe, args, runInShell: false);
 
-/// Asks [proc] to stop, then force-kills it if it is still alive after 2 s.
-void _kill(Process proc) {
-  proc.kill();
-  unawaited(
-    proc.exitCode.timeout(
-      const Duration(seconds: 2),
-      onTimeout: () {
-        proc.kill(ProcessSignal.sigkill);
-        return -1;
-      },
-    ),
-  );
-}
-
 /// Forwards each complete line from a [LineSplitter] to a callback.
 class _LineSink implements Sink<String> {
   _LineSink(this._onLine);
@@ -48,15 +34,18 @@ class DesktopYtDlpRunner implements YtDlpRunner {
     required YtDlpInstaller installer,
     String? systemBinary,
     YtDlpProcessStarter? start,
+    bool? isWindows,
   }) : _binary = binary,
        _installer = installer,
        _system = systemBinary,
-       _start = start ?? _defaultStart;
+       _start = start ?? _defaultStart,
+       _isWindows = isWindows ?? Platform.isWindows;
 
   final File Function() _binary;
   final YtDlpInstaller _installer;
   final String? _system;
   final YtDlpProcessStarter _start;
+  final bool _isWindows;
 
   /// Live runs by processId, for [cancel].
   final Map<String, Process> _running = {};
@@ -105,7 +94,7 @@ class DesktopYtDlpRunner implements YtDlpRunner {
           : await proc.exitCode.timeout(
               timeout,
               onTimeout: () {
-                _kill(proc);
+                unawaited(_kill(proc));
                 throw TimeoutException('yt-dlp timed out', timeout);
               },
             );
@@ -121,7 +110,41 @@ class DesktopYtDlpRunner implements YtDlpRunner {
   @override
   Future<void> cancel(String processId) async {
     final proc = _running[processId];
-    if (proc != null) _kill(proc);
+    if (proc != null) await _kill(proc);
+  }
+
+  /// Stops [proc]. On Windows the managed `yt-dlp.exe` is a PyInstaller
+  /// bootloader whose Python child does the work, so the whole tree is killed
+  /// with taskkill (falling back to [Process.kill]). Elsewhere: SIGTERM, then
+  /// SIGKILL if it is still alive after 2 s.
+  Future<void> _kill(Process proc) async {
+    if (_isWindows) {
+      try {
+        final tk = await _start('taskkill', [
+          '/PID',
+          '${proc.pid}',
+          '/T',
+          '/F',
+        ]);
+        unawaited(tk.stdout.drain<void>());
+        unawaited(tk.stderr.drain<void>());
+        if (await tk.exitCode == 0) return;
+      } catch (_) {
+        // Fall through to a plain kill.
+      }
+      proc.kill();
+      return;
+    }
+    proc.kill();
+    unawaited(
+      proc.exitCode.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {
+          proc.kill(ProcessSignal.sigkill);
+          return -1;
+        },
+      ),
+    );
   }
 
   @override

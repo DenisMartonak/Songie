@@ -202,6 +202,76 @@ void main() {
     expect(b.killed, isEmpty);
   });
 
+  test('Windows: cancel kills the process tree with taskkill', () async {
+    final yt = _FakeProcess();
+    final calls = <(String, List<String>)>[];
+    final r = DesktopYtDlpRunner(
+      binary: () => File('${dir.path}/x'),
+      installer: installer([]),
+      systemBinary: 'yt-dlp.exe',
+      isWindows: true,
+      start: (e, a) async {
+        calls.add((e, a));
+        if (e == 'taskkill') {
+          yt.finish(1);
+          return _FakeProcess.done(0, '', '');
+        }
+        return yt;
+      },
+    );
+    final run = r.run(['x'], processId: 'w');
+    await pumpEventQueue();
+    await r.cancel('w');
+    expect((await run).exitCode, isNot(0));
+    expect(calls.last.$1, 'taskkill');
+    expect(calls.last.$2, ['/PID', '${yt.pid}', '/T', '/F']);
+    expect(yt.killed, isEmpty);
+  });
+
+  test('Windows: falls back to kill when taskkill fails', () async {
+    final yt = _FakeProcess();
+    final r = DesktopYtDlpRunner(
+      binary: () => File('${dir.path}/x'),
+      installer: installer([]),
+      systemBinary: 'yt-dlp.exe',
+      isWindows: true,
+      start: (e, a) async {
+        if (e == 'taskkill') throw const ProcessException('taskkill', []);
+        return yt;
+      },
+    );
+    final run = r.run(['x'], processId: 'w');
+    await pumpEventQueue();
+    await r.cancel('w');
+    await run;
+    expect(yt.killed, isNotEmpty);
+  });
+
+  test('Windows: a timeout also uses taskkill', () async {
+    final yt = _FakeProcess();
+    final calls = <String>[];
+    final r = DesktopYtDlpRunner(
+      binary: () => File('${dir.path}/x'),
+      installer: installer([]),
+      systemBinary: 'yt-dlp.exe',
+      isWindows: true,
+      start: (e, a) async {
+        calls.add(e);
+        if (e == 'taskkill') {
+          yt.finish(1);
+          return _FakeProcess.done(0, '', '');
+        }
+        return yt;
+      },
+    );
+    await expectLater(
+      r.run(['x'], timeout: const Duration(milliseconds: 20)),
+      throwsA(isA<TimeoutException>()),
+    );
+    await pumpEventQueue();
+    expect(calls, ['yt-dlp.exe', 'taskkill']);
+  });
+
   test('default starter: streams lines from a real process', () async {
     final r = DesktopYtDlpRunner(
       binary: () => File('${dir.path}/x'),
@@ -263,7 +333,7 @@ class _FakeProcess implements Process {
   @override
   Future<int> get exitCode => _exit.future;
   @override
-  int get pid => 1;
+  int get pid => 4242;
   @override
   IOSink get stdin => throw UnimplementedError();
   @override

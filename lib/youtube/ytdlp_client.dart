@@ -136,11 +136,7 @@ class YtDlpClient {
             _naInt(f.elementAtOrNull(1)) ?? _naInt(f.elementAtOrNull(2));
         onProgress?.call(downloaded, total);
       } else if (line.startsWith(_donePrefix)) {
-        try {
-          done = jsonDecode(line.substring(_donePrefix.length));
-        } on FormatException {
-          done = null;
-        }
+        done = _parseDone(line);
       }
     }
 
@@ -182,6 +178,14 @@ class YtDlpClient {
       );
     }
     if (run is Err<YtDlpRun>) return Err(run.failure);
+    // Streamed lines can be lost (Android posts them apart from the reply);
+    // stdout holds everything.
+    if (done == null) {
+      final line = (run as Ok<YtDlpRun>).value.stdout
+          .split(RegExp(r'\r?\n'))
+          .lastWhere((l) => l.startsWith(_donePrefix), orElse: () => '');
+      if (line.isNotEmpty) done = _parseDone(line);
+    }
     final d = done;
     final path = d is Map ? _naString(d['filepath']) : null;
     if (d is! Map || path == null) {
@@ -204,6 +208,15 @@ class YtDlpClient {
         durationMs: duration is num ? (duration * 1000).round() : null,
       ),
     );
+  }
+
+  /// The JSON of a `songies-done` line, or null when it does not parse.
+  static Object? _parseDone(String line) {
+    try {
+      return jsonDecode(line.substring(_donePrefix.length));
+    } on FormatException {
+      return null;
+    }
   }
 
   static const _progressPrefix = 'songies-progress ';

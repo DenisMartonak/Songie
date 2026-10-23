@@ -17,6 +17,9 @@ class FakeYtDlpRunner implements YtDlpRunner {
   final List<String> cancelled = [];
   final Map<String, Completer<void>> _hanging = {};
 
+  /// When false, stdout is not replayed to `onLine` (lines lost in transit).
+  bool replayLines = true;
+
   /// When set, [run] throws it.
   Object? throwOnRun;
   String? versionResult = '2026.10.21';
@@ -54,7 +57,7 @@ class FakeYtDlpRunner implements YtDlpRunner {
         await c.future;
         return const YtDlpRun(-1, '', 'yt-dlp was cancelled');
       }
-      if (onLine != null) {
+      if (onLine != null && replayLines) {
         for (final l in run.stdout.split(RegExp(r'\r?\n'))) {
           if (l.isNotEmpty) onLine(l);
         }

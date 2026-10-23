@@ -111,6 +111,18 @@ void main() {
     expect(d.bytes, 3);
   });
 
+  test('done line missing from onLine is read from stdout', () async {
+    File('${dir.path}/$id.webm').writeAsBytesSync(List.filled(55, 1));
+    runner
+      ..replayLines = false
+      ..onOk('watch?v=', stdout());
+    final r = await client.download(id, dir, processId: 'p');
+    final d = (r as Ok<YtDownload>).value;
+    expect(d.path, '${dir.path}/$id.webm');
+    expect(d.bytes, 55);
+    expect(d.album, 'Random Access Memories');
+  });
+
   test('429 fixture is throttled', () async {
     runner.on('watch?v=', YtDlpRun(1, '', fixture('download_stderr_429.txt')));
     final r = await client.download(id, dir, processId: 'p');
