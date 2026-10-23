@@ -4,8 +4,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// Asks the user for a music folder; null when cancelled.
-typedef FolderPicker = Future<String?> Function();
+import 'android_folder_picker.dart';
+
+export 'android_folder_picker.dart';
+
+/// Asks the user for a music folder.
+typedef FolderPicker = Future<FolderPick> Function();
 
 /// Asks the user for one MP3 file; null when cancelled.
 typedef AudioFilePicker = Future<String?> Function();
@@ -16,9 +20,15 @@ typedef MediaAccessRequest = Future<bool> Function();
 /// The pickers and the permission prompt are providers so tests can replace
 /// the native dialogs.
 final folderPickerProvider = Provider<FolderPicker>(
-  (ref) =>
-      () => FilePicker.getDirectoryPath(dialogTitle: 'Choose a music folder'),
+  (ref) => Platform.isAndroid ? pickFolderOnAndroid : _pickFolderOnDesktop,
 );
+
+Future<FolderPick> _pickFolderOnDesktop() async {
+  final path = await FilePicker.getDirectoryPath(
+    dialogTitle: 'Choose a music folder',
+  );
+  return path == null ? const FolderPickCancelled() : FolderPicked(path);
+}
 
 final audioFilePickerProvider = Provider<AudioFilePicker>(
   (ref) => () async {

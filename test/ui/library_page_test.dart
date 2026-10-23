@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/library/library_scanner.dart';
+import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/library/library_page.dart';
 
 import '../helpers/ui_harness.dart';
@@ -79,7 +80,7 @@ void main() {
     var asked = 0;
     h.folderPicker = () async {
       asked++;
-      return null;
+      return const FolderPickCancelled();
     };
     await pumpLibrary(tester);
 
@@ -196,7 +197,7 @@ void main() {
 
   group('add music folder', () {
     Future<void> chooseFolder(WidgetTester tester) async {
-      h.folderPicker = () async => '/music/Rock';
+      h.folderPicker = () async => const FolderPicked('/music/Rock');
       await pumpLibrary(tester);
       await openMenu(tester, 'Add music folder');
     }
@@ -293,7 +294,7 @@ void main() {
       var picked = false;
       h.folderPicker = () async {
         picked = true;
-        return '/music/Rock';
+        return const FolderPicked('/music/Rock');
       };
       h.mediaAccess = () async => false;
       await pumpLibrary(tester);

@@ -10,6 +10,7 @@ import '../../core/result.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../library/add_folder_flow.dart' show folderPickFailureMessage;
 import '../library/add_songs_sheet.dart';
 import '../library/pickers.dart';
 import '../widgets/artwork.dart';
@@ -284,8 +285,17 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     final snacks = PageSnackBars.of(context);
     final repo = _repo;
     final queue = ref.read(scanQueueProvider);
-    final folder = await ref.read(folderPickerProvider)();
-    if (folder == null) return;
+    final pick = await ref.read(folderPickerProvider)();
+    final String folder;
+    switch (pick) {
+      case FolderPicked(:final path):
+        folder = path;
+      case FolderPickCancelled():
+        return;
+      case FolderPickFailed(:final error):
+        snacks.show(content: Text(folderPickFailureMessage(error)));
+        return;
+    }
     final name = p.basename(folder).isEmpty ? folder : p.basename(folder);
     try {
       await queue.enqueue(folder, registerFolder: false);

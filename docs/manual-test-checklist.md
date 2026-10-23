@@ -24,6 +24,14 @@ Linux (Nobara)
 - [ ] Seeking from the applet works, and media keys work through the desktop.
 - [ ] The applet's progress bar advances while playing.
 
+
+## Add music folder
+
+Android
+- [ ] Library → + → Add music folder opens the system folder picker.
+- [ ] Picking Music adds its MP3s.
+- [ ] Picking Downloads shows the "can't be used" message.
+
 ## Plan 1 end-to-end
 
 Do each item on every platform listed. Build with `flutter run -d windows`, `flutter run --release -d <android>` and `flutter run -d linux` (Nobara).

@@ -101,7 +101,8 @@ class UiHarness {
   DateTime Function() now = DateTime.now;
 
   /// Replaced per test to fake the native dialogs.
-  Future<String?> Function() folderPicker = () async => null;
+  Future<FolderPick> Function() folderPicker = () async =>
+      const FolderPickCancelled();
   Future<String?> Function() filePicker = () async => null;
   Future<bool> Function() mediaAccess = () async => true;
 

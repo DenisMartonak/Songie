@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:songies/core/log.dart';
 import 'package:songies/core/paths.dart';
 import 'package:songies/data/database.dart';
+import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 
@@ -218,7 +219,7 @@ void main() {
     uiTest('Add folder picks a folder and scans it through the queue', (
       tester,
     ) async {
-      h.folderPicker = () async => '/music/New';
+      h.folderPicker = () async => FolderPicked('/music/New');
       await pumpSettings(tester);
 
       await tester.tap(find.byKey(const Key('settings.addFolder')));

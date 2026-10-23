@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/library/library_scanner.dart';
+import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/library/add_songs_sheet.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 
@@ -282,7 +283,7 @@ void main() {
         await h.addTrack('t1', missing: true);
         return h.addPlaylist('P', ['t1']);
       });
-      h.folderPicker = () async => '/storage/Music';
+      h.folderPicker = () async => FolderPicked('/storage/Music');
       h.scanner.onScan = (folder, name) async* {
         // The scan finds the file by content and repairs its local file row.
         await (h.db.update(h.db.localFiles)
@@ -318,7 +319,7 @@ void main() {
         await h.addTrack('t1', missing: true);
         return h.addPlaylist('P', ['t1']);
       });
-      h.folderPicker = () async => '/storage/Music';
+      h.folderPicker = () async => FolderPicked('/storage/Music');
       h.scanner.onScan = (folder, name) => Stream.value(
         const ScanProgress(
           found: 3,
@@ -358,7 +359,7 @@ void main() {
         await h.addTrack('t1', missing: true);
         return h.addPlaylist('P', ['t1']);
       });
-      h.folderPicker = () async => '/storage/Music';
+      h.folderPicker = () async => FolderPicked('/storage/Music');
       h.scanner.onScan = (folder, name) => Stream.error(StateError('gone'));
       await pumpPage(tester, id);
 

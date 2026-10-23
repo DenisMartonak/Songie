@@ -23,8 +23,17 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
     await _explainPermission(context);
     return;
   }
-  final path = await pickFolder();
-  if (path == null || !context.mounted) return;
+  final pick = await pickFolder();
+  if (!context.mounted) return;
+  final path = switch (pick) {
+    FolderPicked(:final path) => path,
+    FolderPickCancelled() => null,
+    FolderPickFailed(:final error) => () {
+      snacks.show(content: Text(folderPickFailureMessage(error)));
+      return null;
+    }(),
+  };
+  if (path == null) return;
 
   final name = folderDisplayName(path);
   final createPlaylist = await showDialog<bool>(
@@ -50,6 +59,16 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
     snacks.show(content: Text("Couldn't scan $name"));
   }
 }
+
+/// What to tell the user when the folder picker could not open.
+String folderPickFailureMessage(FolderPickError error) => switch (error) {
+  FolderPickError.unsupportedLocation =>
+    "That folder can't be used — pick one under Internal storage or the SD "
+        'card (not Downloads or a cloud folder)',
+  FolderPickError.noFileManager => 'No file manager found to pick a folder',
+  FolderPickError.busy => 'The folder picker is already open',
+  FolderPickError.unknown => "Couldn't open the folder picker",
+};
 
 /// The last segment of a folder path (the path itself for a root).
 String folderDisplayName(String path) {
@@ -93,6 +112,7 @@ String _summary(ScanProgress? result, String folderName) {
   if (result == null) return 'Scanned $folderName';
   final songs = result.added == 1 ? '1 song' : '${result.added} songs';
   final skipped = result.skipped > 0 ? ' · ${result.skipped} skipped' : '';
+  if (result.found == 0) return 'No MP3 files in $folderName';
   if (result.added == 0) {
     return 'No new songs in $folderName$skipped';
   }
