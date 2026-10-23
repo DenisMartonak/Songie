@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../player/player_service.dart';
 import '../../providers.dart';
+import '../../youtube/yt_models.dart';
 import '../widgets/page_snack_bar.dart';
 
 /// What the user is told for a [PlayerState.error].
@@ -10,6 +11,7 @@ String playerErrorMessage(String error) => switch (error) {
   PlayerService.noPlayableFilesError =>
     "Couldn't play — the song files are missing",
   PlayerService.engineFailedError => "Couldn't play these songs",
+  _ when error.startsWith('ytdlp:') => ytErrorUserMessageFromText(error),
   _ => error,
 };
 

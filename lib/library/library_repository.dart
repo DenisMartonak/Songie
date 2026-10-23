@@ -440,6 +440,26 @@ class LibraryRepository {
     });
   }
 
+  /// Flags a track as unplayable (e.g. a YouTube video that is gone). Stamped;
+  /// a no-op when it is already flagged.
+  Future<Result<void>> markUnavailable(String trackId) {
+    return guardDb(_db, () async {
+      final t = await trackById(trackId);
+      if (t == null) return _notFound('track $trackId');
+      if (t.unavailable) return const Ok(null);
+      final stamp = await _stamp.next();
+      await (_db.update(_db.tracks)..where((r) => r.id.equals(trackId))).write(
+        TracksCompanion(
+          unavailable: const Value(true),
+          clock: Value(stamp.clock),
+          originDevice: Value(stamp.originDevice),
+          localSeq: Value(stamp.localSeq),
+        ),
+      );
+      return const Ok(null);
+    });
+  }
+
   Future<Track?> trackById(String id) {
     return (_db.select(_db.tracks)
           ..where((t) => t.id.equals(id) & t.deleted.equals(false)))

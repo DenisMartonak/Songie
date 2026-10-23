@@ -83,9 +83,12 @@ YtErrorKind? ytErrorKindOf(Failure f) {
   return null;
 }
 
-String ytErrorUserMessage(Failure f) {
-  final kind = ytErrorKindOf(f);
-  if (kind == null) return f.message;
+String ytErrorUserMessage(Failure f) => ytErrorUserMessageFromText(f.message);
+
+/// Like [ytErrorUserMessage] for a bare message string (e.g. a player error).
+String ytErrorUserMessageFromText(String message) {
+  final kind = ytErrorKindOf(Failure(FailureKind.unknown, message));
+  if (kind == null) return message;
   return switch (kind) {
     YtErrorKind.notAPlaylist => "That's a video link — paste a playlist link",
     YtErrorKind.notFound =>

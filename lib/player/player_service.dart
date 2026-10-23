@@ -85,6 +85,9 @@ class PlayerState {
 class _Entry {
   _Entry(this.track);
   final Track track;
+
+  /// Whether the engine-error retry (fresh stream URL) was already used.
+  bool engineRetried = false;
 }
 
 /// The single source of truth for what is playing. Platform-agnostic: audio
@@ -100,6 +103,7 @@ class PlayerService {
     this._resolver, {
     this._onMissing,
     this._onTrackStarted,
+    this._onUnavailable,
     Random? random,
   }) : _random = random ?? Random() {
     _sub = _backend.states.listen(_onBackendState);
@@ -117,6 +121,7 @@ class PlayerService {
   final TrackResolver _resolver;
   final Future<void> Function(String trackId)? _onMissing;
   final Future<void> Function(Track track, String? playlistId)? _onTrackStarted;
+  final Future<void> Function(String trackId)? _onUnavailable;
   final Random _random;
 
   final StreamController<PlayerState> _controller =
@@ -144,6 +149,13 @@ class PlayerService {
   /// the user picks what to play.
   int _engineFailures = 0;
   Future<void> _tail = Future<void>.value();
+
+  /// Set by [_tryStart] when resolving failed for lack of network; playback
+  /// then stops instead of skipping on.
+  Failure? _networkFailure;
+
+  /// The entry whose successor was already prefetched.
+  _Entry? _prefetchedFor;
 
   Stream<PlayerState> get states => _controller.stream;
   PlayerState get state => _state;
@@ -223,7 +235,7 @@ class PlayerService {
       _candidates(index - 1, step: -1, wrap: false),
       giveUpOnFailure: false,
     );
-    if (!found) {
+    if (!found && _networkFailure == null) {
       // Nothing earlier can be played: keep the current track going.
       await _restartCurrent(entry);
     }
@@ -416,8 +428,10 @@ class PlayerService {
   }) async {
     // A new attempt starts clean, so failing again is a new error to show.
     if (_state.error != null) _emit(_state.copyWith(error: null));
+    _networkFailure = null;
     for (final entry in candidates) {
       if (await _tryStart(entry)) return true;
+      if (await _haltOnNetworkFailure()) return false;
     }
     if (giveUpOnFailure) {
       await _stopBackend();
@@ -451,8 +465,19 @@ class PlayerService {
     _emit(_state.copyWith(playing: false));
   }
 
-  Future<bool> _tryStart(_Entry entry) async {
+  /// Stops playback with the network failure's message, if [_tryStart] saw one.
+  Future<bool> _haltOnNetworkFailure() async {
+    final failure = _networkFailure;
+    if (failure == null) return false;
+    await _stopBackend();
+    _markStopped();
+    _emit(_state.copyWith(error: failure.message));
+    return true;
+  }
+
+  Future<bool> _tryStart(_Entry entry, {bool report = true}) async {
     final track = entry.track;
+    _prefetchedFor = null;
     final Result<AudioSourceRef> resolved;
     try {
       resolved = await _resolver.resolve(track);
@@ -462,8 +487,15 @@ class PlayerService {
     }
     switch (resolved) {
       case Err(:final failure):
-        if (failure.kind == FailureKind.notFound) {
-          await _reportMissing(track.id);
+        if (failure.kind == FailureKind.network) {
+          AppLog.w('Cannot play ${track.id}: ${failure.message}');
+          _networkFailure = failure;
+        } else if (failure.kind == FailureKind.notFound) {
+          if (track.source == 'yt') {
+            await _reportUnavailable(track.id);
+          } else {
+            await _reportMissing(track.id);
+          }
         } else {
           AppLog.w('Cannot play ${track.id}: ${failure.message}');
         }
@@ -491,7 +523,7 @@ class PlayerService {
         _loaded = true;
         _generation++;
         _emit(_state.copyWith(playing: true, error: null));
-        await _reportStarted(track);
+        if (report) await _reportStarted(track);
         return true;
     }
   }
@@ -504,6 +536,14 @@ class PlayerService {
       await _onMissing?.call(trackId);
     } catch (e, s) {
       AppLog.e('onMissing failed for $trackId', e, s);
+    }
+  }
+
+  Future<void> _reportUnavailable(String trackId) async {
+    try {
+      await _onUnavailable?.call(trackId);
+    } catch (e, s) {
+      AppLog.e('onUnavailable failed for $trackId', e, s);
     }
   }
 
@@ -579,6 +619,7 @@ class PlayerService {
         duration: s.duration ?? _currentDuration(),
       ),
     );
+    _maybePrefetch();
     if (completedNow && _loaded) {
       final generation = _generation;
       _locked(() => _handleCompleted(generation))
@@ -586,6 +627,36 @@ class PlayerService {
             AppLog.e('Handling track completion failed', e, st);
           });
     }
+  }
+
+  static const Duration prefetchLead = Duration(seconds: 20);
+
+  /// Warms the next track's stream once the current one is nearly over.
+  void _maybePrefetch() {
+    final entry = _currentEntry;
+    final duration = _state.duration;
+    if (entry == null ||
+        duration == null ||
+        !_state.playing ||
+        !_loaded ||
+        identical(_prefetchedFor, entry) ||
+        duration - _state.position > prefetchLead) {
+      return;
+    }
+    final index = _state.index;
+    final _Entry? next;
+    if (_state.repeat == RepeatMode.one) {
+      next = null;
+    } else if (index + 1 < _queue.length) {
+      next = _queue[index + 1];
+    } else {
+      next = _wraps ? _queue.first : null;
+    }
+    _prefetchedFor = entry;
+    if (next == null || identical(next, entry)) return;
+    _resolver.prefetch(next.track).catchError((Object e, StackTrace st) {
+      AppLog.w('Prefetching ${next!.track.id} failed', e, st);
+    });
   }
 
   Duration? _currentDuration() {
@@ -603,6 +674,14 @@ class PlayerService {
       // Stopped, or the user already moved on since this was reported.
       if (!_loaded || !identical(_currentEntry, entry)) return;
       AppLog.w('Playback of ${entry.track.id} failed: $error');
+      if (entry.track.source == 'yt' && !entry.engineRetried) {
+        // The stream URL may have expired: fetch a fresh one, once per entry.
+        entry.engineRetried = true;
+        _resolver.invalidate(entry.track);
+        _networkFailure = null;
+        if (await _tryStart(entry, report: false)) return;
+        if (await _haltOnNetworkFailure()) return;
+      }
       if (++_engineFailures >= _queue.length) {
         await _stopBackend();
         _markStopped();

@@ -29,6 +29,9 @@ Track track(String id, {int durationMs = 0}) => Track(
 class FakeResolver extends TrackResolver {
   final Set<String> missing = {};
   final List<String> resolved = [];
+  final Map<String, Failure> failures = {};
+  final List<String> prefetched = [];
+  final List<String> invalidated = [];
   Completer<void>? gate;
 
   @override
@@ -36,12 +39,22 @@ class FakeResolver extends TrackResolver {
     resolved.add(t.id);
     final g = gate;
     if (g != null) await g.future;
+    final f = failures[t.id];
+    if (f != null) return Err(f);
     if (missing.contains(t.id)) {
       return Err(Failure(FailureKind.notFound, 'missing ${t.id}'));
     }
     return Ok(FileSource('/music/${t.id}.mp3'));
   }
+
+  @override
+  Future<void> prefetch(Track t) async => prefetched.add(t.id);
+
+  @override
+  void invalidate(Track t) => invalidated.add(t.id);
 }
+
+Track ytTrack(String id) => track(id).copyWith(source: 'yt');
 
 Future<void> settle() => pumpEventQueue();
 
@@ -50,6 +63,7 @@ void main() {
   late FakeResolver resolver;
   late List<String> missingReports;
   late List<String> started;
+  late List<String> unavailable;
   late PlayerService player;
   final a = track('a');
   final b = track('b');
@@ -62,6 +76,7 @@ void main() {
     resolver,
     random: Random(seed),
     onMissing: (id) async => missingReports.add(id),
+    onUnavailable: (id) async => unavailable.add(id),
     onTrackStarted: (t, playlistId) async =>
         started.add('${t.id}@${playlistId ?? '-'}'),
   );
@@ -71,6 +86,7 @@ void main() {
     resolver = FakeResolver();
     missingReports = [];
     started = [];
+    unavailable = [];
     player = build();
   });
 
@@ -812,6 +828,166 @@ void main() {
       await player.setVolume(0.3);
       await player.playQueue([a, b]);
       expect(player.state.volume, 0.3);
+    });
+  });
+
+  group('network failures', () {
+    final offline = Failure(FailureKind.network, "You're offline");
+
+    test('stop playback without skipping', () async {
+      resolver.failures['a'] = offline;
+      await player.playQueue([a, b, c]);
+
+      expect(backend.calls, isNot(contains('play')));
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, "You're offline");
+      expect(resolver.resolved, ['a']);
+      expect(player.state.current, a);
+    });
+
+    test('stop when auto-advancing', () async {
+      await player.playQueue([a, b, c]);
+      resolver.failures['b'] = offline;
+      backend.complete();
+      await settle();
+
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, "You're offline");
+      expect(resolver.resolved, ['a', 'b']);
+      expect(backend.calls.last, 'stop');
+    });
+
+    test('previous does not restart after a network stop', () async {
+      await player.playQueue([a, b, c], startIndex: 2);
+      resolver.failures['b'] = offline;
+      await player.previous();
+      expect(resolver.resolved, ['c', 'b']);
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, "You're offline");
+    });
+
+    test('yt notFound skips and reports unavailable', () async {
+      final y = ytTrack('y');
+      resolver.failures['y'] = Failure(
+        FailureKind.notFound,
+        'ytdlp:notFound:x',
+      );
+      await player.playQueue([y, b]);
+
+      expect(player.state.current, b);
+      expect(player.state.playing, isTrue);
+      expect(unavailable, ['y']);
+      expect(missingReports, isEmpty);
+    });
+
+    test('local notFound does not report unavailable', () async {
+      resolver.missing.add('a');
+      await player.playQueue([a, b]);
+      expect(unavailable, isEmpty);
+    });
+  });
+
+  group('yt engine retry', () {
+    test('first engine error re-resolves the same entry once', () async {
+      final y = ytTrack('y');
+      await player.playQueue([y, b]);
+      backend.clearCalls();
+
+      backend.emitError();
+      await settle();
+
+      expect(resolver.invalidated, ['y']);
+      expect(resolver.resolved, ['y', 'y']);
+      expect(backend.calls, ['setSource:/music/y.mp3', 'play']);
+      expect(player.state.current, y);
+      expect(player.state.playing, isTrue);
+      expect(started, ['y@-']);
+    });
+
+    test('second engine error follows the skip path', () async {
+      final y = ytTrack('y');
+      await player.playQueue([y, b]);
+      backend.emitError();
+      await settle();
+      backend.emitError();
+      await settle();
+
+      expect(resolver.invalidated, ['y']);
+      expect(player.state.current, b);
+    });
+
+    test('local tracks are not retried', () async {
+      await player.playQueue([a, b]);
+      backend.emitError();
+      await settle();
+      expect(resolver.invalidated, isEmpty);
+      expect(player.state.current, b);
+    });
+
+    test('network failure on the retry stops playback', () async {
+      final y = ytTrack('y');
+      await player.playQueue([y, b]);
+      resolver.failures['y'] = Failure(FailureKind.network, "You're offline");
+      backend.emitError();
+      await settle();
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, "You're offline");
+      expect(resolver.resolved, ['y', 'y']);
+    });
+  });
+
+  group('prefetch', () {
+    Future<void> at(int secs) async {
+      backend.setDuration(const Duration(seconds: 100));
+      backend.setPosition(Duration(seconds: secs));
+      await settle();
+    }
+
+    test('fires once when within 20 s of the end', () async {
+      await player.playQueue([a, b, c]);
+      await at(70);
+      expect(resolver.prefetched, isEmpty);
+      await at(80);
+      await at(85);
+      expect(resolver.prefetched, ['b']);
+    });
+
+    test('not while paused or with unknown duration', () async {
+      await player.playQueue([a, b]);
+      backend.setPosition(const Duration(seconds: 95));
+      expect(resolver.prefetched, isEmpty);
+      await player.pause();
+      backend.setDuration(const Duration(seconds: 100));
+      backend.setPosition(const Duration(seconds: 96));
+      expect(resolver.prefetched, isEmpty);
+    });
+
+    test('none at the end with repeat off, wraps with repeat all', () async {
+      await player.playQueue([a, b], startIndex: 1);
+      await at(90);
+      expect(resolver.prefetched, isEmpty);
+
+      player.cycleRepeat();
+      await player.playQueue([a, b], startIndex: 1);
+      await at(90);
+      expect(resolver.prefetched, ['a']);
+    });
+
+    test('none for repeat one', () async {
+      player.cycleRepeat();
+      player.cycleRepeat();
+      await player.playQueue([a, b]);
+      await at(90);
+      expect(resolver.prefetched, isEmpty);
+    });
+
+    test('again for the next entry', () async {
+      await player.playQueue([a, b, c]);
+      await at(90);
+      backend.complete();
+      await settle();
+      await at(90);
+      expect(resolver.prefetched, ['b', 'c']);
     });
   });
 }

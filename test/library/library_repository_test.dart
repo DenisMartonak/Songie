@@ -581,6 +581,30 @@ void main() {
     expect(failureOf(r), FailureKind.io);
   });
 
+  group('markUnavailable', () {
+    Future<Track> row(String id) =>
+        (db.select(db.tracks)..where((t) => t.id.equals(id))).getSingle();
+
+    test('flags the track, stamped; a second call is a no-op', () async {
+      await db.into(db.tracks).insert(trackRow(id: 't', localSeq: 99));
+      final before = await row('t');
+      expect(await repo.markUnavailable('t'), isA<Ok<void>>());
+      final after = await row('t');
+      expect(after.unavailable, isTrue);
+      expect(after.localSeq, isNot(before.localSeq));
+      expect(after.clock, isNot(before.clock));
+      expect(after.originDevice, stamp.deviceId);
+
+      await repo.markUnavailable('t');
+      expect((await row('t')).localSeq, after.localSeq);
+    });
+
+    test('unknown track is notFound', () async {
+      final r = await repo.markUnavailable('nope');
+      expect(r, isA<Err<void>>());
+    });
+  });
+
   group('updateTrackMetadata', () {
     Future<Track> row(String id) =>
         (db.select(db.tracks)..where((t) => t.id.equals(id))).getSingle();
