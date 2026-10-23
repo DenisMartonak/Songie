@@ -1146,19 +1146,21 @@ void main() {
       expect(player.state.playing, isTrue);
     });
 
-    test('previous falling back to the current track restores its index',
-        () async {
-      final y = ytTrack('y');
-      await player.playQueue([y, b], startIndex: 1);
-      resolver.failures['y'] = Failure(
-        FailureKind.notFound,
-        'ytdlp:notFound:x',
-      );
-      await player.previous();
-      expect(player.state.current, b);
-      expect(player.state.index, 1);
-      expect(player.state.buffering, isFalse);
-      expect(player.state.playing, isTrue);
-    });
+    test(
+      'previous falling back to the current track restores its index',
+      () async {
+        final y = ytTrack('y');
+        await player.playQueue([y, b], startIndex: 1);
+        resolver.failures['y'] = Failure(
+          FailureKind.notFound,
+          'ytdlp:notFound:x',
+        );
+        await player.previous();
+        expect(player.state.current, b);
+        expect(player.state.index, 1);
+        expect(player.state.buffering, isFalse);
+        expect(player.state.playing, isTrue);
+      },
+    );
   });
 }

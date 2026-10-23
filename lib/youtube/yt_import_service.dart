@@ -277,9 +277,7 @@ class YtImportService {
       final trackId = old?.id ?? s!.id;
       trackIds.add(trackId);
       // Unavailable entries only carry YouTube's no_thumbnail placeholder.
-      if (old?.artworkRef == null &&
-          e.thumbnailUrl != null &&
-          !e.unavailable) {
+      if (old?.artworkRef == null && e.thumbnailUrl != null && !e.unavailable) {
         needArt.add((trackId, e.thumbnailUrl!));
       }
       if (old == null) {
