@@ -19,6 +19,9 @@ String? parsePlaylistLink(String input) {
   if (!_hosts.contains(uri.host.toLowerCase())) return null;
   final id = uri.queryParameters['list'];
   if (id == null || !_idPattern.hasMatch(id)) return null;
+  // `RD…` ids are radio/mix lists generated per listener, not playlists;
+  // `RDCLAK…` are YouTube Music's curated (static) playlists and do import.
+  if (id.startsWith('RD') && !id.startsWith('RDCLAK')) return null;
   return 'https://music.youtube.com/playlist?list=$id';
 }
 

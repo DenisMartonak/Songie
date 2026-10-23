@@ -170,6 +170,21 @@ void main() {
     expect(find.text('Settings stub'), findsOneWidget);
   });
 
+  uiTest('a throwing import does not leave the dialog busy', (tester) async {
+    h.importService.onImport = (_) async => throw StateError('boom');
+    await pumpLibrary(tester);
+    await openDialog(tester);
+    await submit(tester, _link);
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('Importing…'), findsNothing);
+    expect(find.text('Something went wrong — try again'), findsOneWidget);
+    final button = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Import'),
+    );
+    expect(button.onPressed, isNotNull);
+  });
+
   uiTest('an extractor error shows the update hint inline', (tester) async {
     h.importService.onImport = (_) async =>
         Err(ytFailure(YtErrorKind.extractor, 'boom'));

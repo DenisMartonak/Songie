@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/log.dart';
 import '../../core/result.dart';
 import '../../providers.dart';
 import '../../youtube/yt_import_service.dart';
@@ -57,6 +58,8 @@ class _ImportDialogState extends ConsumerState<ImportDialog> {
     super.dispose();
   }
 
+  static const _failedCopy = 'Something went wrong — try again';
+
   Future<void> _import() async {
     if (_busy) return;
     setState(() {
@@ -64,9 +67,18 @@ class _ImportDialogState extends ConsumerState<ImportDialog> {
       _error = null;
       _missingBinary = false;
     });
-    final result = await ref
-        .read(ytImportServiceProvider)
-        .importPlaylist(_link.text.trim());
+    Result<ImportResult> result;
+    try {
+      result = await ref
+          .read(ytImportServiceProvider)
+          .importPlaylist(_link.text.trim());
+    } catch (e, s) {
+      AppLog.w('Import failed', e, s);
+      result = Err(Failure(FailureKind.unknown, _failedCopy, cause: e));
+    } finally {
+      // Whatever happens above, the dialog must not stay stuck busy.
+      if (mounted && _busy) setState(() => _busy = false);
+    }
     if (!mounted) return;
     switch (result) {
       case Ok(:final value):
@@ -74,7 +86,6 @@ class _ImportDialogState extends ConsumerState<ImportDialog> {
         _open(value);
       case Err(:final failure):
         setState(() {
-          _busy = false;
           _error = ytErrorUserMessage(failure);
           _missingBinary = ytErrorKindOf(failure) == YtErrorKind.missingBinary;
         });

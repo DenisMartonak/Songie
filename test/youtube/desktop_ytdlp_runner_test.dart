@@ -29,7 +29,7 @@ void main() {
       installer: installer([]),
       start: (e, a, t) async => fail('must not start'),
     );
-    expect(r.run(['--version']), throwsA(isA<YtDlpMissing>()));
+    await expectLater(r.run(['--version']), throwsA(isA<YtDlpMissing>()));
     expect(await r.version(), isNull);
   });
 
@@ -40,7 +40,7 @@ void main() {
       systemBinary: 'yt-dlp',
       start: (e, a, t) async => throw const ProcessException('yt-dlp', []),
     );
-    expect(r.run(['x']), throwsA(isA<YtDlpMissing>()));
+    await expectLater(r.run(['x']), throwsA(isA<YtDlpMissing>()));
   });
 
   test('systemBinary uses that executable name and passes args', () async {

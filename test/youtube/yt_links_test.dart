@@ -17,6 +17,15 @@ void main() {
       }
     });
 
+    test('accepts curated RDCLAK playlists (static, not a mix)', () {
+      expect(
+        parsePlaylistLink(
+          'https://music.youtube.com/playlist?list=RDCLAK5uy_a',
+        ),
+        'https://music.youtube.com/playlist?list=RDCLAK5uy_a',
+      );
+    });
+
     test('rejects non-playlist input', () {
       for (final s in [
         'https://www.youtube.com/watch?v=abc',
@@ -25,6 +34,9 @@ void main() {
         'https://example.com/playlist?list=PLx',
         'https://youtube.com/playlist?list=',
         'ftp://youtube.com/playlist?list=PLx',
+        // Radio/mix lists are generated per user, not real playlists.
+        'https://music.youtube.com/playlist?list=RDAMVMabc',
+        'https://www.youtube.com/watch?v=abc&list=RDabc',
       ]) {
         expect(parsePlaylistLink(s), isNull, reason: s);
       }
