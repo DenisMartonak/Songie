@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -108,4 +109,101 @@ void main() {
       expect(File('${inst.binary.path}.download').existsSync(), isFalse);
     });
   }
+
+  test('a hanging --version run times out and keeps the old binary', () async {
+    final inst = YtDlpInstaller(
+      dir,
+      isWindows: false,
+      download: (uri) async => uri.pathSegments.last == 'SHA2-256SUMS'
+          ? utf8.encode('$hash  yt-dlp_linux\n')
+          : bytes,
+      runProcess: (exe, args) {
+        if (exe == 'chmod') return Future.value(ProcessResult(0, 0, '', ''));
+        return Completer<ProcessResult>().future; // never finishes
+      },
+      versionTimeout: const Duration(milliseconds: 50),
+    );
+    inst.binary.writeAsBytesSync([7, 7]);
+    final r = await inst.installOrUpdate();
+    expect(r, isA<Err<String>>());
+    expect(inst.binary.readAsBytesSync(), [7, 7]);
+    expect(File('${inst.binary.path}.download').existsSync(), isFalse);
+  });
+
+  group('httpDownload (loopback server)', () {
+    late HttpServer server;
+    late Future<void> Function(HttpRequest) handler;
+    final open = <HttpResponse>[];
+
+    setUp(() async {
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((req) => handler(req));
+    });
+    tearDown(() async {
+      for (final r in open) {
+        try {
+          await r.detachSocket().then((s) => s.destroy());
+        } on Object {
+          // already closed
+        }
+      }
+      open.clear();
+      await server.close(force: true);
+    });
+
+    Uri url() => Uri.parse('http://127.0.0.1:${server.port}/f');
+
+    test('downloads the body', () async {
+      handler = (req) async {
+        req.response.add([1, 2, 3]);
+        await req.response.close();
+      };
+      expect(await httpDownload(url()), [1, 2, 3]);
+    });
+
+    test('a stalled body hits the idle timeout', () async {
+      handler = (req) async {
+        req.response.contentLength = 100;
+        req.response.add([1, 2, 3]);
+        await req.response.flush();
+        open.add(req.response); // then nothing more
+      };
+      await expectLater(
+        httpDownload(url(), idleTimeout: const Duration(milliseconds: 200)),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('no response headers hits the idle timeout', () async {
+      handler = (req) async => open.add(req.response);
+      await expectLater(
+        httpDownload(url(), idleTimeout: const Duration(milliseconds: 200)),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('a trickling body hits the overall cap', () async {
+      handler = (req) async {
+        req.response.contentLength = 1000;
+        open.add(req.response);
+        for (var i = 0; i < 40; i++) {
+          try {
+            req.response.add([i]);
+            await req.response.flush();
+          } on Object {
+            return;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 25));
+        }
+      };
+      await expectLater(
+        httpDownload(
+          url(),
+          idleTimeout: const Duration(seconds: 5),
+          totalTimeout: const Duration(milliseconds: 300),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+  });
 }

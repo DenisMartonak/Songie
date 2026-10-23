@@ -40,6 +40,18 @@ String listJson(List<String> ids, {String title = 'Mix', List<String>? bad}) =>
       ],
     });
 
+/// A fetcher that throws for one url (fetch normally never throws).
+class _ThrowingFetcher extends ThumbnailFetcher {
+  _ThrowingFetcher(super.art, super.download, this.bad);
+  final String bad;
+
+  @override
+  Future<String?> fetch(String? url) {
+    if (url == bad) throw StateError('boom');
+    return super.fetch(url);
+  }
+}
+
 void main() {
   late AppDatabase db;
   late SyncStamp stamp;
@@ -267,6 +279,30 @@ void main() {
       expect(r, isA<Ok<ImportResult>>());
       await service.thumbnailsSettled;
       expect((await db.select(db.tracks).getSingle()).artworkRef, isNull);
+    });
+
+    test('a throwing fetch does not drop the rest of the pass', () async {
+      final old = debugPrint;
+      debugPrint = (String? m, {int? wrapWidth}) {};
+      addTearDown(() => debugPrint = old);
+      runner.onOk('list=PLx', listJson(['a', 'b']));
+      service = YtImportService(
+        db,
+        stamp,
+        YtDlpClient(runner),
+        _ThrowingFetcher(
+          ArtCache(Directory('${tmp.path}/art')),
+          (u) async => img.encodePng(img.Image(width: 16, height: 9)),
+          'https://img/a.jpg',
+        ),
+      );
+      await service.importPlaylist(link);
+      await service.thumbnailsSettled;
+      final tracks = {
+        for (final t in await db.select(db.tracks).get()) t.ytVideoId: t,
+      };
+      expect(tracks['a']!.artworkRef, isNull);
+      expect(tracks['b']!.artworkRef, isNotNull);
     });
 
     test('1,500 entries import in order', () async {

@@ -27,24 +27,39 @@ Future<ProcessResult> _defaultRunProcess(String exe, List<String> args) =>
     );
 
 /// Real download function: GET with redirects (GitHub release assets redirect).
-Future<List<int>> httpDownload(Uri uri) async {
-  final client = HttpClient();
-  try {
+///
+/// A stalled connection fails with a [TimeoutException] instead of hanging:
+/// [connectionTimeout] bounds the connect, [idleTimeout] any wait for the
+/// response headers or the next body chunk, and [totalTimeout] the whole
+/// download (the yt-dlp binary is tens of MB).
+Future<List<int>> httpDownload(
+  Uri uri, {
+  Duration connectionTimeout = const Duration(seconds: 30),
+  Duration idleTimeout = const Duration(seconds: 30),
+  Duration totalTimeout = const Duration(minutes: 10),
+}) async {
+  final client = HttpClient()..connectionTimeout = connectionTimeout;
+  Future<List<int>> body() async {
     final req = await client.getUrl(uri);
     req.followRedirects = true;
     req.maxRedirects = 10;
-    final res = await req.close();
+    final res = await req.close().timeout(idleTimeout);
     if (res.statusCode != 200) {
-      await res.drain<void>();
+      await res.drain<void>().timeout(idleTimeout);
       throw HttpException('HTTP ${res.statusCode}', uri: uri);
     }
     final b = BytesBuilder(copy: false);
-    await for (final chunk in res) {
+    await for (final chunk in res.timeout(idleTimeout)) {
       b.add(chunk);
     }
     return b.takeBytes();
+  }
+
+  try {
+    return await body().timeout(totalTimeout);
   } finally {
-    client.close();
+    // force: a timed-out request must not keep its socket open.
+    client.close(force: true);
   }
 }
 
@@ -54,7 +69,11 @@ class YtDlpInstaller {
     required this.download,
     required this.isWindows,
     ProcessRunFn? runProcess,
+    this.versionTimeout = const Duration(seconds: 30),
   }) : _run = runProcess ?? _defaultRunProcess;
+
+  /// Limit for the post-install `--version` check of the downloaded binary.
+  final Duration versionTimeout;
 
   final Directory binDir;
   final Future<List<int>> Function(Uri) download;
@@ -100,9 +119,14 @@ class YtDlpInstaller {
           );
         }
       }
-      final v = await _run(tmp.path, ['--version']);
-      final version = '${v.stdout}'.trim();
-      if (v.exitCode != 0 || version.isEmpty) {
+      ProcessResult? v;
+      try {
+        v = await _run(tmp.path, ['--version']).timeout(versionTimeout);
+      } on TimeoutException {
+        v = null;
+      }
+      final version = '${v?.stdout ?? ''}'.trim();
+      if (v == null || v.exitCode != 0 || version.isEmpty) {
         await _cleanup(tmp);
         return const Err(
           Failure(FailureKind.io, 'Installed yt-dlp does not run'),

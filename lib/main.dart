@@ -73,7 +73,10 @@ Future<void> main() async {
     db,
     stamp,
     ytClient,
-    ThumbnailFetcher(artCache, httpDownload),
+    ThumbnailFetcher(
+      artCache,
+      (u) => httpDownload(u, totalTimeout: const Duration(seconds: 15)),
+    ),
   );
   final streams = StreamResolver(
     ytClient,

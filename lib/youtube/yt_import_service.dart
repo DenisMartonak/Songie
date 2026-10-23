@@ -423,8 +423,13 @@ class YtImportService {
       Future<void> worker() async {
         while (next < need.length) {
           final (trackId, url) = need[next++];
-          final ref = await _thumbs.fetch(url);
-          if (ref != null) refs[trackId] = ref;
+          try {
+            final ref = await _thumbs.fetch(url);
+            if (ref != null) refs[trackId] = ref;
+          } catch (e, s) {
+            // One bad image must not drop the rest of the pass.
+            AppLog.w('Thumbnail for $trackId failed', e, s);
+          }
         }
       }
 
