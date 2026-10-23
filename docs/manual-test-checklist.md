@@ -82,6 +82,10 @@ Import and sync
 
 Streaming
 - [ ] A YouTube song streams and plays with no ads.
+- [ ] A YouTube song plays on Android, in both builds (this checks that stream headers reach YouTube without the local proxy, and that release shrinking kept youtubedl-android).
+  - [ ] Debug APK
+  - [ ] Release APK
+- [ ] Tapping a YouTube song shows it as the current song (loading) right away, before the stream starts.
 - [ ] The next song starts without a long gap.
 - [ ] Wi-Fi only on, mobile data: streaming is blocked with the "Wi-Fi only" message. (Android)
 - [ ] Offline: playing a YouTube song shows the offline message and stops.
@@ -89,7 +93,8 @@ Streaming
 yt-dlp
 - [ ] Settings, Update yt-dlp works on Android.
 - [ ] Settings, Update yt-dlp works on desktop.
-- [ ] Windows: on a fresh install, Settings, Install yt-dlp downloads it and shows the version.
+- [ ] Windows: on a fresh install, Settings, Install yt-dlp downloads it and shows the version. (The install step runs `--version` on `yt-dlp.exe.download` before renaming it; check that this works there and that antivirus doesn't block it.)
+- [ ] Windows: Update yt-dlp while a YouTube song is streaming. The update finishes (or fails with a message) and the song keeps playing or stops cleanly.
 - [ ] Nobara: "Use system yt-dlp" works with the distro's yt-dlp, and Update explains that the package manager does it.
 
 Windows release build (left for the PC, because Plan 2 was verified on Nobara)

@@ -2,11 +2,11 @@
 
 _Last updated: 2026-10-23_
 
-## Plan 2 (YouTube) — done, pending your device checks and the final review
+## Plan 2 (YouTube) — done and reviewed, pending your device checks
 
 - **Branch:** `plan-2-youtube`, made from `plan-1-foundation`. Plan: [Plan 2](superpowers/plans/2026-10-22-songies-plan-2-youtube-import-sync-stream.md).
-- **Status:** Tasks 1-10 are implemented and reviewed task by task. The final whole-branch review is in progress. The YouTube section of the [manual checklist](manual-test-checklist.md) is for you.
-- **Tests:** 556 passing; `flutter analyze` is clean.
+- **Status:** Tasks 1-10 are implemented and reviewed task by task, and the final whole-branch review's findings are fixed (see "Plan 2 final review fixes" below). The YouTube section of the [manual checklist](manual-test-checklist.md) is for you.
+- **Tests:** 583 passing; `flutter analyze` is clean.
 
 ### What works now
 - **Import:** paste a YouTube or YouTube Music playlist link, or Share one from the YT Music app (Android). Importing the same playlist twice says it already exists.
@@ -22,17 +22,16 @@ _Last updated: 2026-10-23_
   - Sync right after: 0 added, 0 flagged, 0 restored (2.0 s).
   - Stream resolve of one track: 3.2 s. A ranged GET (`Range: bytes=0-1023`) with the returned headers gave HTTP 206, `audio/webm`, `bytes 0-1023/3947045`.
 - **`flutter build linux --release`:** succeeds (bundle 33 MB), without `mpv-libs-devel`. The release bundle was launched for 12 s with no errors (media_kit_libs_linux registered); audio was not listened to.
-- **`flutter build apk --release`:** succeeds, 78.5 MB (arm64-v8a, armeabi-v7a and x86_64). It prints `llvm-strip` "not a valid object file" errors for `libpython.zip.so`. They don't fail the build; the file just ships unstripped. No gradle change was made.
+- **`flutter build apk --release`:** succeeds, 78.8 MB after the final fixes (78.5 MB before) (arm64-v8a, armeabi-v7a and x86_64). It prints `llvm-strip` "not a valid object file" errors for `libpython.zip.so`. They don't fail the build; the file just ships unstripped. No gradle change was made.
 - **Not done here (left for the Windows PC):** `flutter build windows --release`, idle RAM (target 150 MB or less), and "Install yt-dlp" from Settings on Windows. No audio, phone or Windows checks were possible.
 
 ### Next steps
-1. Finish the final whole-branch review and fix its findings.
-2. Tick the YouTube section of the manual checklist on Android, Windows and Nobara.
-3. Merge `plan-1-foundation` and `plan-2-youtube` once happy.
-4. **Plan 3: downloads** (save YouTube songs for offline play).
+1. Tick the YouTube section of the manual checklist on Android, Windows and Nobara.
+2. Merge `plan-1-foundation` and `plan-2-youtube` once happy.
+3. **Plan 3: downloads** (save YouTube songs for offline play).
 
 - **To resume in a new Claude session:**
-  > Songies Plan 2 is implemented on branch `plan-2-youtube` (Tasks 1-10 done, 556 tests). Next: run or finish the final whole-branch review, then fix its findings. After that, write Plan 3 (downloads) from docs/superpowers/specs/2026-10-21-songies-design.md. Read docs/PROGRESS.md. Don't push or merge.
+  > Songies Plan 2 is implemented on branch `plan-2-youtube` (Tasks 1-10 done, final review fixed, 583 tests). Next: the manual YouTube checks on Android/Windows/Nobara, then write Plan 3 (downloads) from docs/superpowers/specs/2026-10-21-songies-design.md. Read docs/PROGRESS.md. Don't push or merge.
 
 ## Plan 1 status
 
@@ -129,11 +128,24 @@ Each entry says what was decided and what it costs if it turns out wrong.
 - **R28:** A network failure leaving `StreamResolver` has a ready-to-show message ("Couldn't reach YouTube — check your connection"); other kinds keep the prefix and the UI maps them. Cost if wrong: copy edit.
 - **R29:** `SyncStamp.nextMany(n)` hands out many stamps in one write, so a 1,500-song import doesn't make thousands of separate calls. Cost if wrong: a small extra API.
 - **R30:** Thumbnails download in the background after an import or sync returns (6 at a time, `thumbnailsSettled` for tests). Cost if wrong: artwork appears a bit after the playlist opens.
-- **R31:** Connectivity changes are not de-duplicated, so a Wi-Fi to Wi-Fi switch or a VPN toggle still clears stream links (the IP changed). Cost if wrong: a few extra resolves.
+- **R31:** Songies doesn't de-duplicate connectivity changes itself. Note that `connectivity_plus` already applies `distinct` to its own stream, so a Wi-Fi to Wi-Fi switch or VPN toggle that keeps the same connection type sends no event; a stream link bound to the old IP then fails on load, and the one-time fresh-URL retry (R38, I1) recovers it. Cost if wrong: a few extra resolves.
 - **R32:** Prefetch uses the same next-song rules as playback and skips unavailable songs. Cost if wrong: a small refactor.
 - **R33:** Next or previous while offline stops the still-playing song (the network-failure rule), rather than silently ignoring the tap. Cost if wrong: one behaviour tweak.
 - **R34:** One song reads "Imported 1 song" / "Added 1 new song"; other counts keep the plural. Cost if wrong: two strings.
 - **R35:** Import errors from yt-dlp itself show inline in the import dialog; sync and stream errors show as snack bars. Cost if wrong: one widget change.
+- **R36 (P13):** A YouTube stream failure of kind extractor, missingBinary or unknown stops playback like a network failure (the failing song stays current, the snack shows the mapped copy such as "yt-dlp isn't installed — install it in Settings"). Region-blocked and age-restricted errors count as notFound, so those songs are still skipped. Reason: these errors hit every track alike, and skipping would run yt-dlp hundreds of times. Cost if wrong: one queue stop where a skip might have worked.
+- **R37 (P14):** Sync rewrites a live track's `unavailable` flag from the fetched playlist when it differs (stamped only on change), in both directions. `HTTP Error 400` counts as notFound only for `[youtube:tab]` (playlist) errors; elsewhere it's extractor. Cost if wrong: a song that playback marked unavailable but YouTube still lists flips back to available on each sync, until playback marks it again.
+- **R38 (P15):** The final fix wave also took cheap, user-visible minors: R8 keep rules for youtubedl-android in release; the import dialog can't stick busy; no artwork fetch for unavailable entries; radio/mix `list=RD…` links are rejected (curated `RDCLAK…` playlists still import); the un-awaited `throwsA` test is awaited; the player shows the tapped YouTube song (buffering) before its stream resolves. Cost if wrong: a slightly larger fix wave.
+
+## Plan 2 final review fixes
+
+1. **C1 Android streaming:** stream headers are now sent natively (ExoPlayer request properties, media_kit `httpHeaders`) instead of through just_audio's local `http://127.0.0.1` proxy, which Android blocks without cleartext permission (`useProxyForRequestHeaders: false`).
+2. **C2 broken yt-dlp:** extractor, missingBinary and unknown stream failures stop playback with the right message instead of trying every song in the queue (R36).
+3. **I1 dead stream URL on load:** when `setSource`/`play` throws for a YouTube song (typically HTTP 403 for an expired or IP-bound link), the cached link is dropped and the song is resolved once more, through the same helper as the engine-error retry.
+4. **I2 user additions:** Sync no longer flags YouTube songs you added from another playlist as "removed on YouTube"; only ids that came from this playlist (`yt_seen`) are checked.
+5. **I3 unavailable both ways:** Sync clears or sets `unavailable` from YouTube's current list; HTTP 400 is notFound only for playlist errors (R37).
+6. **I4 timeouts:** downloads have connect, idle (30 s) and overall (10 min) timeouts; each thumbnail gives up after 15 s, and one failing thumbnail no longer drops the rest; the installer's `--version` check is capped at 30 s.
+7. **Extras (R38):** R8 keep rules (`android/app/proguard-rules.pro`), import dialog try/finally, no artwork for unavailable entries, radio/mix links rejected, awaited test expectation, immediate feedback when tapping a YouTube song.
 
 ## Final review fixes (after Task 15)
 
@@ -158,22 +170,23 @@ Each entry says what was decided and what it costs if it turns out wrong.
 **Plan 2 deferred minor items (none block use):**
 - **Link parsing:**
   - A shared link with trailing punctuation (`list=PLx.` or in parentheses) isn't recognised.
-  - Watch links with `&list=` and radio/mix lists are accepted as playlists, untested.
+  - Watch links with `&list=PL…` are accepted as playlists, untested.
 - **yt-dlp client and runners:**
   - The `ERROR:` line filtering and the no-entries check are duplicated.
   - Untested branches: getaddrinfo/unreachable network errors, `chmod`/write failures, SIGKILL escalation.
-  - `httpDownload` has no timeout and buffers about 35 MB in memory; the post-install `--version` has no timeout.
+  - `httpDownload` buffers about 35 MB in memory. A timed-out `--version` run isn't killed (only abandoned).
   - A non-UTF-8 byte in yt-dlp output can throw an unmapped exception.
   - Any `ProcessException` maps to "missing", including permission-denied.
   - The inner `exitCode.timeout` future is unawaited; `desktop_ytdlp_runner.dart` has a missing `const` and an `ignore_for_file: prefer_initializing_formals`.
-  - The timeout test depends on `pgrep`; one `expect(...throwsA)` isn't awaited.
+  - The timeout test depends on `pgrep`.
   - Android: post-dispose `main.post` result calls, and init runs per plugin instance.
   - Android: a non-zero exit drops partial stdout and the real exit code; `version()` catches only `PlatformException`.
 - **Share on Android:** the initial share intent is re-read after the activity is recreated; share snack bars may sit under the mini-player; the share path in `main.dart` is untested; a second shared link stacks a second dialog.
 - **Import and sync:**
   - Playlist lookups run outside `guardDb`.
   - Already-live tracks still consume a stamp.
-  - The thumbnail pool relies on `ThumbnailFetcher.fetch` never throwing.
+  - yt-dlp's `track`/`artists` metadata isn't used; the plan amendment chose the channel as artist.
+  - A large playlist's JSON is decoded on the UI isolate.
   - Test gaps: duplicate ids in one sync response, a restored entry keeping its position, a failed fetch leaving `lastYtSyncAt`, mid-transaction rollback. One test prints a warning and stack trace.
 - **Streaming and player:**
   - An expired-URL retry restarts the song from 0; `engineRetried` isn't reset on explicit play.
@@ -184,12 +197,14 @@ Each entry says what was decided and what it costs if it turns out wrong.
   - Missing tests: header equality of `UrlSource`, `onUnavailable` throwing, prefetch with shuffle, stale in-flight regressions.
   - `ytErrorUserMessageFromText` builds a dummy `Failure`.
   - Linux plugin registrants weren't regenerated for `connectivity_plus` (the Linux build works).
+  - With "Use system yt-dlp" on, a missing binary still says "install it in Settings", which is misleading there.
 - **Settings UI:**
   - The sync busy flag is widget-local, so leaving and returning allows a second sync.
   - Keep/Delete have no busy state.
   - Toggle writes give no failure feedback.
   - If the version lookup fails, desktop shows "Update" instead of "Install".
   - The `useSystemYtDlpProvider` doc is inaccurate.
+  - The Library empty state doesn't offer "Import a YouTube playlist".
 - **Housekeeping:** meaningless ignore comment in `composite_track_resolver.dart`; a "no thumbnails" comment in the 1,500-entry test is false; an earlier fix commit bundled format-only edits to three unrelated files.
 
 **Plan 1 minor polish (none of it blocks use):**
