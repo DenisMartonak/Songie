@@ -10,6 +10,15 @@ String cleanArtist(String channel) {
       : t;
 }
 
+/// Cover urls to try, best first. YouTube serves the large ones for most
+/// videos; the flat-playlist thumbnail (at most 336x188) is the last resort.
+List<String> thumbnailCandidates(String videoId, String? flatThumbnail) => [
+  'https://i.ytimg.com/vi/$videoId/maxresdefault.jpg',
+  'https://i.ytimg.com/vi/$videoId/hq720.jpg',
+  'https://i.ytimg.com/vi/$videoId/sddefault.jpg',
+  ?flatThumbnail,
+];
+
 /// Prefers a square thumbnail, else the largest; null when none have a url.
 String? pickThumbnail(List thumbnails) {
   Map? best;

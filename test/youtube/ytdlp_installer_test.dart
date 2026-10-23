@@ -169,7 +169,7 @@ void main() {
         open.add(req.response); // then nothing more
       };
       await expectLater(
-        httpDownload(url(), idleTimeout: const Duration(milliseconds: 200)),
+        httpDownload(url(), stallTimeout: const Duration(milliseconds: 200)),
         throwsA(isA<TimeoutException>()),
       );
     });
@@ -177,10 +177,31 @@ void main() {
     test('no response headers hits the idle timeout', () async {
       handler = (req) async => open.add(req.response);
       await expectLater(
-        httpDownload(url(), idleTimeout: const Duration(milliseconds: 200)),
+        httpDownload(url(), stallTimeout: const Duration(milliseconds: 200)),
         throwsA(isA<TimeoutException>()),
       );
     });
+
+    test(
+      'a slow trickle that never stalls succeeds without a total cap',
+      () async {
+        // Scaled down from 1 byte per 10 s for 15 min against a 60 s stall.
+        handler = (req) async {
+          req.response.contentLength = 20;
+          for (var i = 0; i < 20; i++) {
+            req.response.add([i]);
+            await req.response.flush();
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+          }
+          await req.response.close();
+        };
+        final got = await httpDownload(
+          url(),
+          stallTimeout: const Duration(milliseconds: 1500),
+        );
+        expect(got, List.generate(20, (i) => i));
+      },
+    );
 
     test('a trickling body hits the overall cap', () async {
       handler = (req) async {
@@ -199,7 +220,7 @@ void main() {
       await expectLater(
         httpDownload(
           url(),
-          idleTimeout: const Duration(seconds: 5),
+          stallTimeout: const Duration(seconds: 5),
           totalTimeout: const Duration(milliseconds: 300),
         ),
         throwsA(isA<TimeoutException>()),

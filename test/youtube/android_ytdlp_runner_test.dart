@@ -32,17 +32,23 @@ void main() {
     expect((seen!.arguments as Map)['processId'], isA<String>());
   });
 
-  test('PlatformException becomes exit code -1 with message as stderr',
-      () async {
-    handle((c) async => throw PlatformException(code: 'boom', message: 'bad'));
-    final r = await AndroidYtDlpRunner().run(['-J']);
-    expect(r.exitCode, -1);
-    expect(r.stderr, contains('bad'));
-  });
+  test(
+    'PlatformException becomes exit code -1 with message as stderr',
+    () async {
+      handle(
+        (c) async => throw PlatformException(code: 'boom', message: 'bad'),
+      );
+      final r = await AndroidYtDlpRunner().run(['-J']);
+      expect(r.exitCode, -1);
+      expect(r.stderr, contains('bad'));
+    },
+  );
 
   test('init failure throws YtDlpMissing', () async {
-    handle((c) async =>
-        throw PlatformException(code: 'init_failed', message: 'no python'));
+    handle(
+      (c) async =>
+          throw PlatformException(code: 'init_failed', message: 'no python'),
+    );
     expect(AndroidYtDlpRunner().run(['-J']), throwsA(isA<YtDlpMissing>()));
   });
 
@@ -54,7 +60,9 @@ void main() {
       return Future.value(null);
     });
     await expectLater(
-      AndroidYtDlpRunner().run(['-J'], timeout: const Duration(milliseconds: 20)),
+      AndroidYtDlpRunner().run([
+        '-J',
+      ], timeout: const Duration(milliseconds: 20)),
       throwsA(isA<TimeoutException>()),
     );
     await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -71,8 +79,10 @@ void main() {
   test('update maps success and failure', () async {
     handle((c) async => 'DONE');
     expect(await AndroidYtDlpRunner().update(), isA<Ok<void>>());
-    handle((c) async =>
-        throw PlatformException(code: 'update_failed', message: 'offline'));
+    handle(
+      (c) async =>
+          throw PlatformException(code: 'update_failed', message: 'offline'),
+    );
     final r = await AndroidYtDlpRunner().update();
     expect(r, isA<Err<void>>());
   });

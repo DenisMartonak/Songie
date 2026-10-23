@@ -21,20 +21,27 @@ void main() {
   });
   tearDown(() => tmp.deleteSync(recursive: true));
 
-  test('put downscales a 1200x800 PNG to 512x341 JPEG', () async {
+  test('put downscales a 1200x800 PNG to 720x480 JPEG', () async {
     final ref = await cache.put(_png(1200, 800));
     expect(ref, isNotNull);
     expect(ref, endsWith('.jpg'));
     final decoded = img.decodeJpg(cache.fileFor(ref!).readAsBytesSync())!;
-    expect(decoded.width, 512);
-    expect(decoded.height, 341);
+    expect(decoded.width, 720);
+    expect(decoded.height, 480);
   });
 
-  test('squareCrop turns a 1280x720 image into 512x512', () async {
+  test('put downsizes 1280x720 input to at most 720 px', () async {
+    final ref = await cache.put(_png(1280, 720));
+    final decoded = img.decodeJpg(cache.fileFor(ref!).readAsBytesSync())!;
+    expect(decoded.width, 720);
+    expect(decoded.height, 405);
+  });
+
+  test('squareCrop turns a 1280x720 image into 720x720', () async {
     final ref = await cache.put(_png(1280, 720), squareCrop: true);
     final decoded = img.decodeJpg(cache.fileFor(ref!).readAsBytesSync())!;
-    expect(decoded.width, 512);
-    expect(decoded.height, 512);
+    expect(decoded.width, 720);
+    expect(decoded.height, 720);
   });
 
   test('put does not upscale small images', () async {
@@ -47,8 +54,8 @@ void main() {
   test('put downscales portrait images by the longest side', () async {
     final ref = await cache.put(_png(800, 1200));
     final decoded = img.decodeJpg(cache.fileFor(ref!).readAsBytesSync())!;
-    expect(decoded.width, 341);
-    expect(decoded.height, 512);
+    expect(decoded.width, 480);
+    expect(decoded.height, 720);
   });
 
   test(

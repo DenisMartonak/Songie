@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:image/image.dart' as img;
+
 import '../core/log.dart';
 import '../library/art_cache.dart';
 
@@ -18,16 +20,30 @@ class ThumbnailFetcher {
   /// Overall limit per image; a slow one must not hold up the whole pass.
   final Duration timeout;
 
-  /// The art-cache ref, or null for a missing url or any failure. Never throws.
-  Future<String?> fetch(String? url) async {
-    if (url == null || url.isEmpty) return null;
-    try {
-      final uri = Uri.parse(url);
-      final bytes = await _download(uri).timeout(timeout);
-      return await _art.put(Uint8List.fromList(bytes), squareCrop: true);
-    } catch (e, s) {
-      AppLog.w('Thumbnail fetch failed', e, s);
-      return null;
+  /// Tries each url in turn and returns the art-cache ref of the first usable
+  /// image, or null when none is. A failed download (404, timeout), an
+  /// undecodable body and YouTube's 120x90 "no thumbnail" placeholder all
+  /// count as a miss. Never throws.
+  Future<String?> fetchBest(List<String> urls) async {
+    for (final url in urls) {
+      if (url.isEmpty) continue;
+      try {
+        final bytes = Uint8List.fromList(
+          await _download(Uri.parse(url)).timeout(timeout),
+        );
+        if (_isPlaceholder(bytes)) continue;
+        final ref = await _art.put(bytes, squareCrop: true);
+        if (ref != null) return ref;
+      } catch (e, s) {
+        AppLog.w('Thumbnail fetch failed', e, s);
+      }
     }
+    return null;
+  }
+
+  /// Reads only the image header, so a large cover is not decoded twice.
+  bool _isPlaceholder(Uint8List bytes) {
+    final info = img.findDecoderForData(bytes)?.startDecode(bytes);
+    return info != null && info.width == 120 && info.height == 90;
   }
 }

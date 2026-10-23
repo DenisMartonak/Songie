@@ -94,6 +94,16 @@ void main() {
     expect(pickThumbnail([]), isNull);
   });
 
+  test('thumbnailCandidates lists the large covers first', () {
+    expect(thumbnailCandidates('abc', 'x.jpg'), [
+      'https://i.ytimg.com/vi/abc/maxresdefault.jpg',
+      'https://i.ytimg.com/vi/abc/hq720.jpg',
+      'https://i.ytimg.com/vi/abc/sddefault.jpg',
+      'x.jpg',
+    ]);
+    expect(thumbnailCandidates('abc', null), hasLength(3));
+  });
+
   test('parseStreamJson reads url, headers, expiry and metadata', () {
     final s = parseStreamJson(fixture('stream_opus.json'));
     expect(s.url.toString(), isNotEmpty);

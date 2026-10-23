@@ -46,9 +46,12 @@ Stream<String> sharedPlaylistLinks(ShareSource? source) {
     onListen: () {
       // Subscribe first so a share arriving during initialText() isn't lost.
       sub = src.texts.listen(emit, onError: (Object _) {});
-      src.initialText().then((t) {
-        if (t != null) emit(t);
-      }).catchError((Object _) {});
+      src
+          .initialText()
+          .then((t) {
+            if (t != null) emit(t);
+          })
+          .catchError((Object _) {});
     },
     onCancel: () => sub?.cancel(),
   );

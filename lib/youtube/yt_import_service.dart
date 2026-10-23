@@ -9,6 +9,7 @@ import '../data/db_guard.dart';
 import '../data/sync_stamp.dart';
 import '../library/library_repository.dart';
 import 'thumbnail_fetcher.dart';
+import 'yt_json.dart';
 import 'yt_links.dart';
 import 'yt_models.dart';
 import 'ytdlp_client.dart';
@@ -44,6 +45,9 @@ class SyncResult {
 }
 
 const _chunk = 500;
+
+/// (track id, video id, flat-playlist thumbnail url) of a cover to fetch.
+typedef _ArtJob = (String, String, String?);
 
 /// Imports a YouTube playlist into the library and syncs it later (spec
 /// 6.1-6.2). All database writes of one import/sync run in a single
@@ -162,6 +166,7 @@ class YtImportService {
       String? last;
       final gone = <String>[];
       final back = <String>[];
+      final upgrade = <_ArtJob>[];
       // Track id -> new `unavailable` value, for tracks whose flag changed.
       final flips = <String, bool>{};
       for (final r in live) {
@@ -173,6 +178,9 @@ class YtImportService {
         final f = fetchedById[vid];
         if (f != null && f.unavailable != t.unavailable) {
           flips[t.id] = f.unavailable;
+        }
+        if (!_hasSharpArt(t.artworkRef) && !(f?.unavailable ?? t.unavailable)) {
+          upgrade.add((t.id, vid, f?.thumbnailUrl));
         }
         // Only ids this playlist got from YouTube; tracks the user added from
         // elsewhere are left alone (spec 6.2).
@@ -194,6 +202,7 @@ class YtImportService {
       await _setUnavailable(flips);
       flagged = gone.length;
       restored = back.length;
+      w.needArt.addAll(upgrade);
 
       final ps = await _stamp.next();
       await (_db.update(
@@ -268,7 +277,7 @@ class YtImportService {
     final newTracks = <TracksCompanion>[];
     final revived = <(String, TracksCompanion)>[];
     final trackIds = <String>[];
-    final needArt = <(String, String)>[];
+    final needArt = <_ArtJob>[];
     var w = 0;
     for (final e in entries) {
       final old = byVideo[e.videoId];
@@ -277,8 +286,8 @@ class YtImportService {
       final trackId = old?.id ?? s!.id;
       trackIds.add(trackId);
       // Unavailable entries only carry YouTube's no_thumbnail placeholder.
-      if (old?.artworkRef == null && e.thumbnailUrl != null && !e.unavailable) {
-        needArt.add((trackId, e.thumbnailUrl!));
+      if (!_hasSharpArt(old?.artworkRef) && !e.unavailable) {
+        needArt.add((trackId, e.videoId, e.thumbnailUrl));
       }
       if (old == null) {
         newTracks.add(
@@ -404,7 +413,34 @@ class YtImportService {
 
   static const _thumbConcurrency = 6;
 
-  void _startThumbnails(List<(String, String)> need) {
+  /// Queues the YouTube tracks among [tracks] whose art is not yet the sharp
+  /// `yt2-` kind (and that are not unavailable) into the background thumbnail
+  /// pass. Fire-and-forget; never throws.
+  void refreshArtwork(Iterable<Track> tracks) {
+    try {
+      _startThumbnails([
+        for (final t in tracks)
+          if (t.ytVideoId != null &&
+              !t.unavailable &&
+              !_hasSharpArt(t.artworkRef))
+            (t.id, t.ytVideoId!, null),
+      ]);
+    } catch (e, s) {
+      AppLog.w('refreshArtwork failed', e, s);
+    }
+  }
+
+  static bool _hasSharpArt(String? ref) =>
+      ref != null && ref.startsWith('yt2-');
+
+  void _startThumbnails(List<_ArtJob> jobs) {
+    // One job per track; a later job's flat url replaces an earlier null.
+    final byTrack = <String, _ArtJob>{};
+    for (final j in jobs) {
+      final old = byTrack[j.$1];
+      if (old == null || old.$3 == null) byTrack[j.$1] = j;
+    }
+    final need = byTrack.values.toList();
     if (need.isEmpty) return;
     final previous = _thumbsPass;
     _thumbsPass = () async {
@@ -414,15 +450,17 @@ class YtImportService {
   }
 
   /// Best effort, after the main transaction: failures are ignored.
-  Future<void> _fetchThumbnails(List<(String, String)> need) async {
+  Future<void> _fetchThumbnails(List<_ArtJob> need) async {
     try {
       final refs = <String, String>{};
       var next = 0;
       Future<void> worker() async {
         while (next < need.length) {
-          final (trackId, url) = need[next++];
+          final (trackId, videoId, flatUrl) = need[next++];
           try {
-            final ref = await _thumbs.fetch(url);
+            final ref = await _thumbs.fetchBest(
+              thumbnailCandidates(videoId, flatUrl),
+            );
             if (ref != null) refs[trackId] = ref;
           } catch (e, s) {
             // One bad image must not drop the rest of the pass.
@@ -465,5 +503,5 @@ class _Written {
 
   final String playlistId;
   final List<String> trackIds;
-  final List<(String, String)> needArt;
+  final List<_ArtJob> needArt;
 }

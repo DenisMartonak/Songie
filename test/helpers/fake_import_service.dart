@@ -1,4 +1,5 @@
 import 'package:songies/core/result.dart';
+import 'package:songies/data/database.dart';
 import 'package:songies/youtube/yt_import_service.dart';
 
 /// A [YtImportService] whose results the test controls.
@@ -26,6 +27,9 @@ class FakeImportService implements YtImportService {
           const Err(Failure(FailureKind.unknown, 'syncPlaylist not faked')),
         );
   }
+
+  @override
+  void refreshArtwork(Iterable<Track> tracks) {}
 
   @override
   Future<void> get thumbnailsSettled => Future.value();

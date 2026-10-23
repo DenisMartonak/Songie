@@ -87,13 +87,17 @@ Future<void> main() async {
   final resolver = CompositeTrackResolver(
     LocalTrackResolver(db),
     streams,
-    onStreamMetadata: (t, s) => library.updateTrackMetadata(
-      t.id,
-      title: s.title,
-      artist: s.artist,
-      album: s.album,
-      durationMs: s.durationMs,
-    ),
+    onStreamMetadata: (t, s) {
+      // Fire-and-forget: upgrades blurry pre-yt2 covers while the song plays.
+      ytImport.refreshArtwork([t]);
+      return library.updateTrackMetadata(
+        t.id,
+        title: s.title,
+        artist: s.artist,
+        album: s.album,
+        durationMs: s.durationMs,
+      );
+    },
   );
 
   final backend = JustAudioBackend();

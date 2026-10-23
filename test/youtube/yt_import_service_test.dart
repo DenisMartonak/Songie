@@ -40,15 +40,15 @@ String listJson(List<String> ids, {String title = 'Mix', List<String>? bad}) =>
       ],
     });
 
-/// A fetcher that throws for one url (fetch normally never throws).
+/// A fetcher that throws for one video (fetchBest normally never throws).
 class _ThrowingFetcher extends ThumbnailFetcher {
   _ThrowingFetcher(super.art, super.download, this.bad);
   final String bad;
 
   @override
-  Future<String?> fetch(String? url) {
-    if (url == bad) throw StateError('boom');
-    return super.fetch(url);
+  Future<String?> fetchBest(List<String> urls) {
+    if (urls.contains(bad)) throw StateError('boom');
+    return super.fetchBest(urls);
   }
 }
 
@@ -262,6 +262,20 @@ void main() {
       expect(downloads, isEmpty);
     });
 
+    test('the thumbnail pass asks for the candidates of each video', () async {
+      serve(['a', 'b']);
+      await service.importPlaylist(link);
+      await service.thumbnailsSettled;
+      // The first (maxresdefault) candidate succeeds, so one request each.
+      expect(downloads.map((u) => u.toString()).toSet(), {
+        'https://i.ytimg.com/vi/a/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/b/maxresdefault.jpg',
+      });
+      for (final t in await db.select(db.tracks).get()) {
+        expect(t.artworkRef, startsWith('yt2-'));
+      }
+    });
+
     test('duplicate ids in one response are imported once', () async {
       serve(['a', 'b', 'a']);
       final r = (await service.importPlaylist(link) as Ok<ImportResult>).value;
@@ -470,6 +484,38 @@ void main() {
       expect(after.unavailable, true);
       expect(after.localSeq, greaterThan(a.localSeq));
       expect((await trackOf('c')).unavailable, false);
+    });
+
+    test('sync refetches sq- art but leaves yt2- art alone', () async {
+      await service.thumbnailsSettled;
+      Future<void> setRef(String vid, String ref) =>
+          (db.update(db.tracks)..where((t) => t.ytVideoId.equals(vid))).write(
+            TracksCompanion(artworkRef: Value(ref)),
+          );
+      await setRef('a', 'sq-old.jpg');
+      await setRef('c', 'yt2-keep.jpg');
+      serve(['a', 'b', 'c']);
+      downloads.clear();
+      await service.syncPlaylist(pid);
+      await service.thumbnailsSettled;
+      final vids = downloads.map((u) => u.pathSegments[1]).toSet();
+      expect(vids, contains('a'));
+      expect(vids, isNot(contains('c')));
+      expect((await trackOf('a')).artworkRef, startsWith('yt2-'));
+      expect((await trackOf('c')).artworkRef, 'yt2-keep.jpg');
+    });
+
+    test('refreshArtwork queues only non-yt2 youtube tracks', () async {
+      await service.thumbnailsSettled;
+      await (db.update(db.tracks)..where((t) => t.ytVideoId.equals('a'))).write(
+        const TracksCompanion(artworkRef: Value('sq-old.jpg')),
+      );
+      final all = await db.select(db.tracks).get();
+      downloads.clear();
+      service.refreshArtwork(all);
+      await service.thumbnailsSettled;
+      expect(downloads.map((u) => u.pathSegments[1]).toSet(), {'a'});
+      expect((await trackOf('a')).artworkRef, startsWith('yt2-'));
     });
 
     test('non-yt playlist is invalidInput', () async {

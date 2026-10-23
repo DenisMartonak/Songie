@@ -9,12 +9,12 @@ import 'package:path/path.dart' as p;
 
 import '../core/log.dart';
 
-/// Disk cache of downscaled album covers: `<dir>/<sha256 of source>.jpg`,
-/// longest side <= [maxSide], JPEG quality [jpegQuality].
+/// Disk cache of downscaled album covers: `<dir>/<sha256 of source>.jpg`
+/// (`yt2-` prefixed when square-cropped YouTube art), longest side <= [maxSide], JPEG quality [jpegQuality].
 class ArtCache {
   ArtCache(this.dir);
 
-  static const int maxSide = 512;
+  static const int maxSide = 720;
   static const int jpegQuality = 85;
 
   final Directory dir;
@@ -25,7 +25,8 @@ class ArtCache {
   /// decoded or the file cannot be written. Never throws.
   Future<String?> put(Uint8List imageBytes, {bool squareCrop = false}) async {
     try {
-      final ref = '${squareCrop ? 'sq-' : ''}${sha256.convert(imageBytes)}.jpg';
+      final ref =
+          '${squareCrop ? 'yt2-' : ''}${sha256.convert(imageBytes)}.jpg';
       final target = fileFor(ref);
       if (target.existsSync()) return ref;
 
@@ -58,6 +59,18 @@ Uint8List? _toJpeg(Uint8List bytes, bool squareCrop) {
   final decoded = img.decodeImage(bytes);
   if (decoded == null) return null;
   var image = decoded;
+  // A 4:3 image (YouTube's sddefault) carries black letterbox bars: keep the
+  // centre 16:9 band before the square crop.
+  if (squareCrop && (image.width / image.height - 4 / 3).abs() < 0.02) {
+    final bandHeight = (image.width * 9 / 16).round();
+    image = img.copyCrop(
+      image,
+      x: 0,
+      y: (image.height - bandHeight) ~/ 2,
+      width: image.width,
+      height: bandHeight,
+    );
+  }
   if (squareCrop && image.width != image.height) {
     final side = math.min(image.width, image.height);
     image = img.copyCrop(

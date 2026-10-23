@@ -29,34 +29,36 @@ Future<ProcessResult> _defaultRunProcess(String exe, List<String> args) =>
 /// Real download function: GET with redirects (GitHub release assets redirect).
 ///
 /// A stalled connection fails with a [TimeoutException] instead of hanging:
-/// [connectionTimeout] bounds the connect, [idleTimeout] any wait for the
-/// response headers or the next body chunk, and [totalTimeout] the whole
-/// download (the yt-dlp binary is tens of MB).
+/// [connectionTimeout] bounds the connect and [stallTimeout] any wait for the
+/// response headers or the next body chunk, so a slow link still succeeds as
+/// long as bytes keep arriving. [totalTimeout], when given, bounds the whole
+/// download.
 Future<List<int>> httpDownload(
   Uri uri, {
   Duration connectionTimeout = const Duration(seconds: 30),
-  Duration idleTimeout = const Duration(seconds: 30),
-  Duration totalTimeout = const Duration(minutes: 10),
+  Duration stallTimeout = const Duration(seconds: 60),
+  Duration? totalTimeout,
 }) async {
   final client = HttpClient()..connectionTimeout = connectionTimeout;
   Future<List<int>> body() async {
     final req = await client.getUrl(uri);
     req.followRedirects = true;
     req.maxRedirects = 10;
-    final res = await req.close().timeout(idleTimeout);
+    final res = await req.close().timeout(stallTimeout);
     if (res.statusCode != 200) {
-      await res.drain<void>().timeout(idleTimeout);
+      await res.drain<void>().timeout(stallTimeout);
       throw HttpException('HTTP ${res.statusCode}', uri: uri);
     }
     final b = BytesBuilder(copy: false);
-    await for (final chunk in res.timeout(idleTimeout)) {
+    await for (final chunk in res.timeout(stallTimeout)) {
       b.add(chunk);
     }
     return b.takeBytes();
   }
 
   try {
-    return await body().timeout(totalTimeout);
+    final done = body();
+    return await (totalTimeout == null ? done : done.timeout(totalTimeout));
   } finally {
     // force: a timed-out request must not keep its socket open.
     client.close(force: true);
