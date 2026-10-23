@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/connectivity.dart';
 import 'package:songies/core/result.dart';
@@ -6,6 +8,7 @@ import 'package:songies/data/settings_repository.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/stream_resolver.dart';
 import 'package:songies/youtube/ytdlp_client.dart';
+import 'package:songies/youtube/ytdlp_runner.dart';
 
 import '../helpers/fake_network_status.dart';
 import '../helpers/fake_ytdlp_runner.dart';
@@ -188,4 +191,63 @@ void main() {
     resolver.dispose();
     expect((net).hasListeners, isFalse);
   });
+
+  test(
+    'invalidating another id does not strand an in-flight resolve',
+    () async {
+      final gated = _GatedRunner()
+        ..onOk(
+          'watch?v=abc',
+          streamJson(expire: expireOf(now.add(const Duration(minutes: 60)))),
+        );
+      runner = gated;
+      resolver.dispose();
+      resolver = make();
+      final first = resolver.resolve('abc');
+      await pumpEventQueue();
+      resolver.invalidate('other');
+      gated.gate.complete();
+      await first;
+      await go();
+      expect(runner.calls, hasLength(1));
+    },
+  );
+
+  test('a failed resolve is not served again', () async {
+    runner.onFail('watch?v=flaky', 'ERROR: something odd');
+    expect(await go('flaky'), isA<Err<UrlSource>>());
+    expect(await go('flaky'), isA<Err<UrlSource>>());
+    expect(runner.calls.where((c) => c.last.contains('flaky')), hasLength(2));
+  });
+
+  test('invalidate during a fetch discards that result', () async {
+    final gated = _GatedRunner()
+      ..onOk(
+        'watch?v=abc',
+        streamJson(expire: expireOf(now.add(const Duration(minutes: 60)))),
+      );
+    runner = gated;
+    resolver.dispose();
+    resolver = make();
+    final first = resolver.resolve('abc');
+    await pumpEventQueue();
+    resolver.invalidate('abc');
+    gated.gate.complete();
+    await first;
+    await go();
+    expect(runner.calls, hasLength(2));
+  });
+}
+
+class _GatedRunner extends FakeYtDlpRunner {
+  final Completer<void> gate = Completer<void>();
+  bool _first = true;
+
+  @override
+  Future<YtDlpRun> run(List<String> args, {Duration? timeout}) async {
+    final wait = _first;
+    _first = false;
+    if (wait) await gate.future;
+    return super.run(args, timeout: timeout);
+  }
 }

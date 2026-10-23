@@ -161,9 +161,8 @@ void main() {
       expect(await repo.renamePlaylist(p, ' New '), isA<Ok<void>>());
       final after = await (db.select(db.playlists)).getSingle();
       expect(after.name, 'New');
-      expect(after.localSeq, isNot(before.localSeq));
-      expect(after.clock, isNot(before.clock));
-      expect(after.originDevice, stamp.deviceId);
+      expect(after.localSeq, greaterThan(before.localSeq));
+      expect(after.clock.compareTo(before.clock), greaterThan(0));
       expect(after.originDevice, stamp.deviceId);
     });
 

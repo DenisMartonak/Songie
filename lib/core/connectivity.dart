@@ -32,6 +32,8 @@ class ConnectivityPlusStatus implements NetworkStatus {
       networkKindOf(await _c.checkConnectivity());
 
   @override
+  // No distinct on the kind: a Wi-Fi to Wi-Fi switch or a VPN toggle changes
+  // the IP (which stream URLs are bound to) without changing the kind.
   Stream<NetworkKind> get changes =>
-      _c.onConnectivityChanged.map(networkKindOf).distinct();
+      _c.onConnectivityChanged.map(networkKindOf);
 }

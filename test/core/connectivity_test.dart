@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/connectivity.dart';
@@ -21,4 +23,30 @@ void main() {
       NetworkKind.wifi,
     );
   });
+
+  test('changes emits on every event, even with an unchanged kind', () async {
+    final events = StreamController<List<ConnectivityResult>>();
+    final status = ConnectivityPlusStatus(_FakeConnectivity(events.stream));
+    final seen = <NetworkKind>[];
+    final sub = status.changes.listen(seen.add);
+    events
+      ..add([ConnectivityResult.wifi])
+      ..add([ConnectivityResult.wifi])
+      ..add([ConnectivityResult.wifi, ConnectivityResult.vpn]);
+    await pumpEventQueue();
+    await sub.cancel();
+    await events.close();
+    expect(seen, [NetworkKind.wifi, NetworkKind.wifi, NetworkKind.wifi]);
+  });
+}
+
+class _FakeConnectivity implements Connectivity {
+  _FakeConnectivity(this._stream);
+  final Stream<List<ConnectivityResult>> _stream;
+
+  @override
+  Stream<List<ConnectivityResult>> get onConnectivityChanged => _stream;
+
+  @override
+  Future<List<ConnectivityResult>> checkConnectivity() async => [];
 }

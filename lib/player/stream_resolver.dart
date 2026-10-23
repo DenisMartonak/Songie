@@ -34,19 +34,21 @@ class StreamResolver {
 
   final Map<String, ({YtStream stream, DateTime validUntil})> _cache = {};
   final Map<String, Future<Result<YtStream>>> _inFlight = {};
-  int _generation = 0;
+  // The running fetch of each id; a fetch that is no longer current (it was
+  // invalidated or the network changed) does not write the cache.
+  final Map<String, Object> _tokens = {};
 
   void _clear() {
-    _generation++;
+    _tokens.clear();
     _cache.clear();
     _inFlight.clear();
   }
 
   /// Drops the cached stream of [videoId] (e.g. after the engine rejected it).
   void invalidate(String videoId) {
-    _generation++;
     _cache.remove(videoId);
     _inFlight.remove(videoId);
+    _tokens.remove(videoId);
   }
 
   void dispose() {
@@ -83,16 +85,21 @@ class StreamResolver {
       if (_now().isBefore(cached.validUntil)) return Ok(cached.stream);
       _cache.remove(videoId);
     }
-    return _inFlight[videoId] ??= _fetch(videoId);
+    final existing = _inFlight[videoId];
+    if (existing != null) return existing;
+    final token = Object();
+    _tokens[videoId] = token;
+    final future = _fetch(videoId, token);
+    _inFlight[videoId] = future;
+    return future;
   }
 
-  Future<Result<YtStream>> _fetch(String videoId) async {
-    final generation = _generation;
+  Future<Result<YtStream>> _fetch(String videoId, Object token) async {
     try {
       final r = await _client.resolveStream(videoId);
       switch (r) {
         case Ok(:final value):
-          if (generation == _generation) {
+          if (identical(_tokens[videoId], token)) {
             final exp = value.expiresAt;
             _cache[videoId] = (
               stream: value,
@@ -115,7 +122,10 @@ class StreamResolver {
           return r;
       }
     } finally {
-      if (generation == _generation) _inFlight.remove(videoId);
+      if (identical(_tokens[videoId], token)) {
+        _tokens.remove(videoId);
+        _inFlight.remove(videoId);
+      }
     }
   }
 
