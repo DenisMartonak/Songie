@@ -23,13 +23,13 @@ class ArtCache {
 
   /// Stores [imageBytes] and returns its ref, or null if the bytes cannot be
   /// decoded or the file cannot be written. Never throws.
-  Future<String?> put(Uint8List imageBytes) async {
+  Future<String?> put(Uint8List imageBytes, {bool squareCrop = false}) async {
     try {
-      final ref = '${sha256.convert(imageBytes)}.jpg';
+      final ref = '${squareCrop ? 'sq-' : ''}${sha256.convert(imageBytes)}.jpg';
       final target = fileFor(ref);
       if (target.existsSync()) return ref;
 
-      final jpg = await Isolate.run(() => _toJpeg(imageBytes));
+      final jpg = await Isolate.run(() => _toJpeg(imageBytes, squareCrop));
       if (jpg == null) return null;
 
       dir.createSync(recursive: true);
@@ -54,10 +54,20 @@ class ArtCache {
   }
 }
 
-Uint8List? _toJpeg(Uint8List bytes) {
+Uint8List? _toJpeg(Uint8List bytes, bool squareCrop) {
   final decoded = img.decodeImage(bytes);
   if (decoded == null) return null;
   var image = decoded;
+  if (squareCrop && image.width != image.height) {
+    final side = math.min(image.width, image.height);
+    image = img.copyCrop(
+      image,
+      x: (image.width - side) ~/ 2,
+      y: (image.height - side) ~/ 2,
+      width: side,
+      height: side,
+    );
+  }
   final longest = math.max(image.width, image.height);
   if (longest > ArtCache.maxSide) {
     final scale = ArtCache.maxSide / longest;

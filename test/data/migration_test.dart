@@ -58,6 +58,66 @@ void main() {
     expect(await db.select(db.playHistory).get(), hasLength(1));
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 2);
+    expect(version.data.values.single, 3);
+  });
+
+  test('a v2 database opened with v3 code gains yt_seen and keeps data', () async {
+    final dir = await Directory.systemTemp.createTemp('songies_migration');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File('${dir.path}/songies.db');
+
+    final raw = sqlite.sqlite3.open(file.path);
+    for (final sql in _v1Schema) {
+      raw.execute(sql);
+    }
+    raw.execute(
+      'CREATE TABLE "play_history" ("id" INTEGER NOT NULL, "track_id" TEXT NOT NULL, "playlist_id" TEXT NULL, "played_at" INTEGER NOT NULL, PRIMARY KEY ("id" AUTOINCREMENT))',
+    );
+    raw.execute(
+      "INSERT INTO tracks (id, clock, origin_device, local_seq, source, title, "
+      "artist, search_text) VALUES ('t1', 'c', 'dev', 1, 'local', 'Halo', "
+      "'Beyonce', 'halo beyonce')",
+    );
+    raw.execute('PRAGMA user_version = 2');
+    raw.close();
+
+    final db = AppDatabase.open(file);
+    addTearDown(db.close);
+
+    expect(
+      [for (final t in await db.select(db.tracks).get()) t.title],
+      ['Halo'],
+    );
+    await db
+        .into(db.ytSeen)
+        .insert(
+          YtSeenCompanion.insert(
+            id: 's1',
+            clock: 'c',
+            originDevice: 'dev',
+            localSeq: 2,
+            playlistId: 'p',
+            videoId: 'v',
+          ),
+        );
+    expect(await db.select(db.ytSeen).get(), hasLength(1));
+    // (playlist, video) is unique.
+    await expectLater(
+      db
+          .into(db.ytSeen)
+          .insert(
+            YtSeenCompanion.insert(
+              id: 's2',
+              clock: 'c',
+              originDevice: 'dev',
+              localSeq: 3,
+              playlistId: 'p',
+              videoId: 'v',
+            ),
+          ),
+      throwsA(anything),
+    );
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data.values.single, 3);
   });
 }

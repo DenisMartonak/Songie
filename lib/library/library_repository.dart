@@ -336,6 +336,40 @@ class LibraryRepository {
     });
   }
 
+  /// Marks a (possibly `removed_on_yt`) entry as kept: sync will never flag
+  /// it again. Sets `status='active'` and `kept=true`.
+  Future<Result<void>> keepEntry(String entryId) {
+    return guardDb(_db, () async {
+      if (await _liveEntry(entryId) == null) return _notFound('entry $entryId');
+      final stamp = await _stamp.next();
+      await (_db.update(
+        _db.playlistEntries,
+      )..where((e) => e.id.equals(entryId))).write(
+        PlaylistEntriesCompanion(
+          status: const Value('active'),
+          kept: const Value(true),
+          clock: Value(stamp.clock),
+          originDevice: Value(stamp.originDevice),
+          localSeq: Value(stamp.localSeq),
+        ),
+      );
+      return const Ok(null);
+    });
+  }
+
+  /// The live YouTube playlist imported from [canonicalUrl], if any.
+  Future<Playlist?> findPlaylistByYtUrl(String canonicalUrl) {
+    return (_db.select(_db.playlists)
+          ..where(
+            (p) =>
+                p.ytPlaylistUrl.equals(canonicalUrl) &
+                p.source.equals('yt') &
+                p.deleted.equals(false),
+          )
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
   /// Points [entryId] at a different track (e.g. after the user located a
   /// moved file). Err(notFound) for an unknown or deleted entry or track.
   Future<Result<void>> replaceEntryTrack(String entryId, String trackId) {

@@ -12,6 +12,7 @@ part 'database.g.dart';
     Tracks,
     Playlists,
     PlaylistEntries,
+    YtSeen,
     LocalFiles,
     LibraryFolders,
     Settings,
@@ -26,13 +27,14 @@ class AppDatabase extends _$AppDatabase {
       AppDatabase(NativeDatabase.createInBackground(f));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
       if (from < 2) await m.createTable(playHistory);
+      if (from < 3) await m.createTable(ytSeen);
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');

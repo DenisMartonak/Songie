@@ -2148,6 +2148,479 @@ class PlaylistEntriesCompanion extends UpdateCompanion<PlaylistEntry> {
   }
 }
 
+class $YtSeenTable extends YtSeen with TableInfo<$YtSeenTable, YtSeenData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $YtSeenTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clockMeta = const VerificationMeta('clock');
+  @override
+  late final GeneratedColumn<String> clock = GeneratedColumn<String>(
+    'clock',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _originDeviceMeta = const VerificationMeta(
+    'originDevice',
+  );
+  @override
+  late final GeneratedColumn<String> originDevice = GeneratedColumn<String>(
+    'origin_device',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedMeta = const VerificationMeta(
+    'deleted',
+  );
+  @override
+  late final GeneratedColumn<bool> deleted = GeneratedColumn<bool>(
+    'deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _localSeqMeta = const VerificationMeta(
+    'localSeq',
+  );
+  @override
+  late final GeneratedColumn<int> localSeq = GeneratedColumn<int>(
+    'local_seq',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _playlistIdMeta = const VerificationMeta(
+    'playlistId',
+  );
+  @override
+  late final GeneratedColumn<String> playlistId = GeneratedColumn<String>(
+    'playlist_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _videoIdMeta = const VerificationMeta(
+    'videoId',
+  );
+  @override
+  late final GeneratedColumn<String> videoId = GeneratedColumn<String>(
+    'video_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    clock,
+    originDevice,
+    deleted,
+    localSeq,
+    playlistId,
+    videoId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'yt_seen';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<YtSeenData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('clock')) {
+      context.handle(
+        _clockMeta,
+        clock.isAcceptableOrUnknown(data['clock']!, _clockMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_clockMeta);
+    }
+    if (data.containsKey('origin_device')) {
+      context.handle(
+        _originDeviceMeta,
+        originDevice.isAcceptableOrUnknown(
+          data['origin_device']!,
+          _originDeviceMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_originDeviceMeta);
+    }
+    if (data.containsKey('deleted')) {
+      context.handle(
+        _deletedMeta,
+        deleted.isAcceptableOrUnknown(data['deleted']!, _deletedMeta),
+      );
+    }
+    if (data.containsKey('local_seq')) {
+      context.handle(
+        _localSeqMeta,
+        localSeq.isAcceptableOrUnknown(data['local_seq']!, _localSeqMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localSeqMeta);
+    }
+    if (data.containsKey('playlist_id')) {
+      context.handle(
+        _playlistIdMeta,
+        playlistId.isAcceptableOrUnknown(data['playlist_id']!, _playlistIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_playlistIdMeta);
+    }
+    if (data.containsKey('video_id')) {
+      context.handle(
+        _videoIdMeta,
+        videoId.isAcceptableOrUnknown(data['video_id']!, _videoIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_videoIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {playlistId, videoId},
+  ];
+  @override
+  YtSeenData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return YtSeenData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      clock: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}clock'],
+      )!,
+      originDevice: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}origin_device'],
+      )!,
+      deleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}deleted'],
+      )!,
+      localSeq: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}local_seq'],
+      )!,
+      playlistId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}playlist_id'],
+      )!,
+      videoId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}video_id'],
+      )!,
+    );
+  }
+
+  @override
+  $YtSeenTable createAlias(String alias) {
+    return $YtSeenTable(attachedDatabase, alias);
+  }
+}
+
+class YtSeenData extends DataClass implements Insertable<YtSeenData> {
+  final String id;
+  final String clock;
+  final String originDevice;
+  final bool deleted;
+  final int localSeq;
+  final String playlistId;
+  final String videoId;
+  const YtSeenData({
+    required this.id,
+    required this.clock,
+    required this.originDevice,
+    required this.deleted,
+    required this.localSeq,
+    required this.playlistId,
+    required this.videoId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['clock'] = Variable<String>(clock);
+    map['origin_device'] = Variable<String>(originDevice);
+    map['deleted'] = Variable<bool>(deleted);
+    map['local_seq'] = Variable<int>(localSeq);
+    map['playlist_id'] = Variable<String>(playlistId);
+    map['video_id'] = Variable<String>(videoId);
+    return map;
+  }
+
+  YtSeenCompanion toCompanion(bool nullToAbsent) {
+    return YtSeenCompanion(
+      id: Value(id),
+      clock: Value(clock),
+      originDevice: Value(originDevice),
+      deleted: Value(deleted),
+      localSeq: Value(localSeq),
+      playlistId: Value(playlistId),
+      videoId: Value(videoId),
+    );
+  }
+
+  factory YtSeenData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return YtSeenData(
+      id: serializer.fromJson<String>(json['id']),
+      clock: serializer.fromJson<String>(json['clock']),
+      originDevice: serializer.fromJson<String>(json['originDevice']),
+      deleted: serializer.fromJson<bool>(json['deleted']),
+      localSeq: serializer.fromJson<int>(json['localSeq']),
+      playlistId: serializer.fromJson<String>(json['playlistId']),
+      videoId: serializer.fromJson<String>(json['videoId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'clock': serializer.toJson<String>(clock),
+      'originDevice': serializer.toJson<String>(originDevice),
+      'deleted': serializer.toJson<bool>(deleted),
+      'localSeq': serializer.toJson<int>(localSeq),
+      'playlistId': serializer.toJson<String>(playlistId),
+      'videoId': serializer.toJson<String>(videoId),
+    };
+  }
+
+  YtSeenData copyWith({
+    String? id,
+    String? clock,
+    String? originDevice,
+    bool? deleted,
+    int? localSeq,
+    String? playlistId,
+    String? videoId,
+  }) => YtSeenData(
+    id: id ?? this.id,
+    clock: clock ?? this.clock,
+    originDevice: originDevice ?? this.originDevice,
+    deleted: deleted ?? this.deleted,
+    localSeq: localSeq ?? this.localSeq,
+    playlistId: playlistId ?? this.playlistId,
+    videoId: videoId ?? this.videoId,
+  );
+  YtSeenData copyWithCompanion(YtSeenCompanion data) {
+    return YtSeenData(
+      id: data.id.present ? data.id.value : this.id,
+      clock: data.clock.present ? data.clock.value : this.clock,
+      originDevice: data.originDevice.present
+          ? data.originDevice.value
+          : this.originDevice,
+      deleted: data.deleted.present ? data.deleted.value : this.deleted,
+      localSeq: data.localSeq.present ? data.localSeq.value : this.localSeq,
+      playlistId: data.playlistId.present
+          ? data.playlistId.value
+          : this.playlistId,
+      videoId: data.videoId.present ? data.videoId.value : this.videoId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('YtSeenData(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('playlistId: $playlistId, ')
+          ..write('videoId: $videoId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    clock,
+    originDevice,
+    deleted,
+    localSeq,
+    playlistId,
+    videoId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is YtSeenData &&
+          other.id == this.id &&
+          other.clock == this.clock &&
+          other.originDevice == this.originDevice &&
+          other.deleted == this.deleted &&
+          other.localSeq == this.localSeq &&
+          other.playlistId == this.playlistId &&
+          other.videoId == this.videoId);
+}
+
+class YtSeenCompanion extends UpdateCompanion<YtSeenData> {
+  final Value<String> id;
+  final Value<String> clock;
+  final Value<String> originDevice;
+  final Value<bool> deleted;
+  final Value<int> localSeq;
+  final Value<String> playlistId;
+  final Value<String> videoId;
+  final Value<int> rowid;
+  const YtSeenCompanion({
+    this.id = const Value.absent(),
+    this.clock = const Value.absent(),
+    this.originDevice = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.localSeq = const Value.absent(),
+    this.playlistId = const Value.absent(),
+    this.videoId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  YtSeenCompanion.insert({
+    required String id,
+    required String clock,
+    required String originDevice,
+    this.deleted = const Value.absent(),
+    required int localSeq,
+    required String playlistId,
+    required String videoId,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       clock = Value(clock),
+       originDevice = Value(originDevice),
+       localSeq = Value(localSeq),
+       playlistId = Value(playlistId),
+       videoId = Value(videoId);
+  static Insertable<YtSeenData> custom({
+    Expression<String>? id,
+    Expression<String>? clock,
+    Expression<String>? originDevice,
+    Expression<bool>? deleted,
+    Expression<int>? localSeq,
+    Expression<String>? playlistId,
+    Expression<String>? videoId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (clock != null) 'clock': clock,
+      if (originDevice != null) 'origin_device': originDevice,
+      if (deleted != null) 'deleted': deleted,
+      if (localSeq != null) 'local_seq': localSeq,
+      if (playlistId != null) 'playlist_id': playlistId,
+      if (videoId != null) 'video_id': videoId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  YtSeenCompanion copyWith({
+    Value<String>? id,
+    Value<String>? clock,
+    Value<String>? originDevice,
+    Value<bool>? deleted,
+    Value<int>? localSeq,
+    Value<String>? playlistId,
+    Value<String>? videoId,
+    Value<int>? rowid,
+  }) {
+    return YtSeenCompanion(
+      id: id ?? this.id,
+      clock: clock ?? this.clock,
+      originDevice: originDevice ?? this.originDevice,
+      deleted: deleted ?? this.deleted,
+      localSeq: localSeq ?? this.localSeq,
+      playlistId: playlistId ?? this.playlistId,
+      videoId: videoId ?? this.videoId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (clock.present) {
+      map['clock'] = Variable<String>(clock.value);
+    }
+    if (originDevice.present) {
+      map['origin_device'] = Variable<String>(originDevice.value);
+    }
+    if (deleted.present) {
+      map['deleted'] = Variable<bool>(deleted.value);
+    }
+    if (localSeq.present) {
+      map['local_seq'] = Variable<int>(localSeq.value);
+    }
+    if (playlistId.present) {
+      map['playlist_id'] = Variable<String>(playlistId.value);
+    }
+    if (videoId.present) {
+      map['video_id'] = Variable<String>(videoId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('YtSeenCompanion(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('playlistId: $playlistId, ')
+          ..write('videoId: $videoId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $LocalFilesTable extends LocalFiles
     with TableInfo<$LocalFilesTable, LocalFile> {
   @override
@@ -3299,6 +3772,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $PlaylistEntriesTable playlistEntries = $PlaylistEntriesTable(
     this,
   );
+  late final $YtSeenTable ytSeen = $YtSeenTable(this);
   late final $LocalFilesTable localFiles = $LocalFilesTable(this);
   late final $LibraryFoldersTable libraryFolders = $LibraryFoldersTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
@@ -3315,6 +3789,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     tracks,
     playlists,
     playlistEntries,
+    ytSeen,
     localFiles,
     libraryFolders,
     settings,
@@ -4355,6 +4830,249 @@ typedef $$PlaylistEntriesTableProcessedTableManager =
       PlaylistEntry,
       PrefetchHooks Function()
     >;
+typedef $$YtSeenTableCreateCompanionBuilder = YtSeenCompanion Function({
+  required String id,
+  required String clock,
+  required String originDevice,
+  Value<bool> deleted,
+  required int localSeq,
+  required String playlistId,
+  required String videoId,
+  Value<int> rowid,
+});
+typedef $$YtSeenTableUpdateCompanionBuilder = YtSeenCompanion Function({
+  Value<String> id,
+  Value<String> clock,
+  Value<String> originDevice,
+  Value<bool> deleted,
+  Value<int> localSeq,
+  Value<String> playlistId,
+  Value<String> videoId,
+  Value<int> rowid,
+});
+
+class $$YtSeenTableFilterComposer
+    extends Composer<_$AppDatabase, $YtSeenTable> {
+  $$YtSeenTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get playlistId => $composableBuilder(
+    column: $table.playlistId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get videoId => $composableBuilder(
+    column: $table.videoId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$YtSeenTableOrderingComposer
+    extends Composer<_$AppDatabase, $YtSeenTable> {
+  $$YtSeenTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get playlistId => $composableBuilder(
+    column: $table.playlistId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get videoId => $composableBuilder(
+    column: $table.videoId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$YtSeenTableAnnotationComposer
+    extends Composer<_$AppDatabase, $YtSeenTable> {
+  $$YtSeenTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get clock =>
+      $composableBuilder(column: $table.clock, builder: (column) => column);
+
+  GeneratedColumn<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get deleted =>
+      $composableBuilder(column: $table.deleted, builder: (column) => column);
+
+  GeneratedColumn<int> get localSeq =>
+      $composableBuilder(column: $table.localSeq, builder: (column) => column);
+
+  GeneratedColumn<String> get playlistId => $composableBuilder(
+    column: $table.playlistId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get videoId =>
+      $composableBuilder(column: $table.videoId, builder: (column) => column);
+}
+
+class $$YtSeenTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $YtSeenTable,
+          YtSeenData,
+          $$YtSeenTableFilterComposer,
+          $$YtSeenTableOrderingComposer,
+          $$YtSeenTableAnnotationComposer,
+          $$YtSeenTableCreateCompanionBuilder,
+          $$YtSeenTableUpdateCompanionBuilder,
+          (YtSeenData, BaseReferences<_$AppDatabase, $YtSeenTable, YtSeenData>),
+          YtSeenData,
+          PrefetchHooks Function()
+        > {
+  $$YtSeenTableTableManager(_$AppDatabase db, $YtSeenTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$YtSeenTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$YtSeenTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$YtSeenTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> clock = const Value.absent(),
+                Value<String> originDevice = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<int> localSeq = const Value.absent(),
+                Value<String> playlistId = const Value.absent(),
+                Value<String> videoId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => YtSeenCompanion(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                playlistId: playlistId,
+                videoId: videoId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String clock,
+                required String originDevice,
+                Value<bool> deleted = const Value.absent(),
+                required int localSeq,
+                required String playlistId,
+                required String videoId,
+                Value<int> rowid = const Value.absent(),
+              }) => YtSeenCompanion.insert(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                playlistId: playlistId,
+                videoId: videoId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$YtSeenTable, YtSeenData>(table),
+                  BaseReferences<_$AppDatabase, $YtSeenTable, YtSeenData>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$YtSeenTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $YtSeenTable,
+      YtSeenData,
+      $$YtSeenTableFilterComposer,
+      $$YtSeenTableOrderingComposer,
+      $$YtSeenTableAnnotationComposer,
+      $$YtSeenTableCreateCompanionBuilder,
+      $$YtSeenTableUpdateCompanionBuilder,
+      (YtSeenData, BaseReferences<_$AppDatabase, $YtSeenTable, YtSeenData>),
+      YtSeenData,
+      PrefetchHooks Function()
+    >;
 typedef $$LocalFilesTableCreateCompanionBuilder = LocalFilesCompanion Function({
   required String trackId,
   required String path,
@@ -5064,6 +5782,8 @@ class $AppDatabaseManager {
       $$PlaylistsTableTableManager(_db, _db.playlists);
   $$PlaylistEntriesTableTableManager get playlistEntries =>
       $$PlaylistEntriesTableTableManager(_db, _db.playlistEntries);
+  $$YtSeenTableTableManager get ytSeen =>
+      $$YtSeenTableTableManager(_db, _db.ytSeen);
   $$LocalFilesTableTableManager get localFiles =>
       $$LocalFilesTableTableManager(_db, _db.localFiles);
   $$LibraryFoldersTableTableManager get libraryFolders =>

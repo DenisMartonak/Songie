@@ -30,6 +30,13 @@ void main() {
     expect(decoded.height, 341);
   });
 
+  test('squareCrop turns a 1280x720 image into 512x512', () async {
+    final ref = await cache.put(_png(1280, 720), squareCrop: true);
+    final decoded = img.decodeJpg(cache.fileFor(ref!).readAsBytesSync())!;
+    expect(decoded.width, 512);
+    expect(decoded.height, 512);
+  });
+
   test('put does not upscale small images', () async {
     final ref = await cache.put(_png(100, 60));
     final decoded = img.decodeJpg(cache.fileFor(ref!).readAsBytesSync())!;

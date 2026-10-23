@@ -55,6 +55,18 @@ class PlaylistEntries extends Table with SyncColumns {
   DateTimeColumn get addedAt => dateTime()();
 }
 
+/// Synced: which YouTube videos a playlist has already seen, so sync never
+/// re-adds one the user removed.
+class YtSeen extends Table with SyncColumns {
+  TextColumn get playlistId => text()();
+  TextColumn get videoId => text()();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {playlistId, videoId},
+  ];
+}
+
 /// Device-local: where a track's audio file lives on this device. Not synced.
 class LocalFiles extends Table {
   TextColumn get trackId => text()();
