@@ -6,6 +6,7 @@ import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/track_resolver.dart';
+import 'package:songies/youtube/yt_models.dart';
 
 enum RepeatMode { off, all, one }
 
@@ -150,13 +151,18 @@ class PlayerService {
   int _engineFailures = 0;
   Future<void> _tail = Future<void>.value();
 
-  /// Set by [_tryStart] when resolving failed for lack of network; playback
-  /// then stops instead of skipping on.
+  /// Set by [_tryStart] when resolving failed in a way that would fail every
+  /// track alike (no network, or yt-dlp itself broken); playback then stops
+  /// instead of skipping on.
   Failure? _networkFailure;
 
   /// The entry that failed with [_networkFailure]; it becomes current so a
   /// later play retries it.
   _Entry? _networkEntry;
+
+  /// True while [_tryStart] resolves a stream for an entry that was already
+  /// shown as current; the old track's position ticks are ignored meanwhile.
+  bool _resolving = false;
 
   /// The entry whose successor was already prefetched.
   _Entry? _prefetchedFor;
@@ -433,9 +439,15 @@ class PlayerService {
     // A new attempt starts clean, so failing again is a new error to show.
     if (_state.error != null) _emit(_state.copyWith(error: null));
     _networkFailure = null;
+    final shownIndex = _state.index;
     for (final entry in candidates) {
       if (await _tryStart(entry)) return true;
       if (await _haltOnNetworkFailure()) return false;
+    }
+    if (!giveUpOnFailure && _state.index != shownIndex) {
+      // A YouTube candidate was shown while it resolved; nothing started, so
+      // the previous track is still the current one.
+      _emit(_state.copyWith(index: shownIndex, buffering: false));
     }
     if (giveUpOnFailure) {
       await _stopBackend();
@@ -480,19 +492,45 @@ class PlayerService {
     return true;
   }
 
+  /// yt-dlp failures that would hit every YouTube track alike.
+  static bool _haltsQueue(Failure f) => switch (ytErrorKindOf(f)) {
+    YtErrorKind.extractor ||
+    YtErrorKind.missingBinary ||
+    YtErrorKind.unknown => true,
+    _ => false,
+  };
+
   Future<bool> _tryStart(_Entry entry, {bool report = true}) async {
     final track = entry.track;
     _prefetchedFor = null;
+    if (track.source == 'yt' && !track.unavailable) {
+      // Resolving a stream can take seconds: show the target right away.
+      final index = _queue.indexOf(entry);
+      if (index >= 0) {
+        _emit(
+          _state.copyWith(
+            index: index,
+            position: Duration.zero,
+            buffering: true,
+            duration: _durationOf(track),
+          ),
+        );
+      }
+    }
     final Result<AudioSourceRef> resolved;
+    _resolving = true;
     try {
       resolved = await _resolver.resolve(track);
     } catch (e, s) {
       AppLog.w('Resolving ${track.id} failed', e, s);
       return false;
+    } finally {
+      _resolving = false;
     }
     switch (resolved) {
       case Err(:final failure):
-        if (failure.kind == FailureKind.network) {
+        if (failure.kind == FailureKind.network ||
+            (track.source == 'yt' && _haltsQueue(failure))) {
           AppLog.w('Cannot play ${track.id}: ${failure.message}');
           _networkFailure = failure;
           _networkEntry = entry;
@@ -524,7 +562,8 @@ class PlayerService {
           await _backend.play();
         } catch (e, s) {
           AppLog.w('Backend failed to play ${track.id}', e, s);
-          return false;
+          // Usually an expired or IP-bound stream URL (HTTP 403).
+          return _retryWithFreshStream(entry, report: report);
         }
         _loaded = true;
         _generation++;
@@ -532,6 +571,20 @@ class PlayerService {
         if (report) await _reportStarted(track);
         return true;
     }
+  }
+
+  /// Re-resolves a YouTube [entry] once with its cached stream URL dropped
+  /// (it may have expired or be bound to an old IP). False when the entry is
+  /// not a YouTube track, was already retried, or failed again.
+  Future<bool> _retryWithFreshStream(
+    _Entry entry, {
+    required bool report,
+  }) async {
+    if (entry.track.source != 'yt' || entry.engineRetried) return false;
+    entry.engineRetried = true;
+    _resolver.invalidate(entry.track);
+    _networkFailure = null;
+    return _tryStart(entry, report: report);
   }
 
   Duration? _durationOf(Track t) =>
@@ -618,6 +671,8 @@ class PlayerService {
     if (_disposed) return;
     final completedNow = s.completed && !_wasCompleted;
     _wasCompleted = s.completed;
+    // The previous track's ticks would overwrite the resolving one's state.
+    if (_resolving) return;
     _emit(
       _state.copyWith(
         position: s.position,
@@ -683,10 +738,7 @@ class PlayerService {
       AppLog.w('Playback of ${entry.track.id} failed: $error');
       if (entry.track.source == 'yt' && !entry.engineRetried) {
         // The stream URL may have expired: fetch a fresh one, once per entry.
-        entry.engineRetried = true;
-        _resolver.invalidate(entry.track);
-        _networkFailure = null;
-        if (await _tryStart(entry, report: false)) return;
+        if (await _retryWithFreshStream(entry, report: false)) return;
         if (await _haltOnNetworkFailure()) return;
       }
       if (++_engineFailures >= _queue.length) {

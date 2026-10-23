@@ -9,6 +9,8 @@ import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
 
+import 'package:songies/ui/shell/player_error_snacks.dart';
+
 import '../helpers/fake_audio_backend.dart';
 
 Track track(String id, {int durationMs = 0}) => Track(
@@ -1024,6 +1026,139 @@ void main() {
       await settle();
       await at(90);
       expect(resolver.prefetched, ['b', 'c']);
+    });
+  });
+
+  group('yt-dlp failures that hit every track', () {
+    test('extractor failure stops instead of skipping', () async {
+      final y1 = ytTrack('y1');
+      final y2 = ytTrack('y2');
+      final y3 = ytTrack('y3');
+      for (final id in ['y1', 'y2', 'y3']) {
+        resolver.failures[id] = Failure(
+          FailureKind.unknown,
+          'ytdlp:extractor:boom',
+        );
+      }
+      await player.playQueue([y1, y2, y3]);
+
+      expect(resolver.resolved, ['y1']);
+      expect(player.state.playing, isFalse);
+      expect(player.state.current, y1);
+      expect(player.state.error, 'ytdlp:extractor:boom');
+      expect(
+        playerErrorMessage(player.state.error!),
+        'YouTube changed something — try Settings → Update yt-dlp',
+      );
+    });
+
+    test('missingBinary stops with the install copy', () async {
+      final y1 = ytTrack('y1');
+      resolver.failures['y1'] = Failure(
+        FailureKind.unknown,
+        'ytdlp:missingBinary:not installed',
+      );
+      await player.playQueue([y1, b]);
+
+      expect(resolver.resolved, ['y1']);
+      expect(player.state.playing, isFalse);
+      expect(
+        playerErrorMessage(player.state.error!),
+        "yt-dlp isn't installed — install it in Settings",
+      );
+    });
+
+    test('unknown yt-dlp failure stops', () async {
+      final y1 = ytTrack('y1');
+      resolver.failures['y1'] = Failure(FailureKind.unknown, 'ytdlp:unknown:x');
+      await player.playQueue([y1, b]);
+      expect(resolver.resolved, ['y1']);
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, 'ytdlp:unknown:x');
+    });
+
+    test('play after the stop retries the failed track', () async {
+      final y1 = ytTrack('y1');
+      resolver.failures['y1'] = Failure(
+        FailureKind.unknown,
+        'ytdlp:extractor:boom',
+      );
+      await player.playQueue([y1, b]);
+      resolver.failures.clear();
+      await player.play();
+      expect(player.state.current, y1);
+      expect(player.state.playing, isTrue);
+    });
+  });
+
+  group('yt setSource failure retry', () {
+    test('a setSource throw re-resolves the yt entry once', () async {
+      final y = ytTrack('y');
+      backend.failNext.add('setSource');
+      await player.playQueue([y, b]);
+
+      expect(resolver.invalidated, ['y']);
+      expect(resolver.resolved, ['y', 'y']);
+      expect(player.state.current, y);
+      expect(player.state.playing, isTrue);
+      expect(started, ['y@-']);
+    });
+
+    test('a second throw skips to the next entry', () async {
+      final y = ytTrack('y');
+      backend.onSetSource = (s) {
+        if (s is FileSource && s.path.endsWith('/y.mp3')) {
+          throw StateError('403');
+        }
+      };
+      await player.playQueue([y, b]);
+
+      expect(resolver.invalidated, ['y']);
+      expect(resolver.resolved, ['y', 'y', 'b']);
+      expect(player.state.current, b);
+      expect(player.state.playing, isTrue);
+    });
+
+    test('local setSource throws are not retried', () async {
+      backend.failNext.add('setSource');
+      await player.playQueue([a, b]);
+      expect(resolver.invalidated, isEmpty);
+      expect(player.state.current, b);
+    });
+  });
+
+  group('feedback while a stream resolves', () {
+    test('index and buffering are emitted before the resolve', () async {
+      final y = ytTrack('y');
+      await player.playQueue([a, y]);
+      final gate = Completer<void>();
+      resolver.gate = gate;
+
+      final done = player.playAt(1);
+      await settle();
+      expect(player.state.index, 1);
+      expect(player.state.buffering, isTrue);
+
+      gate.complete();
+      await done;
+      expect(player.state.index, 1);
+      expect(player.state.buffering, isFalse);
+      expect(player.state.playing, isTrue);
+    });
+
+    test('previous falling back to the current track restores its index',
+        () async {
+      final y = ytTrack('y');
+      await player.playQueue([y, b], startIndex: 1);
+      resolver.failures['y'] = Failure(
+        FailureKind.notFound,
+        'ytdlp:notFound:x',
+      );
+      await player.previous();
+      expect(player.state.current, b);
+      expect(player.state.index, 1);
+      expect(player.state.buffering, isFalse);
+      expect(player.state.playing, isTrue);
     });
   });
 }
