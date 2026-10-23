@@ -6,6 +6,8 @@ import 'core/paths.dart';
 import 'data/database.dart';
 import 'data/settings_repository.dart';
 import 'data/sync_stamp.dart';
+import 'downloads/download_repository.dart';
+import 'downloads/download_service.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
 import 'library/library_scanner.dart';
@@ -213,3 +215,16 @@ final playlistRowProvider = StreamProvider.autoDispose
     .family<Playlist?, String>(
       (ref, id) => ref.watch(libraryRepositoryProvider).watchPlaylist(id),
     );
+
+// --- Downloads -------------------------------------------------------------
+
+/// This device's YouTube download rows. `main()` overrides it with the
+/// instance the queue uses.
+final downloadRepositoryProvider = Provider<DownloadRepository>(
+  (ref) => DownloadRepository(ref.watch(databaseProvider)),
+);
+
+/// The YouTube download queue.
+final downloadServiceProvider = Provider<DownloadService>(
+  (ref) => _unwired('downloadServiceProvider'),
+);

@@ -287,23 +287,28 @@ void main() {
     expect(f.existsSync(), isTrue);
   });
 
-  test('dropUnwanted deletes unwanted queued/failed rows only', () async {
-    for (final id in ['y1', 'y2', 'y3', 'y4', 'y5']) {
-      await track(id);
-    }
-    await entry('A', 'y1');
-    await repo.setPlaylistDownload('A', true); // y1 queued, wanted
-    await setRow('y2', 'queued');
-    await setRow('y3', 'failed');
-    await setRow('y4', 'queued', manual: true);
-    await setRow('y5', 'done', path: 'x');
-    await repo.dropUnwanted();
-    expect(await row('y1'), isNotNull);
-    expect(await row('y2'), isNull);
-    expect(await row('y3'), isNull);
-    expect(await row('y4'), isNotNull);
-    expect(await row('y5'), isNotNull);
-  });
+  test(
+    'dropUnwanted deletes unwanted queued/downloading/failed rows',
+    () async {
+      for (final id in ['y1', 'y2', 'y3', 'y4', 'y5', 'y6']) {
+        await track(id);
+      }
+      await entry('A', 'y1');
+      await repo.setPlaylistDownload('A', true); // y1 queued, wanted
+      await setRow('y2', 'queued');
+      await setRow('y3', 'failed');
+      await setRow('y4', 'queued', manual: true);
+      await setRow('y5', 'done', path: 'x');
+      await setRow('y6', 'downloading');
+      await repo.dropUnwanted();
+      expect(await row('y1'), isNotNull);
+      expect(await row('y2'), isNull);
+      expect(await row('y3'), isNull);
+      expect(await row('y4'), isNotNull);
+      expect(await row('y5'), isNotNull);
+      expect(await row('y6'), isNull);
+    },
+  );
 
   test('retryFailed requeues failed rows, optionally per playlist', () async {
     await track('y1');

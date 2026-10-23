@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,7 +9,10 @@ import 'package:go_router/go_router.dart';
 import 'package:songies/core/paths.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
+import 'package:songies/data/settings_repository.dart';
 import 'package:songies/data/sync_stamp.dart';
+import 'package:songies/downloads/download_repository.dart';
+import 'package:songies/downloads/download_service.dart';
 import 'package:songies/library/library_repository.dart';
 import 'package:songies/library/library_scanner.dart';
 import 'package:songies/library/play_history_repository.dart';
@@ -20,9 +24,11 @@ import 'package:songies/providers.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/library/pickers.dart';
+import 'package:songies/youtube/ytdlp_client.dart';
 
 import 'fake_audio_backend.dart';
 import 'fake_import_service.dart';
+import 'fake_network_status.dart';
 import 'fake_ytdlp_runner.dart';
 import 'test_db.dart';
 
@@ -69,6 +75,26 @@ class FakeScanner implements LibraryScanner {
   Future<void> markMissing(String trackId) async {}
 }
 
+/// A download queue that is never started and counts [kick]s.
+class CountingDownloadService extends DownloadService {
+  CountingDownloadService(AppDatabase db, YtDlpClient client)
+    : super(
+        repo: DownloadRepository(db),
+        client: client,
+        network: FakeNetworkStatus(),
+        settings: SettingsRepository(db),
+        ytDir: Directory.systemTemp,
+        concurrency: 3,
+        onDownloaded: (_, _) async {},
+        onUnavailable: (_) async {},
+      );
+
+  int kicks = 0;
+
+  @override
+  void kick() => kicks++;
+}
+
 /// An in-memory app: database, repositories, a player on a fake backend and a
 /// fake scanner, ready to be wired into a [ProviderScope].
 class UiHarness {
@@ -92,6 +118,10 @@ class UiHarness {
   final FakeScanner scanner = FakeScanner();
   final FakeYtDlpRunner ytRunner = FakeYtDlpRunner();
   final FakeImportService importService = FakeImportService();
+  late final CountingDownloadService downloads = CountingDownloadService(
+    db,
+    YtDlpClient(ytRunner),
+  );
 
   /// The platform the YouTube settings think they run on.
   bool isAndroid = false;
@@ -146,6 +176,7 @@ class UiHarness {
     locateByFolderProvider.overrideWithValue(locateByFolder),
     ytDlpRunnerProvider.overrideWithValue(ytRunner),
     ytImportServiceProvider.overrideWithValue(importService),
+    downloadServiceProvider.overrideWithValue(downloads),
     isAndroidProvider.overrideWithValue(isAndroid),
     isLinuxProvider.overrideWithValue(isLinux),
   ];

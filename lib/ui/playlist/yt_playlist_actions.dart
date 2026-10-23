@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/log.dart';
 import '../../core/result.dart';
+import '../../downloads/download_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../../youtube/yt_import_service.dart';
@@ -71,6 +73,8 @@ class _YtSyncButtonState extends ConsumerState<YtSyncButton> {
     if (_busy) return;
     final snacks = PageSnackBars.of(context);
     final service = ref.read(ytImportServiceProvider);
+    final downloadRepo = ref.read(downloadRepositoryProvider);
+    final downloads = ref.read(downloadServiceProvider);
     setState(() => _busy = true);
     final Result<SyncResult> result;
     try {
@@ -85,6 +89,15 @@ class _YtSyncButtonState extends ConsumerState<YtSyncButton> {
     snacks
       ..clear()
       ..show(content: Text(text));
+    if (result case Ok(:final value) when value.addedTrackIds.isNotEmpty) {
+      // New songs of a downloaded playlist are downloaded too.
+      try {
+        await downloadRepo.queueAdded(widget.playlistId, value.addedTrackIds);
+        downloads.kick();
+      } on DownloadDbException catch (e, s) {
+        AppLog.w('Queueing synced songs failed', e, s);
+      }
+    }
   }
 
   @override

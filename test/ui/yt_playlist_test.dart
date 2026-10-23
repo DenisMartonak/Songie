@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
+import 'package:songies/downloads/download_repository.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/playlist/yt_playlist_actions.dart';
 import 'package:songies/youtube/yt_import_service.dart';
@@ -169,6 +170,39 @@ void main() {
         find.text('YouTube changed something — try Settings → Update yt-dlp'),
         findsOneWidget,
       );
+    });
+
+    uiTest('new songs of a downloaded playlist are queued', (tester) async {
+      final pid = await ytPlaylist(tester);
+      await real(tester, () async {
+        await h.db
+            .into(h.db.tracks)
+            .insert(trackRow(id: 'y4', source: 'yt', ytVideoId: 'vy4'));
+        await h.repo.addTracks(pid, ['y4']);
+        await DownloadRepository(h.db).setPlaylistDownload(pid, true);
+        // Only y1 was queued by enabling; y4 comes from the sync.
+        await (h.db.delete(
+          h.db.localFiles,
+        )..where((f) => f.trackId.equals('y4'))).go();
+      });
+      h.importService.onSync = (_) async => Ok(
+        SyncResult(
+          added: 1,
+          flaggedRemoved: 0,
+          restored: 0,
+          addedTrackIds: const ['y4'],
+        ),
+      );
+      await pumpPage(tester, pid);
+      await tester.tap(syncButton());
+      await settle(tester);
+
+      final rows = await real(tester, () => h.db.select(h.db.localFiles).get());
+      expect(
+        {for (final r in rows) r.trackId: r.state},
+        {'y1': 'queued', 'y4': 'queued'},
+      );
+      expect(h.downloads.kicks, 1);
     });
 
     uiTest('shows Syncing… and ignores taps while running', (tester) async {

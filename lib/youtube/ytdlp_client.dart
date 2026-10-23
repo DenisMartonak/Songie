@@ -210,6 +210,9 @@ class YtDlpClient {
     );
   }
 
+  /// Stops the [download] started with [processId], if it is still running.
+  Future<void> cancel(String processId) => _runner.cancel(processId);
+
   /// The JSON of a `songies-done` line, or null when it does not parse.
   static Object? _parseDone(String line) {
     try {

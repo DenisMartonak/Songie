@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -13,6 +14,8 @@ import 'core/paths.dart';
 import 'data/database.dart';
 import 'data/settings_repository.dart';
 import 'data/sync_stamp.dart';
+import 'downloads/download_repository.dart';
+import 'downloads/download_service.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
 import 'library/library_scanner.dart';
@@ -78,9 +81,10 @@ Future<void> main() async {
       (u) => httpDownload(u, totalTimeout: const Duration(seconds: 15)),
     ),
   );
+  final network = ConnectivityPlusStatus();
   final streams = StreamResolver(
     ytClient,
-    ConnectivityPlusStatus(),
+    network,
     settings,
     wifiOnlyFallback: Platform.isAndroid,
   );
@@ -99,6 +103,34 @@ Future<void> main() async {
       );
     },
   );
+
+  // Downloads: start() only resumes work already queued; nothing runs when
+  // the queue is empty.
+  final downloadRepo = DownloadRepository(db);
+  final downloads = DownloadService(
+    repo: downloadRepo,
+    client: ytClient,
+    network: network,
+    settings: settings,
+    ytDir: paths.libraryYt,
+    concurrency: Platform.isAndroid ? 2 : 3,
+    wifiOnlyFallback: Platform.isAndroid,
+    onDownloaded: (trackId, d) async {
+      await library.updateTrackMetadata(
+        trackId,
+        title: d.title,
+        artist: d.artist,
+        album: d.album,
+        durationMs: d.durationMs,
+      );
+      final t = await library.trackById(trackId);
+      if (t != null) ytImport.refreshArtwork([t]);
+    },
+    onUnavailable: (trackId) async {
+      await library.markUnavailable(trackId);
+    },
+  );
+  unawaited(downloads.start());
 
   final backend = JustAudioBackend();
   final player = PlayerService(
@@ -138,6 +170,8 @@ Future<void> main() async {
         settingsRepositoryProvider.overrideWithValue(settings),
         ytDlpRunnerProvider.overrideWithValue(runner),
         ytImportServiceProvider.overrideWithValue(ytImport),
+        downloadRepositoryProvider.overrideWithValue(downloadRepo),
+        downloadServiceProvider.overrideWithValue(downloads),
       ],
       child: SongiesApp(router: router),
     ),

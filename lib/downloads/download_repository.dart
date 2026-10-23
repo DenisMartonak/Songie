@@ -274,14 +274,15 @@ class DownloadRepository {
         .fold<int>(0, (a, r) => a + r.bytes);
   }
 
-  /// Deletes queued/failed rows nothing wants any more.
+  /// Deletes queued, downloading and failed rows nothing wants any more. A
+  /// running download whose row goes is then cancelled by the queue.
   Future<void> dropUnwanted() {
     return _tx(() async {
       final wanted = await _wantedIds();
       final rows =
           await (_db.select(_db.localFiles)..where(
                 (f) =>
-                    f.state.isIn(const ['queued', 'failed']) &
+                    f.state.isIn(const ['queued', 'downloading', 'failed']) &
                     f.manual.equals(false),
               ))
               .get();
@@ -353,6 +354,15 @@ class DownloadRepository {
   }
 
   // --- queue ---------------------------------------------------------------
+
+  /// Those of [trackIds] that have a download row.
+  Future<Set<String>> rowIds(Iterable<String> trackIds) async => {
+    for (final r in await _rows(trackIds)) r.trackId,
+  };
+
+  /// The live YouTube track [trackId], or null.
+  Future<Track?> ytTrack(String trackId) async =>
+      (await _ytTracks([trackId]))[trackId];
 
   Future<List<LocalFile>> nextQueued(int limit) =>
       (_db.select(_db.localFiles)
