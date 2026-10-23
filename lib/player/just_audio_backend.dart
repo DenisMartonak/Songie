@@ -51,7 +51,14 @@ class JustAudioBackend implements AudioBackend {
 
   // handleInterruptions is off: PlayerService owns the playing flag, so pausing
   // and resuming on session events is done by bindAudioSession, not by the engine.
-  final AudioPlayer _player = AudioPlayer(handleInterruptions: false);
+  // useProxyForRequestHeaders is off: YouTube streams always carry headers, and
+  // the default routes them through a cleartext http://127.0.0.1 proxy that
+  // Android blocks. ExoPlayer (setDefaultRequestProperties) and media_kit
+  // (Media.httpHeaders) both send the headers natively instead.
+  final AudioPlayer _player = AudioPlayer(
+    handleInterruptions: false,
+    useProxyForRequestHeaders: false,
+  );
   late final List<StreamSubscription<Object?>> _subs;
   final StreamController<BackendState> _controller =
       StreamController<BackendState>.broadcast();
