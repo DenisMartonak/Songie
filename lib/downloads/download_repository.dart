@@ -364,13 +364,20 @@ class DownloadRepository {
             ..limit(limit))
           .get();
 
-  Future<void> _write(String id, LocalFilesCompanion c) =>
-      (_db.update(_db.localFiles)..where((f) => f.trackId.equals(id))).write(c);
+  Future<bool> _write(String id, LocalFilesCompanion c) async =>
+      await (_db.update(
+        _db.localFiles,
+      )..where((f) => f.trackId.equals(id))).write(c) >
+      0;
 
-  Future<void> markDownloading(String id) =>
+  /// Returns false when the row no longer exists (e.g. removed while the
+  /// download ran).
+  Future<bool> markDownloading(String id) =>
       _write(id, const LocalFilesCompanion(state: Value('downloading')));
 
-  Future<void> markDone(String id, String path, int bytes) => _write(
+  /// Returns false when the row no longer exists; the caller then owns the
+  /// finished file at [path] and should delete it, as nothing tracks it.
+  Future<bool> markDone(String id, String path, int bytes) => _write(
     id,
     LocalFilesCompanion(
       state: const Value('done'),
@@ -381,7 +388,8 @@ class DownloadRepository {
     ),
   );
 
-  Future<void> markFailed(String id, String message) => _write(
+  /// Returns false when the row no longer exists.
+  Future<bool> markFailed(String id, String message) => _write(
     id,
     LocalFilesCompanion(state: const Value('failed'), error: Value(message)),
   );
@@ -515,11 +523,12 @@ class DownloadRepository {
     },
   );
 
-  /// Download state per track id (only tracks that have a row).
+  /// Download state per YouTube track id (only tracks that have a row).
   Stream<Map<String, String>> watchTrackStates(Iterable<String> trackIds) {
     final ids = trackIds.toList();
-    return _watch([_db.localFiles], () async {
-      final rows = await _rows(ids);
+    return _watch([_db.localFiles, _db.tracks], () async {
+      final yt = await _ytTracks(ids);
+      final rows = await _rows(yt.keys);
       return {for (final r in rows) r.trackId: r.state};
     });
   }

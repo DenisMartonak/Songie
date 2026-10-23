@@ -406,4 +406,28 @@ void main() {
     await pumpEventQueue();
     expect(s.last, {'y1': 'done'});
   });
+
+  test('mark moves report false when the row was removed meanwhile', () async {
+    await track('y1');
+    await setRow('y1', 'downloading');
+    await repo.removeFiles(['y1'], ytDir);
+    expect(await repo.markDone('y1', '${ytDir.path}/v.opus', 5), isFalse);
+    expect(await repo.markDownloading('y1'), isFalse);
+    expect(await repo.markFailed('y1', 'x'), isFalse);
+    await setRow('y1', 'queued');
+    expect(await repo.markDownloading('y1'), isTrue);
+    expect(await repo.markDone('y1', 'p', 5), isTrue);
+  });
+
+  test('watchTrackStates ignores local-library rows', () async {
+    await track('y1');
+    await track('l1', source: 'local');
+    await setRow('y1', 'queued');
+    await setRow('l1', 'done', path: '/m/l.mp3', bytes: 1);
+    final s = <Map<String, String>>[];
+    final sub = repo.watchTrackStates(['y1', 'l1']).listen(s.add);
+    addTearDown(sub.cancel);
+    await pumpEventQueue();
+    expect(s.last, {'y1': 'queued'});
+  });
 }
