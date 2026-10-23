@@ -102,6 +102,19 @@ void main() {
       'ERROR: [youtube] x: Sign in to confirm you are not a bot':
           YtErrorKind.extractor,
       'something odd with no marker': YtErrorKind.unknown,
+      'ERROR: [youtube] abc: The uploader has not made this video available '
+              'in your country':
+          YtErrorKind.notFound,
+      'ERROR: [youtube] abc: This video is not available in your country':
+          YtErrorKind.notFound,
+      'ERROR: [youtube] abc: Sign in to confirm your age. This video may be '
+              'inappropriate for some users.':
+          YtErrorKind.notFound,
+      'ERROR: [youtube] abc: This video is age-restricted':
+          YtErrorKind.notFound,
+      'ERROR: [youtube] abc: Unable to download API page: HTTP Error 400: '
+              'Bad Request':
+          YtErrorKind.extractor,
     };
     cases.forEach((stderr, kind) {
       test('$kind <- ${stderr.split('\n').last}', () async {

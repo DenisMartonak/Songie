@@ -21,9 +21,17 @@ YtErrorKind classifyYtDlpStderr(String stderr) {
     'This video is unavailable',
     'Private video',
     'removed for violating',
-    'HTTP Error 400',
+    // Region-blocked and age-restricted videos: unplayable for this user, but
+    // yt-dlp itself works, so playback skips them like private videos.
+    'available in your country',
+    'Sign in to confirm your age',
+    'age-restricted',
   ];
   if (notFound.any(errors.contains)) return YtErrorKind.notFound;
+  // A malformed playlist id; elsewhere a 400 means yt-dlp's request is stale.
+  if (RegExp(r'\[youtube:tab\][^\n]*HTTP Error 400').hasMatch(errors)) {
+    return YtErrorKind.notFound;
+  }
   final http4xx = RegExp(r'HTTP Error 4\d\d').hasMatch(errors);
   if (http4xx && errors.contains('[generic]')) return YtErrorKind.notFound;
   if (errors.contains('Unable to connect') ||
