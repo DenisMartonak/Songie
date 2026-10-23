@@ -419,6 +419,7 @@ void main() {
     expect(await repo.markDone('y1', '${ytDir.path}/v.opus', 5), isFalse);
     expect(await repo.markDownloading('y1'), isFalse);
     expect(await repo.markFailed('y1', 'x'), isFalse);
+    expect(await repo.requeue('y1'), isFalse);
     await setRow('y1', 'queued');
     expect(await repo.markDownloading('y1'), isTrue);
     expect(await repo.markDone('y1', 'p', 5), isTrue);

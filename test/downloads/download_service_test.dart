@@ -73,6 +73,21 @@ class GateRunner implements YtDlpRunner {
   Future<Result<void>> update() async => const Ok(null);
 }
 
+/// A repository whose [rowIds] can be held open by the test.
+class GatedRepository extends DownloadRepository {
+  GatedRepository(super.db);
+
+  Completer<void>? rowIdsGate;
+
+  @override
+  Future<Set<String>> rowIds(Iterable<String> trackIds) async {
+    final ids = trackIds.toList();
+    final gate = rowIdsGate;
+    if (gate != null) await gate.future;
+    return super.rowIds(ids);
+  }
+}
+
 class RecordingNotifier implements DownloadNotifier {
   final List<DownloadSnapshot> updates = [];
   final List<(int, int)> finishes = [];
@@ -103,7 +118,7 @@ class Env {
     : db = testDb(),
       tmp = Directory.systemTemp.createTempSync('dl_service_test') {
     ytDir = Directory('${tmp.path}/yt')..createSync();
-    repo = DownloadRepository(db);
+    repo = GatedRepository(db);
     settings = SettingsRepository(db);
     wait(settings.setBool(kWifiOnly, wifiOnly));
   }
@@ -113,7 +128,7 @@ class Env {
   final AppDatabase db;
   final Directory tmp;
   late final Directory ytDir;
-  late final DownloadRepository repo;
+  late final GatedRepository repo;
   late final SettingsRepository settings;
   final runner = GateRunner();
   final network = FakeNetworkStatus();
@@ -429,16 +444,36 @@ void main() {
     expect(e.runner.started, ['dl-y1', 'dl-y1']);
   });
 
-  run('a network error pauses until the next connectivity change', (e) {
+  const networkError =
+      'ERROR: [youtube] abc: Unable to download webpage: '
+      '<urlopen error [Errno -3] getaddrinfo failed>';
+
+  run('a network error on a working network retries with the backoff', (e) {
     e.queued(['y1']);
     e.wait(e.service.start());
-    e.fail(
-      'y1',
-      'ERROR: [youtube] abc: Unable to download webpage: '
-          '<urlopen error [Errno -3] getaddrinfo failed>',
-    );
-    expect(e.snap.pause?.reason, DownloadPauseReason.offline);
+    e.fail('y1', networkError);
+    expect(e.snap.pause?.reason, DownloadPauseReason.throttled);
+    expect(e.snap.pause?.resumesAt, e.base.add(const Duration(seconds: 30)));
     expect(e.row('y1')!.state, 'queued');
+    e.elapse(const Duration(seconds: 29));
+    expect(e.runner.running, 0);
+    e.elapse(const Duration(seconds: 1));
+    expect(e.runner.started, ['dl-y1', 'dl-y1'], reason: 'no network event');
+
+    final at = e.base.add(e.async.elapsed);
+    e.fail('y1', networkError);
+    expect(e.snap.pause?.resumesAt, at.add(const Duration(seconds: 60)));
+  });
+
+  run('a network error while really offline pauses as offline', (e) {
+    e.queued(['y1']);
+    e.wait(e.service.start());
+    e.network.kind = NetworkKind.offline; // no event yet
+    e.fail('y1', networkError);
+    expect(e.snap.pause, const DownloadPause(DownloadPauseReason.offline));
+    expect(e.row('y1')!.state, 'queued');
+    e.elapse(const Duration(minutes: 30));
+    expect(e.runner.running, 0);
     e.network.set(NetworkKind.wifi);
     e.settle();
     expect(e.runner.running, 1);
@@ -531,6 +566,41 @@ void main() {
     e.wait(removed);
     expect(e.file('y1').existsSync(), isFalse);
     expect(e.row('y1'), isNull);
+  });
+
+  run(
+    'a job started while cancelUnwanted reads is not cancelled',
+    concurrency: 1,
+    (e) {
+      e.queued(['y1', 'y2']);
+      e.wait(e.service.start());
+      e.repo.rowIdsGate = Completer<void>();
+      final cancelling = e.service.cancelUnwanted();
+      e.succeed('y1'); // y2 is reserved and started meanwhile
+      expect(e.runner.started, ['dl-y1', 'dl-y2']);
+      e.repo.rowIdsGate!.complete();
+      e.wait(cancelling);
+      expect(e.runner.cancelled, isEmpty);
+      e.succeed('y2');
+      expect(e.row('y2')!.state, 'done');
+    },
+  );
+
+  run('a requeue of a row that is gone still ends the run', (e) {
+    e.queued(['y1']);
+    e.wait(e.service.start());
+    // The row goes; the watcher sees it but its cancel is held up, so the
+    // 429 that follows is handled normally and its requeue finds no row.
+    e.repo.rowIdsGate = Completer<void>();
+    e.wait(e.db.delete(e.db.localFiles).go());
+    e.fail('y1', _throttled);
+    e.repo.rowIdsGate!.complete();
+    e.settle();
+    expect(e.row('y1'), isNull);
+    expect(e.snap.queued, 0);
+    expect(e.snap.active, 0);
+    expect(e.notifier.finishes, [(0, 0)]);
+    expect(e.async.pendingTimers, isEmpty);
   });
 
   run('start() runs a row left downloading by a crash again', (e) {

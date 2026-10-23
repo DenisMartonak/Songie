@@ -405,7 +405,8 @@ class DownloadRepository {
   );
 
   /// Back to the queue (e.g. after a pause); keeps its place in line.
-  Future<void> requeue(String id) => _write(
+  /// Returns false when the row no longer exists.
+  Future<bool> requeue(String id) => _write(
     id,
     const LocalFilesCompanion(state: Value('queued'), error: Value(null)),
   );

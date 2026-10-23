@@ -15,6 +15,9 @@ import '../youtube/ytdlp_client.dart';
 import 'download_notifier.dart';
 import 'download_repository.dart';
 
+/// `throttled` is the backoff wait (with a `resumesAt`): after an HTTP 429,
+/// or after a network error while the device still reports a connection.
+/// `offline` is only for a device that reports no connection.
 enum DownloadPauseReason { wifiOnly, offline, throttled, diskFull }
 
 /// Why the queue is not starting downloads, and when it resumes by itself
@@ -315,18 +318,21 @@ class DownloadService {
   Future<void> cancelUnwanted() async {
     final running = [
       for (final j in _jobs.values)
-        if (!j.finished) j.trackId,
+        if (!j.finished) j,
     ];
     if (running.isEmpty) return;
     final Set<String> ids;
     try {
-      ids = await _repo.rowIds(running);
+      ids = await _repo.rowIds([for (final j in running) j.trackId]);
     } catch (e, s) {
       _logError(e, s);
       return;
     }
-    for (final j in _jobs.values.toList()) {
-      if (!ids.contains(j.trackId)) _stop(j, _Stop.unwanted);
+    // Only the jobs that were read: one reserved meanwhile has its row.
+    for (final j in running) {
+      if (identical(_jobs[j.trackId], j) && !ids.contains(j.trackId)) {
+        _stop(j, _Stop.unwanted);
+      }
     }
   }
 
@@ -558,8 +564,14 @@ class DownloadService {
         _throttle();
         await _requeue(id);
       case YtErrorKind.network:
-        _offline = true;
-        _update();
+        // Really offline: wait for the connection. Otherwise (a blip, a
+        // stall) retry on the backoff, as no connectivity event may come.
+        if (await _isOffline()) {
+          _offline = true;
+          _update();
+        } else {
+          _throttle();
+        }
         await _requeue(id);
       case YtErrorKind.diskFull:
         _diskFull = true;
@@ -576,8 +588,17 @@ class DownloadService {
   }
 
   Future<void> _requeue(String id) async {
-    await _repo.requeue(id);
-    _queuedIds = {..._queuedIds, id};
+    // A row that is gone must not keep the run open.
+    if (await _repo.requeue(id)) _queuedIds = {..._queuedIds, id};
+  }
+
+  Future<bool> _isOffline() async {
+    try {
+      _networkKind = await _network.current();
+    } catch (e, s) {
+      _logError(e, s);
+    }
+    return _networkKind == NetworkKind.offline;
   }
 
   // --- cancelling ----------------------------------------------------------
