@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:songies/core/result.dart';
@@ -70,6 +71,7 @@ void main() {
     );
   });
   tearDown(() async {
+    await service.thumbnailsSettled;
     await db.close();
     tmp.deleteSync(recursive: true);
   });
@@ -130,6 +132,7 @@ void main() {
         expect(pl.name, 'Mix');
         expect(pl.ytPlaylistUrl, link);
         expect(pl.lastYtSyncAt, isNotNull);
+        await service.thumbnailsSettled;
         final seqs = <int>[
           for (final t in await db.select(db.tracks).get()) t.localSeq,
           for (final t in await db.select(db.playlistEntries).get()) t.localSeq,
@@ -143,6 +146,19 @@ void main() {
         expect(t.artworkRef, isNotNull);
       },
     );
+
+    test('two concurrent imports of one link make one playlist', () async {
+      serve(['a', 'b']);
+      final rs = await Future.wait([
+        service.importPlaylist(link),
+        service.importPlaylist(link),
+      ]);
+      final oks = [for (final r in rs) (r as Ok<ImportResult>).value];
+      expect(oks.where((o) => o.alreadyExisted), hasLength(1));
+      expect(oks[0].playlistId, oks[1].playlistId);
+      expect((await counts())[0], 1);
+      expect((await counts())[2], 2);
+    });
 
     test('invalid link writes nothing', () async {
       serve(['a']);
@@ -222,8 +238,12 @@ void main() {
     test('thumbnail failures do not fail the import', () async {
       failDownload = true;
       serve(['a']);
+      final old = debugPrint;
+      debugPrint = (String? m, {int? wrapWidth}) {};
+      addTearDown(() => debugPrint = old);
       final r = await service.importPlaylist(link);
       expect(r, isA<Ok<ImportResult>>());
+      await service.thumbnailsSettled;
       expect((await db.select(db.tracks).getSingle()).artworkRef, isNull);
     });
 
@@ -232,7 +252,7 @@ void main() {
         for (var i = 0; i < 1500; i++) 'v${i.toString().padLeft(4, '0')}',
       ];
       runner.onOk('list=PLx', listJson(ids));
-      // No thumbnails: keep the test about the database.
+      // Thumbnails run in the background; they are not awaited here.
       final sw = Stopwatch()..start();
       final r = (await service.importPlaylist(link) as Ok<ImportResult>).value;
       expect(r.added, 1500);

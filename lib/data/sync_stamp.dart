@@ -78,6 +78,32 @@ class SyncStamp {
     );
   }
 
+  /// Returns [n] distinct, strictly increasing stamps (clock and `local_seq`)
+  /// persisted with one settings write. [ids], if given, must have length [n]
+  /// (null entries get a new UUID). Same transaction semantics as [next].
+  Future<List<Stamp>> nextMany(int n, {List<String?>? ids}) async {
+    if (ids != null && ids.length != n) {
+      throw ArgumentError('ids must have length $n');
+    }
+    if (n <= 0) return <Stamp>[];
+    final stamps = <Stamp>[
+      for (var i = 0; i < n; i++)
+        Stamp(
+          id: ids?[i] ?? newId(),
+          clock: _clock.tick().pack(),
+          originDevice: deviceId,
+          localSeq: ++_seq,
+        ),
+    ];
+    await _db.batch((b) {
+      b.insertAllOnConflictUpdate(_db.settings, [
+        SettingsCompanion.insert(key: _kLocalSeq, value: _seq.toString()),
+        SettingsCompanion.insert(key: _kHlcLast, value: stamps.last.clock),
+      ]);
+    });
+    return stamps;
+  }
+
   static Future<void> _put(AppDatabase db, String key, String value) => db
       .into(db.settings)
       .insertOnConflictUpdate(SettingsCompanion.insert(key: key, value: value));

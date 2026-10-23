@@ -76,7 +76,15 @@ class YtImportService {
     final list = (fetched as Ok<YtPlaylist>).value;
     final entries = _dedupe(list.entries);
 
+    String? raced;
     final written = await guardDb<_Written>(_db, () async {
+      // Re-check: the fetch above can take minutes and another import of the
+      // same link may have finished meanwhile.
+      final again = await _repo.findPlaylistByYtUrl(url);
+      if (again != null) {
+        raced = again.id;
+        return Ok(_Written(again.id, const [], const []));
+      }
       final ps = await _stamp.next();
       await _db
           .into(_db.playlists)
@@ -98,7 +106,12 @@ class YtImportService {
     });
     if (written is Err<_Written>) return Err(written.failure);
     final w = (written as Ok<_Written>).value;
-    await _fetchThumbnails(w.needArt);
+    if (raced != null) {
+      return Ok(
+        ImportResult(playlistId: raced!, alreadyExisted: true, added: 0),
+      );
+    }
+    _startThumbnails(w.needArt);
     return Ok(
       ImportResult(
         playlistId: w.playlistId,
@@ -187,7 +200,7 @@ class YtImportService {
     });
     if (written is Err<_Written>) return Err(written.failure);
     final w = (written as Ok<_Written>).value;
-    await _fetchThumbnails(w.needArt);
+    _startThumbnails(w.needArt);
     return Ok(
       SyncResult(
         added: w.trackIds.length,
@@ -229,22 +242,37 @@ class YtImportService {
       }
     }
 
+    // Only tracks that are written (new or revived) consume a stamp.
+    final writes = [
+      for (final e in entries)
+        if (byVideo[e.videoId] == null || byVideo[e.videoId]!.deleted) e,
+    ];
+    final n = entries.length;
+    final stamps = await _stamp.nextMany(
+      writes.length + 2 * n,
+      ids: [
+        for (final e in writes) byVideo[e.videoId]?.id,
+        for (var i = 0; i < 2 * n; i++) null,
+      ],
+    );
     final newTracks = <TracksCompanion>[];
     final revived = <(String, TracksCompanion)>[];
     final trackIds = <String>[];
     final needArt = <(String, String)>[];
+    var w = 0;
     for (final e in entries) {
       final old = byVideo[e.videoId];
-      final s = await _stamp.next(id: old?.id);
-      trackIds.add(s.id);
-      final art = old?.artworkRef;
-      if (art == null && e.thumbnailUrl != null) {
-        needArt.add((s.id, e.thumbnailUrl!));
+      final isWrite = old == null || old.deleted;
+      final s = isWrite ? stamps[w++] : null;
+      final trackId = old?.id ?? s!.id;
+      trackIds.add(trackId);
+      if (old?.artworkRef == null && e.thumbnailUrl != null) {
+        needArt.add((trackId, e.thumbnailUrl!));
       }
       if (old == null) {
         newTracks.add(
           TracksCompanion.insert(
-            id: s.id,
+            id: s!.id,
             clock: s.clock,
             originDevice: s.originDevice,
             localSeq: s.localSeq,
@@ -268,7 +296,7 @@ class YtImportService {
             durationMs: Value(e.durationMs),
             unavailable: Value(e.unavailable),
             searchText: Value(normalizeForSearch('${e.title} ${e.artist}')),
-            clock: Value(s.clock),
+            clock: Value(s!.clock),
             originDevice: Value(s.originDevice),
             localSeq: Value(s.localSeq),
           ),
@@ -276,12 +304,12 @@ class YtImportService {
       }
     }
 
-    final positions = nKeysBetween(lastPosition, null, entries.length);
+    final positions = nKeysBetween(lastPosition, null, n);
     final now = DateTime.now();
     final entryRows = <PlaylistEntriesCompanion>[];
     final seenRows = <YtSeenCompanion>[];
-    for (var i = 0; i < entries.length; i++) {
-      final es = await _stamp.next();
+    for (var i = 0; i < n; i++) {
+      final es = stamps[writes.length + i];
       entryRows.add(
         PlaylistEntriesCompanion.insert(
           id: es.id,
@@ -294,7 +322,7 @@ class YtImportService {
           addedAt: now,
         ),
       );
-      final ss = await _stamp.next();
+      final ss = stamps[writes.length + n + i];
       seenRows.add(
         YtSeenCompanion.insert(
           id: ss.id,
@@ -320,7 +348,7 @@ class YtImportService {
 
   Future<void> _setStatus(List<String> entryIds, String status) async {
     if (entryIds.isEmpty) return;
-    final stamps = [for (final _ in entryIds) await _stamp.next()];
+    final stamps = await _stamp.nextMany(entryIds.length);
     await _db.batch((b) {
       for (var i = 0; i < entryIds.length; i++) {
         b.update(
@@ -337,19 +365,43 @@ class YtImportService {
     });
   }
 
+  Future<void> _thumbsPass = Future.value();
+
+  /// Completes when the most recently started thumbnail pass has finished
+  /// (immediately if none is running).
+  Future<void> get thumbnailsSettled => _thumbsPass;
+
+  static const _thumbConcurrency = 6;
+
+  void _startThumbnails(List<(String, String)> need) {
+    if (need.isEmpty) return;
+    final previous = _thumbsPass;
+    _thumbsPass = () async {
+      await previous;
+      await _fetchThumbnails(need);
+    }();
+  }
+
   /// Best effort, after the main transaction: failures are ignored.
   Future<void> _fetchThumbnails(List<(String, String)> need) async {
-    if (need.isEmpty) return;
     try {
       final refs = <String, String>{};
-      for (final (trackId, url) in need) {
-        final ref = await _thumbs.fetch(url);
-        if (ref != null) refs[trackId] = ref;
+      var next = 0;
+      Future<void> worker() async {
+        while (next < need.length) {
+          final (trackId, url) = need[next++];
+          final ref = await _thumbs.fetch(url);
+          if (ref != null) refs[trackId] = ref;
+        }
       }
+
+      await Future.wait([
+        for (var i = 0; i < _thumbConcurrency && i < need.length; i++) worker(),
+      ]);
       if (refs.isEmpty) return;
       await guardDb<void>(_db, () async {
         final ids = refs.keys.toList();
-        final stamps = [for (final _ in ids) await _stamp.next()];
+        final stamps = await _stamp.nextMany(ids.length);
         await _db.batch((b) {
           for (var i = 0; i < ids.length; i++) {
             b.update(

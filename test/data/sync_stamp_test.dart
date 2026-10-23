@@ -28,6 +28,31 @@ void main() {
     expect(c.clock.compareTo(b.clock) > 0, isTrue);
   });
 
+  test(
+    'nextMany() gives distinct increasing stamps and persists once',
+    () async {
+      final db = testDb();
+      addTearDown(db.close);
+      var s = await SyncStamp.load(db, nowMs: () => 1000);
+      final first = await s.next();
+      final many = await s.nextMany(3, ids: ['x', null, 'z']);
+      expect(many.map((e) => e.id).first, 'x');
+      expect(many[2].id, 'z');
+      expect(many[1].id, isNotEmpty);
+      for (var i = 0; i < 3; i++) {
+        final prev = i == 0 ? first : many[i - 1];
+        expect(many[i].localSeq, prev.localSeq + 1);
+        expect(many[i].clock.compareTo(prev.clock) > 0, isTrue);
+      }
+      expect(await s.nextMany(0), isEmpty);
+      s = await SyncStamp.load(db, nowMs: () => 1000);
+      final after = await s.next();
+      expect(after.localSeq, many.last.localSeq + 1);
+      expect(after.clock.compareTo(many.last.clock) > 0, isTrue);
+      expect(() => s.nextMany(2, ids: ['a']), throwsArgumentError);
+    },
+  );
+
   test('next() uses the given id or generates one', () async {
     final db = testDb();
     addTearDown(db.close);
