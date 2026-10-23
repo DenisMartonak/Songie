@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import 'ui/home/home_page.dart';
@@ -12,8 +13,11 @@ import 'ui/widgets/page_surface.dart';
 const String nowPlayingLocation = '/now-playing';
 
 /// Builds the app's router: Home / Search / Library branches inside the shell,
-/// and full-screen Now Playing and Settings above it.
-GoRouter buildRouter() => GoRouter(
+/// and full-screen Now Playing and Settings above it. [navigatorKey] gives
+/// `main()` a context for dialogs opened from outside the widget tree (links
+/// shared into the app).
+GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
+  navigatorKey: navigatorKey,
   initialLocation: '/home',
   routes: [
     StatefulShellRoute.indexedStack(

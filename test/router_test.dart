@@ -51,6 +51,10 @@ Future<GoRouter> pumpRouter(WidgetTester tester) async {
           (ref) async => const StorageUsage(artBytes: 0, databaseBytes: 0),
         ),
         deviceIdProvider.overrideWithValue('0123456789abcdef'),
+        // The YouTube section reads these.
+        ytDlpVersionProvider.overrideWith((ref) async => null),
+        wifiOnlySettingProvider.overrideWith((ref) => Stream.value(false)),
+        useSystemYtDlpProvider.overrideWith((ref) => Stream.value(false)),
       ],
       child: MaterialApp.router(
         theme: buildThemeData(ThemeSpec.builtInDefault),

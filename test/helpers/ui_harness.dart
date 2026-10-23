@@ -22,6 +22,8 @@ import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/library/pickers.dart';
 
 import 'fake_audio_backend.dart';
+import 'fake_import_service.dart';
+import 'fake_ytdlp_runner.dart';
 import 'test_db.dart';
 
 /// Resolves every track to a (fake) file so playback "works".
@@ -88,6 +90,12 @@ class UiHarness {
   // dispose() would wait on a microtask that the fake test clock never runs.
   final PlayerService player;
   final FakeScanner scanner = FakeScanner();
+  final FakeYtDlpRunner ytRunner = FakeYtDlpRunner();
+  final FakeImportService importService = FakeImportService();
+
+  /// The platform the YouTube settings think they run on.
+  bool isAndroid = false;
+  bool isLinux = false;
 
   /// The app's clock; tests move it to exercise time-dependent text.
   DateTime Function() now = DateTime.now;
@@ -135,6 +143,10 @@ class UiHarness {
     audioFilePickerProvider.overrideWithValue(() => filePicker()),
     mediaAccessProvider.overrideWithValue(() => mediaAccess()),
     locateByFolderProvider.overrideWithValue(locateByFolder),
+    ytDlpRunnerProvider.overrideWithValue(ytRunner),
+    ytImportServiceProvider.overrideWithValue(importService),
+    isAndroidProvider.overrideWithValue(isAndroid),
+    isLinuxProvider.overrideWithValue(isLinux),
   ];
 
   /// An app showing [routes], starting at [initialLocation].

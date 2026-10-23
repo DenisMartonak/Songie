@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/paths.dart';
 import 'data/database.dart';
+import 'data/settings_repository.dart';
 import 'data/sync_stamp.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
@@ -14,6 +15,8 @@ import 'library/search_repository.dart';
 import 'player/player_service.dart';
 import 'theme/theme_spec.dart';
 import 'ui/shell/window_controls.dart';
+import 'youtube/yt_import_service.dart';
+import 'youtube/ytdlp_runner.dart';
 
 /// Singletons are created in `main()` and injected with
 /// `ProviderScope.overrides`; reading one without an override is a wiring bug.
@@ -162,3 +165,51 @@ final windowControlsProvider = Provider<WindowControls>(
 final hasCustomTitleBarProvider = Provider<bool>(
   (ref) => Platform.isWindows || Platform.isLinux,
 );
+
+// --- YouTube ---------------------------------------------------------------
+
+/// Device-local settings (Wi-Fi only, system yt-dlp).
+final settingsRepositoryProvider = Provider<SettingsRepository>(
+  (ref) => SettingsRepository(ref.watch(databaseProvider)),
+);
+
+final ytDlpRunnerProvider = Provider<YtDlpRunner>(
+  (ref) => _unwired('ytDlpRunnerProvider'),
+);
+
+final ytImportServiceProvider = Provider<YtImportService>(
+  (ref) => _unwired('ytImportServiceProvider'),
+);
+
+/// Platform flags for the YouTube settings; tests override them.
+final isAndroidProvider = Provider<bool>((ref) => Platform.isAndroid);
+final isLinuxProvider = Provider<bool>((ref) => Platform.isLinux);
+
+/// The installed yt-dlp version, or null when it is missing. Read when
+/// Settings opens (a user action) and again after an update.
+final ytDlpVersionProvider = FutureProvider.autoDispose<String?>(
+  (ref) => ref.watch(ytDlpRunnerProvider).version(),
+);
+
+/// The Wi-Fi only setting: its stored value, else the platform default.
+final wifiOnlySettingProvider = StreamProvider.autoDispose<bool>(
+  (ref) => ref
+      .watch(settingsRepositoryProvider)
+      .watchBool(
+        kWifiOnly,
+        fallback: wifiOnlyDefault(isAndroid: ref.watch(isAndroidProvider)),
+      ),
+);
+
+/// Whether Linux runs the system yt-dlp (read by `main()` at startup).
+final useSystemYtDlpProvider = StreamProvider.autoDispose<bool>(
+  (ref) => ref
+      .watch(settingsRepositoryProvider)
+      .watchBool(kYtdlpUseSystem, fallback: false),
+);
+
+/// One playlist row (for its YouTube link and last sync time).
+final playlistRowProvider = StreamProvider.autoDispose
+    .family<Playlist?, String>(
+      (ref, id) => ref.watch(libraryRepositoryProvider).watchPlaylist(id),
+    );

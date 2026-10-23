@@ -14,6 +14,7 @@ import '../../theme/app_theme.dart';
 import '../library/add_folder_flow.dart';
 import '../widgets/page_snack_bar.dart';
 import 'storage_usage.dart';
+import 'youtube_settings.dart';
 
 /// The app version shown in About. Keep in sync with `version:` in
 /// pubspec.yaml (a test checks it).
@@ -36,7 +37,7 @@ final logSaverProvider = Provider<LogSaver>(
   },
 );
 
-/// Music folders, storage, the log and About.
+/// Music folders, YouTube, storage, the log and About.
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -74,6 +75,7 @@ class SettingsPage extends ConsumerWidget {
             ),
           ),
           const _FoldersSection(),
+          const YouTubeSettingsSection(),
           const _StorageSection(),
           const _LogsSection(),
           const _AboutSection(),
@@ -83,8 +85,9 @@ class SettingsPage extends ConsumerWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title, {this.trailing});
+/// A section heading of the Settings page.
+class SettingsSectionTitle extends StatelessWidget {
+  const SettingsSectionTitle(this.title, {this.trailing, super.key});
 
   final String title;
   final Widget? trailing;
@@ -125,7 +128,7 @@ class _FoldersSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(
+        SettingsSectionTitle(
           'Music folders',
           trailing: TextButton(
             key: const Key('settings.rescanAll'),
@@ -349,7 +352,7 @@ class _StorageSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Storage'),
+        const SettingsSectionTitle('Storage'),
         _InfoRow('Artwork', size(usage?.artBytes)),
         _InfoRow('Database', size(usage?.databaseBytes)),
       ],
@@ -365,7 +368,7 @@ class _LogsSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Logs'),
+        const SettingsSectionTitle('Logs'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: TextButton.icon(
@@ -422,7 +425,7 @@ class _AboutSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('About'),
+        const SettingsSectionTitle('About'),
         const _InfoRow('Version', appVersion),
         _InfoRow('Device ID', shortId),
       ],

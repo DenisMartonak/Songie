@@ -1,0 +1,166 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/result.dart';
+import '../../providers.dart';
+import '../../youtube/yt_import_service.dart';
+import '../../youtube/yt_models.dart';
+import '../widgets/page_snack_bar.dart';
+
+/// Asks for a YouTube playlist link and imports it. On success it opens the
+/// playlist and says how it went; errors stay in the dialog.
+///
+/// [router] defaults to the one above [context] (pass it when [context] is
+/// the root navigator's, e.g. for a link shared into the app).
+Future<void> showImportDialog(
+  BuildContext context, {
+  String? initialLink,
+  GoRouter? router,
+}) {
+  final go = router ?? GoRouter.of(context);
+  final snacks = PageSnackBars.of(context);
+  return showDialog<void>(
+    context: context,
+    builder: (_) =>
+        ImportDialog(initialLink: initialLink, router: go, snacks: snacks),
+  );
+}
+
+class ImportDialog extends ConsumerStatefulWidget {
+  const ImportDialog({
+    required this.router,
+    required this.snacks,
+    this.initialLink,
+    super.key,
+  });
+
+  final String? initialLink;
+  final GoRouter router;
+  final PageSnackBars snacks;
+
+  @override
+  ConsumerState<ImportDialog> createState() => _ImportDialogState();
+}
+
+class _ImportDialogState extends ConsumerState<ImportDialog> {
+  late final TextEditingController _link = TextEditingController(
+    text: widget.initialLink ?? '',
+  );
+  bool _busy = false;
+  String? _error;
+  bool _missingBinary = false;
+
+  @override
+  void dispose() {
+    _link.dispose();
+    super.dispose();
+  }
+
+  Future<void> _import() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+      _missingBinary = false;
+    });
+    final result = await ref
+        .read(ytImportServiceProvider)
+        .importPlaylist(_link.text.trim());
+    if (!mounted) return;
+    switch (result) {
+      case Ok(:final value):
+        Navigator.of(context).pop();
+        _open(value);
+      case Err(:final failure):
+        setState(() {
+          _busy = false;
+          _error = ytErrorUserMessage(failure);
+          _missingBinary = ytErrorKindOf(failure) == YtErrorKind.missingBinary;
+        });
+    }
+  }
+
+  void _open(ImportResult r) {
+    widget.router.go('/library/playlist/${r.playlistId}');
+    final songs = r.added == 1 ? '1 song' : '${r.added} songs';
+    widget.snacks
+      ..clear()
+      ..show(
+        content: Text(
+          r.alreadyExisted
+              ? 'Already in your library — use Sync to update it'
+              : 'Imported $songs',
+        ),
+      );
+  }
+
+  void _openSettings() {
+    Navigator.of(context).pop();
+    widget.router.go('/settings');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final error = _error;
+    return PopScope(
+      canPop: !_busy,
+      child: AlertDialog(
+        title: const Text('Import from YouTube'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _link,
+                autofocus: widget.initialLink == null,
+                enabled: !_busy,
+                keyboardType: TextInputType.url,
+                decoration: InputDecoration(
+                  hintText: 'Paste a YouTube Music playlist link',
+                  errorText: error,
+                  errorMaxLines: 3,
+                ),
+                onSubmitted: (_) => _import(),
+              ),
+              if (_missingBinary)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: OutlinedButton(
+                    onPressed: _openSettings,
+                    child: const Text('Open Settings'),
+                  ),
+                ),
+              if (_busy)
+                const Padding(
+                  padding: EdgeInsets.only(top: 16),
+                  child: Row(
+                    children: [
+                      SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Importing…'),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: _busy ? null : () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: _busy ? null : _import,
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+  }
+}

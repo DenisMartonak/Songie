@@ -10,10 +10,21 @@ import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../widgets/page_snack_bar.dart';
 import 'add_folder_flow.dart';
+import 'import_dialog.dart';
 
-/// Filter chips above the playlist list. YouTube and Downloaded arrive with
-/// the YouTube plans.
-enum _Filter { all, local }
+/// Filter chips above the playlist list. Downloaded arrives with a later plan.
+enum _Filter {
+  all('All', null),
+  local('Local', 'local'),
+  youtube('YouTube', 'yt');
+
+  const _Filter(this.label, this.source);
+
+  final String label;
+
+  /// The playlist source the chip keeps; null keeps everything.
+  final String? source;
+}
 
 /// The user's playlists, plus the entry points for creating one and for adding
 /// a music folder.
@@ -24,7 +35,7 @@ class LibraryPage extends ConsumerStatefulWidget {
   ConsumerState<LibraryPage> createState() => _LibraryPageState();
 }
 
-enum _AddAction { newPlaylist, musicFolder }
+enum _AddAction { newPlaylist, musicFolder, youtube }
 
 class _LibraryPageState extends ConsumerState<LibraryPage> {
   _Filter _filter = _Filter.all;
@@ -32,6 +43,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   Future<void> _onAdd(_AddAction action) => switch (action) {
     _AddAction.newPlaylist => _newPlaylist(),
     _AddAction.musicFolder => _addFolder(),
+    _AddAction.youtube => showImportDialog(context),
   };
 
   Future<void> _newPlaylist() async {
@@ -92,6 +104,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       value: _AddAction.musicFolder,
                       child: Text('Add music folder'),
                     ),
+                    PopupMenuItem(
+                      value: _AddAction.youtube,
+                      child: Text('Import from YouTube'),
+                    ),
                   ],
                 ),
               ],
@@ -102,16 +118,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             child: Wrap(
               spacing: 8,
               children: [
-                ChoiceChip(
-                  label: const Text('All'),
-                  selected: _filter == _Filter.all,
-                  onSelected: (_) => setState(() => _filter = _Filter.all),
-                ),
-                ChoiceChip(
-                  label: const Text('Local'),
-                  selected: _filter == _Filter.local,
-                  onSelected: (_) => setState(() => _filter = _Filter.local),
-                ),
+                for (final f in _Filter.values)
+                  ChoiceChip(
+                    label: Text(f.label),
+                    selected: _filter == f,
+                    onSelected: (_) => setState(() => _filter = f),
+                  ),
               ],
             ),
           ),
@@ -122,12 +134,13 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   const Center(child: Text("Couldn't load your playlists")),
               data: (all) {
                 if (all.isEmpty) return _EmptyLibrary(onAdd: _addFolder);
-                final shown = _filter == _Filter.local
-                    ? [
+                final source = _filter.source;
+                final shown = source == null
+                    ? all
+                    : [
                         for (final pl in all)
-                          if (pl.source == 'local') pl,
-                      ]
-                    : all;
+                          if (pl.source == source) pl,
+                      ];
                 return ListView.builder(
                   padding: EdgeInsets.only(bottom: bottom + 16),
                   itemCount: shown.length,

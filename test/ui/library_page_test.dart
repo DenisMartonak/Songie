@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:songies/data/database.dart';
 import 'package:songies/library/library_scanner.dart';
 import 'package:songies/ui/library/library_page.dart';
 
@@ -128,6 +130,27 @@ void main() {
     expect(find.text('Mine'), findsOneWidget);
     await tester.tap(find.text('All'));
     await settle(tester);
+    expect(find.text('Mine'), findsOneWidget);
+  });
+
+  uiTest('the YouTube chip keeps YouTube playlists', (tester) async {
+    await real(tester, () async {
+      await h.addPlaylist('Mine', []);
+      final yt = await h.addPlaylist('Tube mix', []);
+      await (h.db.update(h.db.playlists)..where((p) => p.id.equals(yt))).write(
+        const PlaylistsCompanion(source: Value('yt')),
+      );
+    });
+    await pumpLibrary(tester);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'YouTube'));
+    await settle(tester);
+    expect(find.text('Tube mix'), findsOneWidget);
+    expect(find.text('Mine'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Local'));
+    await settle(tester);
+    expect(find.text('Tube mix'), findsNothing);
     expect(find.text('Mine'), findsOneWidget);
   });
 

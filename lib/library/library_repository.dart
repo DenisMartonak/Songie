@@ -358,6 +358,13 @@ class LibraryRepository {
     });
   }
 
+  /// The live playlist [id] and its later changes (null once deleted).
+  Stream<Playlist?> watchPlaylist(String id) {
+    return (_db.select(_db.playlists)
+          ..where((p) => p.id.equals(id) & p.deleted.equals(false)))
+        .watchSingleOrNull();
+  }
+
   /// The live YouTube playlist imported from [canonicalUrl], if any.
   Future<Playlist?> findPlaylistByYtUrl(String canonicalUrl) {
     return (_db.select(_db.playlists)

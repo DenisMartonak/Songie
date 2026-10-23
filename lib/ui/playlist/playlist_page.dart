@@ -15,6 +15,7 @@ import '../library/pickers.dart';
 import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../widgets/page_snack_bar.dart';
+import 'yt_playlist_actions.dart';
 
 const double _rowHeight = 64;
 
@@ -388,6 +389,12 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final canGoBack = Navigator.canPop(context);
+    final isYt = summary.source == 'yt';
+    final kindStyle = TextStyle(
+      color: colors.mutedText,
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+    );
     // Narrow phones must fit Play, Shuffle and the menu on one line.
     const compact = ButtonStyle(
       padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16)),
@@ -434,14 +441,10 @@ class _Header extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Local playlist',
-                      style: TextStyle(
-                        color: colors.mutedText,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    if (isYt)
+                      YtHeroSubtitle(playlistId: summary.id, style: kindStyle)
+                    else
+                      Text('Local playlist', style: kindStyle),
                     const SizedBox(height: 4),
                     Text(
                       summary.name,
@@ -502,6 +505,10 @@ class _Header extends StatelessWidget {
               ),
             ],
           ),
+          if (isYt) ...[
+            const SizedBox(height: 8),
+            YtSyncButton(playlistId: summary.id),
+          ],
         ],
       ),
     );
@@ -529,7 +536,9 @@ class _TrackRow extends StatelessWidget {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final track = row.track;
     final missing = row.fileMissing;
-    final dim = missing ? 0.45 : 1.0;
+    final removed = row.status == 'removed_on_yt';
+    final unavailable = track.unavailable;
+    final dim = missing || removed || unavailable ? 0.45 : 1.0;
     return Material(
       color: colors.background,
       child: InkWell(
@@ -570,6 +579,13 @@ class _TrackRow extends StatelessWidget {
                             const _MissingTag(),
                             const SizedBox(width: 6),
                           ],
+                          if (removed) ...[
+                            const YtRowTag('removed on YT'),
+                            const SizedBox(width: 6),
+                          ] else if (unavailable) ...[
+                            const YtRowTag('unavailable'),
+                            const SizedBox(width: 6),
+                          ],
                           Expanded(
                             child: Opacity(
                               opacity: dim,
@@ -591,6 +607,7 @@ class _TrackRow extends StatelessWidget {
                 ),
                 if (missing)
                   TextButton(onPressed: onLocate, child: const Text('Locate')),
+                if (removed) YtRemovedActions(entryId: row.entryId),
                 Opacity(
                   opacity: dim,
                   child: Padding(
