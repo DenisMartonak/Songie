@@ -86,4 +86,26 @@ void main() {
     expect((r as Err<String>).failure.kind, FailureKind.network);
     expect(inst.binary.readAsBytesSync(), [9]);
   });
+
+  for (final thrown in [false, true]) {
+    test('failing version check (throw=$thrown) keeps old binary', () async {
+      final inst = YtDlpInstaller(
+        dir,
+        isWindows: false,
+        download: (uri) async => uri.pathSegments.last == 'SHA2-256SUMS'
+            ? utf8.encode('$hash  yt-dlp_linux\n')
+            : bytes,
+        runProcess: (exe, args) async {
+          if (exe == 'chmod') return ProcessResult(0, 0, '', '');
+          if (thrown) throw const ProcessException('x', []);
+          return ProcessResult(0, 1, '', 'boom');
+        },
+      );
+      inst.binary.writeAsBytesSync([7, 7]);
+      final r = await inst.installOrUpdate();
+      expect(r, isA<Err<String>>());
+      expect(inst.binary.readAsBytesSync(), [7, 7]);
+      expect(File('${inst.binary.path}.download').existsSync(), isFalse);
+    });
+  }
 }

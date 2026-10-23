@@ -100,15 +100,15 @@ class YtDlpInstaller {
           );
         }
       }
-      await tmp.rename(binary.path);
-
-      final v = await _run(binary.path, ['--version']);
-      final version = (v.stdout as String).trim();
+      final v = await _run(tmp.path, ['--version']);
+      final version = '${v.stdout}'.trim();
       if (v.exitCode != 0 || version.isEmpty) {
+        await _cleanup(tmp);
         return const Err(
           Failure(FailureKind.io, 'Installed yt-dlp does not run'),
         );
       }
+      await tmp.rename(binary.path);
       return Ok(version);
     } on FileSystemException catch (e) {
       await _cleanup(tmp);

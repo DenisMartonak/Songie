@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -108,4 +109,33 @@ void main() {
     final res = await r.update();
     expect((res as Err<void>).failure.kind, FailureKind.network);
   });
+
+  test('default starter: timeout throws and kills the child', () async {
+    final f = File('${dir.path}/yt-dlp')..writeAsStringSync('x');
+    final r = DesktopYtDlpRunner(
+      binary: () => f,
+      installer: installer([]),
+      systemBinary: 'sleep',
+    );
+    final sw = Stopwatch()..start();
+    await expectLater(
+      r.run(['31.7'], timeout: const Duration(milliseconds: 100)),
+      throwsA(isA<TimeoutException>()),
+    );
+    expect(sw.elapsed, lessThan(const Duration(seconds: 5)));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final ps = await Process.run('pgrep', [r'-f', r'^sleep 31\.7$']);
+    expect(ps.exitCode, isNot(0), reason: 'sleep still running');
+  }, skip: Platform.isWindows);
+
+  test('default starter: decodes utf8 and tolerates malformed bytes', () async {
+    final r = DesktopYtDlpRunner(
+      binary: () => File('${dir.path}/x'),
+      installer: installer([]),
+      systemBinary: 'printf',
+    );
+    final run = await r.run([r'caf\303\251 \377']);
+    expect(run.exitCode, 0);
+    expect(run.stdout.startsWith('café '), isTrue);
+  }, skip: Platform.isWindows);
 }

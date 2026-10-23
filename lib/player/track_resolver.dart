@@ -32,8 +32,7 @@ class LocalTrackResolver implements TrackResolver {
     if (row.state != 'done') {
       // The file came back (or was restored) since it was flagged missing.
       try {
-        await (_db.update(_db.localFiles)
-              ..where((f) => f.trackId.equals(t.id)))
+        await (_db.update(_db.localFiles)..where((f) => f.trackId.equals(t.id)))
             .write(const LocalFilesCompanion(state: Value('done')));
       } catch (e, s) {
         AppLog.w('Could not clear the missing flag of ${t.id}', e, s);

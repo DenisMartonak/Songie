@@ -160,7 +160,9 @@ class Sidebar extends ConsumerWidget {
                         itemBuilder: (context, i) => _PlaylistRow(
                           playlist: playlists[i],
                           collapsed: collapsed,
-                          selected: path.endsWith('/playlist/${playlists[i].id}'),
+                          selected: path.endsWith(
+                            '/playlist/${playlists[i].id}',
+                          ),
                           colors: colors,
                         ),
                       ),

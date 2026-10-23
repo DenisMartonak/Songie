@@ -103,13 +103,16 @@ void main() {
     expect(backend.calls, ['pause']);
   });
 
-  test('an unknown (permanent) interruption pauses and never resumes', () async {
-    await send(_begin(AudioInterruptionType.unknown));
-    await send(_end(AudioInterruptionType.unknown));
+  test(
+    'an unknown (permanent) interruption pauses and never resumes',
+    () async {
+      await send(_begin(AudioInterruptionType.unknown));
+      await send(_end(AudioInterruptionType.unknown));
 
-    expect(player.state.playing, isFalse);
-    expect(backend.calls, ['pause']);
-  });
+      expect(player.state.playing, isFalse);
+      expect(backend.calls, ['pause']);
+    },
+  );
 
   test('does not resume playback that was already paused', () async {
     await player.pause();
@@ -122,17 +125,20 @@ void main() {
     expect(player.state.playing, isFalse);
   });
 
-  test('a finished interruption does not resume a later manual pause', () async {
-    await send(_begin(AudioInterruptionType.pause));
-    await send(_end(AudioInterruptionType.pause));
-    await player.pause();
-    backend.clearCalls();
+  test(
+    'a finished interruption does not resume a later manual pause',
+    () async {
+      await send(_begin(AudioInterruptionType.pause));
+      await send(_end(AudioInterruptionType.pause));
+      await player.pause();
+      backend.clearCalls();
 
-    await send(_end(AudioInterruptionType.pause));
+      await send(_end(AudioInterruptionType.pause));
 
-    expect(backend.calls, isEmpty);
-    expect(player.state.playing, isFalse);
-  });
+      expect(backend.calls, isEmpty);
+      expect(player.state.playing, isFalse);
+    },
+  );
 
   test('cancel stops reacting to events', () async {
     await binding.cancel();

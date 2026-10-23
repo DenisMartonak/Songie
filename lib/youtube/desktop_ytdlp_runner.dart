@@ -21,14 +21,25 @@ Future<ProcessResult> _defaultStart(
   Duration? timeout,
 ) async {
   final proc = await Process.start(exe, args, runInShell: false);
-  final out = proc.stdout.transform(utf8.decoder).join();
-  final err = proc.stderr.transform(utf8.decoder).join();
+  final out = proc.stdout
+      .transform(const Utf8Decoder(allowMalformed: true))
+      .join();
+  final err = proc.stderr
+      .transform(const Utf8Decoder(allowMalformed: true))
+      .join();
   final Future<int> exit = timeout == null
       ? proc.exitCode
       : proc.exitCode.timeout(
           timeout,
           onTimeout: () {
             proc.kill();
+            proc.exitCode.timeout(
+              const Duration(seconds: 2),
+              onTimeout: () {
+                proc.kill(ProcessSignal.sigkill);
+                return -1;
+              },
+            );
             throw TimeoutException('yt-dlp timed out', timeout);
           },
         );
