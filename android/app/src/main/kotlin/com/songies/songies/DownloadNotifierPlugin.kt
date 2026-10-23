@@ -39,29 +39,48 @@ class DownloadNotifierPlugin(
         }
     }
 
+    /** A start intent was sent and no stop has followed. */
+    private var serviceStarted = false
+
     private fun update(title: String, text: String, progress: Int, max: Int) {
         NotificationManagerCompat.from(context).cancel(DownloadForegroundService.DONE_ID)
-        val intent = Intent(context, DownloadForegroundService::class.java)
-            .putExtra(DownloadForegroundService.EXTRA_TITLE, title)
-            .putExtra(DownloadForegroundService.EXTRA_TEXT, text)
-            .putExtra(DownloadForegroundService.EXTRA_PROGRESS, progress)
-            .putExtra(DownloadForegroundService.EXTRA_MAX, max)
-        try {
-            ContextCompat.startForegroundService(context, intent)
-        } catch (e: Exception) {
-            // Android may refuse a foreground start from the background: show
-            // the notification without the service.
-            DownloadForegroundService.post(
-                context,
-                DownloadForegroundService.PROGRESS_ID,
-                DownloadForegroundService.progressNotification(context, title, text, progress, max),
-            )
+        if (!DownloadForegroundService.foregroundRefused) {
+            val intent = Intent(context, DownloadForegroundService::class.java)
+                .putExtra(DownloadForegroundService.EXTRA_TITLE, title)
+                .putExtra(DownloadForegroundService.EXTRA_TEXT, text)
+                .putExtra(DownloadForegroundService.EXTRA_PROGRESS, progress)
+                .putExtra(DownloadForegroundService.EXTRA_MAX, max)
+            try {
+                ContextCompat.startForegroundService(context, intent)
+                serviceStarted = true
+                return
+            } catch (e: Exception) {
+                // Refused (e.g. a background start): plain notifications for
+                // the rest of the run instead of retrying every update.
+                DownloadForegroundService.foregroundRefused = true
+            }
         }
+        DownloadForegroundService.post(
+            context,
+            DownloadForegroundService.PROGRESS_ID,
+            DownloadForegroundService.progressNotification(context, title, text, progress, max),
+        )
     }
 
     private fun finished(text: String) {
-        context.stopService(Intent(context, DownloadForegroundService::class.java))
-        // Covers the case where the service never started.
+        if (serviceStarted) {
+            // Through the service, so the stop is delivered after the start
+            // intent and its startForeground (stopService could beat it).
+            val stop = Intent(context, DownloadForegroundService::class.java)
+                .setAction(DownloadForegroundService.ACTION_STOP)
+            try {
+                ContextCompat.startForegroundService(context, stop)
+            } catch (e: Exception) {
+                context.stopService(Intent(context, DownloadForegroundService::class.java))
+            }
+        }
+        serviceStarted = false
+        DownloadForegroundService.foregroundRefused = false
         NotificationManagerCompat.from(context).cancel(DownloadForegroundService.PROGRESS_ID)
         DownloadForegroundService.post(
             context,

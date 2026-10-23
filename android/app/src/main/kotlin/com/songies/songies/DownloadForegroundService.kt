@@ -29,24 +29,38 @@ class DownloadForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        val notification = progressNotification(
-            this,
-            intent.getStringExtra(EXTRA_TITLE) ?: "Downloading songs",
-            intent.getStringExtra(EXTRA_TEXT) ?: "",
-            intent.getIntExtra(EXTRA_PROGRESS, 0),
-            intent.getIntExtra(EXTRA_MAX, 0),
-        )
+        // Every start (also a stop) must reach startForeground, or Android
+        // crashes the app for a startForegroundService that never did.
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: "Downloading songs"
+        val text = intent.getStringExtra(EXTRA_TEXT) ?: ""
+        val progress = intent.getIntExtra(EXTRA_PROGRESS, 0)
+        val max = intent.getIntExtra(EXTRA_MAX, 0)
+        val notification = progressNotification(this, title, text, progress, max)
         val type = if (Build.VERSION.SDK_INT >= 29) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         } else {
             0
         }
-        ServiceCompat.startForeground(this, PROGRESS_ID, notification, type)
+        try {
+            ServiceCompat.startForeground(this, PROGRESS_ID, notification, type)
+        } catch (e: Exception) {
+            // Not allowed (time budget spent, background start, bad type):
+            // show a plain notification and let the plugin keep it updated.
+            foregroundRefused = true
+            if (intent.action != ACTION_STOP) post(this, PROGRESS_ID, notification)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (intent.action == ACTION_STOP) {
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
         return START_NOT_STICKY
     }
 
     /** Android 15 ends a dataSync service after its time budget; stop cleanly. */
     override fun onTimeout(startId: Int, fgsType: Int) {
+        foregroundRefused = true
         stopSelf()
     }
 
@@ -56,6 +70,15 @@ class DownloadForegroundService : Service() {
     }
 
     companion object {
+        const val ACTION_STOP = "com.songies.songies.STOP_DOWNLOADS"
+
+        /**
+         * Set when Android refused or ended the foreground service; the plugin
+         * then keeps a plain notification for the rest of the run.
+         */
+        @Volatile
+        var foregroundRefused = false
+
         const val CHANNEL_ID = "downloads"
         const val PROGRESS_ID = 4101
         const val DONE_ID = 4102
