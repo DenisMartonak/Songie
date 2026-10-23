@@ -1194,6 +1194,41 @@ void main() {
       },
     );
 
+    test('playQueue onto a YouTube track pauses the old audio first', () async {
+      await player.playQueue([a]);
+      final gate = Completer<void>();
+      resolver.gate = gate;
+
+      final y = ytTrack('y');
+      final done = player.playQueue([y]);
+      await settle();
+      expect(backend.pauseCalls, 1);
+      expect(player.state.current, y);
+
+      gate.complete();
+      await done;
+      expect(player.state.playing, isTrue);
+    });
+
+    test(
+      'removing the current track onto a YouTube one pauses it first',
+      () async {
+        final y = ytTrack('y');
+        await player.playQueue([a, y]);
+        final gate = Completer<void>();
+        resolver.gate = gate;
+
+        final done = player.removeAt(0);
+        await settle();
+        expect(backend.pauseCalls, 1);
+        expect(player.state.current, y);
+
+        gate.complete();
+        await done;
+        expect(player.state.playing, isTrue);
+      },
+    );
+
     test('a failed start skips at most 3 tracks', () async {
       final ys = [for (var i = 1; i <= 6; i++) ytTrack('y$i')];
       for (final y in ys) {
@@ -1306,6 +1341,21 @@ void main() {
       expect(resolver.invalidated, isEmpty);
       expect(player.state.current, b);
       expect(player.state.playing, isTrue);
+    });
+
+    test('a local track completing early advances normally', () async {
+      await player.playQueue([a, b]);
+      backend.emit(
+        const BackendState(
+          completed: true,
+          position: Duration(seconds: 30),
+          duration: Duration(seconds: 200),
+        ),
+      );
+      await settle();
+      expect(player.state.current, b);
+      expect(player.state.playing, isTrue);
+      expect(player.state.notice, isNull);
     });
 
     test('completed with an unknown duration advances normally', () async {

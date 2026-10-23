@@ -166,6 +166,11 @@ class PlayerService {
   /// Whether the backend currently holds the current track's source.
   bool _loaded = false;
 
+  /// The entry whose source the backend was last given successfully. Unlike
+  /// [_currentEntry] it does not follow the index shown while a new queue or
+  /// a removal is being started.
+  _Entry? _loadedEntry;
+
   /// Bumped whenever playback starts or stops; lets a stale completion event
   /// be recognised and dropped.
   int _generation = 0;
@@ -594,7 +599,7 @@ class PlayerService {
     _prefetchedFor = null;
     _lastFailureReason = null;
     if (track.source == 'yt' && !track.unavailable) {
-      if (_loaded && !identical(_currentEntry, entry)) {
+      if (_loaded && !identical(_loadedEntry, entry)) {
         // Silence the old track first, or it is heard under the new title.
         _loaded = false;
         await _pauseBackend();
@@ -671,6 +676,7 @@ class PlayerService {
           return false;
         }
         _loaded = true;
+        _loadedEntry = entry;
         _generation++;
         _failedStarts = 0;
         final keepNotice = _noticeFresh;
@@ -746,6 +752,7 @@ class PlayerService {
 
   void _markStopped() {
     _loaded = false;
+    _loadedEntry = null;
     _wasCompleted = false;
     _generation++;
     _emit(
@@ -804,10 +811,11 @@ class PlayerService {
     );
     _maybePrefetch();
     if (completedNow && _loaded) {
-      // Local tag durations can be wrong; YouTube's metadata is not.
-      final duration =
-          s.duration ??
-          (_state.current?.source == 'yt' ? _currentDuration() : null);
+      // Only streams die mid-song; a local VBR file can report too long a
+      // duration and still have played to its real end.
+      final duration = _state.current?.source == 'yt'
+          ? s.duration ?? _currentDuration()
+          : null;
       if (duration != null && s.position < duration - earlyEndMargin) {
         // A stream that died mid-song: the engine reports it as finished.
         _onBackendError(
