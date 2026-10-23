@@ -1,16 +1,38 @@
 # Songies — Progress
 
-_Last updated: 2026-10-22_
+_Last updated: 2026-10-23_
 
-## Plan 2 (YouTube) — in progress
+## Plan 2 (YouTube) — done, pending your device checks and the final review
 
-- **Branch:** `plan-2-youtube`, made from `plan-1-foundation`. Plan: [Plan 2](superpowers/plans/2026-10-22-songies-plan-2-youtube-import-sync-stream.md). Read its "Amendments from the Task 2 probe" section too.
-- **Done:**
-  - **Task 1:** the ripple-bleed fix (every page has its own surface), `formatBytes`, Rescan de-dupe, and the engine-failure message.
-  - **Task 2:** the yt-dlp probe. YouTube audio works with no extra components: yt-dlp 2026.10.21, Opus format 251. Details are in [yt-dlp-notes.md](yt-dlp-notes.md), with sample outputs in `test/fixtures/ytdlp/`.
-- **Next:** Tasks 3–10, starting with Task 3 (the yt-dlp client and link parsing). That's an estimated 3.5–5 hours of agent work.
+- **Branch:** `plan-2-youtube`, made from `plan-1-foundation`. Plan: [Plan 2](superpowers/plans/2026-10-22-songies-plan-2-youtube-import-sync-stream.md).
+- **Status:** Tasks 1-10 are implemented and reviewed task by task. The final whole-branch review is in progress. The YouTube section of the [manual checklist](manual-test-checklist.md) is for you.
+- **Tests:** 556 passing; `flutter analyze` is clean.
+
+### What works now
+- **Import:** paste a YouTube or YouTube Music playlist link, or Share one from the YT Music app (Android). Importing the same playlist twice says it already exists.
+- **Sync with YouTube:** new songs are appended; songs removed on YouTube are flagged, and you choose Keep or Delete. Private or deleted videos show as unavailable and are skipped.
+- **Streaming:** YouTube songs stream through yt-dlp, with no downloads yet. Stream links are cached in memory and renewed before they expire. The next song is prepared in the last 20 seconds so the gap is short.
+- **Network rules:** Wi-Fi only blocks streaming on mobile data with a message; offline playback stops with a message; a network change clears cached stream links.
+- **yt-dlp:** on desktop, Settings installs and updates it (checked against the release's SHA-256), or uses the system yt-dlp ("Use system yt-dlp"). On Android it comes bundled (youtubedl-android) and Settings updates it.
+
+### Verification done on this host (Nobara, no Windows)
+- **Real-network run** (throwaway program outside the repo, real classes end to end, Linux yt-dlp). Playlist `PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI`:
+  - yt-dlp install: 3.3 s (version 2026.10.21).
+  - Import: 182 tracks and 182 entries in 2.3 s. All 182 got artwork (3.8 s more, in the background). None unavailable.
+  - Sync right after: 0 added, 0 flagged, 0 restored (2.0 s).
+  - Stream resolve of one track: 3.2 s. A ranged GET (`Range: bytes=0-1023`) with the returned headers gave HTTP 206, `audio/webm`, `bytes 0-1023/3947045`.
+- **`flutter build linux --release`:** succeeds (bundle 33 MB), even though `mpv-libs-devel` is not installed. It has not been launched or listened to.
+- **`flutter build apk --release`:** succeeds, 78.5 MB (arm64-v8a, armeabi-v7a and x86_64). It prints `llvm-strip` "not a valid object file" errors for `libpython.zip.so`. They don't fail the build; the file just ships unstripped. No gradle change was made.
+- **Not done here (left for the Windows PC):** `flutter build windows --release`, idle RAM (target 150 MB or less), and "Install yt-dlp" from Settings on Windows. No audio, phone or Windows checks were possible.
+
+### Next steps
+1. Finish the final whole-branch review and fix its findings.
+2. Tick the YouTube section of the manual checklist on Android, Windows and Nobara.
+3. Merge `plan-1-foundation` and `plan-2-youtube` once happy.
+4. **Plan 3: downloads** (save YouTube songs for offline play).
+
 - **To resume in a new Claude session:**
-  > Continue Songies Plan 2 subagent-driven on branch `plan-2-youtube`, starting at Task 3. Tasks 1–2 are done. Read docs/PROGRESS.md and the plan's amendments section. Don't push or merge; build Windows and Android when finished.
+  > Songies Plan 2 is implemented on branch `plan-2-youtube` (Tasks 1-10 done, 556 tests). Next: run or finish the final whole-branch review, then fix its findings. After that, write Plan 3 (downloads) from docs/superpowers/specs/2026-10-21-songies-design.md. Read docs/PROGRESS.md. Don't push or merge.
 
 ## Plan 1 status
 
@@ -62,6 +84,13 @@ _Last updated: 2026-10-22_
 - **Android:** SDK 36 / platform 37, NDK 28.2.13676358 and CMake 3.22.1 installed. The project uses `compileSdk = 37` and `minSdk 24`.
 - **Nobara needs:** `sudo dnf install clang cmake ninja-build gtk3-devel mpv-libs-devel libsecret-devel` before building there.
 
+## Environment notes (Nobara host used for Plan 2)
+
+- **Flutter 3.47.7** at `~/flutter` (add `~/flutter/bin` to PATH).
+- **Android SDK** at `~/Android/Sdk` (platform `android-37.0`, NDK 28.2.13676358).
+- **JDK 21** (Temurin) at `~/jdk-21`; `flutter config --jdk-dir ~/jdk-21` is set.
+- **`mpv-libs-devel` is missing** (needs sudo). `flutter build linux --release` still succeeded, but install it before relying on Linux audio.
+
 ## Decisions made during implementation (rulings)
 
 Each entry says what was decided and what it costs if it turns out wrong.
@@ -84,6 +113,28 @@ Each entry says what was decided and what it costs if it turns out wrong.
 - **R14: Settings and Now Playing routes.** Settings lives inside the shell, so desktop keeps the sidebar and player bar. Now Playing on desktop opens as an overlay with a close button. Cost if wrong: a small router change.
 - **R15: Locate on Android picks a folder.** It then rescans that folder, because Android's single-file picker copies the file into the app's cache, which breaks "files are referenced in place". Cost if wrong: Locate on Android is slightly less direct.
 
+## Plan 2 rulings (R17 onward)
+
+- **R17:** `YtDlpMissing` lives in `ytdlp_runner.dart`; the client maps it to `missingBinary` and any other throw to `unknown`. Cost if wrong: a moved class.
+- **R18:** `YtDlpRunner.run(args, {timeout})`; playlist fetch gets 10 min, stream resolve 60 s, and a timeout counts as a network error. Cost if wrong: one parameter.
+- **R19:** Errors carry a `ytdlp:<kind>:` prefix; `ytErrorUserMessage` turns a kind into fixed user copy (for example "Not found on YouTube — it may be private or deleted"). Cost if wrong: copy edits.
+- **R20:** `TrackResolver` has concrete `prefetch` and `invalidate` methods, and implementers `extends` it. Cost if wrong: none.
+- **R21:** When the engine rejects a cached stream URL, `PlayerService` drops it and resolves again once per entry before skipping. Cost if wrong: one extra resolve per failure.
+- **R22:** `NetworkStatus` has a `changes` stream; `StreamResolver` clears its cache on any change (event-driven, no polling). Cost if wrong: none.
+- **R23:** Stream URLs are renewed 10 minutes before expiry (the plan's constraint), not 5 as the probe notes suggested. Cost if wrong: renewals happen 5 minutes earlier.
+- **R24:** Streams resolve with `-J` instead of the spec's `-g`, because the request headers only come from the JSON. Cost if wrong: none.
+- **R25:** Windows builds and checks can't run on the Nobara host, so Task 10 became a Linux real-network run plus Linux and APK builds. The Windows release build and RAM check are left for you. Cost if wrong: Windows-only build problems show up later.
+- **R26:** Cancel and progress streams for long import/sync runs (spec section 12) are not in the plan and are deferred; a spinner covers progress. Cost if wrong: a 1,000-song import can't be cancelled.
+- **R27:** With a system yt-dlp, "Update" explains that the package manager does it (it never overwrites the distro's binary); `version()` runs the system binary. Cost if wrong: one message.
+- **R28:** A network failure leaving `StreamResolver` has a ready-to-show message ("Couldn't reach YouTube — check your connection"); other kinds keep the prefix and the UI maps them. Cost if wrong: copy edit.
+- **R29:** `SyncStamp.nextMany(n)` hands out many stamps in one write, so a 1,500-song import doesn't make thousands of separate calls. Cost if wrong: a small extra API.
+- **R30:** Thumbnails download in the background after an import or sync returns (6 at a time, `thumbnailsSettled` for tests). Cost if wrong: artwork appears a bit after the playlist opens.
+- **R31:** Connectivity changes are not de-duplicated, so a Wi-Fi to Wi-Fi switch or a VPN toggle still clears stream links (the IP changed). Cost if wrong: a few extra resolves.
+- **R32:** Prefetch uses the same next-song rules as playback and skips unavailable songs. Cost if wrong: a small refactor.
+- **R33:** Next or previous while offline stops the still-playing song (the network-failure rule), rather than silently ignoring the tap. Cost if wrong: one behaviour tweak.
+- **R34:** One song reads "Imported 1 song" / "Added 1 new song"; other counts keep the plural. Cost if wrong: two strings.
+- **R35:** Import errors from yt-dlp itself show inline in the import dialog; sync and stream errors show as snack bars. Cost if wrong: one widget change.
+
 ## Final review fixes (after Task 15)
 
 1. **Android Back:** opening a playlist from Home or Search now pushes it inside that tab (`/home/playlist/:id`, `/search/playlist/:id`, `/library/playlist/:id`), so Back returns to where you came from instead of closing the app. The old `/playlist/:id` link redirects to the Library one.
@@ -104,7 +155,42 @@ Each entry says what was decided and what it costs if it turns out wrong.
 - **Plan 5:** `Hlc.parse` should reject non-canonical clocks. Re-adding a deleted track must resurrect its row, because of the unique `fileHash`/`ytVideoId` columns. Add a `local_seq` index.
 - **Remove** `dependency_overrides: flutter_rust_bridge: 2.11.1` once `smtc_windows` is rebuilt against flutter_rust_bridge ≥ 2.13.
 
-**Minor polish (none of it blocks use):**
+**Plan 2 deferred minor items (none block use):**
+- **Link parsing:**
+  - A shared link with trailing punctuation (`list=PLx.` or in parentheses) isn't recognised.
+  - Watch links with `&list=` and radio/mix lists are accepted as playlists, untested.
+- **yt-dlp client and runners:**
+  - The `ERROR:` line filtering and the no-entries check are duplicated.
+  - Untested branches: getaddrinfo/unreachable network errors, `chmod`/write failures, SIGKILL escalation.
+  - `httpDownload` has no timeout and buffers about 35 MB in memory; the post-install `--version` has no timeout.
+  - A non-UTF-8 byte in yt-dlp output can throw an unmapped exception.
+  - Any `ProcessException` maps to "missing", including permission-denied.
+  - The timeout test depends on `pgrep`; one `expect(...throwsA)` isn't awaited.
+  - Android: a non-zero exit drops partial stdout and the real exit code; `version()` catches only `PlatformException`.
+- **Share on Android:** the initial share intent is re-read after the activity is recreated; share snack bars may sit under the mini-player; the share path in `main.dart` is untested; a second shared link stacks a second dialog.
+- **Import and sync:**
+  - Playlist lookups run outside `guardDb`.
+  - Already-live tracks still consume a stamp.
+  - The thumbnail pool relies on `ThumbnailFetcher.fetch` never throwing.
+  - Test gaps: duplicate ids in one sync response, a restored entry keeping its position, a failed fetch leaving `lastYtSyncAt`, mid-transaction rollback. One test prints a warning and stack trace.
+- **Streaming and player:**
+  - An expired-URL retry restarts the song from 0; `engineRetried` isn't reset on explicit play.
+  - Retrying inside the last 20 s prefetches again (harmless).
+  - After a network stop, the duration still shows the previous song's.
+  - `_advance`/`_candidates` don't filter unavailable songs themselves.
+  - `dispose()` doesn't clear tokens; `StreamResolver.dispose` is never called (app lifetime).
+  - Missing tests: header equality of `UrlSource`, `onUnavailable` throwing, prefetch with shuffle, stale in-flight regressions.
+  - `ytErrorUserMessageFromText` builds a dummy `Failure`.
+  - Linux plugin registrants weren't regenerated for `connectivity_plus` (the Linux build works).
+- **Settings UI:**
+  - The sync busy flag is widget-local, so leaving and returning allows a second sync.
+  - Keep/Delete have no busy state.
+  - Toggle writes give no failure feedback.
+  - If the version lookup fails, desktop shows "Update" instead of "Install".
+  - The `useSystemYtDlpProvider` doc is inaccurate.
+- **Housekeeping:** meaningless ignore comment in `composite_track_resolver.dart`; a "no thumbnails" comment in the 1,500-entry test is false; an earlier fix commit bundled format-only edits to three unrelated files.
+
+**Plan 1 minor polish (none of it blocks use):**
 - **Playback error wording:** a single-song queue whose audio engine fails still says "files are missing".
 - **Shortcuts:** desktop shortcuts don't work while the Now Playing overlay is open.
 - **Duplicate code:** the scrubber is implemented twice (player bar and Now Playing).

@@ -67,6 +67,35 @@ Also check Settings on each platform:
 - [ ] Android: the Home gear opens it, and Back returns; Export log saves a file you can find in the chosen location.
 - [ ] Linux: sidebar Settings opens it; Export log opens a save dialog.
 
+## YouTube
+
+Import and sync
+- [ ] Import by link: Your Library, Add, Import from YouTube, paste a playlist link. The playlist appears with art and every song.
+  - [ ] Android
+  - [ ] Windows
+  - [ ] Linux
+- [ ] Import by Share: in the YT Music app, Share a playlist to Songies. The import dialog opens with the link filled in. (Android)
+- [ ] Importing the same playlist again says it already exists and does not add a copy.
+- [ ] Sync with YouTube after adding a song on YouTube: the new song is appended at the end.
+- [ ] Remove a song on YouTube, then sync: it is flagged as removed. Try both Keep (it stays) and Delete (it goes).
+- [ ] Private or deleted videos show as unavailable and are skipped during playback.
+
+Streaming
+- [ ] A YouTube song streams and plays with no ads.
+- [ ] The next song starts without a long gap.
+- [ ] Wi-Fi only on, mobile data: streaming is blocked with the "Wi-Fi only" message. (Android)
+- [ ] Offline: playing a YouTube song shows the offline message and stops.
+
+yt-dlp
+- [ ] Settings, Update yt-dlp works on Android.
+- [ ] Settings, Update yt-dlp works on desktop.
+- [ ] Windows: on a fresh install, Settings, Install yt-dlp downloads it and shows the version.
+- [ ] Nobara: "Use system yt-dlp" works with the distro's yt-dlp, and Update explains that the package manager does it.
+
+Windows release build (left for the PC, because Plan 2 was verified on Nobara)
+- [ ] `flutter build windows --release` succeeds.
+- [ ] Idle RAM (Task Manager, paused, window open) is 150 MB or less. Record the number.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.
