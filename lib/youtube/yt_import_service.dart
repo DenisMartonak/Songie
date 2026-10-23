@@ -138,7 +138,7 @@ class YtImportService {
     final fetched = await _client.fetchPlaylist(url);
     if (fetched is Err<YtPlaylist>) return Err(fetched.failure);
     final entries = _dedupe((fetched as Ok<YtPlaylist>).value.entries);
-    final fetchedIds = {for (final e in entries) e.videoId};
+    final fetchedById = {for (final e in entries) e.videoId: e};
 
     var flagged = 0;
     var restored = 0;
@@ -162,13 +162,22 @@ class YtImportService {
       String? last;
       final gone = <String>[];
       final back = <String>[];
+      // Track id -> new `unavailable` value, for tracks whose flag changed.
+      final flips = <String, bool>{};
       for (final r in live) {
         final e = r.readTable(_db.playlistEntries);
         final t = r.readTable(_db.tracks);
         if (last == null || e.position.compareTo(last) > 0) last = e.position;
         final vid = t.ytVideoId;
         if (vid == null) continue;
-        if (fetchedIds.contains(vid)) {
+        final f = fetchedById[vid];
+        if (f != null && f.unavailable != t.unavailable) {
+          flips[t.id] = f.unavailable;
+        }
+        // Only ids this playlist got from YouTube; tracks the user added from
+        // elsewhere are left alone (spec 6.2).
+        if (!seen.contains(vid)) continue;
+        if (f != null) {
           if (e.status == 'removed_on_yt') back.add(e.id);
         } else if (e.status == 'active' && !e.kept) {
           gone.add(e.id);
@@ -182,6 +191,7 @@ class YtImportService {
       final w = await _append(playlistId, fresh, last);
       await _setStatus(gone, 'removed_on_yt');
       await _setStatus(back, 'active');
+      await _setUnavailable(flips);
       flagged = gone.length;
       restored = back.length;
 
@@ -266,7 +276,10 @@ class YtImportService {
       final s = isWrite ? stamps[w++] : null;
       final trackId = old?.id ?? s!.id;
       trackIds.add(trackId);
-      if (old?.artworkRef == null && e.thumbnailUrl != null) {
+      // Unavailable entries only carry YouTube's no_thumbnail placeholder.
+      if (old?.artworkRef == null &&
+          e.thumbnailUrl != null &&
+          !e.unavailable) {
         needArt.add((trackId, e.thumbnailUrl!));
       }
       if (old == null) {
@@ -360,6 +373,26 @@ class YtImportService {
             localSeq: Value(stamps[i].localSeq),
           ),
           where: (e) => e.id.equals(entryIds[i]),
+        );
+      }
+    });
+  }
+
+  Future<void> _setUnavailable(Map<String, bool> flips) async {
+    if (flips.isEmpty) return;
+    final ids = flips.keys.toList();
+    final stamps = await _stamp.nextMany(ids.length);
+    await _db.batch((b) {
+      for (var i = 0; i < ids.length; i++) {
+        b.update(
+          _db.tracks,
+          TracksCompanion(
+            unavailable: Value(flips[ids[i]]!),
+            clock: Value(stamps[i].clock),
+            originDevice: Value(stamps[i].originDevice),
+            localSeq: Value(stamps[i].localSeq),
+          ),
+          where: (t) => t.id.equals(ids[i]),
         );
       }
     });

@@ -228,6 +228,28 @@ void main() {
       expect(t.unavailable, true);
     });
 
+    test('unavailable entries get no artwork fetch', () async {
+      runner.onOk(
+        'list=PLx',
+        jsonEncode({
+          'id': 'PLx',
+          'title': 'M',
+          'entries': [
+            {
+              'id': 'p',
+              'title': '[Private video]',
+              'thumbnails': [
+                {'url': 'https://img/no_thumbnail.jpg', 'width': 1},
+              ],
+            },
+          ],
+        }),
+      );
+      await service.importPlaylist(link);
+      await service.thumbnailsSettled;
+      expect(downloads, isEmpty);
+    });
+
     test('duplicate ids in one response are imported once', () async {
       serve(['a', 'b', 'a']);
       final r = (await service.importPlaylist(link) as Ok<ImportResult>).value;
@@ -348,6 +370,70 @@ void main() {
       final r = await service.syncPlaylist(pid);
       expect(ytErrorKindOf((r as Err).failure), YtErrorKind.network);
       expect(await counts(), before);
+    });
+
+    test('yt tracks the user added from elsewhere are not flagged', () async {
+      runner.onOk('list=PLy', listJson(['z']));
+      await service.importPlaylist(link2);
+      final z = await (db.select(
+        db.tracks,
+      )..where((t) => t.ytVideoId.equals('z'))).getSingle();
+      expect(await repo.addTracks(pid, [z.id]), isA<Ok<void>>());
+
+      serve(['a', 'b', 'c']);
+      final r = (await service.syncPlaylist(pid) as Ok<SyncResult>).value;
+      expect(r.flaggedRemoved, 0);
+      expect((await entryOf(pid, 'z')).status, 'active');
+    });
+
+    Future<Track> trackOf(String video) => (db.select(
+      db.tracks,
+    )..where((t) => t.ytVideoId.equals(video))).getSingle();
+
+    test('sync clears a stale unavailable flag', () async {
+      final a = await trackOf('a');
+      await (db.update(db.tracks)..where((t) => t.id.equals(a.id))).write(
+        const TracksCompanion(unavailable: Value(true)),
+      );
+      final c = await trackOf('c');
+      serve(['a', 'b', 'c']);
+      await service.syncPlaylist(pid);
+      final after = await trackOf('a');
+      expect(after.unavailable, false);
+      expect(after.localSeq, greaterThan(a.localSeq));
+      // Unchanged tracks are not restamped.
+      expect((await trackOf('c')).localSeq, c.localSeq);
+    });
+
+    test('sync marks a now-private track unavailable', () async {
+      runner = FakeYtDlpRunner()
+        ..onOk(
+          'list=PLx',
+          jsonEncode({
+            'id': 'PLx',
+            'title': 'Mix',
+            'entries': [
+              {'id': 'a', 'title': '[Private video]'},
+              {'id': 'b', 'title': 'Song b', 'duration': 100, 'channel': 'C'},
+              {'id': 'c', 'title': 'Song c', 'duration': 100, 'channel': 'C'},
+            ],
+          }),
+        );
+      service = YtImportService(
+        db,
+        stamp,
+        YtDlpClient(runner),
+        ThumbnailFetcher(
+          ArtCache(Directory('${tmp.path}/art')),
+          (u) async => [],
+        ),
+      );
+      final a = await trackOf('a');
+      await service.syncPlaylist(pid);
+      final after = await trackOf('a');
+      expect(after.unavailable, true);
+      expect(after.localSeq, greaterThan(a.localSeq));
+      expect((await trackOf('c')).unavailable, false);
     });
 
     test('non-yt playlist is invalidInput', () async {
