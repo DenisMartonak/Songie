@@ -7,44 +7,39 @@ import '../core/result.dart';
 import 'ytdlp_installer.dart';
 import 'ytdlp_runner.dart';
 
-/// Starts [executable] and returns its result; throws [TimeoutException]
-/// (after killing the process) if [timeout] elapses.
-typedef YtDlpProcessStarter = Future<ProcessResult> Function(
+/// Starts [executable] with [args]; throws [ProcessException] when it cannot.
+typedef YtDlpProcessStarter = Future<Process> Function(
   String executable,
   List<String> args,
-  Duration? timeout,
 );
 
-Future<ProcessResult> _defaultStart(
-  String exe,
-  List<String> args,
-  Duration? timeout,
-) async {
-  final proc = await Process.start(exe, args, runInShell: false);
-  final out = proc.stdout
-      .transform(const Utf8Decoder(allowMalformed: true))
-      .join();
-  final err = proc.stderr
-      .transform(const Utf8Decoder(allowMalformed: true))
-      .join();
-  final Future<int> exit = timeout == null
-      ? proc.exitCode
-      : proc.exitCode.timeout(
-          timeout,
-          onTimeout: () {
-            proc.kill();
-            proc.exitCode.timeout(
-              const Duration(seconds: 2),
-              onTimeout: () {
-                proc.kill(ProcessSignal.sigkill);
-                return -1;
-              },
-            );
-            throw TimeoutException('yt-dlp timed out', timeout);
-          },
-        );
-  final code = await exit;
-  return ProcessResult(proc.pid, code, await out, await err);
+Future<Process> _defaultStart(String exe, List<String> args) =>
+    Process.start(exe, args, runInShell: false);
+
+/// Asks [proc] to stop, then force-kills it if it is still alive after 2 s.
+void _kill(Process proc) {
+  proc.kill();
+  unawaited(
+    proc.exitCode.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {
+        proc.kill(ProcessSignal.sigkill);
+        return -1;
+      },
+    ),
+  );
+}
+
+/// Forwards each complete line from a [LineSplitter] to a callback.
+class _LineSink implements Sink<String> {
+  _LineSink(this._onLine);
+  final void Function(String line) _onLine;
+
+  @override
+  void add(String line) => _onLine(line);
+
+  @override
+  void close() {}
 }
 
 class DesktopYtDlpRunner implements YtDlpRunner {
@@ -63,8 +58,16 @@ class DesktopYtDlpRunner implements YtDlpRunner {
   final String? _system;
   final YtDlpProcessStarter _start;
 
+  /// Live runs by processId, for [cancel].
+  final Map<String, Process> _running = {};
+
   @override
-  Future<YtDlpRun> run(List<String> args, {Duration? timeout}) async {
+  Future<YtDlpRun> run(
+    List<String> args, {
+    Duration? timeout,
+    void Function(String line)? onLine,
+    String? processId,
+  }) async {
     final String exe;
     if (_system != null) {
       exe = _system;
@@ -73,15 +76,52 @@ class DesktopYtDlpRunner implements YtDlpRunner {
       if (!f.existsSync()) throw const YtDlpMissing();
       exe = f.path;
     }
-    final ProcessResult r;
+    final Process proc;
     try {
-      r = await _start(exe, args, timeout);
+      proc = await _start(exe, args);
     } on ProcessException catch (e) {
       throw YtDlpMissing(
         e.message.isEmpty ? 'yt-dlp could not be started' : e.message,
       );
     }
-    return YtDlpRun(r.exitCode, '${r.stdout}', '${r.stderr}');
+    if (processId != null) _running[processId] = proc;
+    try {
+      final out = StringBuffer();
+      final lines = onLine == null
+          ? null
+          : const LineSplitter().startChunkedConversion(_LineSink(onLine));
+      final outDone = proc.stdout
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .forEach((chunk) {
+            out.write(chunk);
+            lines?.add(chunk);
+          })
+          .whenComplete(() => lines?.close());
+      final err = proc.stderr
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .join();
+      final code = timeout == null
+          ? await proc.exitCode
+          : await proc.exitCode.timeout(
+              timeout,
+              onTimeout: () {
+                _kill(proc);
+                throw TimeoutException('yt-dlp timed out', timeout);
+              },
+            );
+      await outDone;
+      return YtDlpRun(code, out.toString(), await err);
+    } finally {
+      if (processId != null && identical(_running[processId], proc)) {
+        _running.remove(processId);
+      }
+    }
+  }
+
+  @override
+  Future<void> cancel(String processId) async {
+    final proc = _running[processId];
+    if (proc != null) _kill(proc);
   }
 
   @override

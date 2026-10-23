@@ -1,0 +1,15 @@
+songies-progress 1024 6214234 NA
+songies-progress 3072 6214234 NA
+songies-progress 7168 6214234 NA
+songies-progress 15360 6214234 NA
+songies-progress 31744 6214234 NA
+songies-progress 64512 6214234 NA
+songies-progress 130048 6214234 NA
+songies-progress 261120 6214234 NA
+songies-progress 523264 6214234 NA
+songies-progress 1047552 6214234 NA
+songies-progress 2096128 6214234 NA
+songies-progress 4193280 6214234 NA
+songies-progress 6214234 6214234 NA
+songies-progress 6214234 6214234 NA
+songies-done {"filepath": "@OUTDIR@/4D7u5KF7SP8.webm", "title": "Get Lucky (feat. Pharrell Williams and Nile Rodgers)", "artist": "Daft Punk, Pharrell Williams, Nile Rodgers", "track": "Get Lucky (feat. Pharrell Williams and Nile Rodgers)", "album": "Random Access Memories", "duration": 370}

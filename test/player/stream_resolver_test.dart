@@ -244,10 +244,20 @@ class _GatedRunner extends FakeYtDlpRunner {
   bool _first = true;
 
   @override
-  Future<YtDlpRun> run(List<String> args, {Duration? timeout}) async {
+  Future<YtDlpRun> run(
+    List<String> args, {
+    Duration? timeout,
+    void Function(String line)? onLine,
+    String? processId,
+  }) async {
     final wait = _first;
     _first = false;
     if (wait) await gate.future;
-    return super.run(args, timeout: timeout);
+    return super.run(
+      args,
+      timeout: timeout,
+      onLine: onLine,
+      processId: processId,
+    );
   }
 }

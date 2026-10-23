@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
 
 import '../core/result.dart';
 import 'yt_json.dart';
@@ -9,13 +12,19 @@ import 'ytdlp_runner.dart';
 const ytStreamFormat = 'bestaudio[acodec=opus]/bestaudio[ext=m4a]/bestaudio';
 
 /// Maps yt-dlp stderr (from a failed run) to an error kind, using only the
-/// `ERROR:` lines; warnings are ignored.
+/// `ERROR:` lines; warnings are ignored. A full disk is recognised anywhere,
+/// since it may surface only as a Python traceback.
 YtErrorKind classifyYtDlpStderr(String stderr) {
+  if (stderr.contains('No space left on device') ||
+      stderr.contains('Errno 28')) {
+    return YtErrorKind.diskFull;
+  }
   final errors = stderr
       .split(RegExp(r'\r?\n'))
       .where((l) => l.trimLeft().startsWith('ERROR:'))
       .join('\n');
   if (errors.isEmpty) return YtErrorKind.unknown;
+  if (errors.contains('HTTP Error 429')) return YtErrorKind.throttled;
   const notFound = [
     'The playlist does not exist',
     'This video is unavailable',
@@ -93,11 +102,136 @@ class YtDlpClient {
     }
   }
 
+  /// Downloads [videoId]'s audio into [outDir] as `<id>.<ext>`, resuming a
+  /// partial file. [onProgress] gets byte counts (total may be an estimate,
+  /// or null). If yt-dlp prints nothing for [stallTimeout], the run is
+  /// cancelled and the result is a network error.
+  Future<Result<YtDownload>> download(
+    String videoId,
+    Directory outDir, {
+    required String processId,
+    void Function(int downloaded, int? total)? onProgress,
+    Duration stallTimeout = const Duration(minutes: 2),
+  }) async {
+    Object? done;
+    int? lastDownloaded;
+    var stalled = false;
+    Timer? stall;
+    void arm() {
+      stall?.cancel();
+      stall = Timer(stallTimeout, () {
+        stalled = true;
+        unawaited(_runner.cancel(processId));
+      });
+    }
+
+    void onLine(String line) {
+      arm();
+      if (line.startsWith(_progressPrefix)) {
+        final f = line.substring(_progressPrefix.length).split(' ');
+        final downloaded = _naInt(f.elementAtOrNull(0));
+        if (downloaded == null || downloaded == lastDownloaded) return;
+        lastDownloaded = downloaded;
+        final total =
+            _naInt(f.elementAtOrNull(1)) ?? _naInt(f.elementAtOrNull(2));
+        onProgress?.call(downloaded, total);
+      } else if (line.startsWith(_donePrefix)) {
+        try {
+          done = jsonDecode(line.substring(_donePrefix.length));
+        } on FormatException {
+          done = null;
+        }
+      }
+    }
+
+    arm();
+    final Result<YtDlpRun> run;
+    try {
+      run = await _run(
+        [
+          '-f',
+          ytStreamFormat,
+          '--no-playlist',
+          '--continue',
+          '--no-mtime',
+          '--newline',
+          '--progress',
+          '--progress-template',
+          'download:$_progressPrefix%(progress.downloaded_bytes)s '
+              '%(progress.total_bytes)s %(progress.total_bytes_estimate)s',
+          '-o',
+          p.join(outDir.path, '%(id)s.%(ext)s'),
+          '--print',
+          'after_move:$_donePrefix'
+              '%(.{filepath,title,artist,track,album,duration})j',
+          'https://music.youtube.com/watch?v=$videoId',
+        ],
+        null,
+        onLine: onLine,
+        processId: processId,
+      );
+    } finally {
+      stall?.cancel();
+    }
+    if (stalled) {
+      return Err(
+        ytFailure(
+          YtErrorKind.network,
+          'no output for ${stallTimeout.inSeconds} s',
+        ),
+      );
+    }
+    if (run is Err<YtDlpRun>) return Err(run.failure);
+    final d = done;
+    final path = d is Map ? _naString(d['filepath']) : null;
+    if (d is! Map || path == null) {
+      return Err(ytFailure(YtErrorKind.unknown, 'yt-dlp reported no file'));
+    }
+    final file = File(path);
+    if (!file.existsSync()) {
+      return Err(ytFailure(YtErrorKind.unknown, 'downloaded file is missing'));
+    }
+    final artist = _naString(d['artist']);
+    final cleaned = artist == null ? null : cleanArtist(artist);
+    final duration = d['duration'];
+    return Ok(
+      YtDownload(
+        path: path,
+        bytes: file.lengthSync(),
+        title: _naString(d['track']) ?? _naString(d['title']),
+        artist: cleaned == null || cleaned.isEmpty ? null : cleaned,
+        album: _naString(d['album']),
+        durationMs: duration is num ? (duration * 1000).round() : null,
+      ),
+    );
+  }
+
+  static const _progressPrefix = 'songies-progress ';
+  static const _donePrefix = 'songies-done ';
+
+  /// A yt-dlp template number, where `NA` means unknown.
+  static int? _naInt(String? s) =>
+      s == null ? null : num.tryParse(s.trim())?.round();
+
+  /// A non-empty string value other than yt-dlp's `NA`.
+  static String? _naString(Object? v) =>
+      v is String && v.trim().isNotEmpty && v != 'NA' ? v : null;
+
   /// Runs yt-dlp; Ok only for exit code 0 (stderr is ignored then).
-  Future<Result<YtDlpRun>> _run(List<String> args, Duration timeout) async {
+  Future<Result<YtDlpRun>> _run(
+    List<String> args,
+    Duration? timeout, {
+    void Function(String line)? onLine,
+    String? processId,
+  }) async {
     final YtDlpRun r;
     try {
-      r = await _runner.run(args, timeout: timeout);
+      r = await _runner.run(
+        args,
+        timeout: timeout,
+        onLine: onLine,
+        processId: processId,
+      );
     } on YtDlpMissing catch (e) {
       return Err(ytFailure(YtErrorKind.missingBinary, e.message, cause: e));
     } on TimeoutException catch (e) {

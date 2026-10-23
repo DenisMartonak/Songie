@@ -56,7 +56,32 @@ enum YtErrorKind {
   network,
   extractor,
   missingBinary,
+
+  /// HTTP 429 from YouTube: back off and retry.
+  throttled,
+
+  /// The disk is full (ENOSPC).
+  diskFull,
   unknown,
+}
+
+/// A finished yt-dlp download.
+class YtDownload {
+  const YtDownload({
+    required this.path,
+    required this.bytes,
+    this.title,
+    this.artist,
+    this.album,
+    this.durationMs,
+  });
+
+  final String path;
+  final int bytes;
+  final String? title;
+  final String? artist;
+  final String? album;
+  final int? durationMs;
 }
 
 const _prefix = 'ytdlp:';
@@ -64,7 +89,8 @@ const _prefix = 'ytdlp:';
 /// Builds a [Failure] whose message starts with `ytdlp:<kind>:`.
 Failure ytFailure(YtErrorKind kind, String detail, {Object? cause}) {
   final fk = switch (kind) {
-    YtErrorKind.network => FailureKind.network,
+    YtErrorKind.network || YtErrorKind.throttled => FailureKind.network,
+    YtErrorKind.diskFull => FailureKind.io,
     YtErrorKind.notFound || YtErrorKind.notAPlaylist => FailureKind.notFound,
     _ => FailureKind.unknown,
   };
@@ -98,6 +124,8 @@ String ytErrorUserMessageFromText(String message) {
       'YouTube changed something — try Settings → Update yt-dlp',
     YtErrorKind.missingBinary =>
       "yt-dlp isn't installed — install it in Settings",
+    YtErrorKind.throttled => 'YouTube is limiting downloads — retrying soon',
+    YtErrorKind.diskFull => 'Storage is full — free up space and retry',
     YtErrorKind.unknown => 'Something went wrong with yt-dlp',
   };
 }

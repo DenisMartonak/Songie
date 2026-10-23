@@ -166,6 +166,14 @@ void main() {
         ytErrorUserMessage(ytFailure(YtErrorKind.unknown, '')),
         'Something went wrong with yt-dlp',
       );
+      expect(
+        ytErrorUserMessage(ytFailure(YtErrorKind.throttled, '')),
+        'YouTube is limiting downloads — retrying soon',
+      );
+      expect(
+        ytErrorUserMessage(ytFailure(YtErrorKind.diskFull, '')),
+        'Storage is full — free up space and retry',
+      );
       const other = Failure(FailureKind.io, 'disk full');
       expect(ytErrorKindOf(other), isNull);
       expect(ytErrorUserMessage(other), 'disk full');

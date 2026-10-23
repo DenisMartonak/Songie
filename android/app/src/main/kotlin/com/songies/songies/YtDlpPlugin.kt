@@ -7,19 +7,25 @@ import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLException
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import io.flutter.plugin.common.BinaryMessenger
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
 
 /**
  * `songies/ytdlp`: yt-dlp via youtubedl-android. Everything runs on a worker
- * thread; init happens lazily on first use.
+ * thread; init happens lazily on first use. Each stdout line of a run is
+ * posted on `songies/ytdlp_lines` as `{processId, line}`.
  */
 class YtDlpPlugin(
     private val context: Context,
     messenger: BinaryMessenger,
 ) : MethodChannel.MethodCallHandler {
     private val channel = MethodChannel(messenger, "songies/ytdlp")
+    private val lines = EventChannel(messenger, "songies/ytdlp_lines")
+
+    /** Touched only on the main thread. */
+    private var lineSink: EventChannel.EventSink? = null
     private val workers = Executors.newCachedThreadPool()
     private val main = Handler(Looper.getMainLooper())
     private val initLock = Any()
@@ -28,10 +34,21 @@ class YtDlpPlugin(
 
     init {
         channel.setMethodCallHandler(this)
+        lines.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+                lineSink = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                lineSink = null
+            }
+        })
     }
 
     fun dispose() {
         channel.setMethodCallHandler(null)
+        lines.setStreamHandler(null)
+        lineSink = null
         workers.shutdown()
     }
 
@@ -53,7 +70,8 @@ class YtDlpPlugin(
             "run" -> {
                 val args = call.argument<List<String>>("args") ?: emptyList()
                 val processId = call.argument<String>("processId")
-                async(result) { runYtDlp(args, processId) }
+                val streamLines = call.argument<Boolean>("streamLines") ?: false
+                async(result) { runYtDlp(args, processId, streamLines) }
             }
             "version" -> async(result) {
                 ensureInit()?.let { return@async null }
@@ -86,13 +104,23 @@ class YtDlpPlugin(
 
     private class UpdateFailure(message: String) : Exception(message)
 
-    private fun runYtDlp(args: List<String>, processId: String?): Map<String, Any> {
+    private fun runYtDlp(
+        args: List<String>,
+        processId: String?,
+        streamLines: Boolean,
+    ): Map<String, Any> {
         ensureInit()?.let { throw InitFailure(it) }
         // addCommands appends the args verbatim and in order (addOption would
         // key them in a map and lose option/value pairing).
         val request = YoutubeDLRequest(emptyList<String>()).addCommands(args)
         return try {
-            val r = YoutubeDL.getInstance().execute(request, processId, null)
+            // Called on a reader thread for every stdout line.
+            val onLine: ((Float, Long, String) -> Unit)? = if (!streamLines) null else { _, _, line ->
+                main.post {
+                    lineSink?.success(mapOf("processId" to processId, "line" to line))
+                }
+            }
+            val r = YoutubeDL.getInstance().execute(request, processId, onLine)
             mapOf("exitCode" to r.exitCode, "out" to r.out, "err" to r.err)
         } catch (e: YoutubeDLException) {
             // yt-dlp exited non-zero; the message is its stderr.

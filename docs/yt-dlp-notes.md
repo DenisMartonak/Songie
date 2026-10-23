@@ -54,3 +54,26 @@ yt-dlp warns that no JS runtime was found (only deno enabled by default) and "so
 - The 0.18.1 AAR (59 MB) bundles the yt-dlp script, Python and a QuickJS runtime (`libqjs.so`) for arm64-v8a, armeabi-v7a, x86, x86_64, so the JS-runtime concern appears covered there. Dependencies: kotlin-stdlib-jdk8 1.7.22, jackson-databind 2.11.1, commons-io 2.5, appcompat 1.4.2, core-ktx 1.8.0. minSdk is not stated in README/POM; verify at integration.
 - Requirements: `android:extractNativeLibs="true"`, ABI filters, `mavenCentral()`.
 - APIs: `YoutubeDL.getInstance().init(context)` (throws `YoutubeDLException`; call once at startup); `YoutubeDL.getInstance().execute(YoutubeDLRequest(url).apply { addOption("-J"); addOption("--flat-playlist") }, processId, callback)` returns a response with `out` (stdout) and `err`; `getInfo(request)` for single-video info; `destroyProcessById(id)`; `YoutubeDL.getInstance().updateYoutubeDL(context, YoutubeDL.UpdateChannel.STABLE or NIGHTLY)`. Exceptions carry stderr text, so the classification above applies.
+
+## Downloads (Plan 3 probe)
+Probed 2026-10-23 on Linux (Nobara) with the system `/usr/bin/yt-dlp` **2026.08.19**, on `fOT0BUpITw8` (from `playlist_flat.json`) and `4D7u5KF7SP8` (Daft Punk "Get Lucky", a YouTube Music art track with `artist`/`track`/`album` metadata). The downloaded audio was deleted afterwards.
+
+Command (unchanged from the plan; works as written):
+```
+yt-dlp -f "bestaudio[acodec=opus]/bestaudio[ext=m4a]/bestaudio" --no-playlist --continue --no-mtime
+  --newline --progress --progress-template "download:songies-progress %(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s"
+  -o "<outDir>/%(id)s.%(ext)s"
+  --print "after_move:songies-done %(.{filepath,title,artist,track,album,duration})j"
+  https://music.youtube.com/watch?v=<id>
+```
+- `--print after_move:` does **not** imply `--simulate` (the file is downloaded) and, with `--progress`, progress lines still appear on stdout. Exit 0.
+- stdout is only our lines: `songies-progress <downloaded> <total> <estimate>` roughly doubling in size per line (1024, 3072, 7168, ...), the final count printed twice, then one `songies-done {json}` line. Unknown template values print as `NA` (here `total_bytes_estimate` was always `NA` because `total_bytes` was known).
+- The done JSON **omits** missing keys rather than printing `NA`: the music video gave only `filepath`, `title`, `duration`; the art track gave `title`, `artist` ("Daft Punk, Pharrell Williams, Nile Rodgers"), `track`, `album` ("Random Access Memories"), `duration` (int seconds). `filepath` is absolute.
+- The file landed as `<id>.webm` (format 251, opus) in both cases; no `.part` left behind.
+- Rerun with the file already present: one line `songies-progress NA <total> NA`, then `songies-done` again with the same `filepath`, exit 0. So "already downloaded" still reports success.
+- stderr: only the JS-runtime WARNING (see above).
+- youtubedl-android 0.18.1: `execute(request, processId, callback)` calls `callback(progress, eta, line)` for **every** stdout line (split on `\r` or `\n`), not only lines matching its own `[download] x%` regex, so the custom template lines reach Dart.
+
+Fixtures:
+- `download_stdout.txt`: the real stdout of the `4D7u5KF7SP8` run, with the scratch output dir replaced by the placeholder `@OUTDIR@` (tests substitute their temp dir).
+- `download_stderr_429.txt` and `download_stderr_nospace.txt` are **hand-crafted** (not reproducible live): the real JS-runtime warning line followed by `ERROR: unable to download video data: HTTP Error 429: Too Many Requests` and `ERROR: unable to write data: [Errno 28] No space left on device` respectively, from yt-dlp's real error wording. A full disk can also surface only as a traceback (`OSError: [Errno 28] No space left on device`), so `diskFull` is matched anywhere in stderr; `throttled` is matched on `ERROR:` lines.

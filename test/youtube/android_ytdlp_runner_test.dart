@@ -15,7 +15,54 @@ void main() {
   void handle(Future<Object?> Function(MethodCall) h) =>
       messenger.setMockMethodCallHandler(channel, h);
 
-  tearDown(() => messenger.setMockMethodCallHandler(channel, null));
+  const lines = EventChannel('songies/ytdlp_lines');
+
+  tearDown(() {
+    messenger.setMockMethodCallHandler(channel, null);
+    messenger.setMockStreamHandler(lines, null);
+  });
+
+  test('onLine gets only its own process lines, in order', () async {
+    MockStreamHandlerEventSink? sink;
+    bool? streamed;
+    messenger.setMockStreamHandler(
+      lines,
+      MockStreamHandler.inline(onListen: (args, s) => sink = s),
+    );
+    handle((c) async {
+      final id = (c.arguments as Map)['processId'];
+      streamed = (c.arguments as Map)['streamLines'] as bool;
+      sink!.success({'processId': id, 'line': 'one'});
+      sink!.success({'processId': 'other', 'line': 'nope'});
+      sink!.success({'processId': id, 'line': 'two'});
+      await pumpEventQueue();
+      return {'exitCode': 0, 'out': 'one\ntwo\n', 'err': ''};
+    });
+    final got = <String>[];
+    final r = await AndroidYtDlpRunner().run(
+      ['x'],
+      onLine: got.add,
+      processId: 'dl-7',
+    );
+    expect(got, ['one', 'two']);
+    expect(streamed, isTrue);
+    expect(r.stdout, 'one\ntwo\n');
+  });
+
+  test('uses the given processId and cancel sends it', () async {
+    final seen = <MethodCall>[];
+    handle((c) async {
+      seen.add(c);
+      return c.method == 'run' ? {'exitCode': 0, 'out': '', 'err': ''} : null;
+    });
+    final runner = AndroidYtDlpRunner();
+    await runner.run(['x'], processId: 'dl-3');
+    await runner.cancel('dl-3');
+    expect((seen[0].arguments as Map)['processId'], 'dl-3');
+    expect((seen[0].arguments as Map)['streamLines'], isFalse);
+    expect(seen[1].method, 'cancel');
+    expect((seen[1].arguments as Map)['processId'], 'dl-3');
+  });
 
   test('maps channel result to YtDlpRun and sends args', () async {
     MethodCall? seen;
