@@ -10,6 +10,7 @@ import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
 
 import 'package:songies/ui/shell/player_error_snacks.dart';
+import 'package:songies/youtube/yt_models.dart';
 
 import '../helpers/fake_audio_backend.dart';
 
@@ -84,6 +85,10 @@ void main() {
   );
 
   setUp(() {
+    // The service logs every skip; keep the test output clean.
+    final original = debugPrint;
+    debugPrint = (String? message, {int? wrapWidth}) {};
+    addTearDown(() => debugPrint = original);
     backend = FakeAudioBackend();
     resolver = FakeResolver();
     missingReports = [];
@@ -445,7 +450,7 @@ void main() {
       player.cycleRepeat();
       await player.playQueue([a, b]);
       // Every track fails right after it starts.
-      backend.onSetSource = (_) => scheduleMicrotask(backend.emitError);
+      backend.onSetSource = (_) => Future(backend.emitError);
 
       backend.emitError();
       await settle();
@@ -1162,5 +1167,167 @@ void main() {
         expect(player.state.playing, isTrue);
       },
     );
+  });
+
+  group('switching and skipping', () {
+    Failure notFound(String id) =>
+        ytFailure(YtErrorKind.notFound, 'unavailable $id');
+
+    test(
+      'switching to a YouTube track pauses the old audio before resolving',
+      () async {
+        final y = ytTrack('y');
+        await player.playQueue([a, y]);
+        final gate = Completer<void>();
+        resolver.gate = gate;
+
+        final done = player.next();
+        await settle();
+        expect(backend.pauseCalls, 1);
+        expect(player.state.index, 1);
+        expect(player.state.current, y);
+
+        gate.complete();
+        await done;
+        expect(player.state.playing, isTrue);
+        expect(backend.sources.last, '/music/y.mp3');
+      },
+    );
+
+    test('a failed start skips at most 3 tracks', () async {
+      final ys = [for (var i = 1; i <= 6; i++) ytTrack('y$i')];
+      for (final y in ys) {
+        resolver.failures[y.id] = notFound(y.id);
+      }
+      await player.playQueue(ys);
+
+      expect(resolver.resolved, ['y1', 'y2', 'y3']);
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, PlayerService.tooManyFailuresError);
+      expect(player.state.notice!.trackTitle, ys[2].title);
+      expect(backend.sources, isEmpty);
+    });
+
+    test('play after the cap stop tries again', () async {
+      final ys = [for (var i = 1; i <= 4; i++) ytTrack('y$i')];
+      for (final y in ys) {
+        resolver.failures[y.id] = notFound(y.id);
+      }
+      await player.playQueue(ys);
+      resolver.failures.clear();
+      await player.play();
+      expect(player.state.current, ys[2]);
+      expect(player.state.playing, isTrue);
+      expect(player.state.error, isNull);
+    });
+
+    test('the cap resets after a successful start', () async {
+      final ys = [for (var i = 1; i <= 5; i++) ytTrack('y$i')];
+      resolver.failures['y1'] = notFound('y1');
+      resolver.failures['y2'] = notFound('y2');
+      await player.playQueue([...ys.take(3), a, ...ys.skip(3)]);
+      expect(player.state.current, ys[2]);
+      expect(player.state.playing, isTrue);
+    });
+
+    test('each skip publishes a notice', () async {
+      final y1 = ytTrack('y1');
+      resolver.failures['y1'] = notFound('y1');
+      await player.playQueue([y1, b, c]);
+
+      expect(player.state.current, b);
+      expect(player.state.notice!.trackTitle, y1.title);
+      expect(player.state.notice!.reason, 'ytdlp:notFound:unavailable y1');
+
+      await player.next();
+      expect(player.state.current, c);
+      expect(player.state.notice, isNull);
+    });
+
+    test('a single YouTube song that fails reports its own reason', () async {
+      final y1 = ytTrack('y1');
+      resolver.failures['y1'] = notFound('y1');
+      await player.playQueue([y1]);
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, 'ytdlp:notFound:unavailable y1');
+    });
+
+    test('a late engine error from the previous source is ignored', () async {
+      final ya = ytTrack('ya');
+      final yb = ytTrack('yb');
+      await player.playQueue([ya, yb, c]);
+      // A's engine fails while B is being loaded.
+      backend.onSetSource = (_) {
+        backend.onSetSource = null;
+        backend.emitError();
+      };
+      await player.next();
+      await settle();
+
+      expect(resolver.resolved, ['ya', 'yb']);
+      expect(resolver.invalidated, isEmpty);
+      expect(player.state.current, yb);
+      expect(player.state.playing, isTrue);
+    });
+
+    test(
+      'completed well before the end is treated as an engine error',
+      () async {
+        final y = ytTrack('y');
+        await player.playQueue([y, b]);
+        backend.emit(
+          const BackendState(
+            completed: true,
+            position: Duration(seconds: 30),
+            duration: Duration(seconds: 200),
+          ),
+        );
+        await settle();
+
+        expect(resolver.invalidated, ['y']);
+        expect(resolver.resolved, ['y', 'y']);
+        expect(player.state.current, y);
+        expect(player.state.playing, isTrue);
+      },
+    );
+
+    test('completed within 5 s of the end advances normally', () async {
+      final y = ytTrack('y');
+      await player.playQueue([y, b]);
+      backend.emit(
+        const BackendState(
+          completed: true,
+          position: Duration(seconds: 197),
+          duration: Duration(seconds: 200),
+        ),
+      );
+      await settle();
+
+      expect(resolver.invalidated, isEmpty);
+      expect(player.state.current, b);
+      expect(player.state.playing, isTrue);
+    });
+
+    test('completed with an unknown duration advances normally', () async {
+      final y = ytTrack('y');
+      await player.playQueue([y, b]);
+      backend.emit(
+        const BackendState(completed: true, position: Duration(seconds: 30)),
+      );
+      await settle();
+      expect(resolver.invalidated, isEmpty);
+      expect(player.state.current, b);
+    });
+
+    test('a halt does not count toward the cap and sets no notice', () async {
+      final y1 = ytTrack('y1');
+      final y2 = ytTrack('y2');
+      resolver.failures['y1'] = notFound('y1');
+      resolver.failures['y2'] = Failure(FailureKind.network, "You're offline");
+      await player.playQueue([y1, y2, b]);
+      expect(resolver.resolved, ['y1', 'y2']);
+      expect(player.state.error, "You're offline");
+      expect(player.state.notice!.trackTitle, y1.title);
+    });
   });
 }

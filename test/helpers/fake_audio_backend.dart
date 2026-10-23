@@ -29,6 +29,10 @@ class FakeAudioBackend implements AudioBackend {
   /// Latest state this fake has reported.
   BackendState get current => _state;
 
+  /// How many times `pause` / `stop` were called.
+  int get pauseCalls => calls.where((c) => c == 'pause').length;
+  int get stopCalls => calls.where((c) => c == 'stop').length;
+
   /// Paths/urls passed to `setSource`, in order.
   List<String> get sources => [
     for (final c in calls)

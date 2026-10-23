@@ -10,6 +10,19 @@ import 'package:songies/youtube/yt_models.dart';
 
 enum RepeatMode { off, all, one }
 
+/// Why a song was skipped without playing. [reason] is a raw failure text
+/// (`ytdlp:<kind>:...` for YouTube, [PlayerService.fileMissingReason] for a
+/// missing local file); the UI turns it into copy.
+class PlayerNotice {
+  const PlayerNotice({required this.trackTitle, required this.reason});
+
+  final String trackTitle;
+  final String reason;
+
+  @override
+  String toString() => 'PlayerNotice($trackTitle: $reason)';
+}
+
 /// Immutable snapshot of the player. [queue] is the *playing* order (already
 /// shuffled when [shuffle] is on) and [index] is -1 when it is empty.
 class PlayerState {
@@ -25,6 +38,7 @@ class PlayerState {
     this.volume = 1.0,
     this.sourcePlaylistId,
     this.error,
+    this.notice,
   });
 
   final List<Track> queue;
@@ -41,13 +55,17 @@ class PlayerState {
   final String? sourcePlaylistId;
   final String? error;
 
+  /// The latest song skipped because it couldn't be played. Kept through the
+  /// start that followed the skip; cleared by the next one.
+  final PlayerNotice? notice;
+
   Track? get current =>
       index >= 0 && index < queue.length ? queue[index] : null;
 
   static const Object _keep = Object();
 
-  /// Nullable fields ([duration], [sourcePlaylistId], [error]) keep their value
-  /// unless a new one (including an explicit null) is passed.
+  /// Nullable fields ([duration], [sourcePlaylistId], [error], [notice]) keep
+  /// their value unless a new one (including an explicit null) is passed.
   PlayerState copyWith({
     List<Track>? queue,
     int? index,
@@ -60,6 +78,7 @@ class PlayerState {
     double? volume,
     Object? sourcePlaylistId = _keep,
     Object? error = _keep,
+    Object? notice = _keep,
   }) {
     return PlayerState(
       queue: queue ?? this.queue,
@@ -77,6 +96,7 @@ class PlayerState {
           ? this.sourcePlaylistId
           : sourcePlaylistId as String?,
       error: identical(error, _keep) ? this.error : error as String?,
+      notice: identical(notice, _keep) ? this.notice : notice as PlayerNotice?,
     );
   }
 }
@@ -117,6 +137,13 @@ class PlayerService {
   static const String noPlayableFilesError = 'No playable files in queue';
   static const String playbackFailedError = 'Playback failed';
   static const String engineFailedError = 'Engine failed on every track';
+  static const String tooManyFailuresError = 'Too many songs failed in a row';
+
+  /// [PlayerNotice.reason] for a local track whose file is gone.
+  static const String fileMissingReason = 'File missing';
+
+  /// Songs in a row that may fail to start before playback stops.
+  static const int maxConsecutiveSkips = 3;
 
   final AudioBackend _backend;
   final TrackResolver _resolver;
@@ -149,6 +176,18 @@ class PlayerService {
   /// the whole queue is unplayable. Reset when something plays to its end or
   /// the user picks what to play.
   int _engineFailures = 0;
+
+  /// Songs in a row that failed to start (see [maxConsecutiveSkips]). Reset by
+  /// a successful start or when the user picks what to play.
+  int _failedStarts = 0;
+
+  /// Why the last [_tryStart] failed, as a [PlayerNotice.reason].
+  String? _lastFailureReason;
+
+  /// Whether [PlayerState.notice] was published after the latest successful
+  /// start; that next start keeps it (it explains the jump), the one after
+  /// clears it.
+  bool _noticeFresh = false;
   Future<void> _tail = Future<void>.value();
 
   /// Set by [_tryStart] when resolving failed in a way that would fail every
@@ -178,6 +217,7 @@ class PlayerService {
     String? sourcePlaylistId,
   }) => _locked(() async {
     _engineFailures = 0;
+    _failedStarts = 0;
     final entries = [for (final t in tracks) _Entry(t)];
     _original
       ..clear()
@@ -229,11 +269,13 @@ class PlayerService {
   /// all) or stops (otherwise).
   Future<void> next() => _locked(() {
     _engineFailures = 0;
+    _failedStarts = 0;
     return _advance();
   });
 
   Future<void> previous() => _locked(() async {
     _engineFailures = 0;
+    _failedStarts = 0;
     final entry = _currentEntry;
     if (entry == null) return;
     final index = _state.index;
@@ -268,12 +310,14 @@ class PlayerService {
 
   Future<void> playAt(int index) => _locked(() async {
     _engineFailures = 0;
+    _failedStarts = 0;
     if (index < 0 || index >= _queue.length) return;
     await _startFirstPlayable(_candidates(index, wrap: _wraps));
   });
 
   Future<void> removeAt(int index) => _locked(() async {
     if (index < 0 || index >= _queue.length) return;
+    _failedStarts = 0;
     final current = _state.index;
     final wasPlaying = _state.playing;
     final removed = _queue.removeAt(index);
@@ -430,8 +474,10 @@ class PlayerService {
   }
 
   /// Starts the first entry of [candidates] that can be played. Missing files
-  /// are reported through `onMissing`. If none can be played, either gives up
-  /// (stop + error) or just reports failure.
+  /// are reported through `onMissing`, and every skipped song is published as
+  /// a [PlayerState.notice]. Stops after [maxConsecutiveSkips] failed starts in
+  /// a row. If none can be played, either gives up (stop + error) or just
+  /// reports failure.
   Future<bool> _startFirstPlayable(
     List<_Entry> candidates, {
     bool giveUpOnFailure = true,
@@ -440,33 +486,76 @@ class PlayerService {
     if (_state.error != null) _emit(_state.copyWith(error: null));
     _networkFailure = null;
     final shownIndex = _state.index;
+    _Entry? lastFailed;
+    String? lastReason;
+    // The latest skip; published before the next try, or with the final stop.
+    PlayerNotice? pending;
+    var capped = false;
     for (final entry in candidates) {
+      if (_failedStarts >= maxConsecutiveSkips) {
+        capped = true;
+        break;
+      }
+      if (pending != null) {
+        _publishNotice(pending);
+        pending = null;
+      }
       if (await _tryStart(entry)) return true;
       if (await _haltOnNetworkFailure()) return false;
+      final reason = _lastFailureReason ?? playbackFailedError;
+      AppLog.w('Skipping ${entry.track.id}: $reason');
+      lastFailed = entry;
+      lastReason = reason;
+      // Songs already known to be unavailable are skipped quietly.
+      if (!entry.track.unavailable) {
+        _failedStarts++;
+        pending = PlayerNotice(trackTitle: entry.track.title, reason: reason);
+      }
     }
-    if (!giveUpOnFailure && _state.index != shownIndex) {
-      // A YouTube candidate was shown while it resolved; nothing started, so
-      // the previous track is still the current one.
-      _emit(_state.copyWith(index: shownIndex, buffering: false));
+    if (!giveUpOnFailure) {
+      if (pending != null) _publishNotice(pending);
+      if (_state.index != shownIndex) {
+        // A YouTube candidate was shown while it resolved; nothing started, so
+        // the previous track is still the current one.
+        _emit(_state.copyWith(index: shownIndex, buffering: false));
+      }
+      return false;
     }
-    if (giveUpOnFailure) {
-      await _stopBackend();
-      _markStopped();
-      final last = candidates.isEmpty ? null : _queue.indexOf(candidates.last);
-      _emit(
-        _state.copyWith(
-          error: noPlayableFilesError,
-          index: last == null || last < 0 ? null : last,
-        ),
-      );
+    await _stopBackend();
+    _markStopped();
+    final String error;
+    if (capped) {
+      AppLog.w('Stopping: $maxConsecutiveSkips songs in a row failed');
+      error = tooManyFailuresError;
+    } else if (lastFailed?.track.source == 'yt' && lastReason != null) {
+      error = lastReason;
+    } else {
+      error = noPlayableFilesError;
     }
+    final lastEntry =
+        lastFailed ?? (candidates.isEmpty ? null : candidates.last);
+    final last = lastEntry == null ? -1 : _queue.indexOf(lastEntry);
+    if (pending != null) _noticeFresh = true;
+    _emit(
+      _state.copyWith(
+        error: error,
+        index: last < 0 ? null : last,
+        notice: pending ?? _state.notice,
+      ),
+    );
     return false;
+  }
+
+  void _publishNotice(PlayerNotice notice) {
+    _noticeFresh = true;
+    _emit(_state.copyWith(notice: notice));
   }
 
   Future<void> _playNow() async {
     final entry = _currentEntry;
     if (entry == null) return;
     if (!_loaded) {
+      _failedStarts = 0;
       await _startFirstPlayable([entry]);
       return;
     }
@@ -503,7 +592,13 @@ class PlayerService {
   Future<bool> _tryStart(_Entry entry, {bool report = true}) async {
     final track = entry.track;
     _prefetchedFor = null;
+    _lastFailureReason = null;
     if (track.source == 'yt' && !track.unavailable) {
+      if (_loaded && !identical(_currentEntry, entry)) {
+        // Silence the old track first, or it is heard under the new title.
+        _loaded = false;
+        await _pauseBackend();
+      }
       // Resolving a stream can take seconds: show the target right away.
       final index = _queue.indexOf(entry);
       if (index >= 0) {
@@ -523,12 +618,17 @@ class PlayerService {
       resolved = await _resolver.resolve(track);
     } catch (e, s) {
       AppLog.w('Resolving ${track.id} failed', e, s);
+      _lastFailureReason = playbackFailedError;
       return false;
     } finally {
       _resolving = false;
     }
     switch (resolved) {
       case Err(:final failure):
+        _lastFailureReason =
+            track.source != 'yt' && failure.kind == FailureKind.notFound
+            ? fileMissingReason
+            : failure.message;
         if (failure.kind == FailureKind.network ||
             (track.source == 'yt' && _haltsQueue(failure))) {
           AppLog.w('Cannot play ${track.id}: ${failure.message}');
@@ -546,7 +646,10 @@ class PlayerService {
         return false;
       case Ok(:final value):
         final index = _queue.indexOf(entry);
-        if (index < 0) return false;
+        if (index < 0) {
+          _lastFailureReason = playbackFailedError;
+          return false;
+        }
         _loaded = false; // the backend's contents are undefined from here on
         _wasCompleted = false;
         _emit(
@@ -563,11 +666,22 @@ class PlayerService {
         } catch (e, s) {
           AppLog.w('Backend failed to play ${track.id}', e, s);
           // Usually an expired or IP-bound stream URL (HTTP 403).
-          return _retryWithFreshStream(entry, report: report);
+          if (await _retryWithFreshStream(entry, report: report)) return true;
+          _lastFailureReason ??= playbackFailedError;
+          return false;
         }
         _loaded = true;
         _generation++;
-        _emit(_state.copyWith(playing: true, error: null));
+        _failedStarts = 0;
+        final keepNotice = _noticeFresh;
+        _noticeFresh = false;
+        _emit(
+          _state.copyWith(
+            playing: true,
+            error: null,
+            notice: keepNotice ? _state.notice : null,
+          ),
+        );
         if (report) await _reportStarted(track);
         return true;
     }
@@ -611,6 +725,14 @@ class PlayerService {
       await _onTrackStarted?.call(track, _state.sourcePlaylistId);
     } catch (e, s) {
       AppLog.e('onTrackStarted failed for ${track.id}', e, s);
+    }
+  }
+
+  Future<void> _pauseBackend() async {
+    try {
+      await _backend.pause();
+    } catch (e, s) {
+      AppLog.w('Backend pause failed', e, s);
     }
   }
 
@@ -682,6 +804,17 @@ class PlayerService {
     );
     _maybePrefetch();
     if (completedNow && _loaded) {
+      // Local tag durations can be wrong; YouTube's metadata is not.
+      final duration =
+          s.duration ??
+          (_state.current?.source == 'yt' ? _currentDuration() : null);
+      if (duration != null && s.position < duration - earlyEndMargin) {
+        // A stream that died mid-song: the engine reports it as finished.
+        _onBackendError(
+          'Ended early at ${s.position.inSeconds}s of ${duration.inSeconds}s',
+        );
+        return;
+      }
       final generation = _generation;
       _locked(() => _handleCompleted(generation))
           .catchError((Object e, StackTrace st) {
@@ -691,6 +824,9 @@ class PlayerService {
   }
 
   static const Duration prefetchLead = Duration(seconds: 20);
+
+  /// A completion further than this from the end counts as an engine error.
+  static const Duration earlyEndMargin = Duration(seconds: 5);
 
   /// Warms the next track's stream once the current one is nearly over.
   void _maybePrefetch() {
@@ -732,21 +868,37 @@ class PlayerService {
     if (_disposed) return;
     final entry = _currentEntry;
     if (entry == null) return;
+    // An error from a source that was replaced since is not this track's.
+    final generation = _generation;
     _locked(() async {
       // Stopped, or the user already moved on since this was reported.
-      if (!_loaded || !identical(_currentEntry, entry)) return;
+      if (generation != _generation ||
+          !_loaded ||
+          !identical(_currentEntry, entry)) {
+        return;
+      }
       AppLog.w('Playback of ${entry.track.id} failed: $error');
+      var reason = playbackFailedError;
       if (entry.track.source == 'yt' && !entry.engineRetried) {
         // The stream URL may have expired: fetch a fresh one, once per entry.
         if (await _retryWithFreshStream(entry, report: false)) return;
         if (await _haltOnNetworkFailure()) return;
+        reason = _lastFailureReason ?? reason;
+        _failedStarts++;
       }
+      AppLog.w('Skipping ${entry.track.id}: $reason');
+      final notice = PlayerNotice(
+        trackTitle: entry.track.title,
+        reason: reason,
+      );
       if (++_engineFailures >= _queue.length) {
         await _stopBackend();
         _markStopped();
-        _emit(_state.copyWith(error: engineFailedError));
+        _noticeFresh = true;
+        _emit(_state.copyWith(error: engineFailedError, notice: notice));
         return;
       }
+      _publishNotice(notice);
       await _advance();
       if (!_state.playing && _state.error == null) {
         _emit(_state.copyWith(error: playbackFailedError));
