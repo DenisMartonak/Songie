@@ -237,16 +237,18 @@ class LibraryScanner {
   /// Existing local files by path, so a scan does not query once per file.
   /// A 'done' row wins over a stale 'missing' one at the same path.
   Future<Map<String, LocalFile>> _localFileIndex() async {
-    final rows = await (_db.select(
-      _db.localFiles,
-    )..orderBy([(f) => OrderingTerm.desc(f.state)])).get();
+    final rows =
+        await (_db.select(_db.localFiles)
+              ..where(_isLocalRow)
+              ..orderBy([(f) => OrderingTerm.desc(f.state)]))
+            .get();
     return {for (final r in rows) r.path: r};
   }
 
   Future<LocalFile?> _localFileAt(String path, Map<String, LocalFile>? index) {
     if (index != null) return Future.value(index[path]);
     return (_db.select(_db.localFiles)
-          ..where((f) => f.path.equals(path))
+          ..where((f) => f.path.equals(path) & _isLocalRow(f))
           ..orderBy([(f) => OrderingTerm.asc(f.state)])
           ..limit(1))
         .getSingleOrNull();
@@ -256,7 +258,7 @@ class LibraryScanner {
   Future<void> _markVanished(String folder, Set<String> seen) async {
     final rows = await (_db.select(
       _db.localFiles,
-    )..where((f) => f.state.equals('done'))).get();
+    )..where((f) => f.state.equals('done') & _isLocalRow(f))).get();
     for (final r in rows) {
       if (!p.isWithin(folder, r.path) || seen.contains(r.path)) continue;
       if (!await File(r.path).exists()) await _setState(r.trackId, 'missing');
@@ -471,8 +473,18 @@ class LibraryScanner {
         );
   }
 
+  /// Rows of the local library. YouTube download rows share the table but
+  /// belong to the download queue: scans, missing-marking and relinking must
+  /// never see them.
+  Expression<bool> _isLocalRow($LocalFilesTable f) => f.trackId.isNotInQuery(
+    _db.selectOnly(_db.tracks)
+      ..addColumns([_db.tracks.id])
+      ..where(_db.tracks.source.equals('yt')),
+  );
+
   Future<void> _setState(String trackId, String state) {
-    return (_db.update(_db.localFiles)..where((f) => f.trackId.equals(trackId)))
+    return (_db.update(_db.localFiles)
+          ..where((f) => f.trackId.equals(trackId) & _isLocalRow(f)))
         .write(LocalFilesCompanion(state: Value(state)));
   }
 

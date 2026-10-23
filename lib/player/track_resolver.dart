@@ -21,6 +21,10 @@ abstract class TrackResolver {
 
 /// Resolves tracks through their `LocalFiles` row; fails with
 /// [FailureKind.notFound] when there is no row or the file is gone.
+///
+/// YouTube download rows live in the same table: only a finished one
+/// (`done`, with a path) is a file. `queued`, `downloading` and `failed` rows
+/// (path '') fail here so the composite resolver streams instead.
 class LocalTrackResolver extends TrackResolver {
   LocalTrackResolver(this._db);
 
@@ -33,6 +37,11 @@ class LocalTrackResolver extends TrackResolver {
     )..where((f) => f.trackId.equals(t.id))).getSingleOrNull();
     if (row == null) {
       return Err(Failure(FailureKind.notFound, 'No local file for ${t.id}'));
+    }
+    if (const {'queued', 'downloading', 'failed'}.contains(row.state)) {
+      return Err(
+        Failure(FailureKind.notFound, 'Download not finished for ${t.id}'),
+      );
     }
     if (!File(row.path).existsSync()) {
       return Err(Failure(FailureKind.notFound, 'File missing: ${row.path}'));

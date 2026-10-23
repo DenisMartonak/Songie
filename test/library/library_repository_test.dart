@@ -666,4 +666,24 @@ void main() {
       expect(failureOf(r), FailureKind.notFound);
     });
   });
+
+  test('a yt track is never flagged missing (no Locate offered)', () async {
+    await db
+        .into(db.tracks)
+        .insert(trackRow(id: 'y1', source: 'yt', ytVideoId: 'v1'));
+    await db
+        .into(db.localFiles)
+        .insert(
+          LocalFilesCompanion.insert(
+            trackId: 'y1',
+            path: '',
+            state: 'missing',
+            bytes: 0,
+            mtimeMs: 0,
+          ),
+        );
+    final p = await newPlaylist();
+    await repo.addTracks(p, ['y1']);
+    expect((await tracksOf(p)).single.fileMissing, isFalse);
+  });
 }

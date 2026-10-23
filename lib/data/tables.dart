@@ -68,18 +68,40 @@ class YtSeen extends Table with SyncColumns {
 }
 
 /// Device-local: where a track's audio file lives on this device. Not synced.
+///
+/// Local-library tracks use states 'done' | 'missing'. YouTube downloads
+/// (tracks with source 'yt') use 'queued' | 'downloading' | 'done' | 'failed',
+/// with [path] '' until done and [error] holding the user message. The local
+/// library logic (scan, missing-marking, Locate) never touches YouTube rows.
 class LocalFiles extends Table {
   TextColumn get trackId => text()();
   TextColumn get path => text()();
 
-  /// 'done' | 'missing'
+  /// 'done' | 'missing' | 'queued' | 'downloading' | 'failed'
   TextColumn get state => text()();
   IntColumn get bytes => integer()();
   IntColumn get mtimeMs => integer()();
   TextColumn get error => text().nullable()();
 
+  /// When a YouTube download was requested (ms since epoch); FIFO key.
+  IntColumn get requestedAt => integer().nullable()();
+
+  /// A YouTube download the user asked for on this one track.
+  BoolColumn get manual => boolean().withDefault(const Constant(false))();
+
   @override
   Set<Column> get primaryKey => {trackId};
+}
+
+/// Device-local: playlists whose YouTube tracks this device downloads.
+/// Not synced.
+class PlaylistDevicePrefs extends Table {
+  TextColumn get playlistId => text()();
+  BoolColumn get downloadEnabled =>
+      boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {playlistId};
 }
 
 /// Device-local: folders scanned for music. Not synced.

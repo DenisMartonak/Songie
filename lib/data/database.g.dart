@@ -2685,6 +2685,30 @@ class $LocalFilesTable extends LocalFiles
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _requestedAtMeta = const VerificationMeta(
+    'requestedAt',
+  );
+  @override
+  late final GeneratedColumn<int> requestedAt = GeneratedColumn<int>(
+    'requested_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _manualMeta = const VerificationMeta('manual');
+  @override
+  late final GeneratedColumn<bool> manual = GeneratedColumn<bool>(
+    'manual',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("manual" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     trackId,
@@ -2693,6 +2717,8 @@ class $LocalFilesTable extends LocalFiles
     bytes,
     mtimeMs,
     error,
+    requestedAt,
+    manual,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2752,6 +2778,21 @@ class $LocalFilesTable extends LocalFiles
         error.isAcceptableOrUnknown(data['error']!, _errorMeta),
       );
     }
+    if (data.containsKey('requested_at')) {
+      context.handle(
+        _requestedAtMeta,
+        requestedAt.isAcceptableOrUnknown(
+          data['requested_at']!,
+          _requestedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('manual')) {
+      context.handle(
+        _manualMeta,
+        manual.isAcceptableOrUnknown(data['manual']!, _manualMeta),
+      );
+    }
     return context;
   }
 
@@ -2785,6 +2826,14 @@ class $LocalFilesTable extends LocalFiles
         DriftSqlType.string,
         data['${effectivePrefix}error'],
       ),
+      requestedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}requested_at'],
+      ),
+      manual: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}manual'],
+      )!,
     );
   }
 
@@ -2798,11 +2847,17 @@ class LocalFile extends DataClass implements Insertable<LocalFile> {
   final String trackId;
   final String path;
 
-  /// 'done' | 'missing'
+  /// 'done' | 'missing' | 'queued' | 'downloading' | 'failed'
   final String state;
   final int bytes;
   final int mtimeMs;
   final String? error;
+
+  /// When a YouTube download was requested (ms since epoch); FIFO key.
+  final int? requestedAt;
+
+  /// A YouTube download the user asked for on this one track.
+  final bool manual;
   const LocalFile({
     required this.trackId,
     required this.path,
@@ -2810,6 +2865,8 @@ class LocalFile extends DataClass implements Insertable<LocalFile> {
     required this.bytes,
     required this.mtimeMs,
     this.error,
+    this.requestedAt,
+    required this.manual,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2822,6 +2879,10 @@ class LocalFile extends DataClass implements Insertable<LocalFile> {
     if (!nullToAbsent || error != null) {
       map['error'] = Variable<String>(error);
     }
+    if (!nullToAbsent || requestedAt != null) {
+      map['requested_at'] = Variable<int>(requestedAt);
+    }
+    map['manual'] = Variable<bool>(manual);
     return map;
   }
 
@@ -2835,6 +2896,10 @@ class LocalFile extends DataClass implements Insertable<LocalFile> {
       error: error == null && nullToAbsent
           ? const Value.absent()
           : Value(error),
+      requestedAt: requestedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(requestedAt),
+      manual: Value(manual),
     );
   }
 
@@ -2850,6 +2915,8 @@ class LocalFile extends DataClass implements Insertable<LocalFile> {
       bytes: serializer.fromJson<int>(json['bytes']),
       mtimeMs: serializer.fromJson<int>(json['mtimeMs']),
       error: serializer.fromJson<String?>(json['error']),
+      requestedAt: serializer.fromJson<int?>(json['requestedAt']),
+      manual: serializer.fromJson<bool>(json['manual']),
     );
   }
   @override
@@ -2862,6 +2929,8 @@ class LocalFile extends DataClass implements Insertable<LocalFile> {
       'bytes': serializer.toJson<int>(bytes),
       'mtimeMs': serializer.toJson<int>(mtimeMs),
       'error': serializer.toJson<String?>(error),
+      'requestedAt': serializer.toJson<int?>(requestedAt),
+      'manual': serializer.toJson<bool>(manual),
     };
   }
 
@@ -2872,6 +2941,8 @@ class LocalFile extends DataClass implements Insertable<LocalFile> {
     int? bytes,
     int? mtimeMs,
     Value<String?> error = const Value.absent(),
+    Value<int?> requestedAt = const Value.absent(),
+    bool? manual,
   }) => LocalFile(
     trackId: trackId ?? this.trackId,
     path: path ?? this.path,
@@ -2879,6 +2950,8 @@ class LocalFile extends DataClass implements Insertable<LocalFile> {
     bytes: bytes ?? this.bytes,
     mtimeMs: mtimeMs ?? this.mtimeMs,
     error: error.present ? error.value : this.error,
+    requestedAt: requestedAt.present ? requestedAt.value : this.requestedAt,
+    manual: manual ?? this.manual,
   );
   LocalFile copyWithCompanion(LocalFilesCompanion data) {
     return LocalFile(
@@ -2888,6 +2961,10 @@ class LocalFile extends DataClass implements Insertable<LocalFile> {
       bytes: data.bytes.present ? data.bytes.value : this.bytes,
       mtimeMs: data.mtimeMs.present ? data.mtimeMs.value : this.mtimeMs,
       error: data.error.present ? data.error.value : this.error,
+      requestedAt: data.requestedAt.present
+          ? data.requestedAt.value
+          : this.requestedAt,
+      manual: data.manual.present ? data.manual.value : this.manual,
     );
   }
 
@@ -2899,13 +2976,24 @@ class LocalFile extends DataClass implements Insertable<LocalFile> {
           ..write('state: $state, ')
           ..write('bytes: $bytes, ')
           ..write('mtimeMs: $mtimeMs, ')
-          ..write('error: $error')
+          ..write('error: $error, ')
+          ..write('requestedAt: $requestedAt, ')
+          ..write('manual: $manual')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(trackId, path, state, bytes, mtimeMs, error);
+  int get hashCode => Object.hash(
+    trackId,
+    path,
+    state,
+    bytes,
+    mtimeMs,
+    error,
+    requestedAt,
+    manual,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2915,7 +3003,9 @@ class LocalFile extends DataClass implements Insertable<LocalFile> {
           other.state == this.state &&
           other.bytes == this.bytes &&
           other.mtimeMs == this.mtimeMs &&
-          other.error == this.error);
+          other.error == this.error &&
+          other.requestedAt == this.requestedAt &&
+          other.manual == this.manual);
 }
 
 class LocalFilesCompanion extends UpdateCompanion<LocalFile> {
@@ -2925,6 +3015,8 @@ class LocalFilesCompanion extends UpdateCompanion<LocalFile> {
   final Value<int> bytes;
   final Value<int> mtimeMs;
   final Value<String?> error;
+  final Value<int?> requestedAt;
+  final Value<bool> manual;
   final Value<int> rowid;
   const LocalFilesCompanion({
     this.trackId = const Value.absent(),
@@ -2933,6 +3025,8 @@ class LocalFilesCompanion extends UpdateCompanion<LocalFile> {
     this.bytes = const Value.absent(),
     this.mtimeMs = const Value.absent(),
     this.error = const Value.absent(),
+    this.requestedAt = const Value.absent(),
+    this.manual = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   LocalFilesCompanion.insert({
@@ -2942,6 +3036,8 @@ class LocalFilesCompanion extends UpdateCompanion<LocalFile> {
     required int bytes,
     required int mtimeMs,
     this.error = const Value.absent(),
+    this.requestedAt = const Value.absent(),
+    this.manual = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : trackId = Value(trackId),
        path = Value(path),
@@ -2955,6 +3051,8 @@ class LocalFilesCompanion extends UpdateCompanion<LocalFile> {
     Expression<int>? bytes,
     Expression<int>? mtimeMs,
     Expression<String>? error,
+    Expression<int>? requestedAt,
+    Expression<bool>? manual,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2964,6 +3062,8 @@ class LocalFilesCompanion extends UpdateCompanion<LocalFile> {
       if (bytes != null) 'bytes': bytes,
       if (mtimeMs != null) 'mtime_ms': mtimeMs,
       if (error != null) 'error': error,
+      if (requestedAt != null) 'requested_at': requestedAt,
+      if (manual != null) 'manual': manual,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2975,6 +3075,8 @@ class LocalFilesCompanion extends UpdateCompanion<LocalFile> {
     Value<int>? bytes,
     Value<int>? mtimeMs,
     Value<String?>? error,
+    Value<int?>? requestedAt,
+    Value<bool>? manual,
     Value<int>? rowid,
   }) {
     return LocalFilesCompanion(
@@ -2984,6 +3086,8 @@ class LocalFilesCompanion extends UpdateCompanion<LocalFile> {
       bytes: bytes ?? this.bytes,
       mtimeMs: mtimeMs ?? this.mtimeMs,
       error: error ?? this.error,
+      requestedAt: requestedAt ?? this.requestedAt,
+      manual: manual ?? this.manual,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3009,6 +3113,12 @@ class LocalFilesCompanion extends UpdateCompanion<LocalFile> {
     if (error.present) {
       map['error'] = Variable<String>(error.value);
     }
+    if (requestedAt.present) {
+      map['requested_at'] = Variable<int>(requestedAt.value);
+    }
+    if (manual.present) {
+      map['manual'] = Variable<bool>(manual.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3024,6 +3134,238 @@ class LocalFilesCompanion extends UpdateCompanion<LocalFile> {
           ..write('bytes: $bytes, ')
           ..write('mtimeMs: $mtimeMs, ')
           ..write('error: $error, ')
+          ..write('requestedAt: $requestedAt, ')
+          ..write('manual: $manual, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $PlaylistDevicePrefsTable extends PlaylistDevicePrefs
+    with TableInfo<$PlaylistDevicePrefsTable, PlaylistDevicePref> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PlaylistDevicePrefsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _playlistIdMeta = const VerificationMeta(
+    'playlistId',
+  );
+  @override
+  late final GeneratedColumn<String> playlistId = GeneratedColumn<String>(
+    'playlist_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _downloadEnabledMeta = const VerificationMeta(
+    'downloadEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> downloadEnabled = GeneratedColumn<bool>(
+    'download_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("download_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [playlistId, downloadEnabled];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'playlist_device_prefs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PlaylistDevicePref> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('playlist_id')) {
+      context.handle(
+        _playlistIdMeta,
+        playlistId.isAcceptableOrUnknown(data['playlist_id']!, _playlistIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_playlistIdMeta);
+    }
+    if (data.containsKey('download_enabled')) {
+      context.handle(
+        _downloadEnabledMeta,
+        downloadEnabled.isAcceptableOrUnknown(
+          data['download_enabled']!,
+          _downloadEnabledMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {playlistId};
+  @override
+  PlaylistDevicePref map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PlaylistDevicePref(
+      playlistId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}playlist_id'],
+      )!,
+      downloadEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}download_enabled'],
+      )!,
+    );
+  }
+
+  @override
+  $PlaylistDevicePrefsTable createAlias(String alias) {
+    return $PlaylistDevicePrefsTable(attachedDatabase, alias);
+  }
+}
+
+class PlaylistDevicePref extends DataClass
+    implements Insertable<PlaylistDevicePref> {
+  final String playlistId;
+  final bool downloadEnabled;
+  const PlaylistDevicePref({
+    required this.playlistId,
+    required this.downloadEnabled,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['playlist_id'] = Variable<String>(playlistId);
+    map['download_enabled'] = Variable<bool>(downloadEnabled);
+    return map;
+  }
+
+  PlaylistDevicePrefsCompanion toCompanion(bool nullToAbsent) {
+    return PlaylistDevicePrefsCompanion(
+      playlistId: Value(playlistId),
+      downloadEnabled: Value(downloadEnabled),
+    );
+  }
+
+  factory PlaylistDevicePref.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PlaylistDevicePref(
+      playlistId: serializer.fromJson<String>(json['playlistId']),
+      downloadEnabled: serializer.fromJson<bool>(json['downloadEnabled']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'playlistId': serializer.toJson<String>(playlistId),
+      'downloadEnabled': serializer.toJson<bool>(downloadEnabled),
+    };
+  }
+
+  PlaylistDevicePref copyWith({String? playlistId, bool? downloadEnabled}) =>
+      PlaylistDevicePref(
+        playlistId: playlistId ?? this.playlistId,
+        downloadEnabled: downloadEnabled ?? this.downloadEnabled,
+      );
+  PlaylistDevicePref copyWithCompanion(PlaylistDevicePrefsCompanion data) {
+    return PlaylistDevicePref(
+      playlistId: data.playlistId.present
+          ? data.playlistId.value
+          : this.playlistId,
+      downloadEnabled: data.downloadEnabled.present
+          ? data.downloadEnabled.value
+          : this.downloadEnabled,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlaylistDevicePref(')
+          ..write('playlistId: $playlistId, ')
+          ..write('downloadEnabled: $downloadEnabled')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(playlistId, downloadEnabled);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PlaylistDevicePref &&
+          other.playlistId == this.playlistId &&
+          other.downloadEnabled == this.downloadEnabled);
+}
+
+class PlaylistDevicePrefsCompanion extends UpdateCompanion<PlaylistDevicePref> {
+  final Value<String> playlistId;
+  final Value<bool> downloadEnabled;
+  final Value<int> rowid;
+  const PlaylistDevicePrefsCompanion({
+    this.playlistId = const Value.absent(),
+    this.downloadEnabled = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PlaylistDevicePrefsCompanion.insert({
+    required String playlistId,
+    this.downloadEnabled = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : playlistId = Value(playlistId);
+  static Insertable<PlaylistDevicePref> custom({
+    Expression<String>? playlistId,
+    Expression<bool>? downloadEnabled,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (playlistId != null) 'playlist_id': playlistId,
+      if (downloadEnabled != null) 'download_enabled': downloadEnabled,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PlaylistDevicePrefsCompanion copyWith({
+    Value<String>? playlistId,
+    Value<bool>? downloadEnabled,
+    Value<int>? rowid,
+  }) {
+    return PlaylistDevicePrefsCompanion(
+      playlistId: playlistId ?? this.playlistId,
+      downloadEnabled: downloadEnabled ?? this.downloadEnabled,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (playlistId.present) {
+      map['playlist_id'] = Variable<String>(playlistId.value);
+    }
+    if (downloadEnabled.present) {
+      map['download_enabled'] = Variable<bool>(downloadEnabled.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlaylistDevicePrefsCompanion(')
+          ..write('playlistId: $playlistId, ')
+          ..write('downloadEnabled: $downloadEnabled, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3774,6 +4116,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $YtSeenTable ytSeen = $YtSeenTable(this);
   late final $LocalFilesTable localFiles = $LocalFilesTable(this);
+  late final $PlaylistDevicePrefsTable playlistDevicePrefs =
+      $PlaylistDevicePrefsTable(this);
   late final $LibraryFoldersTable libraryFolders = $LibraryFoldersTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
   late final $PlayHistoryTable playHistory = $PlayHistoryTable(this);
@@ -3791,6 +4135,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     playlistEntries,
     ytSeen,
     localFiles,
+    playlistDevicePrefs,
     libraryFolders,
     settings,
     playHistory,
@@ -5080,6 +5425,8 @@ typedef $$LocalFilesTableCreateCompanionBuilder = LocalFilesCompanion Function({
   required int bytes,
   required int mtimeMs,
   Value<String?> error,
+  Value<int?> requestedAt,
+  Value<bool> manual,
   Value<int> rowid,
 });
 typedef $$LocalFilesTableUpdateCompanionBuilder = LocalFilesCompanion Function({
@@ -5089,6 +5436,8 @@ typedef $$LocalFilesTableUpdateCompanionBuilder = LocalFilesCompanion Function({
   Value<int> bytes,
   Value<int> mtimeMs,
   Value<String?> error,
+  Value<int?> requestedAt,
+  Value<bool> manual,
   Value<int> rowid,
 });
 
@@ -5128,6 +5477,16 @@ class $$LocalFilesTableFilterComposer
 
   ColumnFilters<String> get error => $composableBuilder(
     column: $table.error,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get manual => $composableBuilder(
+    column: $table.manual,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -5170,6 +5529,16 @@ class $$LocalFilesTableOrderingComposer
     column: $table.error,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get manual => $composableBuilder(
+    column: $table.manual,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$LocalFilesTableAnnotationComposer
@@ -5198,6 +5567,14 @@ class $$LocalFilesTableAnnotationComposer
 
   GeneratedColumn<String> get error =>
       $composableBuilder(column: $table.error, builder: (column) => column);
+
+  GeneratedColumn<int> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get manual =>
+      $composableBuilder(column: $table.manual, builder: (column) => column);
 }
 
 class $$LocalFilesTableTableManager
@@ -5237,6 +5614,8 @@ class $$LocalFilesTableTableManager
                 Value<int> bytes = const Value.absent(),
                 Value<int> mtimeMs = const Value.absent(),
                 Value<String?> error = const Value.absent(),
+                Value<int?> requestedAt = const Value.absent(),
+                Value<bool> manual = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LocalFilesCompanion(
                 trackId: trackId,
@@ -5245,6 +5624,8 @@ class $$LocalFilesTableTableManager
                 bytes: bytes,
                 mtimeMs: mtimeMs,
                 error: error,
+                requestedAt: requestedAt,
+                manual: manual,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -5255,6 +5636,8 @@ class $$LocalFilesTableTableManager
                 required int bytes,
                 required int mtimeMs,
                 Value<String?> error = const Value.absent(),
+                Value<int?> requestedAt = const Value.absent(),
+                Value<bool> manual = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LocalFilesCompanion.insert(
                 trackId: trackId,
@@ -5263,6 +5646,8 @@ class $$LocalFilesTableTableManager
                 bytes: bytes,
                 mtimeMs: mtimeMs,
                 error: error,
+                requestedAt: requestedAt,
+                manual: manual,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -5294,6 +5679,180 @@ typedef $$LocalFilesTableProcessedTableManager =
       $$LocalFilesTableUpdateCompanionBuilder,
       (LocalFile, BaseReferences<_$AppDatabase, $LocalFilesTable, LocalFile>),
       LocalFile,
+      PrefetchHooks Function()
+    >;
+typedef $$PlaylistDevicePrefsTableCreateCompanionBuilder =
+    PlaylistDevicePrefsCompanion Function({
+      required String playlistId,
+      Value<bool> downloadEnabled,
+      Value<int> rowid,
+    });
+typedef $$PlaylistDevicePrefsTableUpdateCompanionBuilder =
+    PlaylistDevicePrefsCompanion Function({
+      Value<String> playlistId,
+      Value<bool> downloadEnabled,
+      Value<int> rowid,
+    });
+
+class $$PlaylistDevicePrefsTableFilterComposer
+    extends Composer<_$AppDatabase, $PlaylistDevicePrefsTable> {
+  $$PlaylistDevicePrefsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get playlistId => $composableBuilder(
+    column: $table.playlistId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get downloadEnabled => $composableBuilder(
+    column: $table.downloadEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PlaylistDevicePrefsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PlaylistDevicePrefsTable> {
+  $$PlaylistDevicePrefsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get playlistId => $composableBuilder(
+    column: $table.playlistId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get downloadEnabled => $composableBuilder(
+    column: $table.downloadEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PlaylistDevicePrefsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PlaylistDevicePrefsTable> {
+  $$PlaylistDevicePrefsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get playlistId => $composableBuilder(
+    column: $table.playlistId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get downloadEnabled => $composableBuilder(
+    column: $table.downloadEnabled,
+    builder: (column) => column,
+  );
+}
+
+class $$PlaylistDevicePrefsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PlaylistDevicePrefsTable,
+          PlaylistDevicePref,
+          $$PlaylistDevicePrefsTableFilterComposer,
+          $$PlaylistDevicePrefsTableOrderingComposer,
+          $$PlaylistDevicePrefsTableAnnotationComposer,
+          $$PlaylistDevicePrefsTableCreateCompanionBuilder,
+          $$PlaylistDevicePrefsTableUpdateCompanionBuilder,
+          (
+            PlaylistDevicePref,
+            BaseReferences<
+              _$AppDatabase,
+              $PlaylistDevicePrefsTable,
+              PlaylistDevicePref
+            >,
+          ),
+          PlaylistDevicePref,
+          PrefetchHooks Function()
+        > {
+  $$PlaylistDevicePrefsTableTableManager(
+    _$AppDatabase db,
+    $PlaylistDevicePrefsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PlaylistDevicePrefsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PlaylistDevicePrefsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$PlaylistDevicePrefsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> playlistId = const Value.absent(),
+                Value<bool> downloadEnabled = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PlaylistDevicePrefsCompanion(
+                playlistId: playlistId,
+                downloadEnabled: downloadEnabled,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String playlistId,
+                Value<bool> downloadEnabled = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PlaylistDevicePrefsCompanion.insert(
+                playlistId: playlistId,
+                downloadEnabled: downloadEnabled,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$PlaylistDevicePrefsTable, PlaylistDevicePref>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $PlaylistDevicePrefsTable,
+                    PlaylistDevicePref
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PlaylistDevicePrefsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PlaylistDevicePrefsTable,
+      PlaylistDevicePref,
+      $$PlaylistDevicePrefsTableFilterComposer,
+      $$PlaylistDevicePrefsTableOrderingComposer,
+      $$PlaylistDevicePrefsTableAnnotationComposer,
+      $$PlaylistDevicePrefsTableCreateCompanionBuilder,
+      $$PlaylistDevicePrefsTableUpdateCompanionBuilder,
+      (
+        PlaylistDevicePref,
+        BaseReferences<
+          _$AppDatabase,
+          $PlaylistDevicePrefsTable,
+          PlaylistDevicePref
+        >,
+      ),
+      PlaylistDevicePref,
       PrefetchHooks Function()
     >;
 typedef $$LibraryFoldersTableCreateCompanionBuilder =
@@ -5786,6 +6345,8 @@ class $AppDatabaseManager {
       $$YtSeenTableTableManager(_db, _db.ytSeen);
   $$LocalFilesTableTableManager get localFiles =>
       $$LocalFilesTableTableManager(_db, _db.localFiles);
+  $$PlaylistDevicePrefsTableTableManager get playlistDevicePrefs =>
+      $$PlaylistDevicePrefsTableTableManager(_db, _db.playlistDevicePrefs);
   $$LibraryFoldersTableTableManager get libraryFolders =>
       $$LibraryFoldersTableTableManager(_db, _db.libraryFolders);
   $$SettingsTableTableManager get settings =>

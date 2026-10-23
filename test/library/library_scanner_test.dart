@@ -501,4 +501,50 @@ void main() {
       expect(t.artist, 'Songies');
     });
   });
+
+  group('YouTube download rows are not local-library rows', () {
+    Future<void> ytRow(String id, String path, String state) async {
+      await db
+          .into(db.tracks)
+          .insert(trackRow(id: id, source: 'yt', ytVideoId: 'v$id'));
+      await db
+          .into(db.localFiles)
+          .insert(
+            LocalFilesCompanion.insert(
+              trackId: id,
+              path: path,
+              state: state,
+              bytes: 0,
+              mtimeMs: 0,
+            ),
+          );
+    }
+
+    test('a scan never marks a done yt file missing or adopts it', () async {
+      write('a.mp3');
+      final gone = p.join(music.path, 'gone.mp3'); // never exists
+      final present = write('y.mp3'); // exists, but belongs to a yt row
+      await ytRow('yt1', gone, 'done');
+      await ytRow('yt2', present.path, 'done');
+      await ytRow('yt3', '', 'queued');
+
+      await scan(music);
+
+      expect((await localFileFor('yt1')).state, 'done');
+      final y2 = await localFileFor('yt2');
+      expect(y2.state, 'done');
+      expect(y2.path, present.path);
+      expect((await localFileFor('yt3')).state, 'queued');
+      // y.mp3 was scanned as its own local track instead of rewriting yt2.
+      final yt2 = (await allTracks()).singleWhere((t) => t.id == 'yt2');
+      expect(yt2.fileHash, isNull);
+      expect(yt2.source, 'yt');
+    });
+
+    test('markMissing leaves a yt row alone', () async {
+      await ytRow('yt1', p.join(music.path, 'x.opus'), 'done');
+      await scanner.markMissing('yt1');
+      expect((await localFileFor('yt1')).state, 'done');
+    });
+  });
 }

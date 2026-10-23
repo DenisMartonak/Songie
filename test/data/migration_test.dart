@@ -58,7 +58,7 @@ void main() {
     expect(await db.select(db.playHistory).get(), hasLength(1));
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 3);
+    expect(version.data.values.single, 4);
   });
 
   test('a v2 database opened with v3 code gains yt_seen and keeps data', () async {
@@ -118,6 +118,51 @@ void main() {
       throwsA(anything),
     );
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 3);
+    expect(version.data.values.single, 4);
   });
+
+  test(
+    'a v3 database opened with v4 code gains download columns and keeps rows',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('songies_migration');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File('${dir.path}/songies.db');
+
+      final raw = sqlite.sqlite3.open(file.path);
+      for (final sql in _v1Schema) {
+        raw.execute(sql);
+      }
+      raw.execute(
+        'CREATE TABLE "play_history" ("id" INTEGER NOT NULL, "track_id" TEXT NOT NULL, "playlist_id" TEXT NULL, "played_at" INTEGER NOT NULL, PRIMARY KEY ("id" AUTOINCREMENT))',
+      );
+      raw.execute(
+        'CREATE TABLE "yt_seen" ("id" TEXT NOT NULL, "clock" TEXT NOT NULL, "origin_device" TEXT NOT NULL, "deleted" INTEGER NOT NULL DEFAULT 0 CHECK ("deleted" IN (0, 1)), "local_seq" INTEGER NOT NULL, "playlist_id" TEXT NOT NULL, "video_id" TEXT NOT NULL, PRIMARY KEY ("id"), UNIQUE ("playlist_id", "video_id"))',
+      );
+      raw.execute(
+        "INSERT INTO local_files (track_id, path, state, bytes, mtime_ms) "
+        "VALUES ('t1', '/m/a.mp3', 'done', 5, 7)",
+      );
+      raw.execute('PRAGMA user_version = 3');
+      raw.close();
+
+      final db = AppDatabase.open(file);
+      addTearDown(db.close);
+
+      final rows = await db.select(db.localFiles).get();
+      expect(rows, hasLength(1));
+      expect(rows.single.path, '/m/a.mp3');
+      expect(rows.single.state, 'done');
+      expect(rows.single.requestedAt, isNull);
+      expect(rows.single.manual, isFalse);
+
+      await db
+          .into(db.playlistDevicePrefs)
+          .insert(PlaylistDevicePrefsCompanion.insert(playlistId: 'p'));
+      final pref = await db.select(db.playlistDevicePrefs).getSingle();
+      expect(pref.downloadEnabled, isFalse);
+
+      final version = await db.customSelect('PRAGMA user_version').getSingle();
+      expect(version.data.values.single, 4);
+    },
+  );
 }

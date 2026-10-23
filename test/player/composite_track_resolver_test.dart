@@ -165,4 +165,45 @@ void main() {
     await resolver.resolve(t);
     expect(runner.calls, hasLength(2));
   });
+
+  Future<void> ytRow(String trackId, String path, String state) => db
+      .into(db.localFiles)
+      .insert(
+        LocalFilesCompanion.insert(
+          trackId: trackId,
+          path: path,
+          state: state,
+          bytes: 0,
+          mtimeMs: 0,
+        ),
+      );
+
+  test('a downloading yt row (path empty) streams', () async {
+    final t = await insert(id: 't1', videoId: 'vid1');
+    await ytRow(t.id, '', 'downloading');
+    final r = await resolver.resolve(t) as Ok<AudioSourceRef>;
+    expect(r.value, isA<UrlSource>());
+  });
+
+  test('a done yt row with an existing file plays the file', () async {
+    final t = await insert(id: 't1', videoId: 'vid1');
+    final f = File('${tmp.path}/vid1.opus')..writeAsStringSync('x');
+    await ytRow(t.id, f.path, 'done');
+    final r = await resolver.resolve(t) as Ok<AudioSourceRef>;
+    expect(r.value, FileSource(f.path));
+    expect(runner.calls, isEmpty);
+  });
+
+  test(
+    'an unfinished yt row is never promoted to done by the resolver',
+    () async {
+      final t = await insert(id: 't1', videoId: 'vid1');
+      final f = File('${tmp.path}/vid1.part')..writeAsStringSync('x');
+      await ytRow(t.id, f.path, 'queued');
+      final r = await resolver.resolve(t) as Ok<AudioSourceRef>;
+      expect(r.value, isA<UrlSource>());
+      final row = await db.select(db.localFiles).getSingle();
+      expect(row.state, 'queued');
+    },
+  );
 }

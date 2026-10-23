@@ -138,7 +138,11 @@ class LibraryRepository {
             track: r.readTable(_db.tracks),
             position: r.readTable(_db.playlistEntries).position,
             status: r.readTable(_db.playlistEntries).status,
-            fileMissing: r.readTableOrNull(_db.localFiles)?.state == 'missing',
+            // Only local-library tracks can be "missing"; a YouTube track
+            // without a finished download simply streams.
+            fileMissing:
+                r.readTable(_db.tracks).source != 'yt' &&
+                r.readTableOrNull(_db.localFiles)?.state == 'missing',
           ),
       ];
     });
