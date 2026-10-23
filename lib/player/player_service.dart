@@ -154,6 +154,10 @@ class PlayerService {
   /// then stops instead of skipping on.
   Failure? _networkFailure;
 
+  /// The entry that failed with [_networkFailure]; it becomes current so a
+  /// later play retries it.
+  _Entry? _networkEntry;
+
   /// The entry whose successor was already prefetched.
   _Entry? _prefetchedFor;
 
@@ -471,7 +475,8 @@ class PlayerService {
     if (failure == null) return false;
     await _stopBackend();
     _markStopped();
-    _emit(_state.copyWith(error: failure.message));
+    final i = _networkEntry == null ? -1 : _queue.indexOf(_networkEntry!);
+    _emit(_state.copyWith(error: failure.message, index: i < 0 ? null : i));
     return true;
   }
 
@@ -490,6 +495,7 @@ class PlayerService {
         if (failure.kind == FailureKind.network) {
           AppLog.w('Cannot play ${track.id}: ${failure.message}');
           _networkFailure = failure;
+          _networkEntry = entry;
         } else if (failure.kind == FailureKind.notFound) {
           if (track.source == 'yt') {
             await _reportUnavailable(track.id);
@@ -643,17 +649,18 @@ class PlayerService {
         duration - _state.position > prefetchLead) {
       return;
     }
-    final index = _state.index;
-    final _Entry? next;
-    if (_state.repeat == RepeatMode.one) {
-      next = null;
-    } else if (index + 1 < _queue.length) {
-      next = _queue[index + 1];
-    } else {
-      next = _wraps ? _queue.first : null;
-    }
     _prefetchedFor = entry;
-    if (next == null || identical(next, entry)) return;
+    if (_state.repeat == RepeatMode.one) return;
+    // The same order `_advance` tries entries in, minus ones known unplayable.
+    _Entry? next;
+    for (final c in _candidates(_state.index + 1, wrap: _wraps)) {
+      if (identical(c, entry)) break;
+      if (!c.track.unavailable) {
+        next = c;
+        break;
+      }
+    }
+    if (next == null) return;
     _resolver.prefetch(next.track).catchError((Object e, StackTrace st) {
       AppLog.w('Prefetching ${next!.track.id} failed', e, st);
     });

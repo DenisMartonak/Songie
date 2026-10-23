@@ -855,6 +855,35 @@ void main() {
       expect(player.state.error, "You're offline");
       expect(resolver.resolved, ['a', 'b']);
       expect(backend.calls.last, 'stop');
+      expect(player.state.current, b);
+      expect(player.state.index, 1);
+    });
+
+    test('play after a network stop retries the failed track', () async {
+      await player.playQueue([a, b, c]);
+      resolver.failures['b'] = offline;
+      backend.complete();
+      await settle();
+      resolver.failures.clear();
+      backend.clearCalls();
+
+      await player.play();
+      expect(backend.calls, ['setSource:/music/b.mp3', 'play']);
+      expect(player.state.current, b);
+      expect(player.state.playing, isTrue);
+      expect(player.state.error, isNull);
+    });
+
+    test('next stops on the failed track and play retries it', () async {
+      await player.playQueue([a, b, c]);
+      resolver.failures['b'] = offline;
+      await player.next();
+      expect(player.state.current, b);
+      expect(player.state.playing, isFalse);
+      resolver.failures.clear();
+      await player.play();
+      expect(backend.sources.last, '/music/b.mp3');
+      expect(player.state.playing, isTrue);
     });
 
     test('previous does not restart after a network stop', () async {
@@ -971,6 +1000,13 @@ void main() {
       await player.playQueue([a, b], startIndex: 1);
       await at(90);
       expect(resolver.prefetched, ['a']);
+    });
+
+    test('skips an unavailable next entry', () async {
+      final u = track('u').copyWith(unavailable: true);
+      await player.playQueue([a, u, c]);
+      await at(90);
+      expect(resolver.prefetched, ['c']);
     });
 
     test('none for repeat one', () async {
