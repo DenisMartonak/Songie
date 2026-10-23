@@ -2,6 +2,14 @@
 
 _Last updated: 2026-10-23_
 
+## Plan 3 (bug fixes + downloads) — in progress, stopped after Task 8
+
+- **Branch:** `plan-3-downloads-fixes` (from `plan-2-youtube`). Plan: [Plan 3](superpowers/plans/2026-10-23-songies-plan-3-fixes-and-downloads.md). Plan 4 is written too: [Plan 4](superpowers/plans/2026-10-23-songies-plan-4-alive-ui-and-themes.md).
+- **Status:** Tasks 1–8 implemented and reviewed (tab roots, honest playback, sharp covers, Android folder picker, download data, yt-dlp downloads, download queue, Android download notification). Task 9 (download UI) and Task 10 (docs/builds) and the final review remain. 714 tests passing, analyze clean.
+- **Full record** (what was fixed, every ruling, deferred issues, phone checks): [plan-3-session-log.md](plan-3-session-log.md).
+- **To resume in a new Claude session:**
+  > Continue Songies Plan 3 subagent-driven on branch `plan-3-downloads-fixes`, starting at Task 9. Tasks 1–8 are done. Read docs/plan-3-session-log.md. Don't push or merge.
+
 ## Plan 2 (YouTube) — done and reviewed, pending your device checks
 
 - **Branch:** `plan-2-youtube`, made from `plan-1-foundation`. Plan: [Plan 2](superpowers/plans/2026-10-22-songies-plan-2-youtube-import-sync-stream.md).
