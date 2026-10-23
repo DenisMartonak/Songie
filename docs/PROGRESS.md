@@ -21,7 +21,7 @@ _Last updated: 2026-10-23_
   - Import: 182 tracks and 182 entries in 2.3 s. All 182 got artwork (3.8 s more, in the background). None unavailable.
   - Sync right after: 0 added, 0 flagged, 0 restored (2.0 s).
   - Stream resolve of one track: 3.2 s. A ranged GET (`Range: bytes=0-1023`) with the returned headers gave HTTP 206, `audio/webm`, `bytes 0-1023/3947045`.
-- **`flutter build linux --release`:** succeeds (bundle 33 MB), even though `mpv-libs-devel` is not installed. It has not been launched or listened to.
+- **`flutter build linux --release`:** succeeds (bundle 33 MB), without `mpv-libs-devel`. The release bundle was launched for 12 s with no errors (media_kit_libs_linux registered); audio was not listened to.
 - **`flutter build apk --release`:** succeeds, 78.5 MB (arm64-v8a, armeabi-v7a and x86_64). It prints `llvm-strip` "not a valid object file" errors for `libpython.zip.so`. They don't fail the build; the file just ships unstripped. No gradle change was made.
 - **Not done here (left for the Windows PC):** `flutter build windows --release`, idle RAM (target 150 MB or less), and "Install yt-dlp" from Settings on Windows. No audio, phone or Windows checks were possible.
 
@@ -82,14 +82,14 @@ _Last updated: 2026-10-23_
 - **Rust:** required for the `smtc_windows` plugin.
 - **Windows Developer Mode:** must be on.
 - **Android:** SDK 36 / platform 37, NDK 28.2.13676358 and CMake 3.22.1 installed. The project uses `compileSdk = 37` and `minSdk 24`.
-- **Nobara needs:** `sudo dnf install clang cmake ninja-build gtk3-devel mpv-libs-devel libsecret-devel` before building there.
+- **Nobara needs:** `sudo dnf install clang cmake ninja-build gtk3-devel mpv-libs libsecret-devel` before building there.
 
 ## Environment notes (Nobara host used for Plan 2)
 
 - **Flutter 3.47.7** at `~/flutter` (add `~/flutter/bin` to PATH).
 - **Android SDK** at `~/Android/Sdk` (platform `android-37.0`, NDK 28.2.13676358).
 - **JDK 21** (Temurin) at `~/jdk-21`; `flutter config --jdk-dir ~/jdk-21` is set.
-- **`mpv-libs-devel` is missing** (needs sudo). `flutter build linux --release` still succeeded, but install it before relying on Linux audio.
+- **mpv:** the runtime `mpv-libs` package (0.41) is what's needed, and it is present on this host. `mpv-libs-devel` is not needed; the Linux build and launch work without it.
 
 ## Decisions made during implementation (rulings)
 
@@ -165,7 +165,9 @@ Each entry says what was decided and what it costs if it turns out wrong.
   - `httpDownload` has no timeout and buffers about 35 MB in memory; the post-install `--version` has no timeout.
   - A non-UTF-8 byte in yt-dlp output can throw an unmapped exception.
   - Any `ProcessException` maps to "missing", including permission-denied.
+  - The inner `exitCode.timeout` future is unawaited; `desktop_ytdlp_runner.dart` has a missing `const` and an `ignore_for_file: prefer_initializing_formals`.
   - The timeout test depends on `pgrep`; one `expect(...throwsA)` isn't awaited.
+  - Android: post-dispose `main.post` result calls, and init runs per plugin instance.
   - Android: a non-zero exit drops partial stdout and the real exit code; `version()` catches only `PlatformException`.
 - **Share on Android:** the initial share intent is re-read after the activity is recreated; share snack bars may sit under the mini-player; the share path in `main.dart` is untested; a second shared link stacks a second dialog.
 - **Import and sync:**
