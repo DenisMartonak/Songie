@@ -452,7 +452,7 @@ void main() {
     e.queued(['y1']);
     e.wait(e.service.start());
     e.fail('y1', networkError);
-    expect(e.snap.pause?.reason, DownloadPauseReason.throttled);
+    expect(e.snap.pause?.reason, DownloadPauseReason.retrying);
     expect(e.snap.pause?.resumesAt, e.base.add(const Duration(seconds: 30)));
     expect(e.row('y1')!.state, 'queued');
     e.elapse(const Duration(seconds: 29));

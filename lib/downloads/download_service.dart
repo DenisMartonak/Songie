@@ -15,13 +15,14 @@ import '../youtube/ytdlp_client.dart';
 import 'download_notifier.dart';
 import 'download_repository.dart';
 
-/// `throttled` is the backoff wait (with a `resumesAt`): after an HTTP 429,
-/// or after a network error while the device still reports a connection.
-/// `offline` is only for a device that reports no connection.
-enum DownloadPauseReason { wifiOnly, offline, throttled, diskFull }
+/// `throttled` is the backoff wait after an HTTP 429; `retrying` is the same
+/// wait after a network error while the device still reports a connection.
+/// Both carry a `resumesAt`. `offline` is only for a device that reports no
+/// connection.
+enum DownloadPauseReason { wifiOnly, offline, throttled, retrying, diskFull }
 
 /// Why the queue is not starting downloads, and when it resumes by itself
-/// (only for [DownloadPauseReason.throttled]).
+/// (only for [DownloadPauseReason.throttled] and [DownloadPauseReason.retrying]).
 class DownloadPause {
   const DownloadPause(this.reason, {this.resumesAt});
 
@@ -227,6 +228,7 @@ class DownloadService {
   bool _offline = false;
   bool _diskFull = false;
   DateTime? _throttledUntil;
+  DownloadPauseReason _throttleReason = DownloadPauseReason.throttled;
   int _backoffStep = 0;
   Timer? _backoff;
   bool _extractorFailing = false;
@@ -390,7 +392,7 @@ class DownloadService {
     if (_diskFull) return const DownloadPause(DownloadPauseReason.diskFull);
     final until = _throttledUntil;
     if (until != null) {
-      return DownloadPause(DownloadPauseReason.throttled, resumesAt: until);
+      return DownloadPause(_throttleReason, resumesAt: until);
     }
     return null;
   }
@@ -561,7 +563,7 @@ class DownloadService {
         await _repo.removeFiles([id], _ytDir);
         _deleteParts(job.videoId);
       case YtErrorKind.throttled:
-        _throttle();
+        _throttle(DownloadPauseReason.throttled);
         await _requeue(id);
       case YtErrorKind.network:
         // Really offline: wait for the connection. Otherwise (a blip, a
@@ -570,7 +572,7 @@ class DownloadService {
           _offline = true;
           _update();
         } else {
-          _throttle();
+          _throttle(DownloadPauseReason.retrying);
         }
         await _requeue(id);
       case YtErrorKind.diskFull:
@@ -625,8 +627,9 @@ class DownloadService {
 
   // --- throttling ----------------------------------------------------------
 
-  void _throttle() {
+  void _throttle(DownloadPauseReason reason) {
     if (_throttledUntil != null) return; // already waiting
+    _throttleReason = reason;
     final delay = Duration(
       seconds: math.min(
         _firstBackoff.inSeconds << _backoffStep,

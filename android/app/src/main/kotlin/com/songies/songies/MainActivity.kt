@@ -8,6 +8,7 @@ class MainActivity : AudioServiceActivity() {
     private var ytDlp: YtDlpPlugin? = null
     private var share: SharePlugin? = null
     private var folderPicker: FolderPickerPlugin? = null
+    private var downloadNotifier: DownloadNotifierPlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -15,6 +16,7 @@ class MainActivity : AudioServiceActivity() {
         ytDlp = YtDlpPlugin(applicationContext, messenger)
         share = SharePlugin(messenger, intent)
         folderPicker = FolderPickerPlugin(this, messenger)
+        downloadNotifier = DownloadNotifierPlugin(applicationContext, messenger)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -22,6 +24,7 @@ class MainActivity : AudioServiceActivity() {
         ytDlp = null
         share = null
         folderPicker = null
+        downloadNotifier = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 

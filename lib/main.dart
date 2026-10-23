@@ -14,6 +14,8 @@ import 'core/paths.dart';
 import 'data/database.dart';
 import 'data/settings_repository.dart';
 import 'data/sync_stamp.dart';
+import 'downloads/android_download_notifier.dart';
+import 'downloads/download_notifier.dart';
 import 'downloads/download_repository.dart';
 import 'downloads/download_service.dart';
 import 'library/art_cache.dart';
@@ -107,6 +109,9 @@ Future<void> main() async {
   // Downloads: start() only resumes work already queued; nothing runs when
   // the queue is empty.
   final downloadRepo = DownloadRepository(db);
+  final DownloadNotifier downloadNotifier = Platform.isAndroid
+      ? AndroidDownloadNotifier()
+      : const NoopDownloadNotifier();
   final downloads = DownloadService(
     repo: downloadRepo,
     client: ytClient,
@@ -115,6 +120,7 @@ Future<void> main() async {
     ytDir: paths.libraryYt,
     concurrency: Platform.isAndroid ? 2 : 3,
     wifiOnlyFallback: Platform.isAndroid,
+    notifier: downloadNotifier,
     onDownloaded: (trackId, d) async {
       await library.updateTrackMetadata(
         trackId,
@@ -171,6 +177,7 @@ Future<void> main() async {
         ytDlpRunnerProvider.overrideWithValue(runner),
         ytImportServiceProvider.overrideWithValue(ytImport),
         downloadRepositoryProvider.overrideWithValue(downloadRepo),
+        downloadNotifierProvider.overrideWithValue(downloadNotifier),
         downloadServiceProvider.overrideWithValue(downloads),
       ],
       child: SongiesApp(router: router),

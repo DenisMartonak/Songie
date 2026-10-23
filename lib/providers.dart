@@ -6,6 +6,8 @@ import 'core/paths.dart';
 import 'data/database.dart';
 import 'data/settings_repository.dart';
 import 'data/sync_stamp.dart';
+import 'downloads/android_download_notifier.dart';
+import 'downloads/download_notifier.dart';
 import 'downloads/download_repository.dart';
 import 'downloads/download_service.dart';
 import 'library/art_cache.dart';
@@ -222,6 +224,14 @@ final playlistRowProvider = StreamProvider.autoDispose
 /// instance the queue uses.
 final downloadRepositoryProvider = Provider<DownloadRepository>(
   (ref) => DownloadRepository(ref.watch(databaseProvider)),
+);
+
+/// Shows the queue outside the app: the Android notification, nothing on
+/// desktop. `main()` overrides it with the instance the queue uses.
+final downloadNotifierProvider = Provider<DownloadNotifier>(
+  (ref) => ref.watch(isAndroidProvider)
+      ? AndroidDownloadNotifier()
+      : const NoopDownloadNotifier(),
 );
 
 /// The YouTube download queue.
