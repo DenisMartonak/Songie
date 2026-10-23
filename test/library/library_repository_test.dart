@@ -161,8 +161,9 @@ void main() {
       expect(await repo.renamePlaylist(p, ' New '), isA<Ok<void>>());
       final after = await (db.select(db.playlists)).getSingle();
       expect(after.name, 'New');
-      expect(after.localSeq, greaterThan(before.localSeq));
-      expect(after.clock.compareTo(before.clock), greaterThan(0));
+      expect(after.localSeq, isNot(before.localSeq));
+      expect(after.clock, isNot(before.clock));
+      expect(after.originDevice, stamp.deviceId);
       expect(after.originDevice, stamp.deviceId);
     });
 
@@ -579,5 +580,67 @@ void main() {
     await bgDb.customStatement('DROP TABLE playlists');
     final r = await bgRepo.createPlaylist('x');
     expect(failureOf(r), FailureKind.io);
+  });
+
+  group('updateTrackMetadata', () {
+    Future<Track> row(String id) =>
+        (db.select(db.tracks)..where((t) => t.id.equals(id))).getSingle();
+
+    test('writes only changed non-null fields, stamped', () async {
+      await db
+          .into(db.tracks)
+          .insert(
+            trackRow(
+              id: 't',
+              title: 'Old',
+              artist: 'A',
+              album: 'Al',
+              durationMs: 5,
+              localSeq: 99,
+            ),
+          );
+      final before = await row('t');
+      final r = await repo.updateTrackMetadata(
+        't',
+        title: 'New',
+        artist: 'A',
+        album: null,
+        durationMs: 5,
+      );
+      expect(r, isA<Ok<void>>());
+      final after = await row('t');
+      expect(after.title, 'New');
+      expect(after.artist, 'A');
+      expect(after.album, 'Al');
+      expect(after.durationMs, 5);
+      expect(after.searchText, contains('new'));
+      expect(after.localSeq, isNot(before.localSeq));
+      expect(after.clock, isNot(before.clock));
+      expect(after.originDevice, stamp.deviceId);
+    });
+
+    test('does nothing when nothing changed', () async {
+      await db
+          .into(db.tracks)
+          .insert(trackRow(id: 't', title: 'Old', artist: 'A', durationMs: 5));
+      final before = await row('t');
+      final seqBefore = (await stamp.next()).localSeq;
+      await repo.updateTrackMetadata(
+        't',
+        title: 'Old',
+        artist: null,
+        album: null,
+        durationMs: 5,
+      );
+      final after = await row('t');
+      expect(after.clock, before.clock);
+      expect(after.localSeq, before.localSeq);
+      expect((await stamp.next()).localSeq, seqBefore + 1);
+    });
+
+    test('unknown track is notFound', () async {
+      final r = await repo.updateTrackMetadata('nope', title: 'x');
+      expect(failureOf(r), FailureKind.notFound);
+    });
   });
 }

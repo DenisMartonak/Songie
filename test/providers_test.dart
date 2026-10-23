@@ -6,7 +6,7 @@ import 'package:songies/providers.dart';
 
 import 'helpers/fake_audio_backend.dart';
 
-class _NoResolver implements TrackResolver {
+class _NoResolver extends TrackResolver {
   @override
   Future<Never> resolve(track) => throw UnimplementedError();
 }

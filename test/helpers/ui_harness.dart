@@ -25,7 +25,7 @@ import 'fake_audio_backend.dart';
 import 'test_db.dart';
 
 /// Resolves every track to a (fake) file so playback "works".
-class _FileResolver implements TrackResolver {
+class _FileResolver extends TrackResolver {
   @override
   Future<Result<AudioSourceRef>> resolve(Track t) async =>
       Ok(FileSource('/music/${t.id}.mp3'));

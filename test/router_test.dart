@@ -23,7 +23,7 @@ import 'package:songies/theme/theme_spec.dart';
 
 import 'helpers/fake_audio_backend.dart';
 
-class _NoTracks implements TrackResolver {
+class _NoTracks extends TrackResolver {
   @override
   Future<Result<AudioSourceRef>> resolve(Track t) async =>
       Err(Failure(FailureKind.notFound, 'none'));

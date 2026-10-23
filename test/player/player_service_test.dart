@@ -26,7 +26,7 @@ Track track(String id, {int durationMs = 0}) => Track(
 );
 
 /// Resolves every track to `/music/<id>.mp3` unless listed in [missing].
-class FakeResolver implements TrackResolver {
+class FakeResolver extends TrackResolver {
   final Set<String> missing = {};
   final List<String> resolved = [];
   Completer<void>? gate;

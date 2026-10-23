@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../core/fractional_index.dart';
 import '../core/result.dart';
+import '../core/text_normalize.dart';
 import '../data/database.dart';
 import '../data/db_guard.dart';
 import '../data/sync_stamp.dart';
@@ -382,6 +383,54 @@ class LibraryRepository {
       )..where((e) => e.id.equals(entryId))).write(
         PlaylistEntriesCompanion(
           trackId: Value(trackId),
+          clock: Value(stamp.clock),
+          originDevice: Value(stamp.originDevice),
+          localSeq: Value(stamp.localSeq),
+        ),
+      );
+      return const Ok(null);
+    });
+  }
+
+  /// Updates rough metadata of a track (e.g. from a resolved stream). Only
+  /// non-null fields that differ from the stored value are written, stamped;
+  /// nothing is written (and no stamp issued) when nothing changed.
+  Future<Result<void>> updateTrackMetadata(
+    String trackId, {
+    String? title,
+    String? artist,
+    String? album,
+    int? durationMs,
+  }) {
+    return guardDb(_db, () async {
+      final t = await trackById(trackId);
+      if (t == null) return _notFound('track $trackId');
+      final newTitle = title != null && title != t.title ? title : null;
+      final newArtist = artist != null && artist != t.artist ? artist : null;
+      final newAlbum = album != null && album != t.album ? album : null;
+      final newDuration = durationMs != null && durationMs != t.durationMs
+          ? durationMs
+          : null;
+      if (newTitle == null &&
+          newArtist == null &&
+          newAlbum == null &&
+          newDuration == null) {
+        return const Ok(null);
+      }
+      final stamp = await _stamp.next();
+      await (_db.update(_db.tracks)..where((r) => r.id.equals(trackId))).write(
+        TracksCompanion(
+          title: Value.absentIfNull(newTitle),
+          artist: Value.absentIfNull(newArtist),
+          album: Value.absentIfNull(newAlbum),
+          durationMs: Value.absentIfNull(newDuration),
+          searchText: newTitle != null || newArtist != null
+              ? Value(
+                  normalizeForSearch(
+                    '${newTitle ?? t.title} ${newArtist ?? t.artist}',
+                  ),
+                )
+              : const Value.absent(),
           clock: Value(stamp.clock),
           originDevice: Value(stamp.originDevice),
           localSeq: Value(stamp.localSeq),

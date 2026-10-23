@@ -18,19 +18,27 @@ final class FileSource extends AudioSourceRef {
   String toString() => 'FileSource($path)';
 }
 
-/// A remote stream (used by Plan 2).
+/// A remote stream, with the HTTP headers the server expects.
 final class UrlSource extends AudioSourceRef {
-  const UrlSource(this.url);
+  const UrlSource(this.url, {this.headers = const {}});
   final Uri url;
+  final Map<String, String> headers;
 
   @override
-  bool operator ==(Object other) => other is UrlSource && other.url == url;
+  bool operator ==(Object other) =>
+      other is UrlSource &&
+      other.url == url &&
+      other.headers.length == headers.length &&
+      headers.entries.every((e) => other.headers[e.key] == e.value);
 
   @override
-  int get hashCode => url.hashCode;
+  int get hashCode => Object.hash(
+    url,
+    Object.hashAllUnordered(headers.entries.map((e) => (e.key, e.value))),
+  );
 
   @override
-  String toString() => 'UrlSource($url)';
+  String toString() => 'UrlSource($url, ${headers.length} headers)';
 }
 
 /// A snapshot of what the audio engine is doing.

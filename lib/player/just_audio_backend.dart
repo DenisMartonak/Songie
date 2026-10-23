@@ -97,7 +97,10 @@ class JustAudioBackend implements AudioBackend {
   Future<void> setSource(AudioSourceRef s) async {
     final source = switch (s) {
       FileSource(:final path) => AudioSource.file(path),
-      UrlSource(:final url) => AudioSource.uri(url),
+      UrlSource(:final url, :final headers) => AudioSource.uri(
+        url,
+        headers: headers.isEmpty ? null : headers,
+      ),
     };
     await _player.setAudioSource(source);
   }

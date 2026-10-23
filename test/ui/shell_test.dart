@@ -44,13 +44,13 @@ Track track(String id) => Track(
   searchText: 'title $id artist',
 );
 
-class _Resolver implements TrackResolver {
+class _Resolver extends TrackResolver {
   @override
   Future<Result<AudioSourceRef>> resolve(Track t) async =>
       Ok(FileSource('/music/${t.id}.mp3'));
 }
 
-class _MissingResolver implements TrackResolver {
+class _MissingResolver extends TrackResolver {
   @override
   Future<Result<AudioSourceRef>> resolve(Track t) async =>
       Err(Failure(FailureKind.notFound, 'gone'));

@@ -8,12 +8,20 @@ import 'package:songies/player/audio_backend.dart';
 
 /// Turns a [Track] into something an [AudioBackend] can load.
 abstract class TrackResolver {
+  const TrackResolver();
+
   Future<Result<AudioSourceRef>> resolve(Track t);
+
+  /// Warms whatever [resolve] will need soon (e.g. a stream URL). Never throws.
+  Future<void> prefetch(Track t) async {}
+
+  /// Forgets cached work for [t] so the next [resolve] starts afresh.
+  void invalidate(Track t) {}
 }
 
 /// Resolves tracks through their `LocalFiles` row; fails with
 /// [FailureKind.notFound] when there is no row or the file is gone.
-class LocalTrackResolver implements TrackResolver {
+class LocalTrackResolver extends TrackResolver {
   LocalTrackResolver(this._db);
 
   final AppDatabase _db;

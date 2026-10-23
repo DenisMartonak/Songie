@@ -20,7 +20,7 @@ import 'package:songies/ui/widgets/page_surface.dart';
 
 import '../helpers/fake_audio_backend.dart';
 
-class _Resolver implements TrackResolver {
+class _Resolver extends TrackResolver {
   @override
   Future<Result<AudioSourceRef>> resolve(Track t) async =>
       Ok(FileSource('/music/${t.id}.mp3'));

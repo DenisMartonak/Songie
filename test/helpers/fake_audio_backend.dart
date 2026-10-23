@@ -10,6 +10,9 @@ import 'package:songies/player/audio_backend.dart';
 class FakeAudioBackend implements AudioBackend {
   final List<String> calls = [];
 
+  /// Headers of each `setSource` of a [UrlSource], in order (empty for files).
+  final List<Map<String, String>> sourceHeaders = [];
+
   /// Make the next call to the named method (e.g. `setSource`) throw once.
   final Set<String> failNext = {};
 
@@ -83,6 +86,10 @@ class FakeAudioBackend implements AudioBackend {
       UrlSource(:final url) => url.toString(),
     };
     calls.add('setSource:$label');
+    sourceHeaders.add(switch (s) {
+      UrlSource(:final headers) => headers,
+      _ => const {},
+    });
     _maybeFail('setSource');
     onSetSource?.call(s);
     emit(
