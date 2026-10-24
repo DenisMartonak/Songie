@@ -801,6 +801,29 @@ void main() {
       expect(fill, colors.text.withAlpha(13));
     });
 
+    testWidgets('the selected playlist row fill comes from the theme text '
+        '(light themes)', (tester) async {
+      final light = ThemeSpec.builtInDefault.copyWith(
+        base: 'light',
+        background: const Color(0xFFFFFFFF),
+        surface: const Color(0xFFF2F2F2),
+        text: const Color(0xFF111111),
+      );
+      await pumpApp(tester, desktop, theme: light);
+      final colors = colorsOf(tester, Sidebar);
+      await tester.tap(find.byKey(const Key('sidebar.playlist.p1')));
+      await tester.pumpAndSettle();
+      final fill =
+          (tester
+                      .widget<Container>(
+                        find.byKey(const Key('sidebar.fill.playlist.p1')),
+                      )
+                      .decoration!
+                  as BoxDecoration)
+              .color!;
+      expect(fill, colors.text.withAlpha(20));
+    });
+
     testWidgets('on a playlist page only the playlist row has the bar', (
       tester,
     ) async {

@@ -1,6 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:songies/theme/app_theme.dart';
+import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/motion/motion.dart';
 import 'package:songies/ui/motion/pressable.dart';
 
@@ -129,6 +131,31 @@ void main() {
     expect(
       tester.widget<InkWell>(ink()).hoverColor,
       Colors.white.withValues(alpha: 0.04),
+    );
+  });
+
+  testWidgets('the hover highlight comes from the theme text (light themes)', (
+    tester,
+  ) async {
+    final light = ThemeSpec.builtInDefault.copyWith(
+      base: 'light',
+      background: const Color(0xFFF5F5F5),
+      surface: const Color(0xFFFFFFFF),
+      text: const Color(0xFF121212),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildThemeData(light),
+        home: Scaffold(
+          body: Center(
+            child: Pressable(onTap: () {}, child: const Text('Press me')),
+          ),
+        ),
+      ),
+    );
+    expect(
+      tester.widget<InkWell>(ink()).hoverColor,
+      const Color(0xFF121212).withValues(alpha: 0.04),
     );
   });
 

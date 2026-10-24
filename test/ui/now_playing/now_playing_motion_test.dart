@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/contrast.dart';
+import 'package:songies/theme/cover_palette.dart';
+import 'package:songies/theme/theme_service.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/motion/equalizer_bars.dart';
 import 'package:songies/ui/motion/motion.dart';
@@ -518,6 +520,58 @@ void main() {
         final label = Color.alphaBlend(c.text.withAlpha(179), worst);
         expect(contrastRatio(label, worst), greaterThanOrEqualTo(4.5));
         expect(contrastRatio(c.text, worst), greaterThanOrEqualTo(4.5));
+      }
+    });
+
+    test('a light follow-cover theme reads at the top, blur on and off, '
+        'and its scrim leaves the cover visible', () {
+      const light = ThemeSpec(
+        base: 'light',
+        background: Color(0xFFF5F5F5),
+        surface: Color(0xFFFFFFFF),
+        text: Color(0xFF121212),
+        accent: Color(0xFF117A37),
+        followCover: true,
+        glowStrength: 0.4,
+        cornerRadius: 6,
+        fontFamily: 'Inter',
+        fontFileHash: null,
+        fontScale: 1.0,
+        blurNowPlaying: true,
+      );
+      const palettes = [
+        CoverPalette(
+          dominant: Color(0xFF0A1A3A),
+          vibrant: Color(0xFF1E3A8A),
+          muted: Color(0xFF3A4A6A),
+        ),
+        CoverPalette(
+          dominant: Color(0xFFB00020),
+          vibrant: Color(0xFFE53935),
+          muted: Color(0xFF8A5A5A),
+        ),
+        CoverPalette(
+          dominant: Color(0xFFF3E9B5),
+          vibrant: Color(0xFFFFD54F),
+          muted: Color(0xFFD8CFA0),
+        ),
+      ];
+      void expectReadable(SongiesColors c, Color bg) {
+        final label = Color.alphaBlend(c.text.withAlpha(179), bg);
+        expect(contrastRatio(c.text, bg), greaterThanOrEqualTo(4.5));
+        expect(contrastRatio(label, bg), greaterThanOrEqualTo(4.5));
+      }
+
+      for (final palette in palettes) {
+        final blurOn = songiesColorsFor(light, palette: palette);
+        expectReadable(blurOn, blurWorstCaseTop(blurOn));
+        expect(blurScrim(blurOn).a, lessThan(1));
+
+        final blurOff = songiesColorsFor(
+          light.copyWith(blurNowPlaying: false),
+          palette: palette,
+        );
+        expectReadable(blurOff, blurOff.nowPlayingTop);
       }
     });
 

@@ -27,22 +27,25 @@ class SongiesColors extends ThemeExtension<SongiesColors> {
   factory SongiesColors.fromSpec(ThemeSpec spec, {String? fontFamily}) {
     final accent = spec.accent;
     final glow = accent.withValues(alpha: spec.glowStrength);
+    final text = readableOn(spec.background, preferred: spec.text);
     return SongiesColors(
       background: spec.background,
       surface: spec.surface,
-      text: readableOn(spec.background, preferred: spec.text),
-      mutedText: spec.mutedText,
+      text: text,
+      // Derived from the readable text, as ThemeSpec.mutedText is from the
+      // spec's own.
+      mutedText: Color.lerp(text, spec.background, mutedTextMix)!,
       accent: accent,
       glow: glow,
       miniPlayer: Color.alphaBlend(
         accent.withValues(alpha: 0.25),
         spec.surface,
       ),
-      // A cover-following theme tops it with the darkened accent (the cover's
-      // dominant colour once known); the others keep the soft glow fading
-      // into the background.
+      // A cover-following theme tops it with the accent (the cover's
+      // dominant colour once known) blended into the background; the others
+      // keep the soft glow fading into the background.
       nowPlayingTop: spec.followCover
-          ? darken(accent)
+          ? nowPlayingTopFor(accent, background: spec.background, text: text)
           : Color.alphaBlend(glow, spec.background),
       nowPlayingBottom: spec.background,
       radius: spec.cornerRadius,
@@ -159,10 +162,29 @@ class SongiesColors extends ThemeExtension<SongiesColors> {
   );
 }
 
-/// [c] darkened by [amount] (0..1) towards black; used for the top of the
-/// Now Playing gradient.
+/// [c] darkened by [amount] (0..1) towards black; used by the theme
+/// preview's accent swatch.
 Color darken(Color c, [double amount = 0.55]) =>
     Color.lerp(c, const Color(0xFF000000), amount)!;
+
+/// The top of a cover-following theme's Now Playing gradient: [source] (the
+/// accent or the cover's dominant colour) blended 55 % into [background],
+/// then further until [text] and the header's 70 % label reach 4.5:1 on it.
+/// On a dark base this is close to darkening; on a light one it lightens.
+Color nowPlayingTopFor(
+  Color source, {
+  required Color background,
+  required Color text,
+}) {
+  bool readable(Color c) =>
+      contrastRatio(text, c) >= 4.5 &&
+      contrastRatio(Color.alphaBlend(text.withAlpha(179), c), c) >= 4.5;
+  for (var step = 11; step < 20; step++) {
+    final c = Color.lerp(source, background, step / 20)!;
+    if (readable(c)) return c;
+  }
+  return background;
+}
 
 /// Builds the [ThemeData] for [spec] (light for the light base, else dark),
 /// from [colors] when given (e.g. cover-derived ones), else from the spec

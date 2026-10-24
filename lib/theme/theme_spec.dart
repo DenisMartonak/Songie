@@ -74,7 +74,7 @@ class ThemeSpec {
 
   /// Secondary text: [text] mixed a little over a third of the way towards
   /// [background] (#a7a7a7 for white on charcoal). Derived, never stored.
-  Color get mutedText => Color.lerp(text, background, _mutedMix)!;
+  Color get mutedText => Color.lerp(text, background, mutedTextMix)!;
   final Color accent;
   final bool followCover;
   final double glowStrength;
@@ -84,9 +84,16 @@ class ThemeSpec {
   final double fontScale;
   final bool blurNowPlaying;
 
+  /// The allowed `glowStrength`, `cornerRadius` and `fontScale`, inclusive.
+  static const (double, double) glowRange = (0, 1);
+  static const (double, double) cornerRadiusRange = (0, 24);
+  static const (double, double) fontScaleRange = (0.85, 1.3);
+
   /// Throws [FormatException] when a required key is missing or has the wrong
   /// type or format. `fontFileHash` may be absent or null. A `mutedText` key
-  /// (written by older versions) is ignored.
+  /// (written by older versions) is ignored. Numbers outside their range are
+  /// clamped into it and every colour is made fully opaque, so a stored or
+  /// synced row can never make the app transparent or its text huge.
   factory ThemeSpec.fromJson(Map<String, dynamic> json) {
     T req<T>(String key) {
       final v = json[key];
@@ -100,6 +107,9 @@ class ThemeSpec {
     }
 
     double number(String key) => req<num>(key).toDouble();
+
+    double clamp(double v, (double, double) range) =>
+        v.isNaN ? range.$1 : v.clamp(range.$1, range.$2);
 
     Color color(String key) => _parseColor(key, req<String>(key));
 
@@ -115,11 +125,11 @@ class ThemeSpec {
       text: color('text'),
       accent: color('accent'),
       followCover: req<bool>('followCover'),
-      glowStrength: number('glowStrength'),
-      cornerRadius: number('cornerRadius'),
+      glowStrength: clamp(number('glowStrength'), glowRange),
+      cornerRadius: clamp(number('cornerRadius'), cornerRadiusRange),
       fontFamily: req<String>('fontFamily'),
       fontFileHash: hash as String?,
-      fontScale: number('fontScale'),
+      fontScale: clamp(number('fontScale'), fontScaleRange),
       blurNowPlaying: req<bool>('blurNowPlaying'),
     );
   }
@@ -200,8 +210,9 @@ class ThemeSpec {
   );
 }
 
-// White on #121212 mixes to exactly #a7a7a7: 255 - 88 = 167.
-const double _mutedMix = 88 / 237;
+/// How far muted text mixes from the text towards the background. White on
+/// #121212 mixes to exactly #a7a7a7: 255 - 88 = 167.
+const double mutedTextMix = 88 / 237;
 
 /// `#rrggbb`, or `#aarrggbb` when the colour is not fully opaque.
 String _formatColor(Color c) {
@@ -216,7 +227,6 @@ Color _parseColor(String key, String s) {
   if (!_colorPattern.hasMatch(s)) {
     throw FormatException('Theme key "$key" is not a #rrggbb colour', s);
   }
-  final digits = s.substring(1);
-  final value = int.parse(digits, radix: 16);
-  return Color(digits.length == 6 ? 0xFF000000 | value : value);
+  // An 8-digit colour's alpha is dropped: theme colours are always opaque.
+  return Color(0xFF000000 | int.parse(s.substring(1), radix: 16) & 0xFFFFFF);
 }

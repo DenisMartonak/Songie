@@ -33,6 +33,16 @@ const _blue = CoverPalette(
   vibrant: Color(0xFF2979FF),
   muted: Color(0xFF5A6A8A),
 );
+const _navy = CoverPalette(
+  dominant: Color(0xFF0A1A3A),
+  vibrant: Color(0xFF1E3A8A),
+  muted: Color(0xFF3A4A6A),
+);
+const _pale = CoverPalette(
+  dominant: Color(0xFFF3E9B5),
+  vibrant: Color(0xFFFFD54F),
+  muted: Color(0xFFD8CFA0),
+);
 const _grey = CoverPalette(
   dominant: Color(0xFF777777),
   vibrant: Color(0xFF888888),
@@ -89,7 +99,7 @@ void main() {
         c.miniPlayer,
         Color.alphaBlend(_red.vibrant.withValues(alpha: 0.3), glow.surface),
       );
-      expect(c.nowPlayingTop, Color.lerp(_red.dominant, Colors.black, 0.55));
+      expect(c.nowPlayingTop, Color.lerp(_red.dominant, bg, 0.55));
       expect(c.nowPlayingBottom, bg);
     });
 
@@ -110,7 +120,32 @@ void main() {
       final c = songiesColorsFor(glow);
       expect(c.accent, glow.accent);
       expect(c.glow, glow.accent.withValues(alpha: glow.glowStrength));
-      expect(c.nowPlayingTop, Color.lerp(glow.accent, Colors.black, 0.55));
+      expect(c.nowPlayingTop, Color.lerp(glow.accent, bg, 0.55));
+    });
+
+    test('a light follow-cover theme keeps the top of Now Playing readable '
+        'for dark, vivid and light covers', () {
+      const light = ThemeSpec(
+        base: 'light',
+        background: Color(0xFFF5F5F5),
+        surface: Color(0xFFFFFFFF),
+        text: Color(0xFF121212),
+        accent: Color(0xFF117A37),
+        followCover: true,
+        glowStrength: 0.4,
+        cornerRadius: 6,
+        fontFamily: 'Inter',
+        fontFileHash: null,
+        fontScale: 1.0,
+        blurNowPlaying: false,
+      );
+      for (final palette in [_navy, _red, _pale]) {
+        final c = songiesColorsFor(light, palette: palette);
+        final top = c.nowPlayingTop;
+        final label = Color.alphaBlend(c.text.withAlpha(179), top);
+        expect(contrastRatio(c.text, top), greaterThanOrEqualTo(4.5));
+        expect(contrastRatio(label, top), greaterThanOrEqualTo(4.5));
+      }
     });
 
     test('the resolved font family is carried', () {

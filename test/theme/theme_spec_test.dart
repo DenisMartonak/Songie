@@ -39,7 +39,11 @@ void main() {
       final json = x.toJson();
       expect(json['accent'], '#80112233');
       expect(json['background'], '#121212');
-      expect(ThemeSpec.fromJson(json), x);
+      // Loading makes the colour opaque (see 'every colour loads opaque').
+      expect(
+        ThemeSpec.fromJson(json),
+        x.copyWith(accent: const Color(0xFF112233)),
+      );
     });
 
     test('uses exactly the spec keys (mutedText is derived, not stored)', () {
@@ -96,6 +100,41 @@ void main() {
     test('a wrongly typed value throws FormatException', () {
       final json = ThemeSpec.builtInDefault.toJson()..['cornerRadius'] = 'x';
       expect(() => ThemeSpec.fromJson(json), throwsFormatException);
+    });
+
+    test('out-of-range numbers are clamped on load', () {
+      final high = ThemeSpec.fromJson(
+        ThemeSpec.builtInDefault.toJson()
+          ..['glowStrength'] = 3
+          ..['cornerRadius'] = 99
+          ..['fontScale'] = 4,
+      );
+      expect(high.glowStrength, 1);
+      expect(high.cornerRadius, 24);
+      expect(high.fontScale, 1.3);
+      final low = ThemeSpec.fromJson(
+        ThemeSpec.builtInDefault.toJson()
+          ..['glowStrength'] = -1
+          ..['cornerRadius'] = -5
+          ..['fontScale'] = 0.1,
+      );
+      expect(low.glowStrength, 0);
+      expect(low.cornerRadius, 0);
+      expect(low.fontScale, 0.85);
+    });
+
+    test('every colour loads fully opaque', () {
+      final spec = ThemeSpec.fromJson(
+        ThemeSpec.builtInDefault.toJson()
+          ..['background'] = '#00121212'
+          ..['surface'] = '#802a2a2a'
+          ..['text'] = '#00ffffff'
+          ..['accent'] = '#101db954',
+      );
+      expect(spec.background, const Color(0xFF121212));
+      expect(spec.surface, const Color(0xFF2A2A2A));
+      expect(spec.text, const Color(0xFFFFFFFF));
+      expect(spec.accent, const Color(0xFF1DB954));
     });
 
     test('a missing fontFileHash is allowed', () {

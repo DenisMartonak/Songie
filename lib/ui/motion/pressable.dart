@@ -1,12 +1,13 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../theme/app_theme.dart';
 import 'motion.dart';
 
 /// Makes [child] tappable with a little physical feedback: it scales down to
 /// [pressedScale] over [Motion.quick] from the moment it is touched, keeps
-/// the ink ripple, and on desktop lightens the surface by 4 % under the
-/// mouse. A tap too quick to see still dips fully before scaling back. Like
+/// the ink ripple, and on desktop tints the surface with the text colour at
+/// 4 % under the mouse. A tap too quick to see still dips fully before scaling back. Like
 /// [InkWell], it needs a [Material] ancestor. With neither [onTap] nor
 /// [onLongPress] it is inert: no scale, ripple, hover, cursor or focus.
 class Pressable extends StatefulWidget {
@@ -27,8 +28,11 @@ class Pressable extends StatefulWidget {
   /// Clips the ripple and the hover highlight.
   final BorderRadius? borderRadius;
 
-  /// The hover highlight: white at 4 %.
-  static final Color hoverColor = Colors.white.withValues(alpha: 0.04);
+  /// The hover highlight: the theme's text colour (white without a Songies
+  /// theme) at 4 %, so it shows on light themes too.
+  static Color hoverColorOf(BuildContext context) =>
+      (Theme.of(context).extension<SongiesColors>()?.text ?? Colors.white)
+          .withValues(alpha: 0.04);
 
   @override
   State<Pressable> createState() => _PressableState();
@@ -124,7 +128,7 @@ class _PressableState extends State<Pressable>
           onLongPress: widget.onLongPress,
           // Lost to a scroll or a long press: let go now.
           onTapCancel: enabled ? _up : null,
-          hoverColor: Pressable.hoverColor,
+          hoverColor: Pressable.hoverColorOf(context),
           borderRadius: widget.borderRadius,
           child: widget.child,
         ),

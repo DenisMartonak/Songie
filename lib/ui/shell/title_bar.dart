@@ -233,7 +233,10 @@ class _WindowButton extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         onTap: onPressed,
-        hoverColor: hoverColor ?? Colors.white.withAlpha(26),
+        hoverColor:
+            hoverColor ??
+            (Theme.of(context).extension<SongiesColors>()?.text ?? Colors.white)
+                .withAlpha(26),
         child: SizedBox(
           width: 46,
           height: TitleBar.height,

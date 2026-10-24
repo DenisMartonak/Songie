@@ -21,7 +21,11 @@ SongiesColors songiesColorsFor(
     accent: ensureAccentContrast(vibrant, spec.background),
     glow: vibrant.withValues(alpha: spec.glowStrength),
     miniPlayer: Color.alphaBlend(vibrant.withValues(alpha: 0.3), spec.surface),
-    nowPlayingTop: darken(palette.dominant),
+    nowPlayingTop: nowPlayingTopFor(
+      palette.dominant,
+      background: spec.background,
+      text: own.text,
+    ),
   );
 }
 

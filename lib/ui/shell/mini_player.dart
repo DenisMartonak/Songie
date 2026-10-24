@@ -222,7 +222,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                 height: 2,
                 child: Container(
                   key: const Key('miniPlayer.track'),
-                  color: Colors.white.withAlpha(51),
+                  color: colors.text.withAlpha(51),
                   alignment: Alignment.centerLeft,
                   child: const _Progress(),
                 ),

@@ -84,8 +84,9 @@ class ThemeFile {
       if (specJson is! Map<String, dynamic>) {
         throw const FormatException('spec');
       }
+      // Before fromJson, which would clamp the numbers and drop the alpha.
+      _checkRanges(specJson);
       final spec = ThemeSpec.fromJson(specJson);
-      _checkRanges(spec);
       return Ok(
         ThemeFile(
           name: name.trim(),
@@ -99,14 +100,30 @@ class ThemeFile {
     }
   }
 
-  static void _checkRanges(ThemeSpec s) {
-    bool within(double v, double lo, double hi) =>
-        v.isFinite && v >= lo && v <= hi;
-    if (!_bases.contains(s.base) ||
-        !within(s.glowStrength, 0, 1) ||
-        !within(s.cornerRadius, 0, 24) ||
-        !within(s.fontScale, 0.85, 1.3) ||
-        s.fontFamily.trim().isEmpty) {
+  /// Rejects a raw spec whose base, numbers or font family are out of range,
+  /// or with a colour that is not fully opaque (a theme file is strict where
+  /// stored rows are clamped). Wrong types are left to [ThemeSpec.fromJson].
+  static void _checkRanges(Map<String, dynamic> s) {
+    bool within(String key, (double, double) range) {
+      final v = s[key];
+      return v is! num || (v.isFinite && v >= range.$1 && v <= range.$2);
+    }
+
+    bool opaque(String key) {
+      final v = s[key];
+      return v is! String ||
+          v.length != 9 ||
+          v.substring(1, 3).toLowerCase() == 'ff';
+    }
+
+    final base = s['base'];
+    final family = s['fontFamily'];
+    if ((base is String && !_bases.contains(base)) ||
+        !within('glowStrength', ThemeSpec.glowRange) ||
+        !within('cornerRadius', ThemeSpec.cornerRadiusRange) ||
+        !within('fontScale', ThemeSpec.fontScaleRange) ||
+        (family is String && family.trim().isEmpty) ||
+        !['background', 'surface', 'text', 'accent'].every(opaque)) {
       throw const FormatException('range');
     }
   }
@@ -205,8 +222,14 @@ class ThemeFiles {
         : file.name;
     final saved = await _themes.save(null, name, spec);
     if (saved is Err<String> && added != null) {
-      // Never half an import: drop the font this import brought.
-      await _fonts.removeImported(added.entry.fileHash);
+      // Never half an import: drop the font this import brought. The save
+      // most likely failed on the database, so this may fail too; the save's
+      // error is still the one the user sees.
+      try {
+        await _fonts.removeImported(added.entry.fileHash);
+      } catch (e) {
+        AppLog.w('Rolling back an imported theme font failed', e);
+      }
     }
     return saved;
   }

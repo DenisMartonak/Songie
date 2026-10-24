@@ -118,6 +118,12 @@ void main() {
       'a font scale out of range': withJson(
         good()..['spec'] = (custom.toJson()..['fontScale'] = 4),
       ),
+      'a glow strength out of range': withJson(
+        good()..['spec'] = (custom.toJson()..['glowStrength'] = 1.5),
+      ),
+      'a non-opaque colour': withJson(
+        good()..['spec'] = (custom.toJson()..['background'] = '#00121212'),
+      ),
       'a font without data': withJson(
         good()..['font'] = {'family': 'X', 'ext': 'ttf'},
       ),
@@ -273,6 +279,23 @@ void main() {
       expect(fonts.resolveFamily(_withFamily(custom, 'Fancy Sans')), 'Inter');
     });
 
+    test('a rollback that fails too still reports the save failure', () async {
+      final brokenFonts = _FailingRemove(
+        db,
+        stamp,
+        Directory(p.join(tmp.path, 'fonts')),
+      );
+      final failing = ThemeFiles(_FailingSave(db, stamp), brokenFonts);
+      final file = ThemeFile(
+        name: 'Fancy',
+        spec: custom,
+        font: ThemeFileFont(family: 'Fancy Sans', ext: 'ttf', bytes: fontBytes),
+      );
+
+      final r = await failing.import(file.encode());
+      expect(message(r), 'disk full');
+    });
+
     test('a failed save keeps a font that was already there', () async {
       final path = p.join(tmp.path, 'Fancy Sans.ttf');
       await File(path).writeAsBytes(fontBytes);
@@ -307,4 +330,14 @@ class _FailingSave extends ThemeRepository {
   @override
   Future<Result<String>> save(String? id, String name, ThemeSpec spec) async =>
       const Err(Failure(FailureKind.io, 'disk full'));
+}
+
+/// Font storage whose rollback fails, as when the database is unwritable.
+class _FailingRemove extends FontService {
+  _FailingRemove(super.db, super.stamp, super.dir)
+    : super(register: (_, _) async {});
+
+  @override
+  Future<void> removeImported(String fileHash) async =>
+      throw StateError('database is locked');
 }

@@ -114,9 +114,28 @@ void main() {
     }
   });
 
-  test('a follow-cover theme tops Now Playing with the darkened accent', () {
+  test('a follow-cover theme tops Now Playing with the accent blended into '
+      'the background', () {
     final c = SongiesColors.fromSpec(ThemeSpec.albumGlow);
-    expect(c.nowPlayingTop, Color.lerp(c.accent, Colors.black, 0.55));
+    expect(c.nowPlayingTop, Color.lerp(c.accent, c.background, 0.55));
+  });
+
+  test('a light follow-cover theme keeps the top of Now Playing readable', () {
+    final c = SongiesColors.fromSpec(lightSpec.copyWith(followCover: true));
+    final label = Color.alphaBlend(c.text.withAlpha(179), c.nowPlayingTop);
+    expect(contrastRatio(c.text, c.nowPlayingTop), greaterThanOrEqualTo(4.5));
+    expect(contrastRatio(label, c.nowPlayingTop), greaterThanOrEqualTo(4.5));
+  });
+
+  test('mutedText comes from the readable text, not the raw one', () {
+    // Light text on a light background: the text falls back to black, and
+    // the secondary text must follow it rather than vanish.
+    final c = SongiesColors.fromSpec(
+      lightSpec.copyWith(text: const Color(0xFFF0F0F0)),
+    );
+    expect(c.text, const Color(0xFF000000));
+    expect(c.mutedText, Color.lerp(c.text, c.background, 88 / 237));
+    expect(contrastRatio(c.mutedText, c.background), greaterThanOrEqualTo(4.5));
   });
 
   test('fontScale is left to the text scaler, not baked into sizes', () {

@@ -388,9 +388,10 @@ class _PlaylistRow extends ConsumerWidget {
         child: _HoverHighlight(
           highlightKey: Key('sidebar.hover.playlist.${playlist.id}'),
           child: Container(
+            key: Key('sidebar.fill.playlist.${playlist.id}'),
             height: height,
             decoration: BoxDecoration(
-              color: selected ? Colors.white.withAlpha(20) : null,
+              color: selected ? colors.text.withAlpha(20) : null,
               borderRadius: BorderRadius.circular(colors.radius),
             ),
             padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 8),
