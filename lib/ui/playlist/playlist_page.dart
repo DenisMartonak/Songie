@@ -89,11 +89,12 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     super.dispose();
   }
 
-  /// A pending import is over once its entries have arrived or failed.
+  /// A pending import is over once the entries stream answers with data
+  /// (even none: an import whose videos were all unavailable) or an error.
+  /// The import itself has finished before its page opens, so this answer
+  /// is its result.
   void _settlePendingImport(AsyncValue<List<PlaylistTrack>> entries) {
-    if (entries.hasError || (entries.value?.isNotEmpty ?? false)) {
-      _pendingImports.remove(_id);
-    }
+    if (entries.hasError || entries.hasValue) _pendingImports.remove(_id);
   }
 
   @override

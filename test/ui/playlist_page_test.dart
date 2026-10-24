@@ -762,6 +762,27 @@ void main() {
       expect(find.byType(Shimmer), findsNothing);
     });
 
+    uiTest('an import that brought no entries ends in the empty state', (
+      tester,
+    ) async {
+      final id = await real(tester, () => h.addPlaylist('All unavailable', []));
+      // Opened by the import dialog with the id already pending.
+      await pumpPage(
+        tester,
+        id,
+        extraOverrides: [
+          pendingImportsProvider.overrideWith(() => _SeededPending({id})),
+        ],
+      );
+      expect(find.byType(Shimmer), findsNothing);
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      expect(find.text('Add songs to get started'), findsOneWidget);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PlaylistPage)),
+      );
+      expect(container.read(pendingImportsProvider), isEmpty);
+    });
+
     uiTest('leaving the page clears its pending import', (tester) async {
       final id = await real(tester, () => h.addPlaylist('Importing', []));
       await pumpPage(tester, id);
@@ -941,4 +962,14 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'Add (1)'), findsOneWidget);
     });
   });
+}
+
+/// Pending imports that start with [initial].
+class _SeededPending extends PendingImports {
+  _SeededPending(this.initial);
+
+  final Set<String> initial;
+
+  @override
+  Set<String> build() => initial;
 }
