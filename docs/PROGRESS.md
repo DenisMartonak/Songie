@@ -1,14 +1,25 @@
 # Songies — Progress
 
-_Last updated: 2026-10-23_
+_Last updated: 2026-10-24_
 
-## Plan 3 (bug fixes + downloads) — in progress, stopped after Task 8
+## Plan 3 (bug fixes + downloads) — done and reviewed task by task; final whole-branch review still to come
 
-- **Branch:** `plan-3-downloads-fixes` (from `plan-2-youtube`). Plan: [Plan 3](superpowers/plans/2026-10-23-songies-plan-3-fixes-and-downloads.md). Plan 4 is written too: [Plan 4](superpowers/plans/2026-10-23-songies-plan-4-alive-ui-and-themes.md).
-- **Status:** Tasks 1–8 implemented and reviewed (tab roots, honest playback, sharp covers, Android folder picker, download data, yt-dlp downloads, download queue, Android download notification). Task 9 (download UI) and Task 10 (docs/builds) and the final review remain. 714 tests passing, analyze clean.
-- **Full record** (what was fixed, every ruling, deferred issues, phone checks): [plan-3-session-log.md](plan-3-session-log.md).
+- **Branch:** `plan-3-downloads-fixes` (from `plan-2-youtube`). Plan: [Plan 3](superpowers/plans/2026-10-23-songies-plan-3-fixes-and-downloads.md). Nothing is pushed or merged.
+- **Status:** Tasks 1–10 are implemented; Tasks 1–9 were reviewed by separate reviewers. **The final whole-branch review and its fix batch are still to come.** Tests: 762 passing, `flutter analyze` clean, `flutter build apk --release` and `flutter build linux --release` succeed (APK 79.0 MB). Windows is built on your PC.
+- **What it does now:**
+  - Home/Library/Search tabs always open their root.
+  - Playback no longer shows one song while playing another; failed songs show "Skipped …" and 3 in a row stop playback.
+  - Covers are sharp (maxres first, letterbox cut, stored at 720 px).
+  - Android has its own folder picker that says why it can't be used.
+  - Per-device Download switch beside "Sync with YouTube" in the playlist hero, with progress rings, per-song icons, an app-wide indicator and Downloads panel, a "Downloads failing — update yt-dlp?" banner and Settings → Downloads. Remove downloads? offers Keep files / Remove.
+  - Files go to `<appData>/library/yt/<videoId>.<ext>`; 2 at a time on Android, 3 on desktop; Wi-Fi only pauses on mobile data; 429 backs off 30 s → 10 min; offline pauses and resumes; full storage pauses.
+  - Android: a foreground-service notification ("Downloading songs · x of y", "Paused — waiting for Wi-Fi", "Downloads paused", "Downloaded n songs").
+- **Verification on Linux:** the in-app GUI could not be driven from the agent. Instead yt-dlp 2026.08.19 was run with the app's exact download args (format `bestaudio[acodec=opus]/bestaudio[ext=m4a]/bestaudio`, `--no-playlist --continue --no-mtime`, output `%(id)s.%(ext)s`) in a scratch directory for the first 3 songs of the test playlist (`PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI`): 3 `.webm` files (3.9 MB, 10.4 MB, 3.7 MB) downloaded. **Still a manual check for you:** the in-app Linux flow (files in `~/.local/share/songies/library/yt/`, `FileSource` log line on play, Remove deletes them); it is in [manual-test-checklist.md](manual-test-checklist.md).
+- **Rulings:** see [plan-3-session-log.md](plan-3-session-log.md) for the full list. Task 9 added: the Download toggle sits beside "Sync with YouTube" (the Play/Shuffle row overflowed 400 px phones); a user pause only blocks new slots (running downloads finish) and shows as "Paused" / "Downloads paused" via `DownloadPauseReason.user`; Settings → Downloads resumes any resumable pause; the singular "Remove downloads?" copy; the downloads banner is keyboard-reachable.
+- **Parked items (deferred minors):** the per-task lists in the session log, plus Task 9: banner/indicator heights are hardcoded in the phone overlay padding (covered by the 400 px shell test, phone check is yours); the status line rebuilds on each progress tick (needed for the combined fraction); `track_download_icon` catches `on Exception` where others catch `DownloadDbException`; "Retry failed" is always shown in the Downloads panel; no build-count test for the rebuild-scoping rule. Task 8 minors also remain (service restarts each update, stale "retrying in" text, "Downloaded 0 songs" after cancel-all, duplicated notifier choice, extra core-ktx dependency, stop/refused-flag edge cases).
+- **Next:** the final whole-branch review and fixes, then your device checks, then [Plan 4](superpowers/plans/2026-10-23-songies-plan-4-alive-ui-and-themes.md) (a living UI and the theme engine). Roadmap renumbered: Plan 5 = lyrics, Plan 6 = device sync, Plan 7 = packaging.
 - **To resume in a new Claude session:**
-  > Continue Songies Plan 3 subagent-driven on branch `plan-3-downloads-fixes`, starting at Task 9. Tasks 1–8 are done. Read docs/plan-3-session-log.md. Don't push or merge.
+  > Songies Plan 3 is implemented on branch `plan-3-downloads-fixes` (Tasks 1–10 done). Next: the final whole-branch review and its fixes, then start Plan 4. Read docs/plan-3-session-log.md. Don't push or merge.
 
 ## Plan 2 (YouTube) — done and reviewed, pending your device checks
 

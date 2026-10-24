@@ -109,6 +109,26 @@ Windows release build (left for the PC, because Plan 2 was verified on Nobara)
 - [ ] `flutter build windows --release` succeeds.
 - [ ] Idle RAM (Task Manager, paused, window open) is 150 MB or less. Record the number.
 
+## Plan 3: fixes and downloads
+
+Android downloads
+- [ ] Turning on a playlist download shows the notification with "x of y" and a progress bar.
+- [ ] Locking the phone mid-download keeps it running.
+- [ ] Wi-Fi off with Wi-Fi only on → "Paused — waiting for Wi-Fi", and it resumes when Wi-Fi returns.
+- [ ] Airplane mode → paused offline.
+- [ ] Finishing posts "Downloaded n songs".
+- [ ] Downloaded songs play in airplane mode.
+
+Linux downloads (in-app; only the yt-dlp part was checked headlessly, see PROGRESS.md)
+- [ ] Import the known test playlist, turn on Download beside "Sync with YouTube", wait for 3 songs to finish. `.webm`/`.m4a` files exist in `~/.local/share/songies/library/yt/`.
+- [ ] Playing a downloaded song uses the file (log line `FileSource`).
+- [ ] Turning the download off with **Remove** deletes the files.
+
+All platforms
+- [ ] Home/Library always open their root.
+- [ ] Skipping shows "Skipped …".
+- [ ] Covers are sharp on Now Playing.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.
