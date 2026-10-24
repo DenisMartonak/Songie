@@ -129,6 +129,26 @@ All platforms
 - [ ] Skipping shows "Skipped …".
 - [ ] Covers are sharp on Now Playing.
 
+## Plan 4: a living UI and themes
+
+Colours, motion and battery
+- [ ] Colours follow each new song within a second, smoothly.
+- [ ] Skipping fast never shows a skipped song's colours.
+- [ ] Paused Now Playing for 5 minutes → the battery/CPU graph is flat (Android) / CPU use < 1 % (desktop task manager).
+- [ ] Reduce animations removes motion.
+
+Themes and fonts
+- [ ] Importing a font works, and a non-font file is refused.
+- [ ] A theme exported on one device imports on another.
+- [ ] The three built-ins look as specified.
+
+From the task reviews
+- [ ] Outfit and JetBrains Mono show real bold weights.
+- [ ] Now Playing: dragging it down shows the app underneath; rotating the phone mid-drag and pressing Back mid-drag freeze nothing; the blur stays smooth while dragging (performance overlay).
+- [ ] Playlist page: the header is readable over a pale cover; long titles fit with Android's Large font; nothing sits under a side notch in landscape.
+- [ ] Shell: swiping the mini player skips; the bottom-nav icon bounces; the desktop scrubber and volume thicken on hover; sidebar hover shows on a light theme.
+- [ ] Themes: make, edit, export and import a theme that uses an imported font; a light theme looks right in dialogs and switches.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.
