@@ -57,6 +57,8 @@ class _NowPlaying extends ConsumerWidget {
       children: [
         Hero(
           tag: nowPlayingArtHeroTag,
+          // Stays visible under the desktop panel after the flight.
+          placeholderBuilder: (_, _, child) => child,
           child: Artwork(track.artworkRef, size: 46, radius: 6, seed: track.id),
         ),
         const SizedBox(width: 12),

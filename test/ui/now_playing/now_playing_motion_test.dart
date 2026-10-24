@@ -1,17 +1,20 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:drift/drift.dart' show OrderingTerm;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/theme/app_theme.dart';
+import 'package:songies/theme/contrast.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/motion/equalizer_bars.dart';
 import 'package:songies/ui/motion/motion.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
 import 'package:songies/ui/shell/mini_player.dart';
 import 'package:songies/ui/shell/player_bar.dart';
+import 'package:songies/ui/widgets/artwork.dart';
 
 import '../../helpers/test_db.dart';
 import '../../helpers/ui_harness.dart';
@@ -180,6 +183,30 @@ void main() {
     });
   });
 
+  group('title in a two-song queue', () {
+    uiTest('previous slides it to the right', (tester) async {
+      await pumpApp(tester);
+      final two = await real(
+        tester,
+        () => (h.db.select(
+          h.db.tracks,
+        )..orderBy([(t) => OrderingTerm.asc(t.id)])).get(),
+      );
+      await real(tester, () => h.player.playQueue(two.take(2).toList()));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('nowPlaying.next')));
+      await settle(tester);
+      expect(h.player.state.index, 1);
+      await tester.tap(find.byKey(const Key('nowPlaying.previous')));
+      await flush(tester);
+      await tester.pump(Motion.emphasized ~/ 3);
+      expect(h.player.state.index, 0);
+      expect(titleSlide(tester, 'Song one').position.value.dx, lessThan(0));
+      expect(titleSlide(tester, 'Song two').position.value.dx, greaterThan(0));
+      await settle(tester);
+    });
+  });
+
   group('play button', () {
     uiTest('is an animated play/pause icon on an accent circle', (
       tester,
@@ -246,14 +273,64 @@ void main() {
         await gesture.moveBy(const Offset(0, 10));
         await tester.pump(const Duration(milliseconds: 100));
       }
-      // The page follows the finger (less the touch slop).
+      // The page follows the finger (less the touch slop), uncovering the
+      // app underneath.
       expect(tester.getTopLeft(page()).dy, greaterThan(70));
+      expect(find.text('Shell stub'), findsOneWidget);
       await gesture.up();
       await tester.pump();
       await tester.pump(Motion.standard ~/ 2);
       expect(tester.getTopLeft(page()).dy, inExclusiveRange(0, 80));
       await settle(tester);
       expect(find.byType(NowPlayingPage), findsOneWidget);
+      expect(tester.getTopLeft(page()).dy, 0);
+      // At rest the page is opaque again: the app below is not painted.
+      expect(find.text('Shell stub'), findsNothing);
+    });
+
+    uiTest('mid-drag past the threshold, the app shows underneath', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await playThree(tester);
+      final gesture = await tester.startGesture(tester.getCenter(art()));
+      for (var i = 0; i < 12; i++) {
+        await gesture.moveBy(const Offset(0, 20));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.text('Shell stub'), findsOneWidget);
+      expect(tester.getTopLeft(page()).dy, greaterThan(200));
+      await gesture.up();
+      await settle(tester);
+      expect(find.byType(NowPlayingPage), findsNothing);
+    });
+
+    uiTest('when there is nothing to pop, a long drag springs back', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await real(tester, () => h.addTrack('t1'));
+      await tester.pumpWidget(
+        h.app(
+          initialLocation: '/now-playing',
+          routes: [GoRoute(path: '/now-playing', pageBuilder: nowPlayingPage)],
+        ),
+      );
+      await settle(tester);
+      await playThree(tester);
+      await tester.timedDrag(
+        art(),
+        const Offset(0, 300),
+        const Duration(seconds: 1),
+      );
+      await settle(tester);
+      expect(find.byType(NowPlayingPage), findsOneWidget);
+      expect(tester.getTopLeft(page()).dy, 0);
+      // And it still answers a drag.
+      await tester.drag(art(), const Offset(0, 60));
+      await settle(tester);
       expect(tester.getTopLeft(page()).dy, 0);
     });
 
@@ -275,6 +352,50 @@ void main() {
         const Duration(seconds: 1),
       );
       await settle(tester);
+      expect(find.byType(NowPlayingPage), findsNothing);
+    });
+
+    uiTest('on desktop, a mouse drag over the queue does not move the panel', (
+      tester,
+    ) async {
+      await pumpApp(tester, size: const Size(1280, 800));
+      await playThree(tester);
+      await tester.tap(find.byKey(const Key('nowPlaying.tab.queue')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      final top = tester.getTopLeft(page()).dy;
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('Song two')),
+        kind: PointerDeviceKind.mouse,
+      );
+      for (var i = 0; i < 10; i++) {
+        await gesture.moveBy(const Offset(0, 30));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(tester.getTopLeft(page()).dy, top);
+      await gesture.up();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(NowPlayingPage), findsOneWidget);
+    });
+
+    uiTest('on desktop, a mouse drag on the header closes it', (tester) async {
+      await pumpApp(tester, size: const Size(1280, 800));
+      await playThree(tester);
+      await tester.tap(find.byKey(const Key('nowPlaying.tab.queue')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('NOW PLAYING')),
+        kind: PointerDeviceKind.mouse,
+      );
+      for (var i = 0; i < 10; i++) {
+        await gesture.moveBy(const Offset(0, 30));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await gesture.up();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
       expect(find.byType(NowPlayingPage), findsNothing);
     });
 
@@ -315,6 +436,38 @@ void main() {
       await tester.tap(find.byKey(const Key('nowPlaying.playPause')));
       await settle(tester);
       expect(tester.widget(blur), same(before));
+    });
+
+    test('over a white cover the header text still reaches AA', () {
+      for (final spec in [
+        ThemeSpec.builtInDefault,
+        ThemeSpec.albumGlow,
+        ThemeSpec.terminal,
+        ThemeSpec.builtInDefault.copyWith(
+          background: const Color(0xFFF4F4F4),
+          surface: const Color(0xFFFFFFFF),
+          text: const Color(0xFF111111),
+        ),
+      ]) {
+        final c = SongiesColors.fromSpec(spec);
+        final worst = blurWorstCaseTop(c);
+        // The header's label is the text at 70 %.
+        final label = Color.alphaBlend(c.text.withAlpha(179), worst);
+        expect(contrastRatio(label, worst), greaterThanOrEqualTo(4.5));
+        expect(contrastRatio(c.text, worst), greaterThanOrEqualTo(4.5));
+      }
+    });
+
+    uiTest('blur on: a readability scrim lies over the cover', (tester) async {
+      await pumpApp(tester);
+      await playThree(tester);
+      final scrim = tester.widget<ColoredBox>(
+        find.byKey(const Key('nowPlaying.scrim')),
+      );
+      final colors = Theme.of(tester.element(find.byType(NowPlayingPage)))
+          .extension<SongiesColors>()!;
+      expect(scrim.color, blurScrim(colors));
+      expect(scrim.color.a, greaterThan(0));
     });
 
     uiTest('blur off: only the gradient, no filter', (tester) async {
@@ -572,6 +725,7 @@ void main() {
               path: '/',
               builder: (_, _) => Scaffold(body: Center(child: part)),
             ),
+            GoRoute(path: '/now-playing', pageBuilder: nowPlayingPage),
           ],
         ),
       );
@@ -589,6 +743,22 @@ void main() {
     uiTest('the player bar artwork is np-art', (tester) async {
       await pumpShellPart(tester, const PlayerBar());
       expect(tester.widget<Hero>(find.byType(Hero)).tag, 'np-art');
+    });
+
+    uiTest('the player bar keeps its artwork with the panel open', (
+      tester,
+    ) async {
+      await pumpShellPart(tester, const PlayerBar());
+      GoRouter.of(tester.element(find.byType(PlayerBar))).push('/now-playing');
+      await settle(tester);
+      expect(find.byKey(const Key('nowPlaying.panel')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(PlayerBar),
+          matching: find.byType(Artwork),
+        ),
+        findsOneWidget,
+      );
     });
   });
 

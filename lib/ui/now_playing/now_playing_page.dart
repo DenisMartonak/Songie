@@ -1,12 +1,14 @@
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/contrast.dart';
 import '../motion/marquee.dart';
 import '../motion/motion.dart';
 import '../shell/adaptive_shell.dart';
@@ -19,40 +21,135 @@ import 'now_playing_queue.dart';
 /// page sliding up on a phone, and on desktop a centred panel over the shell
 /// (non-opaque, so the title bar, sidebar and player bar stay visible behind
 /// it; clicking outside closes it).
-Page<void> nowPlayingPage(BuildContext context, GoRouterState state) {
-  final wide = MediaQuery.sizeOf(context).width >= phoneBreakpoint;
-  final motion = Motion.of(context);
-  if (wide) {
-    return CustomTransitionPage<void>(
+Page<void> nowPlayingPage(BuildContext context, GoRouterState state) =>
+    _NowPlayingRoutePage(
       key: state.pageKey,
-      opaque: false,
-      barrierDismissible: true,
-      barrierColor: Colors.black54,
-      barrierLabel: 'Close',
-      transitionDuration: motion.standard,
-      reverseTransitionDuration: motion.standard,
-      child: const NowPlayingPage(),
-      transitionsBuilder: (context, animation, _, child) => FadeTransition(
+      wide: MediaQuery.sizeOf(context).width >= phoneBreakpoint,
+      motion: Motion.of(context),
+    );
+
+class _NowPlayingRoutePage extends Page<void> {
+  const _NowPlayingRoutePage({
+    required this.wide,
+    required this.motion,
+    super.key,
+  });
+
+  final bool wide;
+  final MotionDurations motion;
+
+  @override
+  Route<void> createRoute(BuildContext context) => NowPlayingRoute._(this);
+}
+
+/// The route Now Playing opens in. On a phone, dragging the page down drives
+/// this route's own transition (as iOS's back swipe does), so the app shows
+/// underneath while the page is dragged; at rest the route is opaque and the
+/// app below is neither painted nor ticking.
+class NowPlayingRoute extends PageRoute<void> {
+  NowPlayingRoute._(_NowPlayingRoutePage page) : super(settings: page);
+
+  _NowPlayingRoutePage get _page => settings as _NowPlayingRoutePage;
+
+  /// The desktop panel (rather than the phone's full-screen page).
+  bool get wide => _page.wide;
+
+  @override
+  bool get opaque => !wide;
+
+  @override
+  bool get barrierDismissible => wide;
+
+  @override
+  Color? get barrierColor => wide ? Colors.black54 : null;
+
+  @override
+  String? get barrierLabel => wide ? 'Close' : null;
+
+  @override
+  bool get maintainState => true;
+
+  @override
+  Duration get transitionDuration =>
+      wide ? _page.motion.standard : _page.motion.emphasized;
+
+  @override
+  Duration get reverseTransitionDuration => transitionDuration;
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) => const NowPlayingPage();
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (wide) {
+      return FadeTransition(
         opacity: CurvedAnimation(
           parent: animation,
           curve: Motion.standardCurve,
         ),
         child: child,
-      ),
-    );
-  }
-  return CustomTransitionPage<void>(
-    key: state.pageKey,
-    transitionDuration: motion.emphasized,
-    reverseTransitionDuration: motion.emphasized,
-    child: const NowPlayingPage(),
-    transitionsBuilder: (context, animation, _, child) => SlideTransition(
+      );
+    }
+    // While a finger drives it, the page follows the finger exactly.
+    final dragged = navigator?.userGestureInProgress ?? false;
+    return SlideTransition(
       position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(
-        CurvedAnimation(parent: animation, curve: Motion.emphasizedCurve),
+        dragged
+            ? animation
+            : CurvedAnimation(parent: animation, curve: Motion.emphasizedCurve),
       ),
       child: child,
-    ),
-  );
+    );
+  }
+
+  /// How far the page has been dragged down, as a fraction of its height.
+  double get collapsed => 1 - controller!.value;
+
+  /// A drag down the page has started.
+  void startCollapse() => navigator!.didStartUserGesture();
+
+  /// The page was dragged by [fraction] of its height (positive is down).
+  void dragCollapse(double fraction) => controller!.value -= fraction;
+
+  /// The finger lifted: [close] pops the route through [pop] (which carries
+  /// the page on down); otherwise it springs back over [springBack].
+  void endCollapse({
+    required bool close,
+    required VoidCallback pop,
+    required Duration springBack,
+  }) {
+    final navigator = this.navigator!;
+    final controller = this.controller!;
+    if (close) {
+      pop();
+    } else {
+      controller.animateTo(
+        1,
+        duration: springBack,
+        curve: Motion.standardCurve,
+      );
+    }
+    if (!controller.isAnimating) {
+      navigator.didStopUserGesture();
+      return;
+    }
+    late final AnimationStatusListener done;
+    done = (status) {
+      if (controller.isAnimating) return;
+      navigator.didStopUserGesture();
+      controller.removeStatusListener(done);
+    };
+    controller.addStatusListener(done);
+  }
 }
 
 /// The [Hero] tag shared by the mini-player / player-bar artwork and the Now
@@ -83,45 +180,84 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
     with SingleTickerProviderStateMixin {
   bool _showQueue = false;
 
-  /// How far (px) the page has been dragged down.
+  /// How far (px) the desktop panel has been dragged down. (On a phone the
+  /// drag drives the route's own transition instead.)
   late final AnimationController _drag = AnimationController.unbounded(
     vsync: this,
   );
 
-  /// The dragged area (the page, or the desktop panel), to measure its height.
+  /// The dragged page or panel, to measure its height.
   final GlobalKey _dragArea = GlobalKey();
 
   bool _closing = false;
 
-  void _close() {
-    if (_closing) return;
+  /// A collapse drag is under way (a tap's cancelled drag never starts).
+  bool _dragging = false;
+
+  /// The route, when the drag drives it (a phone page).
+  NowPlayingRoute? get _phoneRoute {
+    final route = ModalRoute.of(context);
+    return route is NowPlayingRoute && !route.wide ? route : null;
+  }
+
+  /// Pops the page; false when there is nothing to pop it to.
+  bool _close() {
+    if (_closing) return true;
+    if (!context.canPop()) return false;
     _closing = true;
     context.pop();
+    return true;
+  }
+
+  double get _height =>
+      _dragArea.currentContext?.size?.height ?? double.infinity;
+
+  void _onDragStart(DragStartDetails _) {
+    if (_closing) return;
+    _dragging = true;
+    _drag.stop();
+    _phoneRoute?.startCollapse();
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
-    if (_closing) return;
-    _drag.value = math.max(0, _drag.value + details.delta.dy);
-  }
-
-  void _onDragEnd(DragEndDetails details) {
-    if (_closing) return;
-    final height = _dragArea.currentContext?.size?.height ?? double.infinity;
-    final far = _drag.value >= height * NowPlayingPage.closeFraction;
-    final fast = (details.primaryVelocity ?? 0) >= NowPlayingPage.closeVelocity;
-    if (far || fast) {
-      // The route's exit transition carries the page on from where it is.
-      _close();
+    if (_closing || !_dragging) return;
+    final route = _phoneRoute;
+    if (route != null) {
+      route.dragCollapse(details.delta.dy / _height);
     } else {
-      _springBack();
+      _drag.value = math.max(0, _drag.value + details.delta.dy);
     }
   }
 
-  void _springBack() => _drag.animateTo(
-    0,
-    duration: Motion.of(context).standard,
-    curve: Motion.standardCurve,
-  );
+  void _onDragEnd(DragEndDetails details) {
+    if (_closing || !_dragging) return;
+    final route = _phoneRoute;
+    final dragged = route?.collapsed ?? _drag.value / _height;
+    final far = dragged >= NowPlayingPage.closeFraction;
+    final fast = (details.primaryVelocity ?? 0) >= NowPlayingPage.closeVelocity;
+    _letGo(close: (far || fast) && context.canPop());
+  }
+
+  void _onDragCancel() {
+    if (!_closing && _dragging) _letGo(close: false);
+  }
+
+  /// Ends a drag: closes the page (its exit transition carries it on from
+  /// where it is) or springs it back.
+  void _letGo({required bool close}) {
+    _dragging = false;
+    final springBack = Motion.of(context).standard;
+    final route = _phoneRoute;
+    if (route != null) {
+      route.endCollapse(
+        close: close,
+        pop: () => _close(),
+        springBack: springBack,
+      );
+    } else if (!close || !_close()) {
+      _drag.animateTo(0, duration: springBack, curve: Motion.standardCurve);
+    }
+  }
 
   @override
   void dispose() {
@@ -129,22 +265,30 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
     super.dispose();
   }
 
-  /// [child] moved by the drag, with the drag gestures on it.
-  Widget _draggable(Widget child) => GestureDetector(
-    key: _dragArea,
+  /// Starts the collapse drag from [child]. On desktop a trackpad's two-finger
+  /// pan scrolls rather than drags.
+  Widget _dragHandle(Widget child, {required bool wide}) => GestureDetector(
     behavior: HitTestBehavior.opaque,
-    onVerticalDragStart: (_) => _drag.stop(),
+    supportedDevices: wide
+        ? const {
+            PointerDeviceKind.touch,
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.stylus,
+            PointerDeviceKind.invertedStylus,
+            PointerDeviceKind.unknown,
+          }
+        : null,
+    onVerticalDragStart: _onDragStart,
     onVerticalDragUpdate: _onDragUpdate,
     onVerticalDragEnd: _onDragEnd,
-    onVerticalDragCancel: () {
-      if (!_closing) _springBack();
-    },
-    child: AnimatedBuilder(
-      animation: _drag,
-      builder: (context, child) =>
-          Transform.translate(offset: Offset(0, _drag.value), child: child),
-      child: KeyedSubtree(key: const Key('nowPlaying.page'), child: child),
-    ),
+    onVerticalDragCancel: _onDragCancel,
+    child: child,
+  );
+
+  /// [child] as the page that the drag moves.
+  Widget _page(Widget child) => KeyedSubtree(
+    key: const Key('nowPlaying.page'),
+    child: KeyedSubtree(key: _dragArea, child: child),
   );
 
   @override
@@ -152,21 +296,32 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final wide = MediaQuery.sizeOf(context).width >= phoneBreakpoint;
 
+    // On desktop only the header and the player tab start the drag: the
+    // queue keeps the mouse for its own reordering and scrolling.
+    Widget handle(Widget child) =>
+        wide ? _dragHandle(child, wide: true) : child;
+
     final body = Stack(
       children: [
         const Positioned.fill(child: _Background()),
         SafeArea(
           child: Column(
             children: [
-              NowPlayingHeader(wide: wide, onClose: _close),
-              NowPlayingTabs(
-                showQueue: _showQueue,
-                onChanged: (queue) => setState(() => _showQueue = queue),
+              handle(
+                Column(
+                  children: [
+                    NowPlayingHeader(wide: wide, onClose: _close),
+                    NowPlayingTabs(
+                      showQueue: _showQueue,
+                      onChanged: (queue) => setState(() => _showQueue = queue),
+                    ),
+                  ],
+                ),
               ),
               Expanded(
                 child: _showQueue
                     ? const NowPlayingQueue()
-                    : const _PlayerTab(),
+                    : handle(const _PlayerTab()),
               ),
             ],
           ),
@@ -182,32 +337,38 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
             maxWidth: 560,
             maxHeight: math.min(780, size.height - 48),
           ),
-          child: _draggable(
-            Material(
-              key: const Key('nowPlaying.panel'),
-              color: colors.background,
-              clipBehavior: Clip.antiAlias,
-              elevation: 12,
-              borderRadius: BorderRadius.circular(colors.radius + 8),
-              child: body,
+          child: AnimatedBuilder(
+            animation: _drag,
+            builder: (context, child) => Transform.translate(
+              offset: Offset(0, _drag.value),
+              child: child,
+            ),
+            child: _page(
+              Material(
+                key: const Key('nowPlaying.panel'),
+                color: colors.background,
+                clipBehavior: Clip.antiAlias,
+                elevation: 12,
+                borderRadius: BorderRadius.circular(colors.radius + 8),
+                child: body,
+              ),
             ),
           ),
         ),
       );
     }
 
-    return _draggable(Scaffold(backgroundColor: colors.background, body: body));
+    return _dragHandle(
+      _page(Scaffold(backgroundColor: colors.background, body: body)),
+      wide: false,
+    );
   }
 }
 
 /// The theme's `nowPlayingTop → nowPlayingBottom` gradient, over the cover
-/// blurred (σ 40) when the theme asks for it.
+/// blurred (σ 40) and a readability scrim when the theme asks for it.
 class _Background extends StatelessWidget {
   const _Background();
-
-  /// How much of the gradient covers the blurred cover, top and bottom.
-  static const double _overBlurTop = 0.55;
-  static const double _overBlurBottom = 0.85;
 
   @override
   Widget build(BuildContext context) {
@@ -219,7 +380,14 @@ class _Background extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         // Const, so colour tweens never rebuild (or re-blur) it.
-        if (blur) const _BlurredCover(),
+        if (blur) ...[
+          const _BlurredCover(),
+          // Keeps the text readable on light covers (see [blurScrim]).
+          ColoredBox(
+            key: const Key('nowPlaying.scrim'),
+            color: blurScrim(colors),
+          ),
+        ],
         DecoratedBox(
           key: const Key('nowPlaying.glow'),
           decoration: BoxDecoration(
@@ -317,7 +485,9 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
       return;
     }
     if (_trackId != null) {
-      final wrapped = _index == length - 1 && index == 0;
+      // Last to first is a wrap forward; with two songs it's ambiguous, so
+      // only the index decides.
+      final wrapped = length > 2 && _index == length - 1 && index == 0;
       _direction = index > _index || wrapped ? 1 : -1;
     }
     _trackId = id;
@@ -518,3 +688,58 @@ class _TitleAndArtist extends StatelessWidget {
     );
   }
 }
+
+/// How much of the gradient covers the blurred cover, top and bottom.
+const double _overBlurTop = 0.55;
+const double _overBlurBottom = 0.85;
+
+/// The page's text at the top of the blurred background: the full text and
+/// the header's 70 % label.
+List<Color> _textOn(SongiesColors colors, Color background) => [
+  colors.text,
+  Color.alphaBlend(colors.text.withAlpha(179), background),
+];
+
+/// The cover that makes [colors]' text hardest to read: white under light
+/// text, black under dark text.
+Color _worstCover(SongiesColors colors) =>
+    contrastRatio(colors.text, Colors.white) >
+        contrastRatio(colors.text, Colors.black)
+    ? Colors.black
+    : Colors.white;
+
+/// The background at the top and bottom of the page over [cover], with
+/// [scrim] between the cover and the gradient.
+List<Color> _blurredBackground(SongiesColors colors, Color cover, Color scrim) {
+  final under = Color.alphaBlend(scrim, cover);
+  final top = colors.nowPlayingTop;
+  final bottom = colors.nowPlayingBottom;
+  return [
+    Color.alphaBlend(top.withValues(alpha: top.a * _overBlurTop), under),
+    Color.alphaBlend(
+      bottom.withValues(alpha: bottom.a * _overBlurBottom),
+      under,
+    ),
+  ];
+}
+
+/// The scrim laid over the blurred cover: the least that keeps the text (and
+/// the header's label) at 4.5:1 over the worst-case cover (white under light
+/// text, black under dark), in the colour opposite to that cover.
+Color blurScrim(SongiesColors colors) {
+  final cover = _worstCover(colors);
+  final shade = cover == Colors.white ? Colors.black : Colors.white;
+  for (var step = 0; step <= 20; step++) {
+    final scrim = shade.withValues(alpha: step / 20);
+    final readable = _blurredBackground(colors, cover, scrim).every(
+      (bg) => _textOn(colors, bg).every((t) => contrastRatio(t, bg) >= 4.5),
+    );
+    if (readable) return scrim;
+  }
+  return shade;
+}
+
+/// The top of the blurred background over the worst-case cover, scrim
+/// included.
+Color blurWorstCaseTop(SongiesColors colors) =>
+    _blurredBackground(colors, _worstCover(colors), blurScrim(colors)).first;

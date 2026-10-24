@@ -51,6 +51,8 @@ class MiniPlayer extends ConsumerWidget {
                   children: [
                     Hero(
                       tag: nowPlayingArtHeroTag,
+                      // Stays visible while Now Playing is dragged down.
+                      placeholderBuilder: (_, _, child) => child,
                       child: Artwork(
                         track.artworkRef,
                         size: 34,

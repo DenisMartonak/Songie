@@ -572,6 +572,41 @@ void main() {
     );
   });
 
+  group('buffered position', () {
+    test('comes from the backend', () async {
+      await player.playQueue([a]);
+      backend.setBuffered(const Duration(seconds: 40));
+      await settle();
+      expect(player.state.buffered, const Duration(seconds: 40));
+    });
+
+    test('is cleared with the position on a track change and a stop', () async {
+      await player.playQueue([a, b]);
+      backend.setBuffered(const Duration(seconds: 40));
+      await settle();
+      final seen = <PlayerState>[];
+      final sub = player.states.listen(seen.add);
+
+      await player.next();
+      await settle();
+      // From the first state showing the new track on, nothing is stale.
+      final changed = seen.skipWhile((s) => s.current != b).toList();
+      expect(changed, isNotEmpty);
+      expect(changed.map((s) => s.buffered), everyElement(Duration.zero));
+
+      backend.setBuffered(const Duration(seconds: 40));
+      await settle();
+      seen.clear();
+      await player.playQueue([c]);
+      await settle();
+      expect(
+        seen.skipWhile((s) => s.current != c).map((s) => s.buffered),
+        everyElement(Duration.zero),
+      );
+      await sub.cancel();
+    });
+  });
+
   group('shuffle', () {
     test(
       'keeps the current track first and restores order when turned off',

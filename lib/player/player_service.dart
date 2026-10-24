@@ -272,6 +272,7 @@ class PlayerService {
         index: start,
         sourcePlaylistId: sourcePlaylistId,
         position: Duration.zero,
+        buffered: Duration.zero,
         duration: null,
       ),
     );
@@ -629,6 +630,7 @@ class PlayerService {
           _state.copyWith(
             index: index,
             position: Duration.zero,
+            buffered: Duration.zero,
             buffering: true,
             duration: _durationOf(track),
           ),
@@ -684,6 +686,7 @@ class PlayerService {
           _state.copyWith(
             index: index,
             position: Duration.zero,
+            buffered: Duration.zero,
             buffering: false,
             duration: _durationOf(track),
           ),
@@ -794,6 +797,7 @@ class PlayerService {
         playing: false,
         buffering: false,
         position: Duration.zero,
+        buffered: Duration.zero,
       ),
     );
   }
