@@ -1,9 +1,22 @@
+import 'dart:io';
+
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/data/database.dart';
+import 'package:songies/library/art_cache.dart';
 import 'package:songies/providers.dart';
+import 'package:songies/theme/app_theme.dart';
+import 'package:songies/theme/cover_palette.dart';
+import 'package:songies/theme/theme_spec.dart';
+import 'package:songies/ui/library/import_dialog.dart';
+import 'package:songies/ui/library/pickers.dart';
+import 'package:songies/ui/motion/equalizer_bars.dart';
+import 'package:songies/ui/motion/fade_slide_in.dart';
+import 'package:songies/ui/motion/pressable.dart';
+import 'package:songies/ui/motion/shimmer.dart';
 import 'package:songies/ui/home/home_page.dart';
 import 'package:songies/ui/search/search_page.dart';
 
@@ -55,12 +68,14 @@ void main() {
     () => (h.db.select(h.db.tracks)..where((t) => t.id.equals(id))).getSingle(),
   );
 
+  /// Plays [trackId] (recording it as played), then pauses so the playing
+  /// tile's equalizer is still and the page can settle.
   Future<void> play(WidgetTester tester, String trackId, {String? from}) async {
     final track = await trackById(tester, trackId);
-    await real(
-      tester,
-      () => h.player.playQueue([track], sourcePlaylistId: from),
-    );
+    await real(tester, () async {
+      await h.player.playQueue([track], sourcePlaylistId: from);
+      await h.player.pause();
+    });
     await settle(tester);
   }
 
@@ -86,6 +101,176 @@ void main() {
       await pumpPage(tester, const HomePage());
       expect(find.text('Good morning'), findsOneWidget);
       expect(find.text('Good evening'), findsNothing);
+    });
+
+    for (final (hour, greeting) in [
+      (7, 'Good morning'),
+      (13, 'Good afternoon'),
+      (23, 'Good evening'),
+    ]) {
+      uiTest('greets "$greeting" at $hour:00', (tester) async {
+        h.now = () => DateTime(2026, 10, 21, hour);
+        await pumpPage(tester, const HomePage());
+        expect(find.text(greeting), findsOneWidget);
+      });
+    }
+
+    uiTest('shows skeleton tiles until the playlists have loaded', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        h.app(
+          initialLocation: '/page',
+          routes: [
+            GoRoute(
+              path: '/page',
+              builder: (_, _) => const Scaffold(body: HomePage()),
+            ),
+          ],
+        ),
+      );
+      expect(find.byKey(const Key('home.skeleton')), findsOneWidget);
+      expect(find.byType(SkeletonBox), findsWidgets);
+      await settle(tester);
+      expect(find.byKey(const Key('home.skeleton')), findsNothing);
+      expect(find.byType(SkeletonBox), findsNothing);
+    });
+
+    uiTest('with no playlists it invites you to import or add music', (
+      tester,
+    ) async {
+      var picks = 0;
+      h.folderPicker = () async {
+        picks++;
+        return const FolderPickCancelled();
+      };
+      await pumpPage(tester, const HomePage());
+      expect(find.text('Your music lives here'), findsOneWidget);
+      final import = find.widgetWithText(
+        FilledButton,
+        'Import a YouTube playlist',
+      );
+      final folder = find.widgetWithText(OutlinedButton, 'Add music folder');
+      expect(import, findsOneWidget);
+      expect(folder, findsOneWidget);
+
+      await tester.tap(folder);
+      await settle(tester);
+      expect(picks, 1);
+
+      await tester.tap(import);
+      await settle(tester);
+      expect(find.byType(ImportDialog), findsOneWidget);
+    });
+
+    uiTest('the playing playlist\'s tile shows equalizer bars', (tester) async {
+      late String playing, other;
+      await real(tester, () async {
+        await h.addTrack('t1');
+        playing = await h.addPlaylist('A list', ['t1']);
+        other = await h.addPlaylist('B list', ['t1']);
+      });
+      await pumpPage(tester, const HomePage());
+      expect(find.byType(EqualizerBars), findsNothing);
+
+      final track = await trackById(tester, 't1');
+      await real(
+        tester,
+        () => h.player.playQueue([track], sourcePlaylistId: playing),
+      );
+      // Playing, the bars keep animating: no settling.
+      await flush(tester);
+      Finder barsIn(String id) => find.descendant(
+        of: find.byKey(Key('home.tile.$id')),
+        matching: find.byType(EqualizerBars),
+      );
+      expect(barsIn(playing), findsOneWidget);
+      expect(tester.widget<EqualizerBars>(barsIn(playing)).playing, isTrue);
+      expect(barsIn(other), findsNothing);
+
+      await real(tester, () => h.player.pause());
+      await settle(tester);
+      expect(tester.widget<EqualizerBars>(barsIn(playing)).playing, isFalse);
+    });
+
+    uiTest('quick tiles and cards press and enter', (tester) async {
+      late String id;
+      await real(tester, () async {
+        await h.addTrack('t1');
+        id = await h.addPlaylist('Road trip', ['t1']);
+      });
+      await pumpPage(tester, const HomePage());
+      for (final key in ['home.tile.$id', 'home.card.$id']) {
+        expect(
+          find.ancestor(
+            of: find.byKey(Key(key)),
+            matching: find.byType(FadeSlideIn),
+          ),
+          findsOneWidget,
+          reason: key,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(Key(key)),
+            matching: find.byType(Pressable),
+          ),
+          findsOneWidget,
+          reason: key,
+        );
+      }
+    });
+
+    uiTest('the header glow takes the last played track\'s colours', (
+      tester,
+    ) async {
+      const palette = CoverPalette(
+        dominant: Color(0xFF203040),
+        vibrant: Color(0xFFE02060),
+        muted: Color(0xFF404040),
+      );
+      await real(tester, () async {
+        await h.addTrack('t1');
+        await (h.db.update(h.db.tracks)..where((t) => t.id.equals('t1'))).write(
+          const TracksCompanion(artworkRef: Value('cover.jpg')),
+        );
+        await h.history.record('t1', null);
+      });
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        h.app(
+          initialLocation: '/page',
+          routes: [
+            GoRoute(
+              path: '/page',
+              builder: (_, _) => const Scaffold(body: HomePage()),
+            ),
+          ],
+          extraOverrides: [
+            artCacheProvider.overrideWithValue(
+              ArtCache(Directory('/nonexistent/songies-art')),
+            ),
+            artPaletteProvider.overrideWith(
+              (ref, art) async => art == 'cover.jpg' ? palette : null,
+            ),
+          ],
+        ),
+      );
+      await settle(tester);
+      // Nothing is playing: the glow still follows the last played cover.
+      expect(h.player.state.current, isNull);
+      final glow = tester.widget<DecoratedBox>(
+        find.byKey(const Key('home.glow')),
+      );
+      final gradient = (glow.decoration as BoxDecoration).gradient!;
+      final colors = buildThemeData(ThemeSpec.builtInDefault)
+          .extension<SongiesColors>()!;
+      expect(gradient.colors.first, homeGlowColor(colors.glow, palette));
+      expect(gradient.colors.first, isNot(colors.glow));
     });
 
     uiTest('lists the last played tracks, newest first', (tester) async {
@@ -212,7 +397,8 @@ void main() {
     uiTest('an empty query shows the hint', (tester) async {
       await seed(tester);
       await pumpPage(tester, const SearchPage());
-      expect(find.text('Search your songs and playlists'), findsOneWidget);
+      expect(find.text('Search your library'), findsOneWidget);
+      expect(find.byKey(const Key('search.emptyIcon')), findsOneWidget);
       expect(find.text('Songs'), findsNothing);
     });
 
@@ -230,7 +416,15 @@ void main() {
       expect(find.text('Halo'), findsOneWidget);
       expect(find.text('Yellow'), findsNothing);
       expect(find.text('Beyoncé hits'), findsOneWidget);
-      expect(find.text('Search your songs and playlists'), findsNothing);
+      expect(find.text('Search your library'), findsNothing);
+      // The results fade in.
+      expect(
+        find.ancestor(
+          of: find.byKey(const Key('search.song.t1')),
+          matching: find.byType(FadeSlideIn),
+        ),
+        findsOneWidget,
+      );
     });
 
     uiTest('querying waits 150 ms after the last keystroke', (tester) async {
@@ -312,7 +506,7 @@ void main() {
       await type(tester, 'zzz');
       await tester.pump(const Duration(milliseconds: 200));
       await settle(tester);
-      expect(find.text('No results for "zzz"'), findsOneWidget);
+      expect(find.text("Nothing matches 'zzz'"), findsOneWidget);
     });
   });
 }

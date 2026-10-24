@@ -120,6 +120,26 @@ final playlistTracksProvider = StreamProvider.autoDispose
           ref.watch(libraryRepositoryProvider).watchPlaylistTracks(playlistId),
     );
 
+/// YouTube imports handed to their playlist page before its entries have
+/// reached it: the import dialog adds the new playlist's id as it opens the
+/// page, and the page shows skeleton rows for it until the entries arrive.
+class PendingImports extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => const {};
+
+  void add(String playlistId) => state = {...state, playlistId};
+
+  void remove(String playlistId) {
+    if (state.contains(playlistId)) {
+      state = {...state}..remove(playlistId);
+    }
+  }
+}
+
+final pendingImportsProvider = NotifierProvider<PendingImports, Set<String>>(
+  PendingImports.new,
+);
+
 /// The current time; tests override it (e.g. for Home's greeting).
 final nowProvider = Provider<DateTime Function()>((_) => DateTime.now);
 
@@ -224,6 +244,17 @@ final coverPaletteProvider = StreamProvider<CoverPalette?>((ref) {
   );
   return ref.watch(coverPaletteServiceProvider).paletteStream(refs.stream);
 });
+
+/// The palette of one cover for a page (a playlist hero, Home's glow), or
+/// null without art. These requests are never superseded by the playing
+/// track's, so a page always gets its colours.
+final artPaletteProvider = FutureProvider.autoDispose
+    .family<CoverPalette?, String?>((ref, artRef) {
+      if (artRef == null) return null;
+      return ref
+          .watch(coverPaletteServiceProvider)
+          .paletteFor(artRef, supersede: false);
+    });
 
 /// The app's colours: the active theme, following the playing track's cover
 /// when the theme asks for it.

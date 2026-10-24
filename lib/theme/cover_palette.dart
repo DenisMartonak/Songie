@@ -86,7 +86,8 @@ Future<CoverPalette?> _extractInIsolate(Uint8List bytes) =>
     Isolate.run(() => extractCoverPalette(bytes));
 
 /// Cover palettes with a memory cache and a `<ref>.palette.json` disk cache.
-/// Extractions run one at a time.
+/// Extractions run one at a time: page requests (`supersede: false`) in the
+/// order they came, ahead of the newest current-track request.
 class CoverPaletteService {
   CoverPaletteService(
     this._art, {
@@ -99,6 +100,9 @@ class CoverPaletteService {
   final Map<String, Future<CoverPalette?>> _jobs = {};
   String? _pendingRef;
   Completer<CoverPalette?>? _pending;
+
+  /// Requests that are never superseded, oldest first.
+  final List<(String, Completer<CoverPalette?>)> _steady = [];
   bool _busy = false;
 
   File _paletteFile(String ref) =>
@@ -106,7 +110,15 @@ class CoverPaletteService {
 
   /// The palette for [artRef], or null for a null ref, a missing or
   /// undecodable file. Never throws.
-  Future<CoverPalette?> paletteFor(String? artRef) async {
+  ///
+  /// By default a request still waiting for extraction is dropped (completes
+  /// with null) when a newer one arrives, which suits the playing track.
+  /// With [supersede] false it waits its turn and always resolves its own
+  /// ref, for page colours (a playlist's cover) that must not be starved.
+  Future<CoverPalette?> paletteFor(
+    String? artRef, {
+    bool supersede = true,
+  }) async {
     if (artRef == null) return null;
     final hit = _memory[artRef];
     if (hit != null) return hit;
@@ -114,7 +126,7 @@ class CoverPaletteService {
       final fromDisk = _readJson(artRef);
       if (fromDisk != null) return _memory[artRef] = fromDisk;
 
-      return await _enqueue(artRef);
+      return await _enqueue(artRef, supersede: supersede);
     } catch (e, s) {
       AppLog.w('Palette for $artRef failed', e, s);
       return null;
@@ -145,31 +157,54 @@ class CoverPaletteService {
     return out.stream;
   }
 
-  /// One extraction runs at a time. A request waiting behind it is replaced by
-  /// a newer one: the replaced request completes with null without extracting
-  /// (it is stale), so the newest ref always runs next.
-  Future<CoverPalette?> _enqueue(String ref) {
+  /// One extraction runs at a time. A superseding request waiting behind it
+  /// is replaced by a newer one: the replaced request completes with null
+  /// without extracting (it is stale), so the newest ref runs next, after the
+  /// non-superseding requests already waiting.
+  Future<CoverPalette?> _enqueue(String ref, {required bool supersede}) {
     final existing = _jobs[ref];
-    if (existing != null) return existing;
+    if (existing != null) {
+      final pending = _pending;
+      if (!supersede && ref == _pendingRef && pending != null) {
+        // Someone needs this one: it may no longer be dropped.
+        _pending = null;
+        _pendingRef = null;
+        _steady.add((ref, pending));
+      }
+      return existing;
+    }
     final completer = Completer<CoverPalette?>();
     _jobs[ref] = completer.future;
-    final stale = _pending;
-    if (stale != null) {
-      _jobs.remove(_pendingRef);
-      stale.complete(null);
+    if (supersede) {
+      final stale = _pending;
+      if (stale != null) {
+        _jobs.remove(_pendingRef);
+        stale.complete(null);
+      }
+      _pendingRef = ref;
+      _pending = completer;
+    } else {
+      _steady.add((ref, completer));
     }
-    _pendingRef = ref;
-    _pending = completer;
     _pump();
     return completer.future;
   }
 
   Future<void> _pump() async {
-    final completer = _pending;
-    final ref = _pendingRef;
-    if (_busy || completer == null || ref == null) return;
-    _pending = null;
-    _pendingRef = null;
+    if (_busy) return;
+    final String ref;
+    final Completer<CoverPalette?> completer;
+    if (_steady.isNotEmpty) {
+      (ref, completer) = _steady.removeAt(0);
+    } else {
+      final pending = _pending;
+      final pendingRef = _pendingRef;
+      if (pending == null || pendingRef == null) return;
+      _pending = null;
+      _pendingRef = null;
+      ref = pendingRef;
+      completer = pending;
+    }
     _busy = true;
     CoverPalette? result;
     try {

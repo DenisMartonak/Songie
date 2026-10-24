@@ -18,12 +18,19 @@ import '../downloads/track_download_icon.dart';
 import '../library/add_folder_flow.dart' show folderPickFailureMessage;
 import '../library/add_songs_sheet.dart';
 import '../library/pickers.dart';
+import '../motion/equalizer_bars.dart';
+import '../motion/motion.dart';
+import '../motion/pressable.dart';
+import '../motion/shimmer.dart';
 import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../widgets/page_snack_bar.dart';
 import 'yt_playlist_actions.dart';
 
 const double _rowHeight = 64;
+
+/// The track-number column, where the playing row shows its equalizer.
+const double _numberWidth = 28;
 
 /// "N songs · H h M min", e.g. "3 songs · 0 h 10 min".
 String playlistSummaryText(int count, int durationMs) {
@@ -65,89 +72,121 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final playlists = ref.watch(playlistsProvider);
     final streamed = ref.watch(playlistTracksProvider(_id));
+    final importing = ref.watch(
+      pendingImportsProvider.select((ids) => ids.contains(_id)),
+    );
 
     final summary = playlists.value
         ?.where((p) => p.id == _id)
         .cast<PlaylistSummary?>()
         .firstOrNull;
     if (summary == null) {
-      return playlists.hasValue
+      // A just-imported playlist may not have reached the list yet.
+      return playlists.hasValue && !importing
           ? _NotFound(onBack: () => context.go('/library'))
           : const Center(child: CircularProgressIndicator());
     }
     final rows = _pending ?? streamed.value;
-    if (rows == null) return const Center(child: CircularProgressIndicator());
+    if (importing && rows != null && rows.isNotEmpty) {
+      // The imported entries have arrived.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ref.read(pendingImportsProvider.notifier).remove(_id);
+      });
+    }
+    final skeleton = rows == null || (importing && rows.isEmpty);
 
-    final current = ref.watch(
-      playerStateProvider.select(
-        (s) => s.value?.sourcePlaylistId == _id ? s.value?.current?.id : null,
-      ),
+    final (current, playing) = ref.watch(
+      playerStateProvider.select((s) {
+        final state = s.value;
+        return state?.sourcePlaylistId == _id
+            ? (state?.current?.id, state?.playing ?? false)
+            : (null, false);
+      }),
     );
+    final top = MediaQuery.paddingOf(context).top;
     final bottom = MediaQuery.paddingOf(context).bottom;
-    final totalMs = rows.fold<int>(0, (sum, r) => sum + r.track.durationMs);
+    final list = rows ?? const <PlaylistTrack>[];
+    final totalMs = list.fold<int>(0, (sum, r) => sum + r.track.durationMs);
+    final dominant = ref
+        .watch(artPaletteProvider(summary.coverRef))
+        .value
+        ?.dominant;
 
-    return Stack(
-      children: [
-        // The soft accent wash behind the hero, as in the desktop mockup.
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          height: 240,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
+    return CustomScrollView(
+      slivers: [
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _HeroDelegate(
+            topInset: top,
+            summary: summary,
+            summaryText: rows == null
+                ? ''
+                : playlistSummaryText(rows.length, totalMs),
+            // Without a cover palette, the soft accent wash of the mockup.
+            heroColor:
+                dominant ??
+                Color.alphaBlend(
                   colors.accent.withValues(alpha: 0.28),
-                  colors.background.withValues(alpha: 0),
-                ],
-              ),
-            ),
+                  colors.background,
+                ),
+            canGoBack: Navigator.canPop(context),
+            canPlay: list.isNotEmpty,
+            onPlay: () => _play(list, shuffle: false),
+            onShuffle: () => _play(list, shuffle: true),
+            onMenu: (action) => _onMenu(action, summary),
           ),
         ),
-        SafeArea(
-          bottom: false,
-          child: ReorderableListView.builder(
-            buildDefaultDragHandles: false,
-            padding: EdgeInsets.only(bottom: bottom + 16),
-            header: _Header(
-              summary: summary,
-              summaryText: playlistSummaryText(rows.length, totalMs),
-              canPlay: rows.isNotEmpty,
-              onPlay: () => _play(rows, shuffle: false),
-              onShuffle: () => _play(rows, shuffle: true),
-              onMenu: (action) => _onMenu(action, summary),
-            ),
-            footer: rows.isEmpty ? _EmptyPlaylist(onAdd: _addSongs) : null,
-            itemCount: rows.length,
-            onReorderItem: (from, to) => _reorder(rows, from, to),
+        if (summary.source == 'yt')
+          SliverToBoxAdapter(child: _YtActions(playlistId: summary.id)),
+        if (skeleton)
+          const SliverToBoxAdapter(child: _SkeletonRows())
+        else if (list.isEmpty)
+          SliverToBoxAdapter(child: _EmptyPlaylist(onAdd: _addSongs))
+        else
+          SliverReorderableList(
+            itemCount: list.length,
+            onReorderItem: (from, to) => _reorder(list, from, to),
+            proxyDecorator: _liftWhileDragged,
             itemBuilder: (context, i) {
-              final row = rows[i];
+              final row = list[i];
               return Dismissible(
                 key: ValueKey(row.entryId),
                 background: const _SwipeBackground(Alignment.centerLeft),
                 secondaryBackground: const _SwipeBackground(
                   Alignment.centerRight,
                 ),
-                onDismissed: (_) => _remove(rows, i),
+                onDismissed: (_) => _remove(list, i),
                 child: _TrackRow(
                   key: ValueKey('row.${row.entryId}'),
                   playlistId: _id,
                   row: row,
                   index: i,
-                  playing: row.track.id == current,
-                  onTap: () => _playFrom(rows, i),
+                  current: row.track.id == current,
+                  playing: playing,
+                  onTap: () => _playFrom(list, i),
                   onLocate: () => _locate(row),
                 ),
               );
             },
           ),
-        ),
+        SliverToBoxAdapter(child: SizedBox(height: bottom + 16)),
       ],
     );
   }
+
+  static Widget _liftWhileDragged(
+    Widget child,
+    int index,
+    Animation<double> animation,
+  ) => AnimatedBuilder(
+    animation: animation,
+    builder: (context, child) => Material(
+      elevation: 6 * Curves.easeInOut.transform(animation.value),
+      type: MaterialType.transparency,
+      child: child,
+    ),
+    child: child,
+  );
 
   // --- playback -------------------------------------------------------------
 
@@ -384,57 +423,225 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
 
 enum _MenuAction { rename, delete, addSongs }
 
-class _Header extends StatelessWidget {
-  const _Header({
+/// The hero's pinned top bar.
+const double _barHeight = 56;
+
+/// The cover, title and summary below the bar.
+const double _coverRowHeight = 144;
+
+/// Shuffle and the menu, beside the Play button.
+const double _actionsHeight = 56;
+
+/// The floating Play button.
+const double _playSize = 48;
+
+/// How far the playlist scrolls before its hero has collapsed into the bar.
+const double playlistHeroCollapseRange = _coverRowHeight + _actionsHeight;
+
+/// Collapse fraction past which the title shows in the bar (and the hero's
+/// own title and cover have faded away).
+const double _barTitleFrom = 0.6;
+
+/// The collapsing hero: a gradient from the cover's dominant colour, the
+/// cover and title (shrinking and fading as the list scrolls), and a pinned
+/// top bar that takes the title past 60 % collapse. The Play button rides
+/// with the hero, then pins to the bar.
+class _HeroDelegate extends SliverPersistentHeaderDelegate {
+  _HeroDelegate({
+    required this.topInset,
     required this.summary,
     required this.summaryText,
+    required this.heroColor,
+    required this.canGoBack,
     required this.canPlay,
     required this.onPlay,
     required this.onShuffle,
     required this.onMenu,
   });
 
+  final double topInset;
   final PlaylistSummary summary;
   final String summaryText;
+  final Color heroColor;
+  final bool canGoBack;
   final bool canPlay;
   final VoidCallback onPlay;
   final VoidCallback onShuffle;
   final ValueChanged<_MenuAction> onMenu;
 
   @override
+  double get minExtent => topInset + _barHeight;
+
+  @override
+  double get maxExtent => minExtent + playlistHeroCollapseRange;
+
+  @override
+  bool shouldRebuild(_HeroDelegate old) => true;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final t = (shrinkOffset / playlistHeroCollapseRange).clamp(0.0, 1.0);
+    final heroFade = (1 - t / _barTitleFrom).clamp(0.0, 1.0);
+    final barFade = ((t - _barTitleFrom) / (1 - _barTitleFrom)).clamp(0.0, 1.0);
+    final barBottom = topInset + _barHeight;
+    final playTop = max(
+      topInset + (_barHeight - _playSize) / 2,
+      barBottom +
+          _coverRowHeight +
+          (_actionsHeight - _playSize) / 2 -
+          shrinkOffset,
+    );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // The whole gradient, so the collapsed bar shows its top.
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: maxExtent,
+          child: TweenAnimationBuilder<Color?>(
+            tween: ColorTween(end: heroColor),
+            duration: Motion.of(context).colour,
+            builder: (context, color, _) => DecoratedBox(
+              key: const Key('playlist.heroBackground'),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [color!, colors.background],
+                ),
+              ),
+            ),
+          ),
+        ),
+        // The hero scrolls up under the bar.
+        Positioned(
+          top: barBottom,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              Positioned(
+                top: -shrinkOffset,
+                left: 0,
+                right: 0,
+                height: playlistHeroCollapseRange,
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: _coverRowHeight,
+                      child: heroFade == 0
+                          ? null
+                          : Opacity(
+                              opacity: heroFade,
+                              child: _HeroCover(
+                                summary: summary,
+                                summaryText: summaryText,
+                                coverSize: 112 * (1 - 0.4 * t),
+                              ),
+                            ),
+                    ),
+                    SizedBox(
+                      height: _actionsHeight,
+                      child: _HeroActions(
+                        canPlay: canPlay,
+                        onShuffle: onShuffle,
+                        onMenu: onMenu,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          top: topInset,
+          left: 0,
+          right: 0,
+          height: _barHeight,
+          child: SizedBox(
+            key: const Key('playlist.topBar'),
+            child: Row(
+              children: [
+                if (canGoBack)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: IconButton(
+                      tooltip: 'Back',
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  )
+                else
+                  const SizedBox(width: 16),
+                Expanded(
+                  child: barFade == 0
+                      ? const SizedBox.shrink()
+                      : Opacity(
+                          opacity: barFade,
+                          child: Text(
+                            summary.name,
+                            key: const Key('playlist.barTitle'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colors.text,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                ),
+                // Room for the pinned Play button.
+                const SizedBox(width: 16 + _playSize + 8),
+              ],
+            ),
+          ),
+        ),
+        Positioned(
+          top: playTop,
+          right: 16,
+          child: _PlayButton(enabled: canPlay, onPlay: onPlay),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroCover extends StatelessWidget {
+  const _HeroCover({
+    required this.summary,
+    required this.summaryText,
+    required this.coverSize,
+  });
+
+  final PlaylistSummary summary;
+  final String summaryText;
+  final double coverSize;
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    final canGoBack = Navigator.canPop(context);
-    final isYt = summary.source == 'yt';
     final kindStyle = TextStyle(
       color: colors.mutedText,
       fontSize: 11,
       fontWeight: FontWeight.w600,
     );
-    // Narrow phones must fit Play, Shuffle and the menu on one line.
-    const compact = ButtonStyle(
-      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16)),
-    );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (canGoBack)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton(
-                tooltip: 'Back',
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-            )
-          else
-            const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              DecoratedBox(
+          SizedBox.square(
+            dimension: 112,
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(colors.radius + 4),
                   boxShadow: const [
@@ -447,91 +654,197 @@ class _Header extends StatelessWidget {
                 ),
                 child: Artwork(
                   summary.coverRef,
-                  size: 112,
+                  key: const Key('playlist.cover'),
+                  size: coverSize,
                   radius: colors.radius + 4,
                   seed: summary.id,
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (isYt)
-                      YtHeroSubtitle(playlistId: summary.id, style: kindStyle)
-                    else
-                      Text('Local playlist', style: kindStyle),
-                    const SizedBox(height: 4),
-                    Text(
-                      summary.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colors.text,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        height: 1.1,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      summaryText,
-                      style: TextStyle(color: colors.mutedText, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              FilledButton.icon(
-                style: compact,
-                onPressed: canPlay ? onPlay : null,
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: const Text('Play'),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                style: compact,
-                onPressed: canPlay ? onShuffle : null,
-                icon: const Icon(Icons.shuffle_rounded),
-                label: const Text('Shuffle'),
-              ),
-              const Spacer(),
-              PopupMenuButton<_MenuAction>(
-                tooltip: 'More',
-                icon: const Icon(Icons.more_horiz),
-                onSelected: onMenu,
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: _MenuAction.rename,
-                    child: Text('Rename'),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.addSongs,
-                    child: Text('Add songs'),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.delete,
-                    child: Text('Delete'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          if (isYt) ...[
-            const SizedBox(height: 8),
-            Row(
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                YtSyncButton(playlistId: summary.id),
-                const SizedBox(width: 8),
-                DownloadToggle(playlistId: summary.id),
+                if (summary.source == 'yt')
+                  YtHeroSubtitle(playlistId: summary.id, style: kindStyle)
+                else
+                  Text('Local playlist', style: kindStyle),
+                const SizedBox(height: 4),
+                Text(
+                  summary.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  summaryText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: colors.mutedText, fontSize: 12),
+                ),
               ],
             ),
-            DownloadStatusLine(playlistId: summary.id),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shuffle and the ⋯ menu; the Play button floats at the row's end.
+class _HeroActions extends StatelessWidget {
+  const _HeroActions({
+    required this.canPlay,
+    required this.onShuffle,
+    required this.onMenu,
+  });
+
+  final bool canPlay;
+  final VoidCallback onShuffle;
+  final ValueChanged<_MenuAction> onMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16),
+      child: Row(
+        children: [
+          OutlinedButton.icon(
+            style: const ButtonStyle(
+              padding: WidgetStatePropertyAll(
+                EdgeInsets.symmetric(horizontal: 16),
+              ),
+            ),
+            onPressed: canPlay ? onShuffle : null,
+            icon: const Icon(Icons.shuffle_rounded),
+            label: const Text('Shuffle'),
+          ),
+          const Spacer(),
+          PopupMenuButton<_MenuAction>(
+            tooltip: 'More',
+            icon: const Icon(Icons.more_horiz),
+            onSelected: onMenu,
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: _MenuAction.rename, child: Text('Rename')),
+              PopupMenuItem(
+                value: _MenuAction.addSongs,
+                child: Text('Add songs'),
+              ),
+              PopupMenuItem(value: _MenuAction.delete, child: Text('Delete')),
+            ],
+          ),
+          // The floating Play button sits here.
+          const SizedBox(width: 16 + _playSize + 8),
+        ],
+      ),
+    );
+  }
+}
+
+/// The floating accent circle that plays the playlist from the top.
+class _PlayButton extends StatelessWidget {
+  const _PlayButton({required this.enabled, required this.onPlay});
+
+  final bool enabled;
+  final VoidCallback onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return IconButton.filled(
+      key: const Key('playlist.play'),
+      tooltip: 'Play',
+      iconSize: 30,
+      style: IconButton.styleFrom(
+        fixedSize: const Size.square(_playSize),
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
+        elevation: 4,
+        shadowColor: const Color(0x80000000),
+      ),
+      onPressed: enabled ? onPlay : null,
+      icon: const Icon(Icons.play_arrow_rounded),
+    );
+  }
+}
+
+/// A YouTube playlist's Sync and Download, and how its downloads are going.
+class _YtActions extends StatelessWidget {
+  const _YtActions({required this.playlistId});
+
+  final String playlistId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              YtSyncButton(playlistId: playlistId),
+              DownloadToggle(playlistId: playlistId),
+            ],
+          ),
+          DownloadStatusLine(playlistId: playlistId),
+        ],
+      ),
+    );
+  }
+}
+
+/// Placeholder rows while an import's entries are on their way.
+class _SkeletonRows extends StatelessWidget {
+  const _SkeletonRows();
+
+  static const int count = 8;
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer(
+      child: Column(
+        children: [
+          for (var i = 0; i < count; i++)
+            KeyedSubtree(
+              key: ValueKey(i),
+              child: SizedBox(
+                key: const Key('playlist.skeleton'),
+                height: _rowHeight,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      SizedBox(width: _numberWidth),
+                      SkeletonBox(width: 44, height: 44),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SkeletonBox(width: 160, height: 12),
+                            SizedBox(height: 8),
+                            SkeletonBox(width: 96, height: 10),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -543,6 +856,7 @@ class _TrackRow extends StatelessWidget {
     required this.playlistId,
     required this.row,
     required this.index,
+    required this.current,
     required this.playing,
     required this.onTap,
     required this.onLocate,
@@ -552,6 +866,11 @@ class _TrackRow extends StatelessWidget {
   final String playlistId;
   final PlaylistTrack row;
   final int index;
+
+  /// The player's current track is this row's (played from this playlist).
+  final bool current;
+
+  /// The player is playing (not paused).
   final bool playing;
   final VoidCallback onTap;
   final VoidCallback onLocate;
@@ -566,7 +885,7 @@ class _TrackRow extends StatelessWidget {
     final dim = missing || removed || unavailable ? 0.45 : 1.0;
     return Material(
       color: colors.background,
-      child: InkWell(
+      child: Pressable(
         onTap: onTap,
         child: SizedBox(
           height: _rowHeight,
@@ -574,6 +893,24 @@ class _TrackRow extends StatelessWidget {
             padding: const EdgeInsets.only(left: 16),
             child: Row(
               children: [
+                SizedBox(
+                  width: _numberWidth,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: current
+                        ? EqualizerBars(playing: playing)
+                        : Opacity(
+                            opacity: dim,
+                            child: Text(
+                              '${index + 1}',
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
                 Opacity(
                   opacity: dim,
                   child: Artwork(track.artworkRef, size: 44, seed: track.id),
@@ -591,7 +928,7 @@ class _TrackRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: playing ? colors.accent : colors.text,
+                            color: current ? colors.accent : colors.text,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
@@ -789,9 +1126,15 @@ class _EmptyPlaylist extends StatelessWidget {
       padding: const EdgeInsets.all(32),
       child: Column(
         children: [
+          Icon(Icons.queue_music_rounded, size: 48, color: colors.mutedText),
+          const SizedBox(height: 12),
           Text(
-            'This playlist is empty',
-            style: TextStyle(color: colors.mutedText),
+            'Add songs to get started',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 16),
           FilledButton(onPressed: onAdd, child: const Text('Add songs')),

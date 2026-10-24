@@ -176,6 +176,53 @@ void main() {
       expect(started.length, 3);
     });
 
+    test('a page request (supersede: false) resolves while current-track '
+        'requests keep superseding', () async {
+      for (final r in ['a', 'b', 'c', 'p']) {
+        putArt('$r.jpg', png(8, 8, (x, y) => 0x010101 * (r.codeUnitAt(0) - 90)));
+      }
+      final gate = Completer<void>();
+      var calls = 0;
+      final s = CoverPaletteService(art, extract: (bytes) async {
+        if (++calls == 1) await gate.future;
+        return pal(0xFF010203);
+      });
+      final fa = s.paletteFor('a.jpg');
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final fp = s.paletteFor('p.jpg', supersede: false);
+      final fb = s.paletteFor('b.jpg');
+      final fc = s.paletteFor('c.jpg');
+      gate.complete();
+      expect(await fa, isNotNull);
+      expect(await fp, isNotNull);
+      expect(await fb, isNull);
+      expect(await fc, isNotNull);
+      expect(calls, 3);
+    });
+
+    test('a page request for a pending current-track ref is not superseded',
+        () async {
+      for (final r in ['a', 'b', 'c']) {
+        putArt('$r.jpg', png(8, 8, (x, y) => 0x010101 * (r.codeUnitAt(0) - 90)));
+      }
+      final gate = Completer<void>();
+      var calls = 0;
+      final s = CoverPaletteService(art, extract: (bytes) async {
+        if (++calls == 1) await gate.future;
+        return pal(0xFF010203);
+      });
+      final fa = s.paletteFor('a.jpg');
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final fb = s.paletteFor('b.jpg');
+      final page = s.paletteFor('b.jpg', supersede: false);
+      final fc = s.paletteFor('c.jpg');
+      gate.complete();
+      await fa;
+      expect(await page, isNotNull);
+      expect(await fb, isNotNull);
+      expect(await fc, isNotNull);
+    });
+
     test('paletteStream: slow A superseded by B emits only B', () async {
       putArt('a.jpg', png(8, 8, (x, y) => 0x111111));
       putArt('b.jpg', png(8, 8, (x, y) => 0x222222));

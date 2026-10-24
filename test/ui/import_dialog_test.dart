@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/result.dart';
+import 'package:songies/providers.dart';
 import 'package:songies/ui/library/import_dialog.dart';
 import 'package:songies/ui/library/library_page.dart';
 import 'package:songies/youtube/yt_import_service.dart';
@@ -92,6 +94,38 @@ void main() {
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('Playlist page p1'), findsOneWidget);
     expect(find.text('Imported 3 songs'), findsOneWidget);
+  });
+
+  uiTest('a new import marks its playlist pending until the page has rows', (
+    tester,
+  ) async {
+    h.importService.onImport = (_) async => const Ok(
+      ImportResult(playlistId: 'p1', alreadyExisted: false, added: 3),
+    );
+    await pumpLibrary(tester);
+    await openDialog(tester);
+    await submit(tester, _link);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.text('Playlist page p1')),
+    );
+    expect(container.read(pendingImportsProvider), {'p1'});
+  });
+
+  uiTest('re-importing a playlist already in the library marks nothing', (
+    tester,
+  ) async {
+    h.importService.onImport = (_) async => const Ok(
+      ImportResult(playlistId: 'p1', alreadyExisted: true, added: 0),
+    );
+    await pumpLibrary(tester);
+    await openDialog(tester);
+    await submit(tester, _link);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.text('Playlist page p1')),
+    );
+    expect(container.read(pendingImportsProvider), isEmpty);
   });
 
   uiTest('while importing it shows a spinner and cannot submit twice', (

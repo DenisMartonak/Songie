@@ -8,6 +8,7 @@ import 'package:songies/data/database.dart';
 import 'package:songies/library/library_scanner.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/library/library_page.dart';
+import 'package:songies/ui/motion/motion.dart';
 
 import '../helpers/ui_harness.dart';
 
@@ -153,6 +154,37 @@ void main() {
     await settle(tester);
     expect(find.text('Tube mix'), findsNothing);
     expect(find.text('Mine'), findsOneWidget);
+  });
+
+  uiTest('chips animate their selection and the list cross-fades', (
+    tester,
+  ) async {
+    await real(tester, () async {
+      await h.addPlaylist('Mine', []);
+      final yt = await h.addPlaylist('Tube mix', []);
+      await (h.db.update(h.db.playlists)..where((p) => p.id.equals(yt))).write(
+        const PlaylistsCompanion(source: Value('yt')),
+      );
+    });
+    await pumpLibrary(tester);
+
+    final chip = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, 'YouTube'),
+    );
+    final style = chip.chipAnimationStyle!;
+    expect(style.selectAnimation!.duration, Motion.standard);
+    expect(style.selectAnimation!.curve, Motion.standardCurve);
+    expect(style.avatarDrawerAnimation!.duration, Motion.standard);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'YouTube'));
+    await tester.pump();
+    await tester.pump(Motion.standard ~/ 2);
+    // Half way: the old list fades out as the new one fades in.
+    expect(find.text('Mine'), findsOneWidget);
+    expect(find.text('Tube mix'), findsNWidgets(2));
+    await settle(tester);
+    expect(find.text('Mine'), findsNothing);
+    expect(find.text('Tube mix'), findsOneWidget);
   });
 
   uiTest('the Downloaded chip keeps playlists downloaded here', (tester) async {

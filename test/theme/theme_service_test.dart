@@ -66,7 +66,10 @@ class _FakePalettes extends CoverPaletteService {
   final Map<String, Completer<void>> gates = {};
 
   @override
-  Future<CoverPalette?> paletteFor(String? artRef) async {
+  Future<CoverPalette?> paletteFor(
+    String? artRef, {
+    bool supersede = true,
+  }) async {
     if (artRef == null) return null;
     await gates[artRef]?.future;
     return palettes[artRef];

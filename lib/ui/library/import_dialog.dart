@@ -82,8 +82,9 @@ class _ImportDialogState extends ConsumerState<ImportDialog> {
     if (!mounted) return;
     switch (result) {
       case Ok(:final value):
+        final pending = ref.read(pendingImportsProvider.notifier);
         Navigator.of(context).pop();
-        _open(value);
+        _open(value, pending);
       case Err(:final failure):
         setState(() {
           _error = ytErrorUserMessage(failure);
@@ -92,7 +93,11 @@ class _ImportDialogState extends ConsumerState<ImportDialog> {
     }
   }
 
-  void _open(ImportResult r) {
+  void _open(ImportResult r, PendingImports pending) {
+    if (!r.alreadyExisted && r.added > 0) {
+      // Its page shows skeleton rows until the entries reach it.
+      pending.add(r.playlistId);
+    }
     widget.router.go('/library/playlist/${r.playlistId}');
     final songs = r.added == 1 ? '1 song' : '${r.added} songs';
     widget.snacks

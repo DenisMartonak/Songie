@@ -8,6 +8,8 @@ import '../../data/database.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../motion/fade_slide_in.dart';
+import '../motion/pressable.dart';
 import '../shell/adaptive_shell.dart';
 import '../widgets/artwork.dart';
 
@@ -140,8 +142,14 @@ class _Results extends ConsumerWidget {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     if (query.trim().isEmpty) {
       return _Message(
-        'Search your songs and playlists',
+        'Search your library',
         color: colors.mutedText,
+        icon: Icon(
+          Icons.manage_search_rounded,
+          key: const Key('search.emptyIcon'),
+          size: 56,
+          color: colors.mutedText.withValues(alpha: 0.6),
+        ),
       );
     }
     final tracks = ref.watch(searchTracksProvider(query));
@@ -151,48 +159,66 @@ class _Results extends ConsumerWidget {
     if (songs == null || lists == null) return const SizedBox.shrink();
     if (songs.isEmpty && lists.isEmpty) {
       return _Message(
-        'No results for "${query.trim()}"',
+        "Nothing matches '${query.trim()}'",
         color: colors.mutedText,
       );
     }
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final children = [
+      if (songs.isNotEmpty) ...[
+        const _SectionTitle('Songs', key: ValueKey('songs')),
+        for (final track in songs)
+          _SongRow(track: track, key: ValueKey('song.${track.id}')),
+      ],
+      if (lists.isNotEmpty) ...[
+        const _SectionTitle('Playlists', key: ValueKey('playlists')),
+        for (final playlist in lists)
+          _PlaylistRow(
+            playlist: playlist,
+            key: ValueKey('playlist.${playlist.id}'),
+          ),
+      ],
+    ];
+    // A new query is a new list, so its results fade in again.
     return ListView(
+      key: ValueKey(query),
       padding: EdgeInsets.only(bottom: bottom + 16),
       children: [
-        if (songs.isNotEmpty) ...[
-          const _SectionTitle('Songs'),
-          for (final track in songs) _SongRow(track: track),
-        ],
-        if (lists.isNotEmpty) ...[
-          const _SectionTitle('Playlists'),
-          for (final playlist in lists) _PlaylistRow(playlist: playlist),
-        ],
+        for (final (i, child) in children.indexed)
+          FadeSlideIn(index: i, id: child.key, child: child),
       ],
     );
   }
 }
 
 class _Message extends StatelessWidget {
-  const _Message(this.text, {required this.color});
+  const _Message(this.text, {required this.color, this.icon});
 
   final String text;
   final Color color;
+  final Widget? icon;
 
   @override
   Widget build(BuildContext context) => Center(
     child: Padding(
       padding: const EdgeInsets.all(24),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: TextStyle(color: color, fontSize: 15),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon case final icon?) ...[icon, const SizedBox(height: 12)],
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: color, fontSize: 15),
+          ),
+        ],
       ),
     ),
   );
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title);
+  const _SectionTitle(this.title, {super.key});
 
   final String title;
 
@@ -233,7 +259,7 @@ class _ResultRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    return InkWell(
+    return Pressable(
       key: rowKey,
       onTap: onTap,
       child: Padding(
@@ -273,7 +299,7 @@ class _ResultRow extends StatelessWidget {
 }
 
 class _SongRow extends ConsumerWidget {
-  const _SongRow({required this.track});
+  const _SongRow({required this.track, super.key});
 
   final Track track;
 
@@ -289,7 +315,7 @@ class _SongRow extends ConsumerWidget {
 }
 
 class _PlaylistRow extends StatelessWidget {
-  const _PlaylistRow({required this.playlist});
+  const _PlaylistRow({required this.playlist, super.key});
 
   final PlaylistSummary playlist;
 

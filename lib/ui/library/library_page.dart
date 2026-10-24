@@ -6,6 +6,7 @@ import '../../core/result.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../motion/motion.dart';
 import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../widgets/page_snack_bar.dart';
@@ -76,6 +77,13 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         ? ref.watch(downloadEnabledPlaylistsProvider).value ?? const <String>{}
         : null;
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final motion = Motion.of(context);
+    final chipMotion = AnimationStyle(
+      duration: motion.standard,
+      reverseDuration: motion.standard,
+      curve: Motion.standardCurve,
+      reverseCurve: Motion.standardCurve,
+    );
 
     return SafeArea(
       bottom: false,
@@ -126,6 +134,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 for (final f in _Filter.values)
                   ChoiceChip(
                     label: Text(f.label),
+                    chipAnimationStyle: ChipAnimationStyle(
+                      selectAnimation: chipMotion,
+                      avatarDrawerAnimation: chipMotion,
+                    ),
                     selected: _filter == f,
                     onSelected: (_) => setState(() => _filter = f),
                   ),
@@ -146,11 +158,18 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                         (downloaded == null || downloaded.contains(pl.id)))
                       pl,
                 ];
-                return ListView.builder(
-                  padding: EdgeInsets.only(bottom: bottom + 16),
-                  itemCount: shown.length,
-                  itemBuilder: (context, i) =>
-                      _PlaylistTile(playlist: shown[i]),
+                // Changing the filter cross-fades to the new list.
+                return AnimatedSwitcher(
+                  duration: motion.standard,
+                  switchInCurve: Motion.standardCurve,
+                  switchOutCurve: Motion.standardCurve,
+                  child: ListView.builder(
+                    key: ValueKey(_filter),
+                    padding: EdgeInsets.only(bottom: bottom + 16),
+                    itemCount: shown.length,
+                    itemBuilder: (context, i) =>
+                        _PlaylistTile(playlist: shown[i]),
+                  ),
                 );
               },
             ),

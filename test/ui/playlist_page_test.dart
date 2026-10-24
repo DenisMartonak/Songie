@@ -1,14 +1,25 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
+import 'package:songies/library/art_cache.dart';
 import 'package:songies/library/library_scanner.dart';
+import 'package:songies/providers.dart';
+import 'package:songies/theme/app_theme.dart';
+import 'package:songies/theme/cover_palette.dart';
+import 'package:songies/ui/downloads/download_toggle.dart';
+import 'package:songies/ui/motion/equalizer_bars.dart';
+import 'package:songies/ui/motion/pressable.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/library/add_songs_sheet.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 
+import '../helpers/test_db.dart';
 import '../helpers/ui_harness.dart';
 
 void main() {
@@ -126,7 +137,8 @@ void main() {
     await pumpPage(tester, id);
 
     await tester.tap(find.text('Song t2'));
-    await settle(tester);
+    // Playing, the row's equalizer keeps animating: no settling.
+    await flush(tester);
 
     final state = h.player.state;
     expect([for (final t in state.queue) t.id], ['t1', 't2', 't3']);
@@ -141,15 +153,15 @@ void main() {
     h.player.setShuffle(true);
     await pumpPage(tester, id);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Play'));
-    await settle(tester);
+    await tester.tap(find.byKey(const Key('playlist.play')));
+    await flush(tester);
     expect(h.player.state.shuffle, isFalse);
     expect([for (final t in h.player.state.queue) t.id], ['t1', 't2', 't3']);
     expect(h.player.state.index, 0);
     expect(h.player.state.sourcePlaylistId, id);
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'Shuffle'));
-    await settle(tester);
+    await flush(tester);
     expect(h.player.state.shuffle, isTrue);
     expect(h.player.state.queue, hasLength(3));
     expect(h.player.state.sourcePlaylistId, id);
@@ -171,7 +183,8 @@ void main() {
     // The player (not the page) decides: it skips a file that is really gone
     // and reports it, and plays one that came back.
     await tester.tap(find.text('Song t2'));
-    await settle(tester);
+    // Playing, the row's equalizer keeps animating: no settling.
+    await flush(tester);
     expect(h.player.state.queue.map((t) => t.id), ['t1', 't2']);
     expect(h.player.state.current?.id, 't2');
     expect(h.backend.sources, ['/music/t2.mp3']);
@@ -373,6 +386,247 @@ void main() {
     });
   });
 
+  uiTest('the playing row shows equalizer bars instead of its number', (
+    tester,
+  ) async {
+    final id = await threeSongs(tester);
+    await pumpPage(tester, id);
+    expect(find.byType(EqualizerBars), findsNothing);
+    expect(find.text('2'), findsOneWidget);
+
+    await tester.tap(find.text('Song t2'));
+    await flush(tester);
+
+    final bars = find.byType(EqualizerBars);
+    expect(bars, findsOneWidget);
+    expect(tester.widget<EqualizerBars>(bars).playing, isTrue);
+    expect(find.text('2'), findsNothing);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    final accent = Theme.of(tester.element(bars))
+        .extension<SongiesColors>()!
+        .accent;
+    expect(tester.widget<Text>(find.text('Song t2')).style!.color, accent);
+    expect(
+      tester.widget<Text>(find.text('Song t1')).style!.color,
+      isNot(accent),
+    );
+
+    await real(tester, () => h.player.pause());
+    await settle(tester);
+    expect(tester.widget<EqualizerBars>(bars).playing, isFalse);
+  });
+
+  uiTest('rows are pressable', (tester) async {
+    final id = await threeSongs(tester);
+    await pumpPage(tester, id);
+    expect(
+      find.ancestor(of: find.text('Song t1'), matching: find.byType(Pressable)),
+      findsOneWidget,
+    );
+  });
+
+  group('collapsing hero', () {
+    Future<String> manySongs(WidgetTester tester) => real(tester, () async {
+      final ids = [for (var i = 1; i <= 20; i++) 't$i'];
+      for (final t in ids) {
+        await h.addTrack(t);
+      }
+      return h.addPlaylist('Road trip', ids);
+    });
+
+    double barTitleOpacity(WidgetTester tester) {
+      final title = find.byKey(const Key('playlist.barTitle'));
+      if (title.evaluate().isEmpty) return 0;
+      return tester
+          .widget<Opacity>(
+            find.ancestor(of: title, matching: find.byType(Opacity)).first,
+          )
+          .opacity;
+    }
+
+    uiTest('scrolling 300 px pins the title and the Play button in the bar', (
+      tester,
+    ) async {
+      final id = await manySongs(tester);
+      await pumpPage(tester, id);
+      expect(barTitleOpacity(tester), 0);
+      final bar = tester.getRect(find.byKey(const Key('playlist.topBar')));
+      final playBefore = tester.getRect(find.byKey(const Key('playlist.play')));
+      expect(playBefore.top, greaterThan(bar.bottom));
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+      await settle(tester);
+
+      expect(barTitleOpacity(tester), 1);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('playlist.barTitle'))).data,
+        'Road trip',
+      );
+      final pinned = tester.getRect(find.byKey(const Key('playlist.play')));
+      expect(pinned.center.dy, inInclusiveRange(bar.top, bar.bottom));
+      // Still a working Play button.
+      await tester.tap(find.byKey(const Key('playlist.play')));
+      await flush(tester);
+      expect(h.player.state.sourcePlaylistId, id);
+      expect(h.player.state.index, 0);
+      await real(tester, () => h.player.pause());
+    });
+
+    void scrollTo(WidgetTester tester, double offset) => tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position
+        .jumpTo(offset);
+
+    uiTest('the title stays hidden in the bar until 60 % collapse', (
+      tester,
+    ) async {
+      final id = await manySongs(tester);
+      await pumpPage(tester, id);
+      const range = playlistHeroCollapseRange;
+      scrollTo(tester, range * 0.55);
+      await settle(tester);
+      expect(barTitleOpacity(tester), 0);
+
+      scrollTo(tester, range * 0.8);
+      await settle(tester);
+      expect(barTitleOpacity(tester), closeTo(0.5, 0.01));
+    });
+
+    uiTest('the cover shrinks and fades as the hero collapses', (tester) async {
+      final id = await manySongs(tester);
+      await pumpPage(tester, id);
+      final cover = find.byKey(const Key('playlist.cover'));
+      final before = tester.getSize(cover);
+      scrollTo(tester, playlistHeroCollapseRange * 0.3);
+      await settle(tester);
+      expect(tester.getSize(cover).width, lessThan(before.width));
+      final fade = tester.widget<Opacity>(
+        find.ancestor(of: cover, matching: find.byType(Opacity)).first,
+      );
+      expect(fade.opacity, lessThan(1));
+    });
+
+    uiTest('the hero is a gradient from the cover\'s dominant colour', (
+      tester,
+    ) async {
+      const palette = CoverPalette(
+        dominant: Color(0xFF335577),
+        vibrant: Color(0xFFE02060),
+        muted: Color(0xFF404040),
+      );
+      final id = await real(tester, () async {
+        await h.addTrack('t1');
+        final id = await h.addPlaylist('Road trip', ['t1']);
+        await (h.db.update(h.db.playlists)..where((p) => p.id.equals(id)))
+            .write(const PlaylistsCompanion(coverRef: Value('cover.jpg')));
+        return id;
+      });
+      tester.view.physicalSize = const Size(800, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        h.app(
+          initialLocation: '/playlist/$id',
+          routes: [
+            GoRoute(
+              path: '/playlist/:id',
+              builder: (_, state) =>
+                  Scaffold(body: PlaylistPage(id: state.pathParameters['id']!)),
+            ),
+          ],
+          extraOverrides: [
+            artCacheProvider.overrideWithValue(
+              ArtCache(Directory('/nonexistent/songies-art')),
+            ),
+            artPaletteProvider.overrideWith(
+              (ref, art) async => art == 'cover.jpg' ? palette : null,
+            ),
+          ],
+        ),
+      );
+      await settle(tester);
+      final hero = tester.widget<DecoratedBox>(
+        find.byKey(const Key('playlist.heroBackground')),
+      );
+      final gradient =
+          (hero.decoration as BoxDecoration).gradient! as LinearGradient;
+      final background = Theme.of(tester.element(find.byType(PlaylistPage)))
+          .extension<SongiesColors>()!
+          .background;
+      expect(gradient.begin, Alignment.topCenter);
+      expect(gradient.end, Alignment.bottomCenter);
+      expect(gradient.colors, [palette.dominant, background]);
+    });
+
+    uiTest('a 400 px phone fits every hero action without overflow', (
+      tester,
+    ) async {
+      final id = await real(tester, () async {
+        await h.db
+            .into(h.db.tracks)
+            .insert(trackRow(id: 'y1', source: 'yt', ytVideoId: 'vy1'));
+        final id = await h.addPlaylist('A long YouTube mix name', ['y1']);
+        await (h.db.update(
+          h.db.playlists,
+        )..where((p) => p.id.equals(id))).write(
+          const PlaylistsCompanion(
+            source: Value('yt'),
+            ytPlaylistUrl: Value('https://music.youtube.com/playlist?list=PLx'),
+          ),
+        );
+        return id;
+      });
+      await pumpPage(tester, id, size: const Size(400, 800));
+      expect(tester.takeException(), isNull);
+      for (final f in [
+        find.byKey(const Key('playlist.play')),
+        find.widgetWithText(OutlinedButton, 'Shuffle'),
+        find.byTooltip('More').first,
+        find.text('Sync with YouTube'),
+        find.byType(DownloadToggle),
+      ]) {
+        expect(f, findsOneWidget);
+        final r = tester.getRect(f);
+        expect(r.left, greaterThanOrEqualTo(0));
+        expect(r.right, lessThanOrEqualTo(400));
+      }
+    });
+  });
+
+  group('skeleton rows', () {
+    uiTest('show while an import is pending and the entries are empty', (
+      tester,
+    ) async {
+      final id = await real(tester, () => h.addPlaylist('Importing', []));
+      await pumpPage(tester, id);
+      expect(find.byKey(const Key('playlist.skeleton')), findsNothing);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PlaylistPage)),
+      );
+      container.read(pendingImportsProvider.notifier).add(id);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byKey(const Key('playlist.skeleton')), findsNWidgets(8));
+      expect(find.text('Add songs to get started'), findsNothing);
+
+      // The entries arrive: rows replace the skeletons, and it is no longer
+      // pending.
+      // Written from the test clock and pumped along (from the real clock it
+      // would wait on database work queued on the test clock).
+      final write = h.addTrack('t1').then((_) => h.repo.addTracks(id, ['t1']));
+      // The shimmer loops until the rows arrive, so let them arrive first.
+      await flush(tester);
+      await write;
+      await flush(tester);
+      await settle(tester);
+      expect(find.byKey(const Key('playlist.skeleton')), findsNothing);
+      expect(find.text('Song t1'), findsOneWidget);
+      expect(container.read(pendingImportsProvider), isEmpty);
+    });
+  });
+
   uiTest('a 300 character title stays on one line without overflow', (
     tester,
   ) async {
@@ -446,6 +700,7 @@ void main() {
     await pumpPage(tester, id);
 
     expect(find.text('0 songs · 0 h 0 min'), findsOneWidget);
+    expect(find.text('Add songs to get started'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Add songs'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Add songs'));
     await settle(tester);
