@@ -109,6 +109,8 @@ GoRoute _playlistRoute() => GoRoute(
 /// A page inside a branch: it enters, and the page under it leaves, along a
 /// shared horizontal axis over [Motion.emphasized] (at once with reduced
 /// motion). Branch roots use it too so that they slide out under a push.
+/// The duration is read when the page is built, so a page already built
+/// keeps its own after Reduce animations changes.
 Page<void> sharedAxisPage(
   BuildContext context,
   GoRouterState state,

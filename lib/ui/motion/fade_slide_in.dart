@@ -5,16 +5,29 @@ import 'motion.dart';
 
 /// Fades [child] in while sliding it up 12 px over [Motion.standard], after
 /// a stagger of 30 ms per [index] (capped at index 8), for lists and grids
-/// as a page first fills.
+/// as they fill.
 ///
-/// It plays only while the page is first filling: items built later in the
-/// same route (scrolled into view, or scrolled back to) appear at once. With
-/// reduced motion everything appears at once.
+/// Each item enters once: built again later in the same scroll view (or,
+/// outside one, the same route), such as when scrolled back to, it appears
+/// at once. Items that first appear later (a list that loads after the page,
+/// rows scrolled into view) still enter, staggered from the first of them.
+/// Items are told apart by [id], or by [index] when there is none; give
+/// each an [id] when several lists share one scroll view. With reduced
+/// motion everything appears at once.
 class FadeSlideIn extends StatefulWidget {
-  const FadeSlideIn({required this.index, required this.child, super.key});
+  const FadeSlideIn({
+    required this.index,
+    required this.child,
+    this.id,
+    super.key,
+  });
 
+  /// The item's position in its list; sets the stagger.
   final int index;
   final Widget child;
+
+  /// Identifies the item within its scroll view (defaults to [index]).
+  final Object? id;
 
   /// Delay added per index.
   static const Duration stagger = Duration(milliseconds: 30);
@@ -25,17 +38,29 @@ class FadeSlideIn extends StatefulWidget {
   /// How far below its place the child starts.
   static const double offset = 12;
 
-  /// After a route's first item appeared, items built within this window
-  /// still play; later ones appear at once.
-  static Duration get fillWindow =>
+  /// Items first built within this long of each other enter as one
+  /// staggered group.
+  static Duration get groupWindow =>
       stagger * maxStaggeredIndex + Motion.standard;
 
   @override
   State<FadeSlideIn> createState() => _FadeSlideInState();
 }
 
-/// When each route's first [FadeSlideIn] was built, in frame time.
-final Expando<Duration> _routeFillStart = Expando('FadeSlideIn fill start');
+/// The items of one scroll view (or route) that have entered, and the group
+/// entering now.
+class _Entrances {
+  final Set<Object> entered = {};
+
+  /// When the current group started, in frame time; null before the first.
+  Duration? groupStart;
+
+  /// The index the current group's stagger counts from: 0 for the first
+  /// group (the page filling), else the group's first item.
+  int groupOrigin = 0;
+}
+
+final Expando<_Entrances> _entrances = Expando('FadeSlideIn entrances');
 
 class _FadeSlideInState extends State<FadeSlideIn>
     with SingleTickerProviderStateMixin {
@@ -58,16 +83,24 @@ class _FadeSlideInState extends State<FadeSlideIn>
     if (motion.reduced) return;
 
     final now = SchedulerBinding.instance.currentSystemFrameTimeStamp;
-    final route = ModalRoute.of(context);
+    final scope = Scrollable.maybeOf(context) ?? ModalRoute.of(context);
+    var position = widget.index;
     var elapsed = Duration.zero;
-    if (route != null) {
-      final start = _routeFillStart[route] ??= now;
-      elapsed = now - start;
-      if (elapsed > FadeSlideIn.fillWindow) return;
+    if (scope != null) {
+      final entrances = _entrances[scope] ??= _Entrances();
+      if (!entrances.entered.add(widget.id ?? widget.index)) return;
+      final groupStart = entrances.groupStart;
+      if (groupStart == null || now - groupStart > FadeSlideIn.groupWindow) {
+        entrances
+          ..groupOrigin = groupStart == null ? 0 : widget.index
+          ..groupStart = now;
+      }
+      position = widget.index - entrances.groupOrigin;
+      elapsed = now - entrances.groupStart!;
     }
 
-    final index = widget.index.clamp(0, FadeSlideIn.maxStaggeredIndex);
-    var delay = FadeSlideIn.stagger * index - elapsed;
+    final steps = position.clamp(0, FadeSlideIn.maxStaggeredIndex);
+    var delay = FadeSlideIn.stagger * steps - elapsed;
     if (delay < Duration.zero) delay = Duration.zero;
     final total = delay + motion.standard;
     final controller = AnimationController(vsync: this, duration: total);

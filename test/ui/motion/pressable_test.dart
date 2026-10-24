@@ -5,17 +5,8 @@ import 'package:songies/ui/motion/motion.dart';
 import 'package:songies/ui/motion/pressable.dart';
 
 void main() {
-  double scale(WidgetTester tester) => tester
-      .widget<AnimatedScale>(
-        find.descendant(
-          of: find.byType(Pressable),
-          matching: find.byType(AnimatedScale),
-        ),
-      )
-      .scale;
-
   /// The scale currently applied (mid-animation too).
-  double renderedScale(WidgetTester tester) => tester
+  double scale(WidgetTester tester) => tester
       .widget<Transform>(
         find
             .descendant(
@@ -27,69 +18,145 @@ void main() {
       .transform
       .entry(0, 0);
 
-  Future<void> pump(WidgetTester tester, {VoidCallback? onTap}) =>
-      tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Center(
-              child: Pressable(
-                onTap: onTap ?? () {},
-                child: const SizedBox(
-                  width: 100,
-                  height: 40,
-                  child: Text('Press me'),
-                ),
-              ),
+  Finder ink() => find.descendant(
+    of: find.byType(Pressable),
+    matching: find.byType(InkWell),
+  );
+
+  Future<void> pump(
+    WidgetTester tester, {
+    VoidCallback? onTap,
+    bool enabled = true,
+  }) => tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Pressable(
+            onTap: enabled ? onTap ?? () {} : null,
+            child: const SizedBox(
+              width: 100,
+              height: 40,
+              child: Text('Press me'),
             ),
           ),
         ),
-      );
+      ),
+    ),
+  );
 
   testWidgets('scales to 0.97 while pressed and back to 1.0 on release', (
     tester,
   ) async {
     var taps = 0;
     await pump(tester, onTap: () => taps++);
-    expect(renderedScale(tester), 1.0);
+    expect(scale(tester), 1.0);
 
     final gesture = await tester.startGesture(
       tester.getCenter(find.byType(Pressable)),
     );
-    // Past the tap-down deadline, then the press animation.
-    await tester.pump(kPressTimeout);
+    // The press shows from pointer down, over Motion.quick.
     await tester.pump();
     await tester.pump(Motion.quick ~/ 2);
-    expect(renderedScale(tester), inExclusiveRange(0.97, 1.0));
-    await tester.pump(Motion.quick);
-    expect(scale(tester), 0.97);
-    expect(renderedScale(tester), closeTo(0.97, 1e-6));
+    expect(scale(tester), inExclusiveRange(0.97, 1.0));
+    await tester.pump(Motion.quick ~/ 2);
+    await tester.pump(kPressTimeout);
+    expect(scale(tester), closeTo(0.97, 1e-6));
 
     await gesture.up();
     await tester.pumpAndSettle();
     expect(scale(tester), 1.0);
-    expect(renderedScale(tester), 1.0);
     expect(taps, 1);
+  });
+
+  testWidgets('a quick tap still shows the press', (tester) async {
+    var taps = 0;
+    await pump(tester, onTap: () => taps++);
+    // Down and up with no frame in between.
+    await tester.tap(find.byType(Pressable));
+    var lowest = 1.0;
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      final s = scale(tester);
+      if (s < lowest) lowest = s;
+    }
+    expect(lowest, lessThan(1.0));
+    await tester.pumpAndSettle();
+    expect(scale(tester), 1.0);
+    expect(taps, 1);
+  });
+
+  testWidgets('a press that turns into a scroll lets go', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListView(
+            children: [
+              for (var i = 0; i < 30; i++)
+                Pressable(
+                  onTap: () {},
+                  child: SizedBox(height: 60, child: Text('row $i')),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('row 2')),
+    );
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -200));
+    await tester.pumpAndSettle();
+    final row = find.ancestor(
+      of: find.text('row 2'),
+      matching: find.byType(Pressable),
+    );
+    final transform = tester.widget<Transform>(
+      find.descendant(of: row, matching: find.byType(Transform)).first,
+    );
+    expect(transform.transform.entry(0, 0), 1.0);
+    await gesture.up();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('keeps the ink ripple', (tester) async {
     await pump(tester);
-    expect(
-      find.descendant(
-        of: find.byType(Pressable),
-        matching: find.byType(InkWell),
-      ),
-      findsOneWidget,
-    );
+    expect(ink(), findsOneWidget);
   });
 
   testWidgets('hovering lightens the surface by 4 %', (tester) async {
     await pump(tester);
-    final ink = tester.widget<InkWell>(
-      find.descendant(
-        of: find.byType(Pressable),
-        matching: find.byType(InkWell),
-      ),
+    expect(
+      tester.widget<InkWell>(ink()).hoverColor,
+      Colors.white.withValues(alpha: 0.04),
     );
-    expect(ink.hoverColor, Colors.white.withValues(alpha: 0.04));
+  });
+
+  testWidgets('with no callbacks it is inert', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await pump(tester, enabled: false);
+
+    final inkWell = tester.widget<InkWell>(ink());
+    expect(inkWell.onTapDown, isNull);
+    expect(inkWell.onTapUp, isNull);
+    expect(inkWell.onTapCancel, isNull);
+    expect(
+      tester.getSemantics(find.text('Press me')),
+      isNot(isSemantics(isFocusable: true)),
+    );
+    expect(
+      tester.getSemantics(find.text('Press me')),
+      isNot(isSemantics(isEnabled: true)),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(Pressable)),
+    );
+    await tester.pump();
+    await tester.pump(Motion.quick);
+    expect(scale(tester), 1.0);
+    expect(tester.hasRunningAnimations, isFalse);
+    await gesture.up();
+    semantics.dispose();
   });
 }
