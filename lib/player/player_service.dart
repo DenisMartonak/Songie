@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:songies/core/connectivity.dart';
 import 'package:songies/core/log.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
@@ -125,6 +126,7 @@ class PlayerService {
     this._onMissing,
     this._onTrackStarted,
     this._onUnavailable,
+    this._network,
     Random? random,
   }) : _random = random ?? Random() {
     _sub = _backend.states.listen(_onBackendState);
@@ -150,6 +152,10 @@ class PlayerService {
   final Future<void> Function(String trackId)? _onMissing;
   final Future<void> Function(Track track, String? playlistId)? _onTrackStarted;
   final Future<void> Function(String trackId)? _onUnavailable;
+
+  /// While it reports offline, YouTube songs without a downloaded file are
+  /// skipped quietly instead of stopping playback.
+  final NetworkStatus? _network;
   final Random _random;
 
   final StreamController<PlayerState> _controller =
@@ -188,6 +194,10 @@ class PlayerService {
 
   /// Why the last [_tryStart] failed, as a [PlayerNotice.reason].
   String? _lastFailureReason;
+
+  /// Set by [_tryStart] when the song failed only because the device is
+  /// offline and it has no downloaded file; it is skipped quietly.
+  bool _skipQuietly = false;
 
   /// Whether [PlayerState.notice] was published after the latest successful
   /// start; that next start keeps it (it explains the jump), the one after
@@ -511,8 +521,9 @@ class PlayerService {
       AppLog.w('Skipping ${entry.track.id}: $reason');
       lastFailed = entry;
       lastReason = reason;
-      // Songs already known to be unavailable are skipped quietly.
-      if (!entry.track.unavailable) {
+      // Songs already known to be unavailable, and undownloaded YouTube songs
+      // while offline, are skipped quietly, outside the cap.
+      if (!entry.track.unavailable && !_skipQuietly) {
         _failedStarts++;
         pending = PlayerNotice(trackTitle: entry.track.title, reason: reason);
       }
@@ -598,6 +609,7 @@ class PlayerService {
     final track = entry.track;
     _prefetchedFor = null;
     _lastFailureReason = null;
+    _skipQuietly = false;
     if (track.source == 'yt' && !track.unavailable) {
       if (_loaded && !identical(_loadedEntry, entry)) {
         // Silence the old track first, or it is heard under the new title.
@@ -634,7 +646,12 @@ class PlayerService {
             track.source != 'yt' && failure.kind == FailureKind.notFound
             ? fileMissingReason
             : failure.message;
-        if (failure.kind == FailureKind.network ||
+        if (track.source == 'yt' &&
+            failure.kind == FailureKind.network &&
+            await _isOffline()) {
+          // Offline and not downloaded: later songs may be downloaded.
+          _skipQuietly = true;
+        } else if (failure.kind == FailureKind.network ||
             (track.source == 'yt' && _haltsQueue(failure))) {
           AppLog.w('Cannot play ${track.id}: ${failure.message}');
           _networkFailure = failure;
@@ -705,6 +722,17 @@ class PlayerService {
     _resolver.invalidate(entry.track);
     _networkFailure = null;
     return _tryStart(entry, report: report);
+  }
+
+  Future<bool> _isOffline() async {
+    final network = _network;
+    if (network == null) return false;
+    try {
+      return await network.current() == NetworkKind.offline;
+    } catch (e, s) {
+      AppLog.w('Reading the network status failed', e, s);
+      return false;
+    }
   }
 
   Duration? _durationOf(Track t) =>

@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:songies/core/connectivity.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/player/audio_backend.dart';
@@ -13,6 +14,7 @@ import 'package:songies/ui/shell/player_error_snacks.dart';
 import 'package:songies/youtube/yt_models.dart';
 
 import '../helpers/fake_audio_backend.dart';
+import '../helpers/fake_network_status.dart';
 
 Track track(String id, {int durationMs = 0}) => Track(
   id: id,
@@ -835,6 +837,104 @@ void main() {
       await player.setVolume(0.3);
       await player.playQueue([a, b]);
       expect(player.state.volume, 0.3);
+    });
+  });
+
+  group('offline playback', () {
+    final offline = Failure(FailureKind.network, "You're offline");
+    late FakeNetworkStatus net;
+
+    /// YouTube tracks [ids] that have no downloaded file: offline they fail
+    /// to resolve, as the stream resolver does.
+    void notDownloaded(Iterable<String> ids) {
+      for (final id in ids) {
+        resolver.failures[id] = offline;
+      }
+    }
+
+    setUp(() async {
+      await player.dispose(); // also closes the backend
+      backend = FakeAudioBackend();
+      net = FakeNetworkStatus(NetworkKind.offline);
+      player = PlayerService(
+        backend,
+        resolver,
+        network: net,
+        onMissing: (id) async => missingReports.add(id),
+        onUnavailable: (id) async => unavailable.add(id),
+      );
+    });
+
+    test(
+      'skips undownloaded YouTube songs quietly to a downloaded one',
+      () async {
+        final ys = [for (var i = 1; i <= 6; i++) ytTrack('y$i')];
+        notDownloaded(['y1', 'y2', 'y3', 'y4', 'y5']);
+        await player.playQueue(ys);
+
+        expect(resolver.resolved, ['y1', 'y2', 'y3', 'y4', 'y5', 'y6']);
+        expect(backend.sources, ['/music/y6.mp3']);
+        expect(player.state.current, ys[5]);
+        expect(player.state.playing, isTrue);
+        expect(player.state.error, isNull);
+        expect(player.state.notice, isNull);
+        expect(unavailable, isEmpty);
+      },
+    );
+
+    test('auto-advance passes undownloaded songs, local MP3s play', () async {
+      final ys = [for (var i = 1; i <= 4; i++) ytTrack('y$i')];
+      notDownloaded(['y1', 'y2', 'y3', 'y4']);
+      final d = ytTrack('d');
+      await player.playQueue([a, ...ys, d, b]);
+      expect(player.state.current, a);
+
+      backend.complete();
+      await settle();
+      expect(player.state.current, d);
+      expect(player.state.playing, isTrue);
+      expect(player.state.notice, isNull);
+
+      backend.complete();
+      await settle();
+      expect(player.state.current, b);
+      expect(backend.sources, ['/music/a.mp3', '/music/d.mp3', '/music/b.mp3']);
+    });
+
+    test('quiet skips do not count toward the 3-in-a-row cap', () async {
+      final ys = [for (var i = 1; i <= 3; i++) ytTrack('y$i')];
+      notDownloaded(['y1', 'y2', 'y3']);
+      // Two real failures, then undownloaded songs, then a playable one.
+      resolver.missing.addAll(['a', 'b']);
+      await player.playQueue([a, b, ...ys, c]);
+
+      expect(player.state.current, c);
+      expect(player.state.playing, isTrue);
+      expect(missingReports, ['a', 'b']);
+    });
+
+    test('stops when nothing left is downloaded', () async {
+      final ys = [for (var i = 1; i <= 5; i++) ytTrack('y$i')];
+      notDownloaded(ys.map((y) => y.id));
+      await player.playQueue(ys);
+
+      expect(resolver.resolved, ['y1', 'y2', 'y3', 'y4', 'y5']);
+      expect(backend.sources, isEmpty);
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, "You're offline");
+      expect(player.state.notice, isNull);
+    });
+
+    test('online, a network failure still stops playback', () async {
+      net.kind = NetworkKind.wifi;
+      final ys = [for (var i = 1; i <= 3; i++) ytTrack('y$i')];
+      resolver.failures['y1'] = offline;
+      await player.playQueue(ys);
+
+      expect(resolver.resolved, ['y1']);
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, "You're offline");
+      expect(player.state.current, ys[0]);
     });
   });
 

@@ -145,6 +145,7 @@ Future<void> main() async {
     onMissing: scanner.markMissing,
     onTrackStarted: (track, playlistId) => history.record(track.id, playlistId),
     onUnavailable: library.markUnavailable,
+    network: network,
   );
   bindAudioSession(
     becomingNoisy: backend.becomingNoisy,
