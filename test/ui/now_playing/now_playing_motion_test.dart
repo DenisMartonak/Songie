@@ -334,6 +334,69 @@ void main() {
       expect(tester.getTopLeft(page()).dy, 0);
     });
 
+    /// The app answers input again and nothing is stuck mid-gesture: Now
+    /// Playing opens and its close button closes it.
+    Future<void> expectUsable(WidgetTester tester, GoRouter router) async {
+      final navigator = tester.state<NavigatorState>(
+        find.byType(Navigator).first,
+      );
+      expect(navigator.userGestureInProgress, isFalse);
+      if (find.byType(NowPlayingPage).evaluate().isEmpty) {
+        router.push('/now-playing');
+        await settle(tester);
+      }
+      expect(find.byType(NowPlayingPage), findsOneWidget);
+      await tester.tap(find.byKey(const Key('nowPlaying.close')));
+      await settle(tester);
+      expect(find.byType(NowPlayingPage), findsNothing);
+      expect(find.text('Shell stub'), findsOneWidget);
+    }
+
+    uiTest('crossing the phone breakpoint mid-drag leaves nothing stuck', (
+      tester,
+    ) async {
+      final router = await pumpApp(tester);
+      await playThree(tester);
+      final gesture = await tester.startGesture(tester.getCenter(art()));
+      for (var i = 0; i < 6; i++) {
+        await gesture.moveBy(const Offset(0, 20));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      // The window widens to desktop while the finger is down.
+      tester.view.physicalSize = const Size(1280, 800);
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, 20));
+      await tester.pump();
+      await gesture.up();
+      await settle(tester);
+      expect(tester.takeException(), isNull);
+      await expectUsable(tester, router);
+    });
+
+    uiTest('system back mid-drag closes it and leaves nothing stuck', (
+      tester,
+    ) async {
+      final router = await pumpApp(tester);
+      await playThree(tester);
+      final gesture = await tester.startGesture(tester.getCenter(art()));
+      for (var i = 0; i < 6; i++) {
+        await gesture.moveBy(const Offset(0, 20));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      // The finger keeps moving, then lifts, while the page leaves.
+      for (var i = 0; i < 4; i++) {
+        await gesture.moveBy(const Offset(0, -20));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await gesture.up();
+      await settle(tester);
+      expect(tester.takeException(), isNull);
+      expect(find.byType(NowPlayingPage), findsNothing);
+      await expectUsable(tester, router);
+    });
+
     uiTest('a fast fling closes it', (tester) async {
       await pumpApp(tester);
       await playThree(tester);

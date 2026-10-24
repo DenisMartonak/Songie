@@ -114,11 +114,29 @@ class NowPlayingRoute extends PageRoute<void> {
   /// How far the page has been dragged down, as a fraction of its height.
   double get collapsed => 1 - controller!.value;
 
-  /// A drag down the page has started.
-  void startCollapse() => navigator!.didStartUserGesture();
+  /// The navigator told of the collapse gesture under way; null when none.
+  /// Every [NavigatorState.didStartUserGesture] made here is balanced on it
+  /// exactly once, whatever happens to the drag (see [_endGesture]).
+  NavigatorState? _gesture;
+
+  /// The page is being popped by the gesture itself.
+  bool _poppingByGesture = false;
+
+  /// A drag down the page has started. False (and nothing is driven) when
+  /// the route is already on its way out.
+  bool startCollapse() {
+    if (_gesture != null || !isActive) return false;
+    _gesture = navigator!..didStartUserGesture();
+    return true;
+  }
 
   /// The page was dragged by [fraction] of its height (positive is down).
-  void dragCollapse(double fraction) => controller!.value -= fraction;
+  /// Ignored once the route has been popped by something else (e.g. system
+  /// back), so its exit transition runs undisturbed.
+  void dragCollapse(double fraction) {
+    if (_gesture == null || !isActive) return;
+    controller!.value -= fraction;
+  }
 
   /// The finger lifted: [close] pops the route through [pop] (which carries
   /// the page on down); otherwise it springs back over [springBack].
@@ -127,28 +145,65 @@ class NowPlayingRoute extends PageRoute<void> {
     required VoidCallback pop,
     required Duration springBack,
   }) {
-    final navigator = this.navigator!;
-    final controller = this.controller!;
+    if (_gesture == null) return;
+    if (!isActive) {
+      // Popped mid-drag: the gesture ends when the exit transition does.
+      _endGestureWhenSettled();
+      return;
+    }
     if (close) {
+      _poppingByGesture = true;
       pop();
+      _poppingByGesture = false;
     } else {
-      controller.animateTo(
+      controller!.animateTo(
         1,
         duration: springBack,
         curve: Motion.standardCurve,
       );
     }
+    _endGestureWhenSettled();
+  }
+
+  @override
+  bool didPop(void result) {
+    final popped = super.didPop(result);
+    // Popped by something else (system back) while a finger drives the
+    // page: let the exit transition finish, then end the gesture.
+    if (_gesture != null && !_poppingByGesture) _endGestureWhenSettled();
+    return popped;
+  }
+
+  bool _awaitingSettle = false;
+
+  void _endGestureWhenSettled() {
+    final controller = this.controller!;
     if (!controller.isAnimating) {
-      navigator.didStopUserGesture();
+      _endGesture();
       return;
     }
+    if (_awaitingSettle) return;
+    _awaitingSettle = true;
     late final AnimationStatusListener done;
     done = (status) {
       if (controller.isAnimating) return;
-      navigator.didStopUserGesture();
       controller.removeStatusListener(done);
+      _awaitingSettle = false;
+      _endGesture();
     };
     controller.addStatusListener(done);
+  }
+
+  void _endGesture() {
+    final navigator = _gesture;
+    _gesture = null;
+    if (navigator != null && navigator.mounted) navigator.didStopUserGesture();
+  }
+
+  @override
+  void dispose() {
+    _endGesture();
+    super.dispose();
   }
 }
 
@@ -194,11 +249,12 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
   /// A collapse drag is under way (a tap's cancelled drag never starts).
   bool _dragging = false;
 
-  /// The route, when the drag drives it (a phone page).
-  NowPlayingRoute? get _phoneRoute {
-    final route = ModalRoute.of(context);
-    return route is NowPlayingRoute && !route.wide ? route : null;
-  }
+  /// The route the current drag drives (a phone page), captured when the
+  /// drag starts so it is the one released, even if the layout changes.
+  NowPlayingRoute? _dragRoute;
+
+  /// Whether the current drag started in the desktop layout.
+  bool _dragWide = false;
 
   /// Pops the page; false when there is nothing to pop it to.
   bool _close() {
@@ -213,15 +269,20 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
       _dragArea.currentContext?.size?.height ?? double.infinity;
 
   void _onDragStart(DragStartDetails _) {
-    if (_closing) return;
+    if (_closing || _dragging) return;
+    final route = ModalRoute.of(context);
+    _dragWide = MediaQuery.sizeOf(context).width >= phoneBreakpoint;
+    if (route is NowPlayingRoute && !route.wide && !_dragWide) {
+      if (!route.startCollapse()) return;
+      _dragRoute = route;
+    }
     _dragging = true;
     _drag.stop();
-    _phoneRoute?.startCollapse();
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
     if (_closing || !_dragging) return;
-    final route = _phoneRoute;
+    final route = _dragRoute;
     if (route != null) {
       route.dragCollapse(details.delta.dy / _height);
     } else {
@@ -231,7 +292,7 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
 
   void _onDragEnd(DragEndDetails details) {
     if (_closing || !_dragging) return;
-    final route = _phoneRoute;
+    final route = _dragRoute;
     final dragged = route?.collapsed ?? _drag.value / _height;
     final far = dragged >= NowPlayingPage.closeFraction;
     final fast = (details.primaryVelocity ?? 0) >= NowPlayingPage.closeVelocity;
@@ -239,7 +300,7 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
   }
 
   void _onDragCancel() {
-    if (!_closing && _dragging) _letGo(close: false);
+    if (_dragging) _letGo(close: false);
   }
 
   /// Ends a drag: closes the page (its exit transition carries it on from
@@ -247,7 +308,8 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
   void _letGo({required bool close}) {
     _dragging = false;
     final springBack = Motion.of(context).standard;
-    final route = _phoneRoute;
+    final route = _dragRoute;
+    _dragRoute = null;
     if (route != null) {
       route.endCollapse(
         close: close,
@@ -261,6 +323,13 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
 
   @override
   void dispose() {
+    // A drag cut short by the page going away still ends its gesture.
+    _dragRoute?.endCollapse(
+      close: false,
+      pop: () {},
+      springBack: Duration.zero,
+    );
+    _dragRoute = null;
     _drag.dispose();
     super.dispose();
   }
@@ -295,6 +364,13 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final wide = MediaQuery.sizeOf(context).width >= phoneBreakpoint;
+    if (_dragging && wide != _dragWide) {
+      // The layout changed under the finger (e.g. a rotation): the drag's
+      // handle is rebuilt away, so end the drag here, springing back.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _dragging) _letGo(close: false);
+      });
+    }
 
     // On desktop only the header and the player tab start the drag: the
     // queue keeps the mouse for its own reordering and scrolling.
