@@ -31,6 +31,7 @@ import 'package:songies/ui/shell/desktop_shell.dart';
 import 'package:songies/ui/shell/title_bar.dart';
 import 'package:songies/ui/shell/mini_player.dart';
 import 'package:songies/ui/shell/player_bar.dart';
+import 'package:songies/ui/shell/sidebar.dart';
 import 'package:songies/ui/shell/window_controls.dart';
 
 import '../helpers/fake_audio_backend.dart';
@@ -118,6 +119,7 @@ void main() {
     Size size, {
     bool customTitleBar = true,
     TrackResolver? resolver,
+    ThemeSpec theme = ThemeSpec.builtInDefault,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -172,7 +174,7 @@ void main() {
           hasCustomTitleBarProvider.overrideWithValue(customTitleBar),
         ],
         child: MaterialApp.router(
-          theme: buildThemeData(ThemeSpec.builtInDefault),
+          theme: buildThemeData(theme),
           routerConfig: router,
         ),
       ),
@@ -413,6 +415,35 @@ void main() {
       expect(player.state.current?.id, 'b');
       expect(find.text('Title a'), findsNothing);
       expect(tester.getTopLeft(find.text('Title b')), before);
+    });
+
+    testWidgets('a swipe that restarts the song leaves no direction behind', (
+      tester,
+    ) async {
+      await pumpApp(tester, phone);
+      await startPlaying(tester);
+      backend.setDuration(const Duration(seconds: 200));
+      backend.setPosition(const Duration(seconds: 30));
+      await tester.pumpAndSettle();
+
+      // Mid-song, a swipe right restarts the song instead of going back.
+      await tester.drag(
+        find.byKey(const Key('miniPlayer.pill')),
+        const Offset(160, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(player.state.current?.id, 'a');
+
+      // The song plays out: an auto-advance is a plain crossfade, with no
+      // slide left over from the swipe.
+      final rest = tester.getTopLeft(find.text('Title a'));
+      backend.complete();
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(Motion.emphasized ~/ 4);
+      expect(player.state.current?.id, 'b');
+      expect(tester.getTopLeft(find.text('Title b')).dx, closeTo(rest.dx, 0.5));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('the mini-player content slides with the finger', (
@@ -739,6 +770,61 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(fill()!.a, greaterThan(0));
+    });
+
+    testWidgets('the hover fill comes from the theme text (light themes)', (
+      tester,
+    ) async {
+      final light = ThemeSpec.builtInDefault.copyWith(
+        base: 'light',
+        background: const Color(0xFFFFFFFF),
+        surface: const Color(0xFFF2F2F2),
+        text: const Color(0xFF111111),
+        mutedText: const Color(0xFF555555),
+      );
+      await pumpApp(tester, desktop, theme: light);
+      final colors = colorsOf(tester, Sidebar);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(
+        tester.getCenter(find.byKey(const Key('sidebar.playlist.p1'))),
+      );
+      await tester.pumpAndSettle();
+      final fill =
+          (tester
+                      .widget<AnimatedContainer>(
+                        find.byKey(const Key('sidebar.hover.playlist.p1')),
+                      )
+                      .decoration!
+                  as BoxDecoration)
+              .color!;
+      expect(fill, colors.text.withAlpha(13));
+    });
+
+    testWidgets('on a playlist page only the playlist row has the bar', (
+      tester,
+    ) async {
+      await pumpApp(tester, desktop);
+      await tester.tap(find.byKey(const Key('sidebar.library')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('sidebar.selectionBar.library')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('sidebar.playlist.p1')));
+      await tester.pumpAndSettle();
+      expect(router.state.uri.path, '/library/playlist/p1');
+      expect(
+        find.byKey(const Key('sidebar.selectionBar.playlists')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('sidebar.selectionBar.library')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('sidebar.selectionBar.nav')), findsNothing);
     });
 
     testWidgets('the selection bar slides between sidebar rows', (

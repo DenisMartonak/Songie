@@ -41,10 +41,14 @@ class Sidebar extends ConsumerWidget {
     // Settings shares Home's branch but is not Home.
     final onSettings = path == '/settings';
     final homeSelected = current == 0 && !onSettings;
-    final navSelected = homeSelected ? 0 : (current == 1 ? 1 : null);
     final playlistSelected = playlists.indexWhere(
       (p) => path.endsWith('/playlist/${p.id}'),
     );
+    // On a playlist page only the playlist's row carries the accent bar.
+    final onListedPlaylist = playlistSelected >= 0;
+    final navSelected = onListedPlaylist
+        ? null
+        : (homeSelected ? 0 : (current == 1 ? 1 : null));
     final boxColor = Color.alphaBlend(
       Colors.white.withAlpha(10),
       Color.alphaBlend(Colors.black.withAlpha(90), colors.background),
@@ -131,7 +135,9 @@ class Sidebar extends ConsumerWidget {
                   children: [
                     _SelectionTrack(
                       name: 'library',
-                      selected: !collapsed && current == 2 ? 0 : null,
+                      selected: !collapsed && current == 2 && !onListedPlaylist
+                          ? 0
+                          : null,
                       extent: _NavItem.height,
                       top: 4,
                       child: Padding(
@@ -483,7 +489,7 @@ class _HoverHighlightState extends State<_HoverHighlight> {
         key: widget.highlightKey,
         duration: Motion.of(context).quick,
         decoration: BoxDecoration(
-          color: Colors.white.withAlpha(lit ? 13 : 0),
+          color: colors.text.withAlpha(lit ? 13 : 0),
           borderRadius: BorderRadius.circular(colors.radius),
         ),
         child: widget.child,

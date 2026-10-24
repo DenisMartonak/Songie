@@ -66,7 +66,12 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
       final next = (velocity.abs() >= _skipVelocity ? velocity : _offset) < 0;
       _pendingDirection = next ? 1 : -1;
       final player = ref.read(playerServiceProvider);
-      next ? player.next() : player.previous();
+      final before = player.state.current?.id;
+      (next ? player.next() : player.previous()).whenComplete(() {
+        // No track change (a restart, or the end of the queue): forget the
+        // direction so a later, unrelated change doesn't slide from it.
+        if (player.state.current?.id == before) _pendingDirection = 0;
+      });
     }
     _springBack();
   }
