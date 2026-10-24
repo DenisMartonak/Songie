@@ -79,7 +79,7 @@ Future<void> main() async {
 
   // The active theme, so the first frame already shows it.
   final themes = ThemeRepository(db, stamp, settings);
-  final initialTheme = await themes.watchActive().first;
+  final initialTheme = await loadInitialThemeSpec(themes.watchActive());
 
   // YouTube. Nothing here touches the network or runs yt-dlp: that only
   // happens on a user action or during playback.
@@ -193,7 +193,7 @@ Future<void> main() async {
         downloadServiceProvider.overrideWithValue(downloads),
         fontServiceProvider.overrideWithValue(fonts),
         themeRepositoryProvider.overrideWithValue(themes),
-        initialThemeSpecProvider.overrideWithValue(initialTheme.spec),
+        initialThemeSpecProvider.overrideWithValue(initialTheme),
       ],
       child: SongiesApp(router: router),
     ),

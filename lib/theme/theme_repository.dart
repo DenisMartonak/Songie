@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -64,6 +65,36 @@ const _builtIns = <ThemeEntry>[
     builtIn: true,
   ),
 ];
+
+/// The first spec [active] emits, for the app's first frame. An error, a
+/// stream that ends empty, or no value within [timeout] is logged and yields
+/// Default, so a broken database never stops the app from starting (the live
+/// provider takes over afterwards).
+Future<ThemeSpec> loadInitialThemeSpec(
+  Stream<ThemeEntry> active, {
+  Duration timeout = const Duration(seconds: 2),
+}) {
+  final result = Completer<ThemeSpec>();
+  StreamSubscription<ThemeEntry>? sub;
+  late final Timer timer;
+  void finish(ThemeSpec spec, [String? why, Object? error]) {
+    if (result.isCompleted) return;
+    if (why != null) AppLog.w('Starting with Default theme: $why', error);
+    timer.cancel();
+    unawaited(sub?.cancel());
+    result.complete(spec);
+  }
+
+  timer = Timer(timeout, () => finish(ThemeSpec.builtInDefault, 'timed out'));
+  sub = active.listen(
+    (entry) => finish(entry.spec),
+    onError: (Object e) => finish(ThemeSpec.builtInDefault, 'load failed', e),
+    onDone: () => finish(ThemeSpec.builtInDefault, 'no active theme'),
+  );
+  // A synchronous stream may have finished before `sub` was assigned.
+  if (result.isCompleted) unawaited(sub.cancel());
+  return result.future;
+}
 
 bool _isBuiltIn(String id) => id.startsWith(_builtInPrefix);
 
