@@ -31,6 +31,7 @@ String downloadPauseText(DownloadPause p, DateTime now) => switch (p.reason) {
     'YouTube is limiting downloads, retrying in ${_minutes(p, now)} min',
   DownloadPauseReason.retrying =>
     'connection problem, retrying in ${_minutes(p, now)} min',
+  DownloadPauseReason.user => 'paused',
 };
 
 /// Whole minutes until the retry, rounded up, at least 1.

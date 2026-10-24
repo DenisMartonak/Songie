@@ -78,8 +78,9 @@ class AndroidDownloadNotifier implements DownloadNotifier {
     };
   }
 
-  String _pausedText(DownloadPause p) =>
-      'Paused — ${downloadPauseText(p, _now())}';
+  String _pausedText(DownloadPause p) => p.reason == DownloadPauseReason.user
+      ? 'Downloads paused'
+      : 'Paused — ${downloadPauseText(p, _now())}';
 
   Future<void> _invoke(String method, Map<String, Object?> args) async {
     try {

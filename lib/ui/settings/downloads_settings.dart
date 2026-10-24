@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/settings_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
-import '../downloads/downloads_sheet.dart' show resumeDownloads;
+import '../../downloads/download_service.dart';
+import '../downloads/download_status_line.dart'
+    show canResumeDownloads, resumeDownloads;
 import 'settings_page.dart';
 import 'storage_usage.dart';
 
@@ -29,8 +31,12 @@ class DownloadsSettingsSection extends ConsumerWidget {
       for (final p in ref.watch(playlistsProvider).value ?? const [])
         p.id: p.name,
     };
-    final paused = ref.watch(
-      downloadSnapshotProvider.select((a) => a.value?.userPaused ?? false),
+    // Selected, so progress ticks don't rebuild the section.
+    final (paused, canResume) = ref.watch(
+      downloadSnapshotProvider.select((a) {
+        final s = a.value ?? const DownloadSnapshot();
+        return (s.userPaused, canResumeDownloads(s));
+      }),
     );
 
     Widget line(String text, {double size = 14, Color? color}) => Padding(
@@ -63,22 +69,28 @@ class DownloadsSettingsSection extends ConsumerWidget {
             ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: paused
-              ? TextButton.icon(
-                  key: const Key('settings.downloads.resume'),
-                  onPressed: () => unawaited(
-                    resumeDownloads(ref.read(downloadServiceProvider)),
-                  ),
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Resume downloads'),
-                )
-              : TextButton.icon(
+          child: Wrap(
+            spacing: 8,
+            children: [
+              if (!paused)
+                TextButton.icon(
                   key: const Key('settings.downloads.pause'),
                   onPressed: () =>
                       ref.read(downloadServiceProvider).pauseByUser(),
                   icon: const Icon(Icons.pause_rounded),
                   label: const Text('Pause downloads'),
                 ),
+              if (canResume)
+                TextButton.icon(
+                  key: const Key('settings.downloads.resume'),
+                  onPressed: () => unawaited(
+                    resumeDownloads(ref.read(downloadServiceProvider)),
+                  ),
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Resume downloads'),
+                ),
+            ],
+          ),
         ),
       ],
     );

@@ -15,6 +15,20 @@ String downloadPauseLine(DownloadPause p, DateTime now) {
   return t.isEmpty ? t : '${t[0].toUpperCase()}${t.substring(1)}';
 }
 
+/// Whether a Resume button can end [s]'s pause: the user's own, or one that
+/// [DownloadService.resume] clears (a Wi-Fi only pause ends on Wi-Fi).
+bool canResumeDownloads(DownloadSnapshot s) {
+  final pause = s.pause;
+  return s.userPaused ||
+      (pause != null && pause.reason != DownloadPauseReason.wifiOnly);
+}
+
+/// Clears the user's pause and any automatic one the user can end.
+Future<void> resumeDownloads(DownloadService service) {
+  service.resumeByUser();
+  return service.resume();
+}
+
 /// The line under a YouTube playlist's hero: its download progress, the
 /// queue's pause, its failures or that it is all downloaded. Nothing while
 /// the download is off.
@@ -73,12 +87,15 @@ class _InFlight extends ConsumerWidget {
     );
     if (pause != null) {
       final text = _Text(downloadPauseLine(pause, ref.watch(nowProvider)()));
-      if (pause.reason != DownloadPauseReason.diskFull) return text;
+      if (pause.reason != DownloadPauseReason.diskFull &&
+          pause.reason != DownloadPauseReason.user) {
+        return text;
+      }
       return Row(
         children: [
           Flexible(child: text),
           TextButton(
-            onPressed: () => ref.read(downloadServiceProvider).resume(),
+            onPressed: () => resumeDownloads(ref.read(downloadServiceProvider)),
             child: const Text('Resume'),
           ),
         ],

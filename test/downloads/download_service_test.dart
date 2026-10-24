@@ -642,8 +642,8 @@ void main() {
     e.service.pauseByUser();
     e.settle();
     expect(e.snap.userPaused, isTrue);
-    expect(e.snap.pause, isNull, reason: 'not an automatic pause');
-    expect(e.runner.cancelled, isEmpty);
+    expect(e.snap.pause, const DownloadPause(DownloadPauseReason.user));
+    expect(e.runner.cancelled, isEmpty, reason: 'running ones finish');
 
     e.succeed('y1');
     expect(e.row('y1')!.state, 'done');
@@ -653,7 +653,25 @@ void main() {
     e.service.resumeByUser();
     e.settle();
     expect(e.snap.userPaused, isFalse);
+    expect(e.snap.pause, isNull);
     expect(e.runner.started.last, 'dl-y4');
+  });
+
+  run('another pause takes precedence over the user pause', (e) {
+    e.queued(['y1']);
+    e.service.pauseByUser();
+    e.wait(e.service.start());
+    expect(e.snap.pause?.reason, DownloadPauseReason.user);
+
+    e.network.set(NetworkKind.offline);
+    e.settle();
+    expect(e.snap.pause?.reason, DownloadPauseReason.offline);
+    expect(e.snap.userPaused, isTrue);
+
+    e.network.set(NetworkKind.wifi);
+    e.settle();
+    expect(e.snap.pause?.reason, DownloadPauseReason.user);
+    expect(e.runner.started, isEmpty);
   });
 
   run('a user pause outlasts other pauses and does not end the run', (e) {

@@ -136,6 +136,23 @@ void main() {
     );
   });
 
+  uiTest('a user pause says Paused and offers Resume', (tester) async {
+    await pump(
+      tester,
+      status(done: 1, queued: 3),
+      snapshot: const DownloadSnapshot(
+        queued: 3,
+        userPaused: true,
+        pause: DownloadPause(DownloadPauseReason.user),
+      ),
+    );
+    expect(find.text('Paused'), findsOneWidget);
+    expect(find.textContaining('Downloading'), findsNothing);
+    await tester.tap(find.text('Resume'));
+    await settle(tester);
+    expect(h.downloads.calls, ['resumeByUser', 'resume']);
+  });
+
   uiTest('a full disk offers Resume, which resumes the queue', (tester) async {
     await pump(
       tester,
@@ -148,6 +165,6 @@ void main() {
     expect(find.text('Storage is full'), findsOneWidget);
     await tester.tap(find.text('Resume'));
     await settle(tester);
-    expect(h.downloads.calls, ['resume']);
+    expect(h.downloads.calls, ['resumeByUser', 'resume']);
   });
 }

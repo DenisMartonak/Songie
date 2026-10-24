@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/data/settings_repository.dart';
+import 'package:songies/downloads/download_service.dart';
+import 'package:songies/providers.dart';
 import 'package:songies/ui/settings/downloads_settings.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 
@@ -103,6 +105,40 @@ void main() {
     await pumpSection(tester);
     final tile = find.widgetWithText(SwitchListTile, 'Wi-Fi only');
     expect(tester.widget<SwitchListTile>(tile).value, isTrue);
+  });
+
+  uiTest('a full disk can be resumed from Settings', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      h.app(
+        initialLocation: '/settings',
+        extraOverrides: [
+          downloadSnapshotProvider.overrideWith(
+            (ref) => Stream.value(
+              const DownloadSnapshot(
+                queued: 2,
+                pause: DownloadPause(DownloadPauseReason.diskFull),
+              ),
+            ),
+          ),
+        ],
+        routes: [
+          GoRoute(
+            path: '/settings',
+            builder: (_, _) => Scaffold(
+              body: ListView(children: const [DownloadsSettingsSection()]),
+            ),
+          ),
+        ],
+      ),
+    );
+    await settle(tester);
+    expect(find.text('Pause downloads'), findsOneWidget);
+    await tester.tap(find.text('Resume downloads'));
+    await settle(tester);
+    expect(h.downloads.calls, ['resumeByUser', 'resume']);
   });
 
   uiTest('Pause and Resume downloads drive the queue', (tester) async {

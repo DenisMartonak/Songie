@@ -179,9 +179,9 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                               child: PlayerErrorSnacks(
                                 child: Column(
                                   children: [
-                                    const ExcludeFocus(
-                                      child: DownloadsBanner(),
-                                    ),
+                                    // Focusable, so Update and Dismiss can be
+                                    // reached by keyboard.
+                                    const DownloadsBanner(),
                                     if (!hasTitleBar)
                                       _SearchRow(
                                         controller: _searchController,

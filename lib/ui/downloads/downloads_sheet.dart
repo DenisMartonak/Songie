@@ -8,7 +8,8 @@ import '../../downloads/download_repository.dart';
 import '../../downloads/download_service.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
-import 'download_status_line.dart' show downloadPauseLine;
+import 'download_status_line.dart'
+    show canResumeDownloads, downloadPauseLine, resumeDownloads;
 
 /// The run's progress, counting the running downloads' partial bytes.
 double _runFraction(DownloadSnapshot s) {
@@ -18,12 +19,6 @@ double _runFraction(DownloadSnapshot s) {
     partial += p.fraction ?? 0;
   }
   return ((s.completedThisRun + partial) / s.totalThisRun).clamp(0.0, 1.0);
-}
-
-/// Clears the user's pause and any automatic one the user can end.
-Future<void> resumeDownloads(DownloadService service) {
-  service.resumeByUser();
-  return service.resume();
 }
 
 Future<void> showDownloadsSheet(BuildContext context) =>
@@ -61,7 +56,10 @@ class _Indicator extends ConsumerWidget {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final s = ref.watch(downloadSnapshotProvider).value;
     if (s == null) return const SizedBox.shrink();
-    final text = 'Downloading ${s.completedThisRun} of ${s.totalThisRun}';
+    final pause = s.pause;
+    final text = pause != null
+        ? downloadPauseLine(pause, ref.watch(nowProvider)())
+        : 'Downloading ${s.completedThisRun} of ${s.totalThisRun}';
     final fraction = _runFraction(s);
     if (compact) {
       return Tooltip(
@@ -137,10 +135,7 @@ class DownloadsSheet extends ConsumerWidget {
         ref.watch(downloadSnapshotProvider).value ?? const DownloadSnapshot();
     final service = ref.read(downloadServiceProvider);
     final pause = s.pause;
-    // A Wi-Fi only pause ends on Wi-Fi, not on Resume.
-    final canResume =
-        s.userPaused ||
-        (pause != null && pause.reason != DownloadPauseReason.wifiOnly);
+    final canResume = canResumeDownloads(s);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -160,8 +155,6 @@ class DownloadsSheet extends ConsumerWidget {
             Text(
               pause != null
                   ? downloadPauseLine(pause, ref.watch(nowProvider)())
-                  : s.userPaused
-                  ? 'Paused'
                   : 'Downloading ${s.completedThisRun} of ${s.totalThisRun}',
               style: TextStyle(color: colors.mutedText, fontSize: 12),
             ),

@@ -80,6 +80,22 @@ void main() {
     expect(find.textContaining('Downloading'), findsNothing);
   });
 
+  uiTest('the indicator says Paused during a pause', (tester) async {
+    await pump(tester);
+    await emit(
+      tester,
+      const DownloadSnapshot(
+        queued: 3,
+        completedThisRun: 1,
+        totalThisRun: 4,
+        userPaused: true,
+        pause: DownloadPause(DownloadPauseReason.user),
+      ),
+    );
+    expect(find.text('Paused'), findsOneWidget);
+    expect(find.textContaining('Downloading'), findsNothing);
+  });
+
   group('the sheet', () {
     Future<void> openSheet(WidgetTester tester, DownloadSnapshot s) async {
       await real(
@@ -97,7 +113,7 @@ void main() {
       );
       await pump(tester);
       await emit(tester, s);
-      await tester.tap(find.text('Downloading 1 of 4'));
+      await tester.tap(find.byKey(const Key('downloads.indicator')));
       await settle(tester);
     }
 
@@ -126,6 +142,7 @@ void main() {
           completedThisRun: 1,
           totalThisRun: 4,
           userPaused: true,
+          pause: DownloadPause(DownloadPauseReason.user),
         ),
       );
       expect(find.text('Pause downloads'), findsNothing);
@@ -144,7 +161,13 @@ void main() {
           pause: DownloadPause(DownloadPauseReason.diskFull),
         ),
       );
-      expect(find.text('Storage is full'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(DownloadsSheet),
+          matching: find.text('Storage is full'),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Resume'));
       await settle(tester);
       expect(h.downloads.calls, ['resumeByUser', 'resume']);

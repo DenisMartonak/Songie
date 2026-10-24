@@ -18,8 +18,16 @@ import 'download_repository.dart';
 /// `throttled` is the backoff wait after an HTTP 429; `retrying` is the same
 /// wait after a network error while the device still reports a connection.
 /// Both carry a `resumesAt`. `offline` is only for a device that reports no
-/// connection.
-enum DownloadPauseReason { wifiOnly, offline, throttled, retrying, diskFull }
+/// connection. `user` is the user's own pause ([DownloadService.pauseByUser]);
+/// any other reason is reported first.
+enum DownloadPauseReason {
+  wifiOnly,
+  offline,
+  throttled,
+  retrying,
+  diskFull,
+  user,
+}
 
 /// Why the queue is not starting downloads, and when it resumes by itself
 /// (only for [DownloadPauseReason.throttled] and [DownloadPauseReason.retrying]).
@@ -730,7 +738,11 @@ class DownloadService {
       failedThisRun: _failed,
       totalThisRun: _completed + _failed + _jobs.length + queued,
       progress: Map.unmodifiable(_progress),
-      pause: pause,
+      // The user's pause lets running downloads finish, so it isn't one of
+      // the pauses above that stop them.
+      pause:
+          pause ??
+          (_userPaused ? const DownloadPause(DownloadPauseReason.user) : null),
       userPaused: _userPaused,
       extractorFailing: _extractorFailing,
       currentTitle: _jobs.isEmpty ? null : _jobs.values.last.title,

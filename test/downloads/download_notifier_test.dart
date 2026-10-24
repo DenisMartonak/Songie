@@ -97,6 +97,7 @@ void main() {
           DownloadPauseReason.retrying,
           resumesAt: base.subtract(const Duration(seconds: 5)),
         ): 'Paused — connection problem, retrying in 1 min',
+        const DownloadPause(DownloadPauseReason.user): 'Downloads paused',
       };
       var i = 0;
       for (final e in cases.entries) {
