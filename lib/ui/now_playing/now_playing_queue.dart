@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/database.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../motion/equalizer_bars.dart';
 import '../widgets/artwork.dart';
 
-/// The playing order as a reorderable list: drag a handle to move a song,
-/// swipe a row away to remove it, tap one to play it.
+/// The playing order as a reorderable list: drag a handle to move a song
+/// (the row lifts with a shadow), swipe a row away to remove it, tap one to
+/// play it. The playing row shows [EqualizerBars].
 class NowPlayingQueue extends ConsumerWidget {
   const NowPlayingQueue({super.key});
 
@@ -24,6 +26,9 @@ class NowPlayingQueue extends ConsumerWidget {
         const <Track>[];
     final playingIndex = ref.watch(
       playerStateProvider.select((s) => s.value?.index ?? -1),
+    );
+    final playing = ref.watch(
+      playerStateProvider.select((s) => s.value?.playing ?? false),
     );
     if (queue.isEmpty) {
       return Center(
@@ -42,6 +47,8 @@ class NowPlayingQueue extends ConsumerWidget {
       padding: EdgeInsets.only(bottom: bottom + 16),
       itemCount: queue.length,
       onReorderItem: player.move,
+      proxyDecorator: (child, _, animation) =>
+          _LiftedRow(animation: animation, child: child),
       itemBuilder: (context, i) => Dismissible(
         key: keys[i],
         direction: DismissDirection.endToStart,
@@ -56,6 +63,7 @@ class NowPlayingQueue extends ConsumerWidget {
           index: i,
           track: queue[i],
           current: i == playingIndex,
+          playing: playing,
           onTap: () => player.playAt(i),
         ),
       ),
@@ -80,18 +88,23 @@ class _QueueRow extends StatelessWidget {
     required this.index,
     required this.track,
     required this.current,
+    required this.playing,
     required this.onTap,
   });
 
   final int index;
   final Track track;
   final bool current;
+
+  /// Whether playback is running (the playing row's bars move).
+  final bool playing;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     return Material(
+      key: Key('queue.row.$index'),
       type: MaterialType.transparency,
       child: InkWell(
         onTap: onTap,
@@ -108,15 +121,25 @@ class _QueueRow extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        track.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: current ? colors.accent : colors.text,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      Row(
+                        children: [
+                          if (current) ...[
+                            EqualizerBars(playing: playing, size: 12),
+                            const SizedBox(width: 6),
+                          ],
+                          Expanded(
+                            child: Text(
+                              track.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: current ? colors.accent : colors.text,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       Text(
                         track.artist,
@@ -147,6 +170,35 @@ class _QueueRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The row being dragged: lifted off the list on the surface colour with a
+/// shadow that grows as the drag starts.
+class _LiftedRow extends StatelessWidget {
+  const _LiftedRow({required this.animation, required this.child});
+
+  final Animation<double> animation;
+  final Widget child;
+
+  /// Elevation once fully lifted.
+  static const double _lift = 8;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) => Material(
+        key: const Key('queue.lifted'),
+        color: colors.surface,
+        shadowColor: Colors.black,
+        elevation: _lift * Curves.easeOut.transform(animation.value),
+        borderRadius: BorderRadius.circular(colors.radius),
+        child: child,
+      ),
+      child: child,
     );
   }
 }

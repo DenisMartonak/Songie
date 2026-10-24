@@ -33,6 +33,7 @@ class PlayerState {
     this.playing = false,
     this.buffering = false,
     this.position = Duration.zero,
+    this.buffered = Duration.zero,
     this.duration,
     this.shuffle = false,
     this.repeat = RepeatMode.off,
@@ -47,6 +48,9 @@ class PlayerState {
   final bool playing;
   final bool buffering;
   final Duration position;
+
+  /// How far the current source has been buffered (as the engine reports).
+  final Duration buffered;
   final Duration? duration;
   final bool shuffle;
   final RepeatMode repeat;
@@ -73,6 +77,7 @@ class PlayerState {
     bool? playing,
     bool? buffering,
     Duration? position,
+    Duration? buffered,
     Object? duration = _keep,
     bool? shuffle,
     RepeatMode? repeat,
@@ -87,6 +92,7 @@ class PlayerState {
       playing: playing ?? this.playing,
       buffering: buffering ?? this.buffering,
       position: position ?? this.position,
+      buffered: buffered ?? this.buffered,
       duration: identical(duration, _keep)
           ? this.duration
           : duration as Duration?,
@@ -833,6 +839,7 @@ class PlayerService {
     _emit(
       _state.copyWith(
         position: s.position,
+        buffered: s.buffered,
         buffering: s.buffering,
         duration: s.duration ?? _currentDuration(),
       ),

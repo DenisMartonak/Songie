@@ -22,6 +22,7 @@ void main() {
     WidgetTester tester, {
     Size size = const Size(400, 800),
     ThemeSpec theme = ThemeSpec.builtInDefault,
+    bool disableAnimations = false,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -36,6 +37,7 @@ void main() {
     await tester.pumpWidget(
       h.app(
         theme: theme,
+        disableAnimations: disableAnimations,
         initialLocation: '/',
         routes: [
           GoRoute(
@@ -82,12 +84,12 @@ void main() {
 
       final circle = find.byKey(const Key('nowPlaying.playPause'));
       expect(tester.getSize(circle), const Size(64, 64));
-      expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
+      expect(find.byTooltip('Pause'), findsOneWidget);
 
       await tester.tap(circle);
       await settle(tester);
       expect(h.player.state.playing, isFalse);
-      expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+      expect(find.byTooltip('Play'), findsOneWidget);
     });
 
     uiTest('a downloaded YouTube song shows download_done', (tester) async {
@@ -141,13 +143,13 @@ void main() {
       expect(h.player.state.index, 0);
     });
 
-    uiTest('shows elapsed and total time', (tester) async {
+    uiTest('shows elapsed and remaining time', (tester) async {
       await pumpApp(tester);
       await playThree(tester);
       h.backend.setPosition(const Duration(seconds: 84));
       await settle(tester);
       expect(find.text('1:24'), findsOneWidget);
-      expect(find.text('3:20'), findsOneWidget);
+      expect(find.text('-1:56'), findsOneWidget);
     });
 
     uiTest('says so when nothing is playing', (tester) async {
@@ -263,13 +265,15 @@ void main() {
   });
 
   group('queue', () {
+    // Reduced motion keeps the playing row's equalizer bars still, so the
+    // tests can wait for everything else to settle.
     Future<void> openQueue(WidgetTester tester) async {
       await tester.tap(find.byKey(const Key('nowPlaying.tab.queue')));
       await settle(tester);
     }
 
     uiTest('lists the queue in playing order', (tester) async {
-      await pumpApp(tester);
+      await pumpApp(tester, disableAnimations: true);
       await playThree(tester);
       await openQueue(tester);
       expect(find.text('Song one'), findsWidgets);
@@ -282,7 +286,7 @@ void main() {
     });
 
     uiTest('tapping a row plays it', (tester) async {
-      await pumpApp(tester);
+      await pumpApp(tester, disableAnimations: true);
       await playThree(tester);
       await openQueue(tester);
       await tester.tap(find.text('Song three'));
@@ -293,7 +297,7 @@ void main() {
     uiTest('dragging a handle reorders through PlayerService.move', (
       tester,
     ) async {
-      await pumpApp(tester);
+      await pumpApp(tester, disableAnimations: true);
       await playThree(tester);
       await openQueue(tester);
       expect(queueIds(), ['t1', 't2', 't3']);
@@ -314,7 +318,7 @@ void main() {
     });
 
     uiTest('swiping a row away removes it', (tester) async {
-      await pumpApp(tester);
+      await pumpApp(tester, disableAnimations: true);
       await playThree(tester);
       await openQueue(tester);
 
@@ -325,7 +329,7 @@ void main() {
     });
 
     uiTest('a position tick does not rebuild the list', (tester) async {
-      await pumpApp(tester);
+      await pumpApp(tester, disableAnimations: true);
       await playThree(tester);
       await openQueue(tester);
 
@@ -339,7 +343,7 @@ void main() {
     uiTest('swiping a row away while the position ticks does not throw', (
       tester,
     ) async {
-      await pumpApp(tester);
+      await pumpApp(tester, disableAnimations: true);
       await playThree(tester);
       await openQueue(tester);
 
@@ -430,7 +434,7 @@ void main() {
       expect(find.byType(NowPlayingPage), findsNothing);
     });
 
-    uiTest('on desktop, swiping down does not close it', (tester) async {
+    uiTest('on desktop, swiping the panel down closes it', (tester) async {
       await pumpApp(tester, size: const Size(1280, 800));
       await playThree(tester);
       await tester.fling(
@@ -439,7 +443,8 @@ void main() {
         1500,
       );
       await settle(tester);
-      expect(find.byType(NowPlayingPage), findsOneWidget);
+      expect(find.byType(NowPlayingPage), findsNothing);
+      expect(find.text('Shell stub'), findsOneWidget);
     });
   });
 }

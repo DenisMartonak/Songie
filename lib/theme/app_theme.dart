@@ -26,18 +26,24 @@ class SongiesColors extends ThemeExtension<SongiesColors> {
   /// black.
   factory SongiesColors.fromSpec(ThemeSpec spec, {String? fontFamily}) {
     final accent = spec.accent;
+    final glow = accent.withValues(alpha: spec.glowStrength);
     return SongiesColors(
       background: spec.background,
       surface: spec.surface,
       text: readableOn(spec.background, preferred: spec.text),
       mutedText: spec.mutedText,
       accent: accent,
-      glow: accent.withValues(alpha: spec.glowStrength),
+      glow: glow,
       miniPlayer: Color.alphaBlend(
         accent.withValues(alpha: 0.25),
         spec.surface,
       ),
-      nowPlayingTop: darken(accent),
+      // A cover-following theme tops it with the darkened accent (the cover's
+      // dominant colour once known); the others keep the soft glow fading
+      // into the background.
+      nowPlayingTop: spec.followCover
+          ? darken(accent)
+          : Color.alphaBlend(glow, spec.background),
       nowPlayingBottom: spec.background,
       radius: spec.cornerRadius,
       fontFamily: fontFamily ?? spec.fontFamily,

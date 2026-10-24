@@ -248,17 +248,25 @@ class UiHarness {
     isLinuxProvider.overrideWithValue(isLinux),
   ];
 
-  /// An app showing [routes], starting at [initialLocation].
+  /// An app showing [routes], starting at [initialLocation]; with
+  /// [disableAnimations], as under the system's "remove animations".
   Widget app({
     required String initialLocation,
     required List<GoRoute> routes,
     ThemeSpec theme = ThemeSpec.builtInDefault,
     List<Override> extraOverrides = const [],
+    bool disableAnimations = false,
   }) {
     return ProviderScope(
       overrides: [...overrides, ...extraOverrides],
       child: MaterialApp.router(
         theme: buildThemeData(theme),
+        builder: disableAnimations
+            ? (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(disableAnimations: true),
+                child: child!,
+              )
+            : null,
         routerConfig: GoRouter(
           initialLocation: initialLocation,
           routes: routes,

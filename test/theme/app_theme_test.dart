@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/theme/app_theme.dart';
@@ -35,6 +33,20 @@ void main() {
       c.miniPlayer,
       Color.alphaBlend(c.accent.withValues(alpha: 0.25), c.surface),
     );
+  });
+
+  test('without follow-cover, Now Playing fades from the glow as before', () {
+    // The pre-Plan-4 look: the glow over the background, into the background.
+    for (final spec in [ThemeSpec.builtInDefault, ThemeSpec.terminal]) {
+      final c = SongiesColors.fromSpec(spec);
+      expect(c.nowPlayingTop, Color.alphaBlend(c.glow, c.background));
+      expect(c.nowPlayingBottom, c.background);
+    }
+  });
+
+  test('a follow-cover theme tops Now Playing with the darkened accent', () {
+    final c = SongiesColors.fromSpec(ThemeSpec.albumGlow);
+    expect(c.nowPlayingTop, Color.lerp(c.accent, Colors.black, 0.55));
   });
 
   test('fontScale is left to the text scaler, not baked into sizes', () {

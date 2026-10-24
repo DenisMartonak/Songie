@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../motion/marquee.dart';
 import '../motion/motion.dart';
 import '../shell/adaptive_shell.dart';
 import '../widgets/artwork.dart';
@@ -54,36 +55,97 @@ Page<void> nowPlayingPage(BuildContext context, GoRouterState state) {
   );
 }
 
+/// The [Hero] tag shared by the mini-player / player-bar artwork and the Now
+/// Playing artwork, so the cover flies between them.
+const String nowPlayingArtHeroTag = 'np-art';
+
 /// What is playing: big art, title, scrubber and transport controls, with the
-/// queue on a second tab. Phone: full screen, swipe down to close. Desktop: a
-/// panel with a close button.
+/// queue on a second tab. Phone: full screen; desktop: a panel with a close
+/// button. On both, dragging the page down moves it, and letting go past a
+/// quarter of its height (or flinging it) closes it; otherwise it springs
+/// back.
 class NowPlayingPage extends ConsumerStatefulWidget {
   const NowPlayingPage({super.key});
 
   /// Largest side of the cover art.
   static const double maxArt = 360;
 
-  /// Drag distance, or fling speed, past which swiping down closes the page.
-  static const double _closeDistance = 120;
-  static const double _closeVelocity = 700;
+  /// Fraction of the page's height, or fling speed (px/s), past which
+  /// letting go of a downward drag closes the page.
+  static const double closeFraction = 0.25;
+  static const double closeVelocity = 700;
 
   @override
   ConsumerState<NowPlayingPage> createState() => _NowPlayingPageState();
 }
 
-class _NowPlayingPageState extends ConsumerState<NowPlayingPage> {
+class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
+    with SingleTickerProviderStateMixin {
   bool _showQueue = false;
-  double _dragged = 0;
 
-  void _close() => context.pop();
+  /// How far (px) the page has been dragged down.
+  late final AnimationController _drag = AnimationController.unbounded(
+    vsync: this,
+  );
+
+  /// The dragged area (the page, or the desktop panel), to measure its height.
+  final GlobalKey _dragArea = GlobalKey();
+
+  bool _closing = false;
+
+  void _close() {
+    if (_closing) return;
+    _closing = true;
+    context.pop();
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (_closing) return;
+    _drag.value = math.max(0, _drag.value + details.delta.dy);
+  }
 
   void _onDragEnd(DragEndDetails details) {
-    final far = _dragged >= NowPlayingPage._closeDistance;
-    final fast =
-        (details.primaryVelocity ?? 0) >= NowPlayingPage._closeVelocity;
-    _dragged = 0;
-    if (far || fast) _close();
+    if (_closing) return;
+    final height = _dragArea.currentContext?.size?.height ?? double.infinity;
+    final far = _drag.value >= height * NowPlayingPage.closeFraction;
+    final fast = (details.primaryVelocity ?? 0) >= NowPlayingPage.closeVelocity;
+    if (far || fast) {
+      // The route's exit transition carries the page on from where it is.
+      _close();
+    } else {
+      _springBack();
+    }
   }
+
+  void _springBack() => _drag.animateTo(
+    0,
+    duration: Motion.of(context).standard,
+    curve: Motion.standardCurve,
+  );
+
+  @override
+  void dispose() {
+    _drag.dispose();
+    super.dispose();
+  }
+
+  /// [child] moved by the drag, with the drag gestures on it.
+  Widget _draggable(Widget child) => GestureDetector(
+    key: _dragArea,
+    behavior: HitTestBehavior.opaque,
+    onVerticalDragStart: (_) => _drag.stop(),
+    onVerticalDragUpdate: _onDragUpdate,
+    onVerticalDragEnd: _onDragEnd,
+    onVerticalDragCancel: () {
+      if (!_closing) _springBack();
+    },
+    child: AnimatedBuilder(
+      animation: _drag,
+      builder: (context, child) =>
+          Transform.translate(offset: Offset(0, _drag.value), child: child),
+      child: KeyedSubtree(key: const Key('nowPlaying.page'), child: child),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -120,94 +182,163 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage> {
             maxWidth: 560,
             maxHeight: math.min(780, size.height - 48),
           ),
-          child: Material(
-            key: const Key('nowPlaying.panel'),
-            color: colors.background,
-            clipBehavior: Clip.antiAlias,
-            elevation: 12,
-            borderRadius: BorderRadius.circular(colors.radius + 8),
-            child: body,
+          child: _draggable(
+            Material(
+              key: const Key('nowPlaying.panel'),
+              color: colors.background,
+              clipBehavior: Clip.antiAlias,
+              elevation: 12,
+              borderRadius: BorderRadius.circular(colors.radius + 8),
+              child: body,
+            ),
           ),
         ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onVerticalDragStart: (_) => _dragged = 0,
-        onVerticalDragUpdate: (d) => _dragged += d.delta.dy,
-        onVerticalDragEnd: _onDragEnd,
-        onVerticalDragCancel: () => _dragged = 0,
-        child: body,
-      ),
+    return _draggable(Scaffold(backgroundColor: colors.background, body: body));
+  }
+}
+
+/// The theme's `nowPlayingTop → nowPlayingBottom` gradient, over the cover
+/// blurred (σ 40) when the theme asks for it.
+class _Background extends StatelessWidget {
+  const _Background();
+
+  /// How much of the gradient covers the blurred cover, top and bottom.
+  static const double _overBlurTop = 0.55;
+  static const double _overBlurBottom = 0.85;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final blur = colors.blurNowPlaying;
+    final top = colors.nowPlayingTop;
+    final bottom = colors.nowPlayingBottom;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Const, so colour tweens never rebuild (or re-blur) it.
+        if (blur) const _BlurredCover(),
+        DecoratedBox(
+          key: const Key('nowPlaying.glow'),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: blur
+                  ? [
+                      top.withValues(alpha: top.a * _overBlurTop),
+                      bottom.withValues(alpha: bottom.a * _overBlurBottom),
+                    ]
+                  : [top, bottom],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-/// The artwork blurred (σ 40) when the theme asks for it, else the theme's
-/// Now Playing gradient.
-class _Background extends ConsumerWidget {
-  const _Background();
+/// The playing cover, small and blurred at σ 40, in a layer of its own: it
+/// is built and painted once per track (crossfading on a change), not on
+/// position ticks, play/pause or colour tweens.
+class _BlurredCover extends ConsumerWidget {
+  const _BlurredCover();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = Theme.of(context).extension<SongiesColors>()!;
     final track = ref.watch(
       playerStateProvider.select((s) => s.value?.current),
     );
-    if (colors.blurNowPlaying && track != null) {
-      return ClipRect(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            ImageFiltered(
-              imageFilter: ImageFilter.blur(
-                sigmaX: 40,
-                sigmaY: 40,
-                tileMode: TileMode.clamp,
-              ),
-              // A small copy scaled up: the blur hides the difference.
-              child: FittedBox(
-                fit: BoxFit.cover,
-                clipBehavior: Clip.hardEdge,
-                child: Artwork(
-                  track.artworkRef,
-                  size: 96,
-                  radius: 0,
-                  seed: track.id,
+    return RepaintBoundary(
+      child: ClipRect(
+        child: AnimatedSwitcher(
+          duration: Motion.of(context).emphasized,
+          layoutBuilder: (current, previous) =>
+              Stack(fit: StackFit.expand, children: [...previous, ?current]),
+          child: track == null
+              ? const SizedBox.expand()
+              : ImageFiltered(
+                  key: ValueKey(track.id),
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: 40,
+                    sigmaY: 40,
+                    tileMode: TileMode.clamp,
+                  ),
+                  // A small copy scaled up: the blur hides the difference.
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    clipBehavior: Clip.hardEdge,
+                    child: Artwork(
+                      track.artworkRef,
+                      size: 96,
+                      radius: 0,
+                      seed: track.id,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            // Keeps the text readable on light covers.
-            ColoredBox(color: Colors.black.withAlpha(115)),
-          ],
-        ),
-      );
-    }
-    return DecoratedBox(
-      key: const Key('nowPlaying.glow'),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [colors.nowPlayingTop, colors.nowPlayingBottom],
         ),
       ),
     );
   }
 }
 
-/// Art, title and artist, scrubber and controls.
-class _PlayerTab extends ConsumerWidget {
+/// Art, title and artist, scrubber and controls. The art crossfades and
+/// grows from 0.92 on a track change, and sits at 0.88 while paused; the
+/// title and artist slide 16 px in the skip direction.
+class _PlayerTab extends ConsumerStatefulWidget {
   const _PlayerTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PlayerTab> createState() => _PlayerTabState();
+}
+
+class _PlayerTabState extends ConsumerState<_PlayerTab> {
+  /// How far the title and artist slide on a track change.
+  static const double _slide = 16;
+
+  /// Art scale while paused.
+  static const double _pausedScale = 0.88;
+
+  /// The art's scale when a new cover starts fading in.
+  static const double _enterScale = 0.92;
+
+  String? _trackId;
+  int _index = -1;
+
+  /// 1 when the last change went forward (the text moves left), -1 back.
+  double _direction = 1;
+
+  /// Notes the skip direction when the track changes.
+  void _track(String id, int index, int length) {
+    if (id == _trackId) {
+      _index = index;
+      return;
+    }
+    if (_trackId != null) {
+      final wrapped = _index == length - 1 && index == 0;
+      _direction = index > _index || wrapped ? 1 : -1;
+    }
+    _trackId = id;
+    _index = index;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
+    final motion = Motion.of(context);
     final track = ref.watch(
       playerStateProvider.select((s) => s.value?.current),
+    );
+    final index = ref.watch(
+      playerStateProvider.select((s) => s.value?.index ?? -1),
+    );
+    final length = ref.watch(
+      playerStateProvider.select((s) => s.value?.queue.length ?? 0),
+    );
+    final playing = ref.watch(
+      playerStateProvider.select((s) => s.value?.playing ?? false),
     );
     if (track == null) {
       return Center(
@@ -217,6 +348,10 @@ class _PlayerTab extends ConsumerWidget {
         ),
       );
     }
+    _track(track.id, index, length);
+    final direction = _direction;
+    final trackKey = ValueKey(track.id);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
       child: Column(
@@ -232,22 +367,47 @@ class _PlayerTab extends ConsumerWidget {
                   ),
                 );
                 return Center(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(colors.radius),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x80000000),
-                          blurRadius: 30,
-                          offset: Offset(0, 12),
+                  child: AnimatedScale(
+                    scale: playing ? 1 : _pausedScale,
+                    duration: motion.standard,
+                    curve: Motion.standardCurve,
+                    child: Hero(
+                      tag: nowPlayingArtHeroTag,
+                      child: AnimatedSwitcher(
+                        duration: motion.emphasized,
+                        switchInCurve: Motion.emphasizedCurve,
+                        switchOutCurve: Motion.emphasizedCurve,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            key: const Key('nowPlaying.artChange'),
+                            scale: Tween(
+                              begin: _enterScale,
+                              end: 1.0,
+                            ).animate(animation),
+                            child: child,
+                          ),
                         ),
-                      ],
-                    ),
-                    child: Artwork(
-                      key: const Key('nowPlaying.art'),
-                      track.artworkRef,
-                      size: side,
-                      seed: track.id,
+                        child: DecoratedBox(
+                          key: trackKey,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(colors.radius),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x80000000),
+                                blurRadius: 30,
+                                offset: Offset(0, 12),
+                              ),
+                            ],
+                          ),
+                          child: Artwork(
+                            key: const Key('nowPlaying.art'),
+                            track.artworkRef,
+                            size: side,
+                            seed: track.id,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 );
@@ -255,41 +415,47 @@ class _PlayerTab extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 20),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  track.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
+          LayoutBuilder(
+            builder: (context, box) {
+              final width = box.maxWidth;
+              final shift = width > 0 ? _slide / width : 0.0;
+              return AnimatedSwitcher(
+                duration: motion.emphasized,
+                switchInCurve: Motion.emphasizedCurve,
+                switchOutCurve: Motion.emphasizedCurve,
+                layoutBuilder: (current, previous) => Stack(
+                  alignment: Alignment.centerLeft,
+                  children: [...previous, ?current],
+                ),
+                transitionBuilder: (child, animation) {
+                  // The new title comes in from the skip side, the old one
+                  // leaves the other way: both move in the skip direction.
+                  final incoming = child.key == trackKey;
+                  final from = (incoming ? shift : -shift) * direction;
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      key: const Key('nowPlaying.titleSlide'),
+                      position: Tween(
+                        begin: Offset(from, 0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
+                child: SizedBox(
+                  key: trackKey,
+                  width: width,
+                  child: _TitleAndArtist(
+                    title: track.title,
+                    artist: track.artist,
+                    trackId: track.id,
+                    playing: playing,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        track.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.text.withAlpha(179),
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                    NowPlayingDownloadedIcon(trackId: track.id),
-                  ],
-                ),
-              ],
-            ),
+              );
+            },
           ),
           const SizedBox(height: 8),
           const NowPlayingScrubber(),
@@ -297,6 +463,58 @@ class _PlayerTab extends ConsumerWidget {
           const NowPlayingControls(),
         ],
       ),
+    );
+  }
+}
+
+class _TitleAndArtist extends StatelessWidget {
+  const _TitleAndArtist({
+    required this.title,
+    required this.artist,
+    required this.trackId,
+    required this.playing,
+  });
+
+  final String title;
+  final String artist;
+  final String trackId;
+  final bool playing;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Marquee(
+          title,
+          scroll: playing,
+          style: TextStyle(
+            color: colors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                artist,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.text.withAlpha(179),
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            NowPlayingDownloadedIcon(trackId: trackId),
+          ],
+        ),
+      ],
     );
   }
 }

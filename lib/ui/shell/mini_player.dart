@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../providers.dart';
 import '../../router.dart';
 import '../../theme/app_theme.dart';
+import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
 import '../widgets/artwork.dart';
 
 /// The phone's mini-player: 48 high with an 8 px side margin, filled with the
@@ -48,11 +49,14 @@ class MiniPlayer extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
                   children: [
-                    Artwork(
-                      track.artworkRef,
-                      size: 34,
-                      radius: 8,
-                      seed: track.id,
+                    Hero(
+                      tag: nowPlayingArtHeroTag,
+                      child: Artwork(
+                        track.artworkRef,
+                        size: 34,
+                        radius: 8,
+                        seed: track.id,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../motion/motion.dart';
 
 /// The page's top row: a close button (a chevron on a phone, an X on the
 /// desktop panel) and where the music is playing from.
@@ -154,7 +155,7 @@ class _Tab extends StatelessWidget {
 }
 
 /// A small download_done mark next to the artist when the playing YouTube
-/// song is downloaded on this device.
+/// song is downloaded on this device; it fades in.
 class NowPlayingDownloadedIcon extends ConsumerWidget {
   const NowPlayingDownloadedIcon({required this.trackId, super.key});
 
@@ -163,16 +164,26 @@ class NowPlayingDownloadedIcon extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final done = ref.watch(trackDownloadStateProvider(trackId)).value == 'done';
-    if (!done) return const SizedBox.shrink();
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    return Padding(
-      padding: const EdgeInsets.only(left: 6),
-      child: Icon(
-        Icons.download_done,
-        size: 16,
-        semanticLabel: 'Downloaded',
-        color: colors.accent,
+    return AnimatedSwitcher(
+      duration: Motion.of(context).standard,
+      transitionBuilder: (child, animation) => FadeTransition(
+        key: const Key('nowPlaying.downloadedFade'),
+        opacity: animation,
+        child: child,
       ),
+      child: done
+          ? Padding(
+              key: const ValueKey('downloaded'),
+              padding: const EdgeInsets.only(left: 6),
+              child: Icon(
+                Icons.download_done,
+                size: 16,
+                semanticLabel: 'Downloaded',
+                color: colors.accent,
+              ),
+            )
+          : const SizedBox.shrink(),
     );
   }
 }

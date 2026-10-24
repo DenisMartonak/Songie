@@ -37,6 +37,10 @@ class JustAudioBackend implements AudioBackend {
             _position = p;
             _emit();
           }),
+      _player.bufferedPositionStream.listen((b) {
+        _buffered = b;
+        _emit();
+      }),
       _player.durationStream.listen((d) {
         _duration = d;
         _emit();
@@ -67,6 +71,7 @@ class JustAudioBackend implements AudioBackend {
   bool _playing = false;
   ProcessingState _processing = ProcessingState.idle;
   Duration _position = Duration.zero;
+  Duration _buffered = Duration.zero;
   Duration? _duration;
 
   void _emit() {
@@ -79,6 +84,7 @@ class JustAudioBackend implements AudioBackend {
             _processing == ProcessingState.buffering,
         completed: _processing == ProcessingState.completed,
         position: _position,
+        buffered: _buffered,
         duration: _duration,
       ),
     );

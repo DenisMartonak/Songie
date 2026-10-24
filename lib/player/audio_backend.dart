@@ -48,6 +48,7 @@ class BackendState {
     this.buffering = false,
     this.completed = false,
     this.position = Duration.zero,
+    this.buffered = Duration.zero,
     this.duration,
   });
 
@@ -57,6 +58,9 @@ class BackendState {
   /// True once the loaded source has played to its end.
   final bool completed;
   final Duration position;
+
+  /// How far the loaded source has been buffered.
+  final Duration buffered;
   final Duration? duration;
 }
 

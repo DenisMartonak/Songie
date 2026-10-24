@@ -8,6 +8,7 @@ import '../../player/player_service.dart';
 import '../../providers.dart';
 import '../../router.dart';
 import '../../theme/app_theme.dart';
+import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
 import '../widgets/artwork.dart';
 
 /// The desktop's bottom player bar, 72 px high: the current track on the left;
@@ -54,7 +55,10 @@ class _NowPlaying extends ConsumerWidget {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     return Row(
       children: [
-        Artwork(track.artworkRef, size: 46, radius: 6, seed: track.id),
+        Hero(
+          tag: nowPlayingArtHeroTag,
+          child: Artwork(track.artworkRef, size: 46, radius: 6, seed: track.id),
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(

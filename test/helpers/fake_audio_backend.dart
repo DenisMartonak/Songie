@@ -63,6 +63,8 @@ class FakeAudioBackend implements AudioBackend {
 
   void setBuffering(bool b) => emit(_copy(buffering: b));
 
+  void setBuffered(Duration d) => emit(_copy(buffered: d));
+
   void clearCalls() => calls.clear();
 
   BackendState _copy({
@@ -70,12 +72,14 @@ class FakeAudioBackend implements AudioBackend {
     bool? buffering,
     bool? completed,
     Duration? position,
+    Duration? buffered,
     Duration? duration,
   }) => BackendState(
     playing: playing ?? _state.playing,
     buffering: buffering ?? _state.buffering,
     completed: completed ?? _state.completed,
     position: position ?? _state.position,
+    buffered: buffered ?? _state.buffered,
     duration: duration ?? _state.duration,
   );
 
