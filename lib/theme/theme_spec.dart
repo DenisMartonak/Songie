@@ -46,7 +46,7 @@ class ThemeSpec {
     mutedText: Color(0xFFA7A7A7),
     accent: Color(0xFF1DB954),
     followCover: true,
-    glowStrength: 0.4,
+    glowStrength: 0.65,
     cornerRadius: 12,
     fontFamily: 'Outfit',
     fontFileHash: null,

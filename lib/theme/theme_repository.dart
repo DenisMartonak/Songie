@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
+import '../core/log.dart';
 import '../core/result.dart';
 import '../data/database.dart';
 import '../data/db_guard.dart';
@@ -82,12 +83,22 @@ class ThemeRepository {
     return null;
   }
 
-  ThemeEntry _fromRow(ThemeRow row) => ThemeEntry(
-    id: row.id,
-    name: row.name,
-    spec: ThemeSpec.fromJson(jsonDecode(row.specJson) as Map<String, dynamic>),
-    builtIn: false,
-  );
+  /// Null (and logged) when a synced row's spec_json cannot be parsed.
+  ThemeEntry? _fromRow(ThemeRow row) {
+    try {
+      return ThemeEntry(
+        id: row.id,
+        name: row.name,
+        spec: ThemeSpec.fromJson(
+          jsonDecode(row.specJson) as Map<String, dynamic>,
+        ),
+        builtIn: false,
+      );
+    } catch (e) {
+      AppLog.w('Skipping theme ${row.id}: unreadable spec_json', e);
+      return null;
+    }
+  }
 
   Future<List<ThemeRow>> _liveRows() =>
       (_db.select(_db.themes)
@@ -105,11 +116,11 @@ class ThemeRepository {
             ..where((t) => t.deleted.equals(false))
             ..orderBy([(t) => OrderingTerm(expression: t.name.lower())]))
           .watch()
-          .map((rows) => [..._builtIns, for (final r in rows) _fromRow(r)]);
+          .map((rows) => [..._builtIns, for (final r in rows) ?_fromRow(r)]);
 
   /// The active theme. With no stored choice, a fresh install (no tracks yet)
   /// becomes Album glow, persisted so importing a song doesn't flip it; an
-  /// existing library resolves to Default. A stored id that is missing or
+  /// existing library resolves to Default, also persisted. A stored id that is missing or
   /// tombstoned resolves to Default.
   Stream<ThemeEntry> watchActive() {
     final changes = _db
@@ -129,19 +140,15 @@ class ThemeRepository {
                 ..addColumns([_db.tracks.id])
                 ..limit(1))
               .get();
-      if (anyTrack.isNotEmpty) return _builtIns[0];
-      id = kAlbumGlowThemeId;
+      // One-time detection: whichever way it goes, the answer is persisted.
+      id = anyTrack.isEmpty ? kAlbumGlowThemeId : kDefaultThemeId;
       await _settings.setString(kActiveThemeId, id);
     }
     final builtIn = _builtIn(id);
     if (builtIn != null) return builtIn;
     final row = await _liveRow(id);
     if (row == null) return _builtIns[0];
-    try {
-      return _fromRow(row);
-    } on FormatException {
-      return _builtIns[0];
-    }
+    return _fromRow(row) ?? _builtIns[0];
   }
 
   String? _cleanName(String name) {
@@ -260,17 +267,23 @@ class ThemeRepository {
   Future<void> setActive(String id) => _settings.setString(kActiveThemeId, id);
 
   /// Saves a copy of [id] (built-in or saved) named `<name> copy`.
-  Future<Result<String>> duplicate(String id) async {
-    final ThemeEntry source;
-    final builtIn = _builtIn(id);
-    if (builtIn != null) {
-      source = builtIn;
-    } else {
-      final row = await _liveRow(id);
-      if (row == null) return _notFound<String>(id);
-      source = _fromRow(row);
-    }
+  Future<Result<String>> duplicate(String id) {
     return guardDb(_db, () async {
+      final ThemeEntry source;
+      final builtIn = _builtIn(id);
+      if (builtIn != null) {
+        source = builtIn;
+      } else {
+        final row = await _liveRow(id);
+        if (row == null) return _notFound<String>(id);
+        final parsed = _fromRow(row);
+        if (parsed == null) {
+          return Err(
+            Failure(FailureKind.invalidInput, 'Theme $id is unreadable'),
+          );
+        }
+        source = parsed;
+      }
       final unique = await _uniqueName(_copyName(source.name));
       return Ok(await _insertReturningId(unique, source.spec));
     });

@@ -57,6 +57,8 @@ void main() {
       expect(a.fontFamily, 'Outfit');
       expect(a.cornerRadius, 12);
       expect(a.followCover, isTrue);
+      expect(a.glowStrength, 0.65);
+      expect(d.glowStrength, 0.4);
 
       final t = all[2].spec;
       expect(t.base, 'black');
@@ -65,6 +67,7 @@ void main() {
       expect(t.fontFamily, 'JetBrains Mono');
       expect(t.cornerRadius, 0);
       expect(t.followCover, isFalse);
+      expect(t.glowStrength, 0.4);
     });
 
     test('are never stored', () async {
@@ -221,11 +224,25 @@ void main() {
       },
     );
 
-    test('an existing library is Default and persists nothing', () async {
+    test('an existing library is Default, persisted', () async {
       await db.into(db.tracks).insert(trackRow(id: 't1'));
       expect((await repo.watchActive().first).id, 'builtin:default');
-      expect(await settings.getString('active_theme_id'), isNull);
+      expect(
+        await settings.getString('active_theme_id'),
+        equals('builtin:default'),
+      );
     });
+
+    test(
+      'an existing library stays Default after the library is emptied',
+      () async {
+        await db.into(db.tracks).insert(trackRow(id: 't1'));
+        expect((await repo.watchActive().first).id, 'builtin:default');
+        expect(await settings.getString('active_theme_id'), 'builtin:default');
+        await db.delete(db.tracks).go();
+        expect((await repo.watchActive().first).id, 'builtin:default');
+      },
+    );
 
     test('a fresh install stays Album glow after a track is added', () async {
       expect((await repo.watchActive().first).id, 'builtin:album-glow');
@@ -281,6 +298,52 @@ void main() {
 
     test('unknown id is notFound', () async {
       expect(failureOf(await repo.duplicate('nope')), FailureKind.notFound);
+    });
+  });
+
+  group('unparseable synced rows', () {
+    Future<String> badRow(String json, {String name = 'Bad'}) async {
+      final st = await stamp.next();
+      await db
+          .into(db.themes)
+          .insert(
+            ThemesCompanion.insert(
+              id: st.id,
+              clock: st.clock,
+              originDevice: st.originDevice,
+              localSeq: st.localSeq,
+              name: name,
+              specJson: json,
+            ),
+          );
+      return st.id;
+    }
+
+    const bad = ['not json', '[1,2]', '{"base": 5}', '{"accent": "#12"}'];
+
+    test('watchAll skips them and keeps the good ones', () async {
+      final good = ok(await repo.save(null, 'Good', spec));
+      for (final j in bad) {
+        await badRow(j);
+      }
+      final ids = (await repo.watchAll().first).map((e) => e.id);
+      expect(ids, contains(good));
+      expect(ids.length, 4);
+    });
+
+    test('duplicate returns invalidInput', () async {
+      for (final j in bad) {
+        final id = await badRow(j);
+        expect(failureOf(await repo.duplicate(id)), FailureKind.invalidInput);
+      }
+    });
+
+    test('a bad active row falls back to Default', () async {
+      for (final j in bad) {
+        final id = await badRow(j);
+        await repo.setActive(id);
+        expect((await repo.watchActive().first).id, 'builtin:default');
+      }
     });
   });
 }
