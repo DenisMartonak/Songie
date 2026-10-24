@@ -1,6 +1,6 @@
 # Songies Plan 4: session log (kept current after every task)
 
-_Last updated: 2026-10-25, after Task 9._
+_Last updated: 2026-10-25, after Task 10 (final review running)._
 
 **To resume in a new Claude session:**
 > Continue Songies Plan 4 subagent-driven on branch `plan-4-alive-ui-themes`. Read docs/plan-4-session-log.md and the ledger it names. Don't push or merge.
@@ -24,10 +24,10 @@ _Last updated: 2026-10-25, after Task 9._
 | 7. Living pages | done, reviewed | `6d8e776`, `e912745`, `e3d7b06` |
 | 8. Living shell | done, reviewed | `bb0d546`, `55da22b` |
 | 9. Theme list and editor | done, reviewed | `4babfce`, `9489d18` |
-| 10. Idle test, docs, builds | not started | |
-| Final whole-branch review + one fix wave | not started | |
+| 10. Idle test, docs, builds | done, reviewed | `08e7bb8` |
+| Final whole-branch review + one fix wave | **in progress** | |
 
-Tests at `9489d18`: 1,032 passing, `flutter analyze` clean.
+Tests at `08e7bb8`: 1,036 passing, `flutter analyze` clean; release APK (79.9 MB) and Linux build made. The idle test proves no frames are scheduled while paused (Home and Now Playing, phone and desktop) or in the background.
 
 
 ## Decisions made on your behalf (each with its cost if wrong)
@@ -75,6 +75,7 @@ Tests at `9489d18`: 1,032 passing, `flutter analyze` clean.
 - Task 7: the playlist header always rebuilds; some tests end with playback running; `playlist_page.dart` is ~1,165 lines (the header belongs in its own file); no end-to-end import-skeleton test; queued palette requests can't be cancelled.
 - Task 8: the nav bounce uses plain ease curves; the volume slider shows no thumb on a touch drag and sliders have no focus cue; the title transition is rebuilt every drag frame; dragged mini-player content slides under the play button; state is changed inside build; the reduced-motion test was never seen failing.
 - Task 9: a font rollback after a failed theme save isn't guarded against a second database error; leaving the Themes page mid-import can throw; the base-colour table lives in a UI file; the colour square has no screen-reader value.
+- Task 10: imported themes aren't range-checked (glow, radius, font scale): queued for the final fix wave. The idle test covers Home and Now Playing only.
 - Device sync (Plan 6) must re-register a synced font when its file arrives.
 
 ## Your checks (phone/desktop), once Plan 4 is done
