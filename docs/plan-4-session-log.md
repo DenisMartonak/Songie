@@ -1,6 +1,6 @@
 # Songies Plan 4: session log (kept current after every task)
 
-_Last updated: 2026-10-24, after Task 5._
+_Last updated: 2026-10-24, after Task 6._
 
 **To resume in a new Claude session:**
 > Continue Songies Plan 4 subagent-driven on branch `plan-4-alive-ui-themes`. Read docs/plan-4-session-log.md and the ledger it names. Don't push or merge.
@@ -20,14 +20,14 @@ _Last updated: 2026-10-24, after Task 5._
 | 3. Cover palette and contrast | done, reviewed | `ae77456`, `ba94ed5` |
 | 4. ThemeService, animated colours | done, reviewed | `4c07b99`, `54558cc` |
 | 5. Motion kit and page transitions | done, reviewed | `6ef2dd9`, `3d45fb7` |
-| 6. Living Now Playing | not started | |
+| 6. Living Now Playing | done, reviewed | `7bcee50`, `bb00ceb`, `4bbc441` |
 | 7. Living pages | not started | |
 | 8. Living shell | not started | |
 | 9. Theme list and editor | not started | |
 | 10. Idle test, docs, builds | not started | |
 | Final whole-branch review + one fix wave | not started | |
 
-Tests at `3d45fb7`: 889 passing, `flutter analyze` clean.
+Tests at `4bbc441`: 935 passing, `flutter analyze` clean.
 
 
 ## Decisions made on your behalf (each with its cost if wrong)
@@ -47,6 +47,9 @@ Tests at `3d45fb7`: 889 passing, `flutter analyze` clean.
 - **The active theme loads before the first frame**, so the app never flashes Default at start; if that read fails or takes over 2 s, it starts on Default. *If wrong:* a few ms of startup.
 - **`animations` 3.0.0** (the current release) instead of the plan's 2.x. *If wrong:* nothing; same API.
 - **Rows scrolling into view for the first time** also play their small entrance animation (a side of making late-loading lists animate). *If wrong:* skip it while scrolling.
+- **Now Playing swipe-down works on desktop too**, and Default/Terminal keep their pre-Plan-4 Now Playing gradient. *If wrong:* one platform check.
+- **The time label shows remaining time** (`-m:ss`), per the plan. *If wrong:* one label.
+- **A swipe-close doesn't fly the cover** back to the mini player (Flutter skips that on gestures); the close button still does. *If wrong:* nothing practical.
 - **Task 7** must not be starved by the "newest wins" palette queue (playlist header and Home glow ask for covers too). *If wrong:* one parameter.
 
 ## Smaller issues left for the final review
@@ -57,9 +60,11 @@ Tests at `3d45fb7`: 889 passing, `flutter analyze` clean.
 - Task 4: the cover-palette provider isn't auto-disposed; the theme tint is 25 % vs the cover tint's 30 %; Default/Terminal's Now Playing gradient changed to a darkened accent (Task 6 rebuilds it); muted text isn't contrast-checked.
 - Carried forward: Task 5 must make every motion token zero under reduced motion and honour the OS setting everywhere; Task 8 tints the player bar; Task 9 refreshes the font list after a font import.
 - Task 5: transition durations are fixed when a page is built; router transitions under the setting aren't tested end-to-end; a few test-strength gaps.
+- Task 6: skip direction is worked out inside build; the queue's lift animation and ripples ignore reduced motion; queue tests only run with animations off.
 - Device sync (Plan 6) must re-register a synced font when its file arrives.
 
 ## Your checks (phone/desktop), once Plan 4 is done
 
 - The three built-in themes look as specified; Outfit and JetBrains Mono show real bold weights.
+- Now Playing: dragging it down shows the app underneath; rotate the phone mid-drag and press back mid-drag, and nothing freezes; the blur stays smooth while dragging (performance overlay).
 - Colours follow each new song within a second; fast skipping never flashes a skipped song's colours.
