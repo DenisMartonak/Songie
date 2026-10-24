@@ -54,6 +54,13 @@ void main() {
       expect(p.isFallback, isTrue);
     });
 
+    test('pure black and pure white are fallbacks', () async {
+      for (final c in [0x000000, 0xffffff]) {
+        final p = (await extractCoverPalette(png(50, 50, (x, y) => c)))!;
+        expect(p.isFallback, isTrue, reason: c.toRadixString(16));
+      }
+    });
+
     test('undecodable bytes give null', () async {
       expect(await extractCoverPalette(Uint8List.fromList([1, 2, 3])), isNull);
     });
@@ -139,6 +146,34 @@ void main() {
       });
       await Future.wait([s.paletteFor('a.jpg'), s.paletteFor('b.jpg')]);
       expect(maxRunning, 1);
+    });
+
+    test('newest pending request runs next; stale pending ones skip',
+        () async {
+      for (final r in ['a', 'b', 'c', 'd']) {
+        putArt('$r.jpg', png(8, 8, (x, y) => 0x010101 * (r.codeUnitAt(0) - 90)));
+      }
+      final gate = Completer<void>();
+      final started = <int>[];
+      final s = CoverPaletteService(art, extract: (bytes) async {
+        started.add(bytes.length);
+        if (started.length == 1) await gate.future;
+        return pal(0xFF010203);
+      });
+      final fa = s.paletteFor('a.jpg');
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final fb = s.paletteFor('b.jpg');
+      final fc = s.paletteFor('c.jpg');
+      final fd = s.paletteFor('d.jpg');
+      gate.complete();
+      expect(await fa, isNotNull);
+      expect(await fd, isNotNull);
+      expect(await fb, isNull);
+      expect(await fc, isNull);
+      expect(started.length, 2);
+      // A later request for a stale ref extracts then.
+      expect(await s.paletteFor('b.jpg'), isNotNull);
+      expect(started.length, 3);
     });
 
     test('paletteStream: slow A superseded by B emits only B', () async {

@@ -34,4 +34,9 @@ void main() {
         const Color(0xFFE0E0E0), const Color(0xFFFFFFFF));
     expect(contrastRatio(c, const Color(0xFFFFFFFF)), greaterThanOrEqualTo(3));
   });
+  test('ensureAccentContrast works on a mid-grey background', () {
+    const mid = Color(0xFF5A5A5A);
+    final c = ensureAccentContrast(const Color(0xFF606060), mid);
+    expect(contrastRatio(c, mid), greaterThanOrEqualTo(3));
+  });
 }

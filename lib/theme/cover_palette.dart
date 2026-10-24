@@ -96,7 +96,10 @@ class CoverPaletteService {
   final ArtCache _art;
   final Future<CoverPalette?> Function(Uint8List) extract;
   final Map<String, CoverPalette> _memory = {};
-  Future<void> _tail = Future.value();
+  final Map<String, Future<CoverPalette?>> _jobs = {};
+  String? _pendingRef;
+  Completer<CoverPalette?>? _pending;
+  bool _busy = false;
 
   File _paletteFile(String ref) =>
       File('${_art.fileFor(ref).path}.palette.json');
@@ -111,17 +114,7 @@ class CoverPaletteService {
       final fromDisk = _readJson(artRef);
       if (fromDisk != null) return _memory[artRef] = fromDisk;
 
-      // Queue behind any extraction in flight so only one runs at a time.
-      final done = Completer<CoverPalette?>();
-      final previous = _tail;
-      _tail = done.future.then((_) {}, onError: (_) {});
-      await previous;
-      try {
-        done.complete(await _extractAndStore(artRef));
-      } catch (e, s) {
-        done.completeError(e, s);
-      }
-      return await done.future;
+      return await _enqueue(artRef);
     } catch (e, s) {
       AppLog.w('Palette for $artRef failed', e, s);
       return null;
@@ -150,6 +143,44 @@ class CoverPaletteService {
       onCancel: () => sub?.cancel(),
     );
     return out.stream;
+  }
+
+  /// One extraction runs at a time. A request waiting behind it is replaced by
+  /// a newer one: the replaced request completes with null without extracting
+  /// (it is stale), so the newest ref always runs next.
+  Future<CoverPalette?> _enqueue(String ref) {
+    final existing = _jobs[ref];
+    if (existing != null) return existing;
+    final completer = Completer<CoverPalette?>();
+    _jobs[ref] = completer.future;
+    final stale = _pending;
+    if (stale != null) {
+      _jobs.remove(_pendingRef);
+      stale.complete(null);
+    }
+    _pendingRef = ref;
+    _pending = completer;
+    _pump();
+    return completer.future;
+  }
+
+  Future<void> _pump() async {
+    final completer = _pending;
+    final ref = _pendingRef;
+    if (_busy || completer == null || ref == null) return;
+    _pending = null;
+    _pendingRef = null;
+    _busy = true;
+    CoverPalette? result;
+    try {
+      result = await _extractAndStore(ref);
+    } catch (e, s) {
+      AppLog.w('Palette for $ref failed', e, s);
+    }
+    _jobs.remove(ref);
+    _busy = false;
+    completer.complete(result);
+    unawaited(_pump());
   }
 
   CoverPalette? _readJson(String ref) {

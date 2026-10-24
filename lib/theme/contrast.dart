@@ -29,13 +29,17 @@ Color readableOn(Color bg, {Color preferred = _white}) {
       : _black;
 }
 
+// Luminance where white and black contrast equally; darker backgrounds
+// take lighter accents, lighter ones darker accents.
+const double _neutralLuminance = 0.179;
+
 /// Moves [accent] in HCT tone (hue and chroma kept) until it reaches 3:1
 /// against [bg]. Moves away from the background's lightness; if that cannot
 /// reach 3:1, tries the other direction, then returns the best attempt.
 Color ensureAccentContrast(Color accent, Color bg) {
   if (contrastRatio(accent, bg) >= 3) return accent;
   final hct = Hct.fromInt(accent.toARGB32());
-  final lighter = _luminance(bg) < 0.5;
+  final lighter = _luminance(bg) < _neutralLuminance;
   Color? best;
   for (final up in [lighter, !lighter]) {
     for (var t = hct.tone; up ? t <= 100 : t >= 0; t += up ? 1 : -1) {
