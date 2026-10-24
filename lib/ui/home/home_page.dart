@@ -71,8 +71,10 @@ class HomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final greeting = greetingFor(ref.watch(nowProvider)());
-    final loaded = ref.watch(playlistsProvider).value;
-    final playlists = loaded ?? const <PlaylistSummary>[];
+    final playlistsAsync = ref.watch(playlistsProvider);
+    // Skeletons only while loading: an error shows the empty state.
+    final loading = !playlistsAsync.hasValue && !playlistsAsync.hasError;
+    final playlists = playlistsAsync.value ?? const <PlaylistSummary>[];
     final recentIds = ref.watch(recentPlaylistIdsProvider).value ?? const [];
     final recentTracks = ref.watch(recentTracksProvider).value ?? const [];
     final lastPlayed = recentTracks.firstOrNull;
@@ -126,7 +128,7 @@ class HomePage extends ConsumerWidget {
                   SliverToBoxAdapter(
                     child: _Header(greeting: greeting, showSettings: isPhone),
                   ),
-                  if (loaded == null)
+                  if (loading)
                     const SliverToBoxAdapter(child: _SkeletonTiles())
                   else if (playlists.isEmpty)
                     const SliverToBoxAdapter(child: _EmptyHome())

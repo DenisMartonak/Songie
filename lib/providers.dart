@@ -129,7 +129,9 @@ class PendingImports extends Notifier<Set<String>> {
 
   void add(String playlistId) => state = {...state, playlistId};
 
+  /// Does nothing once the app's providers are gone.
   void remove(String playlistId) {
+    if (!ref.mounted) return;
     if (state.contains(playlistId)) {
       state = {...state}..remove(playlistId);
     }

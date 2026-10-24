@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/library/art_cache.dart';
+import 'package:songies/library/library_repository.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/cover_palette.dart';
@@ -137,6 +138,33 @@ void main() {
       await settle(tester);
       expect(find.byKey(const Key('home.skeleton')), findsNothing);
       expect(find.byType(SkeletonBox), findsNothing);
+    });
+
+    uiTest('a failing playlists stream shows the empty state, not a shimmer', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        h.app(
+          initialLocation: '/page',
+          routes: [
+            GoRoute(
+              path: '/page',
+              builder: (_, _) => const Scaffold(body: HomePage()),
+            ),
+          ],
+          extraOverrides: [
+            playlistsProvider.overrideWith(
+              (ref) => Stream<List<PlaylistSummary>>.error(StateError('db')),
+            ),
+          ],
+        ),
+      );
+      await settle(tester);
+      expect(find.byType(Shimmer), findsNothing);
+      expect(find.text('Your music lives here'), findsOneWidget);
     });
 
     uiTest('with no playlists it invites you to import or add music', (

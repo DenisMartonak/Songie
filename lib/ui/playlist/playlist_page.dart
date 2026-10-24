@@ -12,6 +12,7 @@ import '../../downloads/download_repository.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/contrast.dart';
 import '../downloads/download_status_line.dart';
 import '../downloads/download_toggle.dart';
 import '../downloads/track_download_icon.dart';
@@ -64,10 +65,42 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
 
   LibraryRepository get _repo => ref.read(libraryRepositoryProvider);
 
+  /// Kept to clear this page's pending import when it goes away.
+  late final PendingImports _pendingImports = ref.read(
+    pendingImportsProvider.notifier,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _pendingImports; // read now: `ref` is unusable in dispose
+    // Entries that were already loaded when the page opened.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _settlePendingImport(ref.read(playlistTracksProvider(_id)));
+    });
+  }
+
+  @override
+  void dispose() {
+    // After the frame: providers may not change while the tree is locked.
+    final id = _id;
+    final pending = _pendingImports;
+    Future.microtask(() => pending.remove(id));
+    super.dispose();
+  }
+
+  /// A pending import is over once its entries have arrived or failed.
+  void _settlePendingImport(AsyncValue<List<PlaylistTrack>> entries) {
+    if (entries.hasError || (entries.value?.isNotEmpty ?? false)) {
+      _pendingImports.remove(_id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    ref.listen(playlistTracksProvider(_id), (_, _) {
+    ref.listen(playlistTracksProvider(_id), (_, next) {
       if (_pending != null) setState(() => _pending = null);
+      _settlePendingImport(next);
     });
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final playlists = ref.watch(playlistsProvider);
@@ -81,19 +114,16 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
         .cast<PlaylistSummary?>()
         .firstOrNull;
     if (summary == null) {
-      // A just-imported playlist may not have reached the list yet.
-      return playlists.hasValue && !importing
+      // A just-imported playlist may not have reached the list yet (until
+      // its entries have loaded).
+      final waiting = importing && !streamed.hasValue && !streamed.hasError;
+      return playlists.hasValue && !waiting
           ? _NotFound(onBack: () => context.go('/library'))
           : const Center(child: CircularProgressIndicator());
     }
     final rows = _pending ?? streamed.value;
-    if (importing && rows != null && rows.isNotEmpty) {
-      // The imported entries have arrived.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) ref.read(pendingImportsProvider.notifier).remove(_id);
-      });
-    }
-    final skeleton = rows == null || (importing && rows.isEmpty);
+    final failed = rows == null && streamed.hasError;
+    final skeleton = !failed && (rows == null || (importing && rows.isEmpty));
 
     final (current, playing) = ref.watch(
       playerStateProvider.select((s) {
@@ -103,8 +133,9 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
             : (null, false);
       }),
     );
-    final top = MediaQuery.paddingOf(context).top;
-    final bottom = MediaQuery.paddingOf(context).bottom;
+    final insets = MediaQuery.paddingOf(context);
+    // The hero grows with the text so a two-line title always fits.
+    final textScale = MediaQuery.textScalerOf(context).scale(100) / 100;
     final list = rows ?? const <PlaylistTrack>[];
     final totalMs = list.fold<int>(0, (sum, r) => sum + r.track.durationMs);
     final dominant = ref
@@ -117,18 +148,21 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
         SliverPersistentHeader(
           pinned: true,
           delegate: _HeroDelegate(
-            topInset: top,
+            insets: insets,
+            coverRowHeight: _coverRowPadding + max(_coverSize, 104 * textScale),
             summary: summary,
             summaryText: rows == null
                 ? ''
                 : playlistSummaryText(rows.length, totalMs),
             // Without a cover palette, the soft accent wash of the mockup.
-            heroColor:
-                dominant ??
-                Color.alphaBlend(
-                  colors.accent.withValues(alpha: 0.28),
-                  colors.background,
-                ),
+            heroColor: playlistHeroTop(
+              dominant ??
+                  Color.alphaBlend(
+                    colors.accent.withValues(alpha: 0.28),
+                    colors.background,
+                  ),
+              colors,
+            ),
             canGoBack: Navigator.canPop(context),
             canPlay: list.isNotEmpty,
             onPlay: () => _play(list, shuffle: false),
@@ -137,42 +171,52 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
           ),
         ),
         if (summary.source == 'yt')
-          SliverToBoxAdapter(child: _YtActions(playlistId: summary.id)),
-        if (skeleton)
-          const SliverToBoxAdapter(child: _SkeletonRows())
-        else if (list.isEmpty)
-          SliverToBoxAdapter(child: _EmptyPlaylist(onAdd: _addSongs))
-        else
-          SliverReorderableList(
-            itemCount: list.length,
-            onReorderItem: (from, to) => _reorder(list, from, to),
-            proxyDecorator: _liftWhileDragged,
-            itemBuilder: (context, i) {
-              final row = list[i];
-              return Dismissible(
-                key: ValueKey(row.entryId),
-                background: const _SwipeBackground(Alignment.centerLeft),
-                secondaryBackground: const _SwipeBackground(
-                  Alignment.centerRight,
-                ),
-                onDismissed: (_) => _remove(list, i),
-                child: _TrackRow(
-                  key: ValueKey('row.${row.entryId}'),
-                  playlistId: _id,
-                  row: row,
-                  index: i,
-                  current: row.track.id == current,
-                  playing: playing,
-                  onTap: () => _playFrom(list, i),
-                  onLocate: () => _locate(row),
-                ),
-              );
-            },
+          _sideSafe(
+            SliverToBoxAdapter(child: _YtActions(playlistId: summary.id)),
           ),
-        SliverToBoxAdapter(child: SizedBox(height: bottom + 16)),
+        if (failed)
+          _sideSafe(const SliverToBoxAdapter(child: _LoadFailed()))
+        else if (skeleton)
+          _sideSafe(const SliverToBoxAdapter(child: _SkeletonRows()))
+        else if (list.isEmpty)
+          _sideSafe(SliverToBoxAdapter(child: _EmptyPlaylist(onAdd: _addSongs)))
+        else
+          _sideSafe(
+            SliverReorderableList(
+              itemCount: list.length,
+              onReorderItem: (from, to) => _reorder(list, from, to),
+              proxyDecorator: _liftWhileDragged,
+              itemBuilder: (context, i) {
+                final row = list[i];
+                return Dismissible(
+                  key: ValueKey(row.entryId),
+                  background: const _SwipeBackground(Alignment.centerLeft),
+                  secondaryBackground: const _SwipeBackground(
+                    Alignment.centerRight,
+                  ),
+                  onDismissed: (_) => _remove(list, i),
+                  child: _TrackRow(
+                    key: ValueKey('row.${row.entryId}'),
+                    playlistId: _id,
+                    row: row,
+                    index: i,
+                    current: row.track.id == current,
+                    playing: playing,
+                    onTap: () => _playFrom(list, i),
+                    onLocate: () => _locate(row),
+                  ),
+                );
+              },
+            ),
+          ),
+        SliverToBoxAdapter(child: SizedBox(height: insets.bottom + 16)),
       ],
     );
   }
+
+  /// Keeps [sliver] clear of landscape side insets (cutouts).
+  static Widget _sideSafe(Widget sliver) =>
+      SliverSafeArea(top: false, bottom: false, sliver: sliver);
 
   static Widget _liftWhileDragged(
     Widget child,
@@ -426,8 +470,12 @@ enum _MenuAction { rename, delete, addSongs }
 /// The hero's pinned top bar.
 const double _barHeight = 56;
 
-/// The cover, title and summary below the bar.
-const double _coverRowHeight = 144;
+/// The hero cover's full size, and the padding around its row.
+const double _coverSize = 112;
+const double _coverRowPadding = 32;
+
+/// The cover, title and summary below the bar, at the default text size.
+const double _coverRowHeight = _coverRowPadding + _coverSize;
 
 /// Shuffle and the menu, beside the Play button.
 const double _actionsHeight = 56;
@@ -435,8 +483,25 @@ const double _actionsHeight = 56;
 /// The floating Play button.
 const double _playSize = 48;
 
-/// How far the playlist scrolls before its hero has collapsed into the bar.
+/// How far the playlist scrolls before its hero has collapsed into the bar,
+/// at the default text size (larger text makes the hero taller).
 const double playlistHeroCollapseRange = _coverRowHeight + _actionsHeight;
+
+/// The top colour of the playlist hero for a cover's [dominant] colour: the
+/// colour itself when the theme's text and muted text read on it at 4.5:1,
+/// else the nearest blend towards the background that does.
+Color playlistHeroTop(Color dominant, SongiesColors colors) {
+  // Muted text that fails on the background itself can't be helped here.
+  final checkMuted = contrastRatio(colors.mutedText, colors.background) >= 4.5;
+  bool readable(Color c) =>
+      contrastRatio(colors.text, c) >= 4.5 &&
+      (!checkMuted || contrastRatio(colors.mutedText, c) >= 4.5);
+  for (var step = 0; step < 20; step++) {
+    final c = Color.lerp(dominant, colors.background, step / 20)!;
+    if (readable(c)) return c;
+  }
+  return colors.background;
+}
 
 /// Collapse fraction past which the title shows in the bar (and the hero's
 /// own title and cover have faded away).
@@ -448,7 +513,8 @@ const double _barTitleFrom = 0.6;
 /// with the hero, then pins to the bar.
 class _HeroDelegate extends SliverPersistentHeaderDelegate {
   _HeroDelegate({
-    required this.topInset,
+    required this.insets,
+    required this.coverRowHeight,
     required this.summary,
     required this.summaryText,
     required this.heroColor,
@@ -459,7 +525,12 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
     required this.onMenu,
   });
 
-  final double topInset;
+  /// The safe-area padding: the bar sits below [EdgeInsets.top], and the
+  /// content keeps clear of the sides.
+  final EdgeInsets insets;
+
+  /// The cover row's height (taller with larger text).
+  final double coverRowHeight;
   final PlaylistSummary summary;
   final String summaryText;
   final Color heroColor;
@@ -469,11 +540,15 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
   final VoidCallback onShuffle;
   final ValueChanged<_MenuAction> onMenu;
 
+  double get topInset => insets.top;
+
+  double get collapseRange => coverRowHeight + _actionsHeight;
+
   @override
   double get minExtent => topInset + _barHeight;
 
   @override
-  double get maxExtent => minExtent + playlistHeroCollapseRange;
+  double get maxExtent => minExtent + collapseRange;
 
   @override
   bool shouldRebuild(_HeroDelegate old) => true;
@@ -481,14 +556,14 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    final t = (shrinkOffset / playlistHeroCollapseRange).clamp(0.0, 1.0);
+    final t = (shrinkOffset / collapseRange).clamp(0.0, 1.0);
     final heroFade = (1 - t / _barTitleFrom).clamp(0.0, 1.0);
     final barFade = ((t - _barTitleFrom) / (1 - _barTitleFrom)).clamp(0.0, 1.0);
     final barBottom = topInset + _barHeight;
     final playTop = max(
       topInset + (_barHeight - _playSize) / 2,
       barBottom +
-          _coverRowHeight +
+          coverRowHeight +
           (_actionsHeight - _playSize) / 2 -
           shrinkOffset,
     );
@@ -527,13 +602,13 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
             children: [
               Positioned(
                 top: -shrinkOffset,
-                left: 0,
-                right: 0,
-                height: playlistHeroCollapseRange,
+                left: insets.left,
+                right: insets.right,
+                height: collapseRange,
                 child: Column(
                   children: [
                     SizedBox(
-                      height: _coverRowHeight,
+                      height: coverRowHeight,
                       child: heroFade == 0
                           ? null
                           : Opacity(
@@ -541,7 +616,7 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
                               child: _HeroCover(
                                 summary: summary,
                                 summaryText: summaryText,
-                                coverSize: 112 * (1 - 0.4 * t),
+                                coverSize: _coverSize * (1 - 0.4 * t),
                               ),
                             ),
                     ),
@@ -561,8 +636,8 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
         ),
         Positioned(
           top: topInset,
-          left: 0,
-          right: 0,
+          left: insets.left,
+          right: insets.right,
           height: _barHeight,
           child: SizedBox(
             key: const Key('playlist.topBar'),
@@ -573,6 +648,7 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
                     padding: const EdgeInsets.only(left: 4),
                     child: IconButton(
                       tooltip: 'Back',
+                      color: colors.text,
                       icon: const Icon(Icons.arrow_back),
                       onPressed: () => Navigator.of(context).maybePop(),
                     ),
@@ -605,7 +681,7 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
         ),
         Positioned(
           top: playTop,
-          right: 16,
+          right: insets.right + 16,
           child: _PlayButton(enabled: canPlay, onPlay: onPlay),
         ),
       ],
@@ -638,7 +714,7 @@ class _HeroCover extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           SizedBox.square(
-            dimension: 112,
+            dimension: _coverSize,
             child: Align(
               alignment: Alignment.bottomLeft,
               child: DecoratedBox(
@@ -673,15 +749,17 @@ class _HeroCover extends StatelessWidget {
                 else
                   Text('Local playlist', style: kindStyle),
                 const SizedBox(height: 4),
-                Text(
-                  summary.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    height: 1.1,
+                Flexible(
+                  child: Text(
+                    summary.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -1139,6 +1217,24 @@ class _EmptyPlaylist extends StatelessWidget {
           const SizedBox(height: 16),
           FilledButton(onPressed: onAdd, child: const Text('Add songs')),
         ],
+      ),
+    );
+  }
+}
+
+class _LoadFailed extends StatelessWidget {
+  const _LoadFailed();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Center(
+        child: Text(
+          "Couldn't load this playlist",
+          style: TextStyle(color: colors.mutedText),
+        ),
       ),
     );
   }

@@ -1,20 +1,25 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/library/art_cache.dart';
+import 'package:songies/library/library_repository.dart';
 import 'package:songies/library/library_scanner.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/theme/app_theme.dart';
+import 'package:songies/theme/contrast.dart';
 import 'package:songies/theme/cover_palette.dart';
 import 'package:songies/ui/downloads/download_toggle.dart';
 import 'package:songies/ui/motion/equalizer_bars.dart';
 import 'package:songies/ui/motion/pressable.dart';
+import 'package:songies/ui/motion/shimmer.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/library/add_songs_sheet.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
@@ -32,6 +37,8 @@ void main() {
     WidgetTester tester,
     String playlistId, {
     Size size = const Size(800, 900),
+    List<Override> extraOverrides = const [],
+    MediaQueryData Function(MediaQueryData)? media,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -42,14 +49,23 @@ void main() {
         routes: [
           GoRoute(
             path: '/playlist/:id',
-            builder: (_, state) =>
-                Scaffold(body: PlaylistPage(id: state.pathParameters['id']!)),
+            builder: (context, state) {
+              final page = Scaffold(
+                body: PlaylistPage(id: state.pathParameters['id']!),
+              );
+              if (media == null) return page;
+              return MediaQuery(
+                data: media(MediaQuery.of(context)),
+                child: page,
+              );
+            },
           ),
           GoRoute(
             path: '/library',
             builder: (_, _) => const Scaffold(body: Text('Library stub')),
           ),
         ],
+        extraOverrides: extraOverrides,
       ),
     );
     await settle(tester);
@@ -507,6 +523,35 @@ void main() {
       expect(fade.opacity, lessThan(1));
     });
 
+    Future<String> coveredPlaylist(WidgetTester tester) =>
+        real(tester, () async {
+          await h.addTrack('t1');
+          final id = await h.addPlaylist('Road trip', ['t1']);
+          await (h.db.update(h.db.playlists)..where((p) => p.id.equals(id)))
+              .write(const PlaylistsCompanion(coverRef: Value('cover.jpg')));
+          return id;
+        });
+
+    List<Override> paletteOverrides(CoverPalette palette) => [
+      artCacheProvider.overrideWithValue(
+        ArtCache(Directory('/nonexistent/songies-art')),
+      ),
+      artPaletteProvider.overrideWith(
+        (ref, art) async => art == 'cover.jpg' ? palette : null,
+      ),
+    ];
+
+    LinearGradient heroGradient(WidgetTester tester) {
+      final hero = tester.widget<DecoratedBox>(
+        find.byKey(const Key('playlist.heroBackground')),
+      );
+      return (hero.decoration as BoxDecoration).gradient! as LinearGradient;
+    }
+
+    SongiesColors themeColors(WidgetTester tester) =>
+        Theme.of(tester.element(find.byType(PlaylistPage)))
+            .extension<SongiesColors>()!;
+
     uiTest('the hero is a gradient from the cover\'s dominant colour', (
       tester,
     ) async {
@@ -515,48 +560,128 @@ void main() {
         vibrant: Color(0xFFE02060),
         muted: Color(0xFF404040),
       );
+      final id = await coveredPlaylist(tester);
+      await pumpPage(tester, id, extraOverrides: paletteOverrides(palette));
+      final gradient = heroGradient(tester);
+      final colors = themeColors(tester);
+      expect(gradient.begin, Alignment.topCenter);
+      expect(gradient.end, Alignment.bottomCenter);
+      expect(gradient.colors, [
+        playlistHeroTop(palette.dominant, colors),
+        colors.background,
+      ]);
+      // A dark cover colour that already keeps the text readable is used
+      // as it is.
+      expect(
+        playlistHeroTop(const Color(0xFF102030), colors),
+        const Color(0xFF102030),
+      );
+    });
+
+    uiTest('a near-white cover still leaves the hero text readable', (
+      tester,
+    ) async {
+      const palette = CoverPalette(
+        dominant: Color(0xFFF6F4EE),
+        vibrant: Color(0xFFE02060),
+        muted: Color(0xFFDDDDDD),
+      );
       final id = await real(tester, () async {
-        await h.addTrack('t1');
-        final id = await h.addPlaylist('Road trip', ['t1']);
+        final ids = [for (var i = 1; i <= 20; i++) 't$i'];
+        for (final t in ids) {
+          await h.addTrack(t);
+        }
+        final id = await h.addPlaylist('Road trip', ids);
         await (h.db.update(h.db.playlists)..where((p) => p.id.equals(id)))
             .write(const PlaylistsCompanion(coverRef: Value('cover.jpg')));
         return id;
       });
-      tester.view.physicalSize = const Size(800, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      await tester.pumpWidget(
-        h.app(
-          initialLocation: '/playlist/$id',
-          routes: [
-            GoRoute(
-              path: '/playlist/:id',
-              builder: (_, state) =>
-                  Scaffold(body: PlaylistPage(id: state.pathParameters['id']!)),
-            ),
-          ],
-          extraOverrides: [
-            artCacheProvider.overrideWithValue(
-              ArtCache(Directory('/nonexistent/songies-art')),
-            ),
-            artPaletteProvider.overrideWith(
-              (ref, art) async => art == 'cover.jpg' ? palette : null,
-            ),
-          ],
+      await pumpPage(tester, id, extraOverrides: paletteOverrides(palette));
+      final top = heroGradient(tester).colors.first;
+      final colors = themeColors(tester);
+      Color colorOf(String text) =>
+          tester.widget<Text>(find.text(text)).style!.color!;
+      expect(
+        contrastRatio(colorOf('Road trip'), top),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastRatio(colorOf('Local playlist'), top),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastRatio(colorOf('20 songs · 1 h 6 min'), top),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(contrastRatio(colors.text, top), greaterThanOrEqualTo(4.5));
+
+      tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position
+          .jumpTo(300);
+      await settle(tester);
+      final bar = tester.widget<Text>(
+        find.byKey(const Key('playlist.barTitle')),
+      );
+      expect(contrastRatio(bar.style!.color!, top), greaterThanOrEqualTo(4.5));
+    });
+
+    uiTest('large text (1.3x) fits a two-line title on a 400 px phone', (
+      tester,
+    ) async {
+      final id = await real(tester, () async {
+        await h.db
+            .into(h.db.tracks)
+            .insert(trackRow(id: 'y1', source: 'yt', ytVideoId: 'vy1'));
+        final id = await h.addPlaylist(
+          'A very long YouTube playlist name that wraps',
+          ['y1'],
+        );
+        await (h.db.update(
+          h.db.playlists,
+        )..where((p) => p.id.equals(id))).write(
+          const PlaylistsCompanion(
+            source: Value('yt'),
+            ytPlaylistUrl: Value('https://music.youtube.com/playlist?list=PLx'),
+          ),
+        );
+        return id;
+      });
+      await pumpPage(
+        tester,
+        id,
+        size: const Size(400, 800),
+        media: (m) => m.copyWith(textScaler: const TextScaler.linear(1.3)),
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('1 song · 0 h 0 min'), findsOneWidget);
+    });
+
+    uiTest('keeps clear of landscape side insets', (tester) async {
+      final id = await threeSongs(tester);
+      await pumpPage(
+        tester,
+        id,
+        size: const Size(900, 500),
+        media: (m) => m.copyWith(
+          padding: const EdgeInsets.only(left: 48, right: 48),
+          viewPadding: const EdgeInsets.only(left: 48, right: 48),
         ),
       );
-      await settle(tester);
-      final hero = tester.widget<DecoratedBox>(
-        find.byKey(const Key('playlist.heroBackground')),
-      );
-      final gradient =
-          (hero.decoration as BoxDecoration).gradient! as LinearGradient;
-      final background = Theme.of(tester.element(find.byType(PlaylistPage)))
-          .extension<SongiesColors>()!
-          .background;
-      expect(gradient.begin, Alignment.topCenter);
-      expect(gradient.end, Alignment.bottomCenter);
-      expect(gradient.colors, [palette.dominant, background]);
+      expect(tester.takeException(), isNull);
+      for (final f in [
+        find.byKey(const Key('playlist.play')),
+        find.byTooltip('More'),
+        find.widgetWithText(OutlinedButton, 'Shuffle'),
+        find.byKey(const Key('playlist.cover')),
+        find.text('3:20').first,
+        find.byIcon(Icons.drag_handle).first,
+        find.text('1'),
+      ]) {
+        final r = tester.getRect(f);
+        expect(r.left, greaterThanOrEqualTo(48), reason: '$f');
+        expect(r.right, lessThanOrEqualTo(900 - 48), reason: '$f');
+      }
     });
 
     uiTest('a 400 px phone fits every hero action without overflow', (
@@ -595,6 +720,63 @@ void main() {
   });
 
   group('skeleton rows', () {
+    uiTest('a failing entries stream shows a message, not a shimmer', (
+      tester,
+    ) async {
+      final id = await real(tester, () => h.addPlaylist('Broken', []));
+      await pumpPage(
+        tester,
+        id,
+        extraOverrides: [
+          playlistTracksProvider.overrideWith(
+            (ref, _) => Stream<List<PlaylistTrack>>.error(StateError('db')),
+          ),
+        ],
+      );
+      // settle() returned: nothing is animating forever.
+      expect(find.byType(Shimmer), findsNothing);
+      expect(find.text("Couldn't load this playlist"), findsOneWidget);
+      expect(tester.binding.hasScheduledFrame, isFalse);
+    });
+
+    uiTest('an error clears a pending import', (tester) async {
+      final id = await real(tester, () => h.addPlaylist('Broken', []));
+      final errors = StreamController<List<PlaylistTrack>>()..add(const []);
+      addTearDown(errors.close);
+      await pumpPage(
+        tester,
+        id,
+        extraOverrides: [
+          playlistTracksProvider.overrideWith((ref, _) => errors.stream),
+        ],
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PlaylistPage)),
+      );
+      container.read(pendingImportsProvider.notifier).add(id);
+      await tester.pump();
+      errors.addError(StateError('db'));
+      await flush(tester);
+      await settle(tester);
+      expect(container.read(pendingImportsProvider), isEmpty);
+      expect(find.byType(Shimmer), findsNothing);
+    });
+
+    uiTest('leaving the page clears its pending import', (tester) async {
+      final id = await real(tester, () => h.addPlaylist('Importing', []));
+      await pumpPage(tester, id);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PlaylistPage)),
+      );
+      container.read(pendingImportsProvider.notifier).add(id);
+      await tester.pump();
+      GoRouter.of(tester.element(find.byType(PlaylistPage))).go('/library');
+      await flush(tester);
+      await settle(tester);
+      expect(find.text('Library stub'), findsOneWidget);
+      expect(container.read(pendingImportsProvider), isEmpty);
+    });
+
     uiTest('show while an import is pending and the entries are empty', (
       tester,
     ) async {
