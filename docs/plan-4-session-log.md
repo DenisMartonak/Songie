@@ -1,6 +1,6 @@
 # Songies Plan 4: session log (kept current after every task)
 
-_Last updated: 2026-10-24, after Task 4._
+_Last updated: 2026-10-24. Stopped at your request during Task 5._
 
 **To resume in a new Claude session:**
 > Continue Songies Plan 4 subagent-driven on branch `plan-4-alive-ui-themes`. Read docs/plan-4-session-log.md and the ledger it names. Don't push or merge.
@@ -19,7 +19,7 @@ _Last updated: 2026-10-24, after Task 4._
 | 2. Fonts (Outfit, JetBrains Mono, import) | done, reviewed | `c9abd88`, `9de8cf2` |
 | 3. Cover palette and contrast | done, reviewed | `ae77456`, `ba94ed5` |
 | 4. ThemeService, animated colours | done, reviewed | `4c07b99`, `54558cc` |
-| 5. Motion kit and page transitions | not started | |
+| 5. Motion kit and page transitions | **stopped mid-task** (see below) | none yet |
 | 6. Living Now Playing | not started | |
 | 7. Living pages | not started | |
 | 8. Living shell | not started | |
@@ -28,6 +28,12 @@ _Last updated: 2026-10-24, after Task 4._
 | Final whole-branch review + one fix wave | not started | |
 
 Tests at `54558cc`: 857 passing, `flutter analyze` clean.
+
+## Where Task 5 stopped
+
+Its helper was stopped while writing the failing tests, before any code. That half-done work is in a git stash, so the branch is clean:
+- `stash@{0}` "plan4-task5-wip": the new `test/ui/motion/` tests, edits to `test/router_test.dart` and `test/ui/settings_test.dart`, and the `animations` package in `pubspec.yaml`/`pubspec.lock`.
+- **To resume:** start Task 5 fresh from `730c364` with the brief `.superpowers/sdd/2026-10-23-songies-plan-4-alive-ui-and-themes/task-5-brief.md` and the Task 5 rulings in the ledger. Either `git stash pop` first and tell the helper the failing tests are a starting point, or drop the stash (`git stash drop`). Both are safe.
 
 ## Decisions made on your behalf (each with its cost if wrong)
 
