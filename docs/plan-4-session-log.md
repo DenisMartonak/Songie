@@ -1,6 +1,6 @@
 # Songies Plan 4: session log (kept current after every task)
 
-_Last updated: 2026-10-24. Stopped at your request during Task 8's fix round._
+_Last updated: 2026-10-24, after Task 8._
 
 **To resume in a new Claude session:**
 > Continue Songies Plan 4 subagent-driven on branch `plan-4-alive-ui-themes`. Read docs/plan-4-session-log.md and the ledger it names. Don't push or merge.
@@ -22,19 +22,12 @@ _Last updated: 2026-10-24. Stopped at your request during Task 8's fix round._
 | 5. Motion kit and page transitions | done, reviewed | `6ef2dd9`, `3d45fb7` |
 | 6. Living Now Playing | done, reviewed | `7bcee50`, `bb00ceb`, `4bbc441` |
 | 7. Living pages | done, reviewed | `6d8e776`, `e912745`, `e3d7b06` |
-| 8. Living shell | **built, review found fixes; fix round not started** (see below) | `bb0d546` |
+| 8. Living shell | done, reviewed | `bb0d546`, `55da22b` |
 | 9. Theme list and editor | not started | |
 | 10. Idle test, docs, builds | not started | |
 | Final whole-branch review + one fix wave | not started | |
 
-Tests at `bb0d546`: 976 passing, `flutter analyze` clean (from the Task 8 helper's report).
-
-## Where Task 8 stopped
-
-Task 8 is built and committed (`bb0d546`), and its review asked for fixes. The fix round was sent, then stopped before any file changed, so the working tree is clean. Next session: run fix round 1 with these three findings (full detail in `.superpowers/sdd/2026-10-23-songies-plan-4-alive-ui-and-themes/task-8-review.md`), then a scoped re-review of the fix commits after `bb0d546`:
-1. **Mini player swipe direction lingers** (`mini_player.dart:67`): a swipe that doesn't change the track (restart mid-song, or Next at the queue's end) leaves the direction set, so the next unrelated song change slides in from the wrong side.
-2. **Sidebar hover fill is hard-coded white** (`sidebar.dart:486`), so it's invisible on light themes. It should come from the theme's text colour.
-3. **Ruling:** on a playlist page, only the playlist row shows the accent selection bar, not the Library header as well (`sidebar.dart:134`, `:186`).
+Tests at `55da22b`: 979 passing, `flutter analyze` clean.
 
 
 ## Decisions made on your behalf (each with its cost if wrong)
@@ -58,6 +51,7 @@ Task 8 is built and committed (`bb0d546`), and its review asked for fixes. The f
 - **The time label shows remaining time** (`-m:ss`), per the plan. *If wrong:* one label.
 - **A swipe-close doesn't fly the cover** back to the mini player (Flutter skips that on gestures); the close button still does. *If wrong:* nothing practical.
 - **Sidebar selection bar** slides between rows within a section and just appears when you jump to another section. *If wrong:* one overlay widget.
+- **Only one sidebar row shows the selection bar**: on a playlist page that's the playlist, not the Library header too. *If wrong:* nothing.
 - **Shell values the plan left open:** swipe-to-skip at 64 px or a 400 px/s fling, a 3 px selection bar, and a slider thumb that grows to 6 px on hover. *If wrong:* numbers.
 - **The title bar is unchanged** (the plan gives it no new behaviour). *If wrong:* nothing.
 - **Page palettes don't wait behind the song's:** the playlist header and Home glow ask for their cover colours through a path the "newest wins" queue can't cancel. *If wrong:* one parameter.
