@@ -22,7 +22,9 @@ class SongiesApp extends ConsumerWidget {
       // MediaQuery (for reduced motion) is available.
       themeAnimationStyle: AnimationStyle.noAnimation,
       routerConfig: router,
-      builder: (context, child) => _ThemeScope(theme: theme, child: child!),
+      builder: (context, child) => MotionScope(
+        child: _ThemeScope(theme: theme, child: child!),
+      ),
     );
   }
 }
@@ -39,16 +41,13 @@ class _ThemeScope extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final reduce =
-        ref.watch(reduceMotionProvider) ||
-        MediaQuery.disableAnimationsOf(context);
     final fontScale = ref.watch(themeSpecProvider.select((s) => s.fontScale));
     final media = MediaQuery.of(context);
     return MediaQuery(
       data: media.copyWith(textScaler: scaleText(media.textScaler, fontScale)),
       child: AnimatedTheme(
         data: theme,
-        duration: reduce ? Duration.zero : Motion.colour,
+        duration: Motion.of(context).colour,
         curve: Curves.linear,
         child: child,
       ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ import 'package:songies/downloads/download_service.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/router.dart';
 import 'package:songies/ui/home/home_page.dart';
+import 'package:songies/ui/motion/motion.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
 import 'package:songies/ui/search/search_page.dart';
@@ -31,7 +33,10 @@ class _NoTracks extends TrackResolver {
 }
 
 /// Pumps the app at phone width, whose shell needs only the player.
-Future<GoRouter> pumpRouter(WidgetTester tester) async {
+Future<GoRouter> pumpRouter(
+  WidgetTester tester, {
+  bool disableAnimations = false,
+}) async {
   tester.view.physicalSize = const Size(400, 800);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -71,6 +76,11 @@ Future<GoRouter> pumpRouter(WidgetTester tester) async {
       child: MaterialApp.router(
         theme: buildThemeData(ThemeSpec.builtInDefault),
         routerConfig: router,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(disableAnimations: disableAnimations),
+          child: child!,
+        ),
       ),
     ),
   );
@@ -110,6 +120,78 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(NowPlayingPage), findsNothing);
     expect(find.byType(HomePage), findsOneWidget);
+  });
+
+  group('transitions', () {
+    Finder inTransition<T extends Widget>(Type page) =>
+        find.ancestor(of: find.byType(page), matching: find.byType(T));
+
+    testWidgets('pushing a playlist uses a shared-axis transition', (
+      tester,
+    ) async {
+      final router = await pumpRouter(tester);
+      unawaited(router.push('/home/playlist/abc'));
+      await tester.pump();
+      await tester.pump(Motion.emphasized ~/ 2);
+      final axis = tester.widget<SharedAxisTransition>(
+        inTransition<SharedAxisTransition>(PlaylistPage).first,
+      );
+      expect(axis.transitionType, SharedAxisTransitionType.horizontal);
+      expect(axis.animation.value, inExclusiveRange(0, 1));
+      await tester.pumpAndSettle();
+      expect(find.byType(PlaylistPage), findsOneWidget);
+    });
+
+    testWidgets('switching tabs fades through', (tester) async {
+      final router = await pumpRouter(tester);
+      router.go('/search');
+      await tester.pump();
+      await tester.pump(Motion.standard ~/ 2);
+      final fade = tester.widget<FadeThroughTransition>(
+        inTransition<FadeThroughTransition>(SearchPage).first,
+      );
+      expect(fade.animation.value, inExclusiveRange(0, 1));
+      await tester.pumpAndSettle();
+      expect(find.byType(SearchPage), findsOneWidget);
+      expect(find.byType(HomePage), findsNothing);
+      // Settled: nothing keeps ticking.
+      expect(tester.binding.hasScheduledFrame, isFalse);
+    });
+
+    testWidgets('Now Playing slides up over Motion.emphasized', (tester) async {
+      final router = await pumpRouter(tester);
+      openNowPlaying(router);
+      await tester.pump();
+      await tester.pump(Motion.emphasized - const Duration(milliseconds: 50));
+      final top = tester.getTopLeft(find.byType(NowPlayingPage)).dy;
+      expect(top, greaterThan(0));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(tester.getTopLeft(find.byType(NowPlayingPage)).dy, 0);
+    });
+
+    testWidgets('with reduced motion every transition is instant', (
+      tester,
+    ) async {
+      final router = await pumpRouter(tester, disableAnimations: true);
+
+      router.go('/search');
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(HomePage), findsNothing);
+      expect(find.byType(SearchPage), findsOneWidget);
+
+      unawaited(router.push('/search/playlist/abc'));
+      await tester.pump();
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isFalse);
+      expect(find.byType(PlaylistPage), findsOneWidget);
+
+      openNowPlaying(router);
+      await tester.pump();
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isFalse);
+      expect(tester.getTopLeft(find.byType(NowPlayingPage)).dy, 0);
+    });
   });
 
   test('providers that main() should override fail loudly', () {

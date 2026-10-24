@@ -8,10 +8,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/log.dart';
 import '../../data/database.dart';
+import '../../data/settings_repository.dart';
 import '../../library/library_scanner.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../library/add_folder_flow.dart';
+import '../motion/motion.dart';
 import '../widgets/page_snack_bar.dart';
 import 'downloads_settings.dart';
 import 'storage_usage.dart';
@@ -38,7 +40,8 @@ final logSaverProvider = Provider<LogSaver>(
   },
 );
 
-/// Music folders, YouTube, downloads, storage, the log and About.
+/// Music folders, appearance, YouTube, downloads, storage, the log and
+/// About.
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -76,6 +79,7 @@ class SettingsPage extends ConsumerWidget {
             ),
           ),
           const _FoldersSection(),
+          const _AppearanceSection(),
           const YouTubeSettingsSection(),
           const DownloadsSettingsSection(),
           const _StorageSection(),
@@ -311,6 +315,36 @@ class _FolderRow extends ConsumerWidget {
       ),
     );
     if (confirmed ?? false) await repo.removeFolder(folder.path);
+  }
+}
+
+/// How the app looks and moves. Each row is one child of the column.
+class _AppearanceSection extends ConsumerWidget {
+  const _AppearanceSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SettingsSectionTitle('Appearance'),
+        SwitchListTile(
+          key: const Key('settings.reduceMotion'),
+          title: Text(
+            'Reduce animations',
+            style: TextStyle(color: colors.text),
+          ),
+          subtitle: Text(
+            'Pages, presses and colours change at once',
+            style: TextStyle(color: colors.mutedText, fontSize: 12),
+          ),
+          value: ref.watch(reduceMotionProvider),
+          onChanged: (v) =>
+              ref.read(settingsRepositoryProvider).setBool(kReduceMotion, v),
+        ),
+      ],
+    );
   }
 }
 

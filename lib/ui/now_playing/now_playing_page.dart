@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../motion/motion.dart';
 import '../shell/adaptive_shell.dart';
 import '../widgets/artwork.dart';
 import 'now_playing_controls.dart';
@@ -19,6 +20,7 @@ import 'now_playing_queue.dart';
 /// it; clicking outside closes it).
 Page<void> nowPlayingPage(BuildContext context, GoRouterState state) {
   final wide = MediaQuery.sizeOf(context).width >= phoneBreakpoint;
+  final motion = Motion.of(context);
   if (wide) {
     return CustomTransitionPage<void>(
       key: state.pageKey,
@@ -26,23 +28,27 @@ Page<void> nowPlayingPage(BuildContext context, GoRouterState state) {
       barrierDismissible: true,
       barrierColor: Colors.black54,
       barrierLabel: 'Close',
-      transitionDuration: const Duration(milliseconds: 200),
-      reverseTransitionDuration: const Duration(milliseconds: 150),
+      transitionDuration: motion.standard,
+      reverseTransitionDuration: motion.standard,
       child: const NowPlayingPage(),
-      transitionsBuilder: (context, animation, _, child) =>
-          FadeTransition(opacity: animation, child: child),
+      transitionsBuilder: (context, animation, _, child) => FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: Motion.standardCurve,
+        ),
+        child: child,
+      ),
     );
   }
   return CustomTransitionPage<void>(
     key: state.pageKey,
-    transitionDuration: const Duration(milliseconds: 280),
-    reverseTransitionDuration: const Duration(milliseconds: 220),
+    transitionDuration: motion.emphasized,
+    reverseTransitionDuration: motion.emphasized,
     child: const NowPlayingPage(),
     transitionsBuilder: (context, animation, _, child) => SlideTransition(
-      position: Tween(
-        begin: const Offset(0, 1),
-        end: Offset.zero,
-      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+      position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(
+        CurvedAnimation(parent: animation, curve: Motion.emphasizedCurve),
+      ),
       child: child,
     ),
   );

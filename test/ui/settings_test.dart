@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:songies/core/log.dart';
 import 'package:songies/core/paths.dart';
 import 'package:songies/data/database.dart';
+import 'package:songies/data/settings_repository.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
@@ -360,6 +361,28 @@ void main() {
       await tester.tap(find.byKey(const Key('settings.exportLog')));
       await settle(tester);
       expect(find.text("Couldn't save the log"), findsOneWidget);
+    });
+  });
+
+  group('appearance', () {
+    uiTest('Reduce animations is off by default and saves the setting', (
+      tester,
+    ) async {
+      await pumpSettings(tester);
+      final toggle = find.byKey(const Key('settings.reduceMotion'));
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+
+      await tester.tap(toggle);
+      await settle(tester);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      expect(
+        await real(
+          tester,
+          () =>
+              SettingsRepository(h.db).getBool(kReduceMotion, fallback: false),
+        ),
+        isTrue,
+      );
     });
   });
 
