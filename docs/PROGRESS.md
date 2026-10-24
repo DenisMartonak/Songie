@@ -2,10 +2,10 @@
 
 _Last updated: 2026-10-24_
 
-## Plan 3 (bug fixes + downloads) — done and reviewed task by task; final whole-branch review still to come
+## Plan 3 (bug fixes + downloads) — done and reviewed; final whole-branch review done and its fixes applied
 
 - **Branch:** `plan-3-downloads-fixes` (from `plan-2-youtube`). Plan: [Plan 3](superpowers/plans/2026-10-23-songies-plan-3-fixes-and-downloads.md). Nothing is pushed or merged.
-- **Status:** Tasks 1–10 are implemented; Tasks 1–9 were reviewed by separate reviewers. **The final whole-branch review and its fix batch are still to come.** Tests: 762 passing, `flutter analyze` clean, `flutter build apk --release` and `flutter build linux --release` succeed (APK 79.0 MB). Windows is built on your PC.
+- **Status:** Tasks 1–10 are implemented and were reviewed by separate reviewers. The final whole-branch review is done, and its fix wave is applied: YouTube download rows are filtered in SQL (large local libraries no longer hit "too many SQL variables"), a run that finished nothing posts no "Downloaded 0 songs", the Android picker's Documents root maps to `/storage/emulated/0/Documents`, and offline playback skips undownloaded YouTube songs quietly (outside the 3-in-a-row cap) instead of stopping. Tests: 769 passing, `flutter analyze` clean, `flutter build apk --release` and `flutter build linux --release` succeed (APK 79.0 MB). Windows is built on your PC.
 - **What it does now:**
   - Home/Library/Search tabs always open their root.
   - Playback no longer shows one song while playing another; failed songs show "Skipped …" and 3 in a row stop playback.
@@ -14,12 +14,12 @@ _Last updated: 2026-10-24_
   - Per-device Download switch beside "Sync with YouTube" in the playlist hero, with progress rings, per-song icons, an app-wide indicator and Downloads panel, a "Downloads failing — update yt-dlp?" banner and Settings → Downloads. Remove downloads? offers Keep files / Remove.
   - Files go to `<appData>/library/yt/<videoId>.<ext>`; 2 at a time on Android, 3 on desktop; Wi-Fi only pauses on mobile data; 429 backs off 30 s → 10 min; offline pauses and resumes; full storage pauses.
   - Android: a foreground-service notification ("Downloading songs · x of y", "Paused — waiting for Wi-Fi", "Downloads paused", "Downloaded n songs").
-- **Verification on Linux:** the in-app GUI could not be driven from the agent. Instead yt-dlp 2026.08.19 was run with the app's exact download args (format `bestaudio[acodec=opus]/bestaudio[ext=m4a]/bestaudio`, `--no-playlist --continue --no-mtime`, output `%(id)s.%(ext)s`) in a scratch directory for the first 3 songs of the test playlist (`PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI`): 3 `.webm` files (3.9 MB, 10.4 MB, 3.7 MB) downloaded. **Still a manual check for you:** the in-app Linux flow (files in `~/.local/share/songies/library/yt/`, `FileSource` log line on play, Remove deletes them); it is in [manual-test-checklist.md](manual-test-checklist.md).
+- **Verification on Linux:** the in-app GUI could not be driven from the agent. Instead yt-dlp 2026.08.19 was run with the app's exact download args (format `bestaudio[acodec=opus]/bestaudio[ext=m4a]/bestaudio`, `--no-playlist --continue --no-mtime`, output `%(id)s.%(ext)s`) in a scratch directory for the first 3 songs of the test playlist (`PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI`): 3 `.webm` files (3.9 MB, 10.4 MB, 3.7 MB) downloaded. yt-dlp warned "no JavaScript runtime found" during this smoke test (it fell back to clients that don't need JS); the downloads still worked. **Still a manual check for you:** the in-app Linux flow (files in `~/.local/share/songies/library/yt/`, `FileSource` log line on play, Remove deletes them); it is in [manual-test-checklist.md](manual-test-checklist.md).
 - **Rulings:** see [plan-3-session-log.md](plan-3-session-log.md) for the full list. Task 9 added: the Download toggle sits beside "Sync with YouTube" (the Play/Shuffle row overflowed 400 px phones); a user pause only blocks new slots (running downloads finish) and shows as "Paused" / "Downloads paused" via `DownloadPauseReason.user`; Settings → Downloads resumes any resumable pause; the singular "Remove downloads?" copy; the downloads banner is keyboard-reachable.
-- **Parked items (deferred minors):** the per-task lists in the session log, plus Task 9: banner/indicator heights are hardcoded in the phone overlay padding (covered by the 400 px shell test, phone check is yours); the status line rebuilds on each progress tick (needed for the combined fraction); `track_download_icon` catches `on Exception` where others catch `DownloadDbException`; "Retry failed" is always shown in the Downloads panel; no build-count test for the rebuild-scoping rule. Task 8 minors also remain (service restarts each update, stale "retrying in" text, "Downloaded 0 songs" after cancel-all, duplicated notifier choice, extra core-ktx dependency, stop/refused-flag edge cases).
-- **Next:** the final whole-branch review and fixes, then your device checks, then [Plan 4](superpowers/plans/2026-10-23-songies-plan-4-alive-ui-and-themes.md) (a living UI and the theme engine). Roadmap renumbered: Plan 5 = lyrics, Plan 6 = device sync, Plan 7 = packaging.
+- **Parked items (deferred minors):** the per-task lists in the session log, plus Task 9: banner/indicator heights are hardcoded in the phone overlay padding (covered by the 400 px shell test, phone check is yours); the status line rebuilds on each progress tick (needed for the combined fraction); `track_download_icon` catches `on Exception` where others catch `DownloadDbException`; "Retry failed" is always shown in the Downloads panel; no build-count test for the rebuild-scoping rule. Task 8 minors also remain (service restarts each update, stale "retrying in" text, duplicated notifier choice, extra core-ktx dependency, stop/refused-flag edge cases).
+- **Next:** your device checks, then [Plan 4](superpowers/plans/2026-10-23-songies-plan-4-alive-ui-and-themes.md) (a living UI and the theme engine). Roadmap renumbered: Plan 5 = lyrics, Plan 6 = device sync, Plan 7 = packaging.
 - **To resume in a new Claude session:**
-  > Songies Plan 3 is implemented on branch `plan-3-downloads-fixes` (Tasks 1–10 done). Next: the final whole-branch review and its fixes, then start Plan 4. Read docs/plan-3-session-log.md. Don't push or merge.
+  > Songies Plan 3 is implemented on branch `plan-3-downloads-fixes` (Tasks 1–10 done and reviewed, final review fixed). Next: the device checks, then start Plan 4. Read docs/plan-3-session-log.md. Don't push or merge.
 
 ## Plan 2 (YouTube) — done and reviewed, pending your device checks
 
@@ -89,7 +89,7 @@ _Last updated: 2026-10-24_
 
 1. **Manual testing on real devices** using [manual-test-checklist.md](manual-test-checklist.md). This covers Android phone, Windows and Nobara. Agents couldn't do it because they had no audio, no phone and no Linux machine.
 2. **Merge** `plan-1-foundation` into `master`.
-3. **Write Plan 2** (YouTube import, Sync with YouTube, streaming), then Plans 3–6 (downloads, themes and lyrics, device sync, packaging). The roadmap is at the top of the Plan 1 file.
+3. **Write Plan 2** (YouTube import, Sync with YouTube, streaming), then Plans 3–7 (downloads, a living UI and themes, lyrics, device sync, packaging). The roadmap at the top of the Plan 1 file uses the old numbering; Plan 3 renumbered it.
 
 ### Plan 1 resume note (superseded by Plan 2 above)
 > Songies Plan 1 is complete and reviewed on branch `plan-1-foundation`. Next: merge it if not done yet, then write Plan 2 (YouTube import, sync and streaming) from docs/superpowers/specs/2026-10-21-songies-design.md. Start with a polish task covering the deferred minor items in docs/PROGRESS.md.
@@ -183,7 +183,10 @@ Each entry says what was decided and what it costs if it turns out wrong.
 
 **Must address before later plans:**
 - **Plan 4:** `ThemeSpec.fromJson` needs range checks (glowStrength, fontScale, cornerRadius) before theme import ships.
-- **Plan 5:** `Hlc.parse` should reject non-canonical clocks. Re-adding a deleted track must resurrect its row, because of the unique `fileHash`/`ytVideoId` columns. Add a `local_seq` index.
+- **Plan 6 (device sync):** `Hlc.parse` should reject non-canonical clocks. Re-adding a deleted track must resurrect its row, because of the unique `fileHash`/`ytVideoId` columns. Add a `local_seq` index.
+- **yt-dlp JavaScript runtime** (from the Plan 3 final review): since late 2025 yt-dlp wants an external JS runtime (only deno is enabled by default) for YouTube's player challenges, and without one it falls back to JS-free clients. If YouTube drops those, streaming and downloads both fail.
+  - **Desktop:** detect `deno`/`node` on PATH and pass `--js-runtimes`, or have the installer fetch deno.
+  - **Android:** check yt-dlp's stderr on the device for the same "no JavaScript runtime found" warning (yt-dlp enables only deno by default, so the bundled QuickJS may not be used).
 - **Remove** `dependency_overrides: flutter_rust_bridge: 2.11.1` once `smtc_windows` is rebuilt against flutter_rust_bridge ≥ 2.13.
 
 **Plan 2 deferred minor items (none block use):**
