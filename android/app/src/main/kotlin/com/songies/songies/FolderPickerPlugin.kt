@@ -73,7 +73,12 @@ class FolderPickerPlugin(
         if (colon < 0) throw IllegalArgumentException("Unexpected document id: $docId")
         val volume = docId.substring(0, colon)
         val rel = docId.substring(colon + 1).trim('/')
-        val root = if (volume == "primary") "/storage/emulated/0" else "/storage/$volume"
+        val root = when (volume) {
+            "primary" -> "/storage/emulated/0"
+            // The picker's "Documents" root.
+            "home" -> "/storage/emulated/0/Documents"
+            else -> "/storage/$volume"
+        }
         return if (rel.isEmpty()) root else "$root/$rel"
     }
 
