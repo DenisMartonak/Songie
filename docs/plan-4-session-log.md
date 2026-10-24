@@ -1,6 +1,6 @@
 # Songies Plan 4: session log (kept current after every task)
 
-_Last updated: 2026-10-24. Stopped at your request during Task 5._
+_Last updated: 2026-10-24, after Task 5._
 
 **To resume in a new Claude session:**
 > Continue Songies Plan 4 subagent-driven on branch `plan-4-alive-ui-themes`. Read docs/plan-4-session-log.md and the ledger it names. Don't push or merge.
@@ -19,7 +19,7 @@ _Last updated: 2026-10-24. Stopped at your request during Task 5._
 | 2. Fonts (Outfit, JetBrains Mono, import) | done, reviewed | `c9abd88`, `9de8cf2` |
 | 3. Cover palette and contrast | done, reviewed | `ae77456`, `ba94ed5` |
 | 4. ThemeService, animated colours | done, reviewed | `4c07b99`, `54558cc` |
-| 5. Motion kit and page transitions | **stopped mid-task** (see below) | none yet |
+| 5. Motion kit and page transitions | done, reviewed | `6ef2dd9`, `3d45fb7` |
 | 6. Living Now Playing | not started | |
 | 7. Living pages | not started | |
 | 8. Living shell | not started | |
@@ -27,13 +27,8 @@ _Last updated: 2026-10-24. Stopped at your request during Task 5._
 | 10. Idle test, docs, builds | not started | |
 | Final whole-branch review + one fix wave | not started | |
 
-Tests at `54558cc`: 857 passing, `flutter analyze` clean.
+Tests at `3d45fb7`: 889 passing, `flutter analyze` clean.
 
-## Where Task 5 stopped
-
-Its helper was stopped while writing the failing tests, before any code. That half-done work is in a git stash, so the branch is clean:
-- `stash@{0}` "plan4-task5-wip": the new `test/ui/motion/` tests, edits to `test/router_test.dart` and `test/ui/settings_test.dart`, and the `animations` package in `pubspec.yaml`/`pubspec.lock`.
-- **To resume:** start Task 5 fresh from `730c364` with the brief `.superpowers/sdd/2026-10-23-songies-plan-4-alive-ui-and-themes/task-5-brief.md` and the Task 5 rulings in the ledger. Either `git stash pop` first and tell the helper the failing tests are a starting point, or drop the stash (`git stash drop`). Both are safe.
 
 ## Decisions made on your behalf (each with its cost if wrong)
 
@@ -50,6 +45,8 @@ Its helper was stopped while writing the failing tests, before any code. That ha
 - **Existing `glow`/`miniPlayer` colours** serve as the plan's glow and tint. *If wrong:* a rename.
 - **Shimmer skeletons** may animate while loading, but stop in the background. *If wrong:* nothing.
 - **The active theme loads before the first frame**, so the app never flashes Default at start; if that read fails or takes over 2 s, it starts on Default. *If wrong:* a few ms of startup.
+- **`animations` 3.0.0** (the current release) instead of the plan's 2.x. *If wrong:* nothing; same API.
+- **Rows scrolling into view for the first time** also play their small entrance animation (a side of making late-loading lists animate). *If wrong:* skip it while scrolling.
 - **Task 7** must not be starved by the "newest wins" palette queue (playlist header and Home glow ask for covers too). *If wrong:* one parameter.
 
 ## Smaller issues left for the final review
@@ -59,6 +56,7 @@ Its helper was stopped while writing the failing tests, before any code. That ha
 - Task 3: the palette stream closes before a pending result arrives; cover bytes are read on the UI thread; a few test-precision gaps.
 - Task 4: the cover-palette provider isn't auto-disposed; the theme tint is 25 % vs the cover tint's 30 %; Default/Terminal's Now Playing gradient changed to a darkened accent (Task 6 rebuilds it); muted text isn't contrast-checked.
 - Carried forward: Task 5 must make every motion token zero under reduced motion and honour the OS setting everywhere; Task 8 tints the player bar; Task 9 refreshes the font list after a font import.
+- Task 5: transition durations are fixed when a page is built; router transitions under the setting aren't tested end-to-end; a few test-strength gaps.
 - Device sync (Plan 6) must re-register a synced font when its file arrives.
 
 ## Your checks (phone/desktop), once Plan 4 is done
