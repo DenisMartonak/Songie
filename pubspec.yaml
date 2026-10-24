@@ -100,25 +100,25 @@ flutter:
           weight: 700
         - asset: assets/fonts/Inter-ExtraBold.ttf
           weight: 800
-    # Variable fonts (Google Fonts publishes no static files): one file per
-    # family, declared at each weight the app uses.
+    # Static instances cut from the official variable fonts with fontTools
+    # (Flutter does not apply the wght axis of a variable font by weight).
     - family: Outfit
       fonts:
-        - asset: assets/fonts/Outfit-Variable.ttf
+        - asset: assets/fonts/Outfit-Regular.ttf
           weight: 400
-        - asset: assets/fonts/Outfit-Variable.ttf
+        - asset: assets/fonts/Outfit-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/Outfit-Variable.ttf
+        - asset: assets/fonts/Outfit-Bold.ttf
           weight: 700
-        - asset: assets/fonts/Outfit-Variable.ttf
+        - asset: assets/fonts/Outfit-ExtraBold.ttf
           weight: 800
     - family: JetBrains Mono
       fonts:
-        - asset: assets/fonts/JetBrainsMono-Variable.ttf
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
           weight: 400
-        - asset: assets/fonts/JetBrainsMono-Variable.ttf
+        - asset: assets/fonts/JetBrainsMono-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/JetBrainsMono-Variable.ttf
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
           weight: 700
-        - asset: assets/fonts/JetBrainsMono-Variable.ttf
+        - asset: assets/fonts/JetBrainsMono-ExtraBold.ttf
           weight: 800

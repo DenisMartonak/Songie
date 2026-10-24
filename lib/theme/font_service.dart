@@ -57,7 +57,7 @@ class FontEntry {
 }
 
 final _styleSuffix = RegExp(
-  r'(?:[-_ ]*(?:Regular|Bold|SemiBold|ExtraBold|Light|ExtraLight|Medium|Thin|Black|Heavy|Book|Italic|Oblique|Variable|VF))+$',
+  r'(?:[-_ ]+(?:Regular|Bold|SemiBold|ExtraBold|Light|ExtraLight|Medium|Thin|Black|Heavy|Book|Italic|Oblique|Variable|VF))+$',
   caseSensitive: false,
 );
 
@@ -146,6 +146,22 @@ class FontService {
     return stripped.isEmpty ? base.trim() : stripped;
   }
 
+  Future<bool> _tryRegister(String family, Uint8List bytes) async {
+    try {
+      await _register(family, [bytes]);
+      return true;
+    } catch (e) {
+      AppLog.w('Font registration failed for $family', e);
+      return false;
+    }
+  }
+
+  Future<void> _ensureFile(String hash, String ext, Uint8List bytes) async {
+    await _fontsDir.create(recursive: true);
+    final dest = File(p.join(_fontsDir.path, '$hash.$ext'));
+    if (!await dest.exists()) await dest.writeAsBytes(bytes, flush: true);
+  }
+
   /// Imports the `.ttf`/`.otf` at [path]; returns its family name.
   Future<Result<String>> import(String path) async {
     final ext = p.extension(path).toLowerCase().replaceFirst('.', '');
@@ -175,7 +191,15 @@ class FontService {
       return await guardDb(_db, () async {
         final rows = await _liveRows();
         for (final r in rows) {
-          if (r.fileHash == hash) return Ok(r.family);
+          if (r.fileHash == hash) {
+            // Known font: heal a missing file and a not-yet-registered family.
+            await _ensureFile(hash, r.ext, bytes);
+            if (!_registered.contains(r.family)) {
+              if (!await _tryRegister(r.family, bytes)) return _notAFont();
+              _registered.add(r.family);
+            }
+            return Ok(r.family);
+          }
         }
 
         final taken = {
@@ -188,10 +212,9 @@ class FontService {
           family = '$base $n';
         }
 
-        await _fontsDir.create(recursive: true);
-        final dest = File(p.join(_fontsDir.path, '$hash.$ext'));
-        if (!await dest.exists()) await dest.writeAsBytes(bytes, flush: true);
-        await _register(family, [bytes]);
+        // Register first: a font the engine rejects must leave nothing saved.
+        if (!await _tryRegister(family, bytes)) return _notAFont();
+        await _ensureFile(hash, ext, bytes);
 
         final s = await _stamp.next();
         await _db

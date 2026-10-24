@@ -150,6 +150,51 @@ void main() {
     expect(service.resolveFamily(_spec('Nope')), 'Inter');
   });
 
+  test(
+    're-importing a known font restores a missing file and registers it',
+    () async {
+      await service.import(fixture.path);
+      final row = (await db.select(db.fonts).get()).single;
+      final stored = File(p.join(fontsDir.path, '${row.fileHash}.ttf'))
+        ..deleteSync();
+
+      registered.clear();
+      final fresh = build();
+      expect(family(await fresh.import(fixture.path)), 'Fancy Sans');
+      expect(stored.existsSync(), isTrue);
+      expect(registered.map((e) => e.$1), ['Fancy Sans']);
+      expect(fresh.resolveFamily(_spec('Fancy Sans')), 'Fancy Sans');
+      expect(await db.select(db.fonts).get(), hasLength(1));
+    },
+  );
+
+  test('a registration failure leaves no row and no file', () async {
+    final failing = FontService(
+      db,
+      stamp,
+      fontsDir,
+      register: (family, data) async => throw Exception('bad font'),
+    );
+    final f = failure(await failing.import(fixture.path));
+    expect(f.kind, FailureKind.invalidInput);
+    expect(f.message, "That file isn't a font");
+    expect(await db.select(db.fonts).get(), isEmpty);
+    expect(!fontsDir.existsSync() || fontsDir.listSync().isEmpty, isTrue);
+  });
+
+  test('only a separated style suffix is stripped from the family', () async {
+    for (final (name, expected) in [
+      ('Twilight', 'Twilight'),
+      ('Notebook', 'Notebook'),
+      ('Foo-Bold', 'Foo'),
+    ]) {
+      final f = await fixture.copy(p.join(tmp.path, '$name.ttf'));
+      // Distinct bytes per file so each is a new font.
+      await f.writeAsBytes([...await fixture.readAsBytes(), ...name.codeUnits]);
+      expect(family(await service.import(f.path)), expected);
+    }
+  });
+
   test('watchAll emits imported fonts', () async {
     await service.import(fixture.path);
     final all = await service.watchAll().first;
