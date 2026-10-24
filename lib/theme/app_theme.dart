@@ -164,16 +164,18 @@ class SongiesColors extends ThemeExtension<SongiesColors> {
 Color darken(Color c, [double amount = 0.55]) =>
     Color.lerp(c, const Color(0xFF000000), amount)!;
 
-/// Builds the dark [ThemeData] for [spec], from [colors] when given (e.g.
-/// cover-derived ones), else from the spec alone. Font sizes are not scaled
-/// here: `fontScale` goes through `MediaQuery.textScaler`.
+/// Builds the [ThemeData] for [spec] (light for the light base, else dark),
+/// from [colors] when given (e.g. cover-derived ones), else from the spec
+/// alone. Font sizes are not scaled here: `fontScale` goes through
+/// `MediaQuery.textScaler`.
 ThemeData buildThemeData(ThemeSpec spec, {SongiesColors? colors}) {
   final c = colors ?? SongiesColors.fromSpec(spec);
+  final brightness = spec.base == 'light' ? Brightness.light : Brightness.dark;
 
   final scheme =
       ColorScheme.fromSeed(
         seedColor: c.accent,
-        brightness: Brightness.dark,
+        brightness: brightness,
       ).copyWith(
         primary: c.accent,
         onPrimary: readableOn(c.accent, preferred: c.background),
@@ -183,7 +185,7 @@ ThemeData buildThemeData(ThemeSpec spec, {SongiesColors? colors}) {
       );
 
   final base = ThemeData(
-    brightness: Brightness.dark,
+    brightness: brightness,
     useMaterial3: true,
     colorScheme: scheme,
     fontFamily: c.fontFamily,

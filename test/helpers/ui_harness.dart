@@ -347,10 +347,16 @@ Future<T> real<T>(WidgetTester tester, Future<T> Function() body) async =>
 /// fire before the framework checks for pending timers.
 void uiTest(String name, Future<void> Function(WidgetTester tester) body) {
   testWidgets(name, (tester) async {
-    await body(tester);
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump(const Duration(milliseconds: 1));
-    // Commands still queued in the player must finish before it is disposed.
-    await flush(tester);
+    try {
+      await body(tester);
+    } finally {
+      // Also after a failure: a tree left mounted keeps drift streams open,
+      // and closing the database would then wait for them forever.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 1));
+      // Commands still queued in the player must finish before it is
+      // disposed.
+      await flush(tester);
+    }
   });
 }

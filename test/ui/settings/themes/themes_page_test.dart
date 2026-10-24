@@ -3,12 +3,15 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/result.dart';
+import 'package:songies/providers.dart';
 import 'package:songies/theme/theme_repository.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/settings/themes/theme_editor_page.dart';
 import 'package:songies/ui/settings/themes/theme_file.dart';
+import 'package:songies/ui/settings/themes/themes_page.dart';
 
 import '../../../helpers/ui_harness.dart';
 import 'theme_test_harness.dart';
@@ -181,5 +184,87 @@ void main() {
     await settle(tester);
     expect((await saved(tester)).map((e) => e.name), ['Shared']);
     expect(find.text('Shared'), findsOneWidget);
+  });
+
+  Future<String> fancyFontFile(WidgetTester tester) => real(tester, () async {
+    final dest = '${t.tmp.path}/Fancy Sans.ttf';
+    await File('assets/fonts/Outfit-Regular.ttf').copy(dest);
+    return dest;
+  });
+
+  ThemeSpec fancy() => ThemeSpec.fromJson({
+    ...ThemeSpec.terminal.toJson(),
+    'fontFamily': 'Fancy Sans',
+  });
+
+  String? cardFont(WidgetTester tester, String id) => tester
+      .widget<Text>(
+        find.descendant(
+          of: find.byKey(Key('themes.card.$id')),
+          matching: find.text('Good evening'),
+        ),
+      )
+      .style!
+      .fontFamily;
+
+  uiTest('a card picks up a font once it is imported', (tester) async {
+    final id = await real(
+      tester,
+      () async =>
+          (await t.themes.save(null, 'Fancy', fancy()) as Ok<String>).value,
+    );
+    await t.pump(tester, location: '/settings/themes');
+    expect(cardFont(tester, id), 'Inter');
+
+    final path = await fancyFontFile(tester);
+    await real(tester, () => t.fonts.import(path));
+    await settle(tester);
+    expect(cardFont(tester, id), 'Fancy Sans');
+  });
+
+  uiTest('importing a theme with a font makes the font usable at once', (
+    tester,
+  ) async {
+    final id = await real(tester, () async {
+      final id =
+          (await t.themes.save(null, 'Fancy', fancy()) as Ok<String>).value;
+      await t.themes.setActive(id);
+      return id;
+    });
+    final path = await fancyFontFile(tester);
+    final file = File('${t.tmp.path}/fancy.songies-theme.json');
+    await real(
+      tester,
+      () async => file.writeAsBytes(
+        ThemeFile(
+          name: 'Shared',
+          spec: fancy(),
+          font: ThemeFileFont(
+            family: 'Fancy Sans',
+            ext: 'ttf',
+            bytes: await File(path).readAsBytes(),
+          ),
+        ).encode(),
+      ),
+    );
+    await t.pump(
+      tester,
+      location: '/settings/themes',
+      extraOverrides: [
+        themeFilePickerProvider.overrideWithValue(() async => file.path),
+      ],
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ThemesPage)),
+    );
+    expect((await active(tester)).id, id);
+    expect(container.read(resolvedFontFamilyProvider), 'Inter');
+
+    await tester.tap(find.byKey(const Key('themes.import')));
+    for (var i = 0; i < 5; i++) {
+      await settle(tester);
+    }
+    expect(find.text('Theme imported'), findsOneWidget);
+    expect(container.read(resolvedFontFamilyProvider), 'Fancy Sans');
   });
 }

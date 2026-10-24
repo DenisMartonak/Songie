@@ -42,13 +42,12 @@ void main() {
       expect(ThemeSpec.fromJson(json), x);
     });
 
-    test('uses the spec keys plus mutedText', () {
+    test('uses exactly the spec keys (mutedText is derived, not stored)', () {
       expect(ThemeSpec.builtInDefault.toJson().keys.toSet(), {
         'base',
         'background',
         'surface',
         'text',
-        'mutedText',
         'accent',
         'followCover',
         'glowStrength',
@@ -58,6 +57,30 @@ void main() {
         'fontScale',
         'blurNowPlaying',
       });
+    });
+
+    test(
+      'an old row with mutedText still loads; the stored value is ignored',
+      () {
+        final json = ThemeSpec.builtInDefault.toJson()
+          ..['mutedText'] = '#123456';
+        final back = ThemeSpec.fromJson(json);
+        expect(back, ThemeSpec.builtInDefault);
+        expect(back.mutedText, const Color(0xFFA7A7A7));
+      },
+    );
+
+    test('mutedText is derived from text and background', () {
+      final light = ThemeSpec.builtInDefault.copyWith(
+        base: 'light',
+        background: const Color(0xFFF5F5F5),
+        text: const Color(0xFF121212),
+      );
+      expect(light.mutedText, isNot(ThemeSpec.builtInDefault.mutedText));
+      // Between the text and the background, nearer the text.
+      final lum = light.mutedText.computeLuminance();
+      expect(lum, greaterThan(light.text.computeLuminance()));
+      expect(lum, lessThan(light.background.computeLuminance()));
     });
 
     test('a missing accent throws FormatException', () {

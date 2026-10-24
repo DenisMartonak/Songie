@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/log.dart';
 import '../../../core/result.dart';
 import '../../../providers.dart';
 import '../../../theme/app_theme.dart';
@@ -23,7 +24,6 @@ typedef BaseColours = ({
   Color background,
   Color surface,
   Color text,
-  Color mutedText,
   Color accent,
 });
 
@@ -32,21 +32,18 @@ const editorBaseColours = <String, BaseColours>{
     background: Color(0xFF121212),
     surface: Color(0xFF2A2A2A),
     text: Color(0xFFFFFFFF),
-    mutedText: Color(0xFFA7A7A7),
     accent: Color(0xFF1DB954),
   ),
   'black': (
     background: Color(0xFF000000),
     surface: Color(0xFF141414),
     text: Color(0xFFFFFFFF),
-    mutedText: Color(0xFFA7A7A7),
     accent: Color(0xFF1DB954),
   ),
   'light': (
     background: Color(0xFFF5F5F5),
     surface: Color(0xFFFFFFFF),
     text: Color(0xFF121212),
-    mutedText: Color(0xFF5E5E5E),
     accent: Color(0xFF117A37),
   ),
 };
@@ -110,11 +107,6 @@ final fontFilePickerProvider = Provider<FontFilePicker>(
     final file = await FilePicker.pickFile(dialogTitle: 'Import font');
     return file?.path;
   },
-);
-
-/// The fonts the user imported, for the editor's font menu.
-final importedFontsProvider = StreamProvider.autoDispose<List<FontEntry>>(
-  (ref) => ref.watch(fontServiceProvider).watchAll(),
 );
 
 /// Edits a theme against a live preview. Nothing is written, and the app's
@@ -204,7 +196,6 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
         background: c.background,
         surface: c.surface,
         text: c.text,
-        mutedText: c.mutedText,
         accent: c.accent,
       ),
     );
@@ -251,12 +242,29 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
     setState(() => _saving = true);
     final r = await repo.save(_saveId, _name.text, _spec);
     switch (r) {
-      case Ok(:final value):
-        await repo.setActive(value);
-        if (mounted) context.pop();
       case Err(:final failure):
         snacks.show(content: Text(failure.message));
         if (mounted) setState(() => _saving = false);
+        return;
+      case Ok(:final value):
+        // Saved: from now on Save updates this theme, and leaving loses
+        // nothing.
+        if (mounted) {
+          setState(() {
+            _saveId = value;
+            _original = _spec;
+            _originalName = _name.text.trim();
+          });
+        }
+        try {
+          await repo.setActive(value);
+        } catch (e, s) {
+          AppLog.e('Making theme $value active failed', e, s);
+          snacks.show(content: const Text("Couldn't apply the theme"));
+          if (mounted) setState(() => _saving = false);
+          return;
+        }
+        if (mounted) context.pop();
     }
   }
 
@@ -265,19 +273,16 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
     final path = await ref.read(fontFilePickerProvider)();
     if (path == null) return;
     final fonts = ref.read(fontServiceProvider);
-    final r = await fonts.import(path);
+    final r = await fonts.importFont(path);
     switch (r) {
       case Err(:final failure):
         snacks.show(content: Text(failure.message));
-      case Ok(value: final family):
-        final entry = (await fonts.watchAll().first)
-            .where((f) => f.family == family)
-            .firstOrNull;
+      case Ok(value: FontImport(:final entry)):
         // The new family is usable at once, by the editor and by any theme
         // that already names it.
         ref.invalidate(resolvedFontFamilyProvider);
         ref.invalidate(importedFontsProvider);
-        if (mounted) _edit(_withFont(family, entry?.fileHash));
+        if (mounted) _edit(_withFont(entry.family, entry.fileHash));
     }
   }
 
@@ -339,6 +344,13 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
     ),
   );
 
+  /// The family [_spec] renders with; rebuilt when the imported fonts
+  /// change, as a font registers.
+  String _resolvedFamily() {
+    ref.watch(importedFontsProvider);
+    return ref.watch(fontServiceProvider).resolveFamily(_spec);
+  }
+
   Widget _body(SongiesColors colors) {
     if (_missing) {
       return Center(
@@ -352,10 +364,7 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
     final preview = Padding(
       padding: const EdgeInsets.all(16),
       child: Center(
-        child: ThemePreview(
-          spec: _spec,
-          fontFamily: ref.read(fontServiceProvider).resolveFamily(_spec),
-        ),
+        child: ThemePreview(spec: _spec, fontFamily: _resolvedFamily()),
       ),
     );
     final controls = SingleChildScrollView(
@@ -579,7 +588,7 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
   static const _importItem = '\u0000import';
 
   Widget _fontMenu(SongiesColors colors) {
-    final bundled = ref.read(fontServiceProvider).bundledFamilies;
+    final bundled = ref.watch(fontServiceProvider).bundledFamilies;
     final imported = ref.watch(importedFontsProvider).value ?? const [];
     String bundledValue(String f) => 'bundled:$f';
     String importedValue(FontEntry f) => 'font:${f.fileHash}';

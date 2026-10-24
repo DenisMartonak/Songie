@@ -780,7 +780,6 @@ void main() {
         background: const Color(0xFFFFFFFF),
         surface: const Color(0xFFF2F2F2),
         text: const Color(0xFF111111),
-        mutedText: const Color(0xFF555555),
       );
       await pumpApp(tester, desktop, theme: light);
       final colors = colorsOf(tester, Sidebar);

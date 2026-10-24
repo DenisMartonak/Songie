@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/result.dart';
+import 'package:songies/data/database.dart';
+import 'package:songies/data/settings_repository.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/theme/theme_repository.dart';
 import 'package:songies/theme/theme_spec.dart';
@@ -183,6 +186,25 @@ void main() {
       final src = 'assets/fonts/Outfit-Regular.ttf';
       final dest = '${t.tmp.path}/Fancy Sans.ttf';
       await File(src).copy(dest);
+      // Two rows synced from other devices that share the family name: one
+      // for another file, one for this very file.
+      final hash = sha256.convert(await File(dest).readAsBytes()).toString();
+      for (final fileHash in ['synced-elsewhere', hash]) {
+        final s = await t.h.stamp.next();
+        await t.h.db
+            .into(t.h.db.fonts)
+            .insert(
+              FontsCompanion.insert(
+                id: s.id,
+                clock: s.clock,
+                originDevice: s.originDevice,
+                localSeq: s.localSeq,
+                family: 'Fancy Sans',
+                fileHash: fileHash,
+                ext: 'ttf',
+              ),
+            );
+      }
       return dest;
     });
     await t.pump(
@@ -207,6 +229,43 @@ void main() {
     await settle(tester);
     final spec = (await saved(tester)).single.spec;
     expect(spec.fontFamily, 'Fancy Sans');
-    expect(spec.fontFileHash, isNotNull);
+    // The imported file's own hash, not the other row's with that family.
+    final bytes = await real(tester, () => File(path).readAsBytes());
+    expect(spec.fontFileHash, sha256.convert(bytes).toString());
   });
+
+  uiTest('a failure to apply the saved theme says so and keeps Save usable', (
+    tester,
+  ) async {
+    await t.pump(
+      tester,
+      location: editLocation(kDefaultThemeId),
+      themesInApp: _FailingSetActive(t),
+    );
+    await dragRadiusToMax(tester);
+    await tester.tap(find.byKey(const Key('themeEditor.save')));
+    await settle(tester);
+
+    expect(find.text("Couldn't apply the theme"), findsOneWidget);
+    expect(find.byType(ThemeEditorPage), findsOneWidget);
+    final save = tester.widget<FilledButton>(
+      find.byKey(const Key('themeEditor.save')),
+    );
+    expect(save.onPressed, isNotNull);
+
+    // Saving again updates the copy already written, not a second one.
+    await tester.tap(find.byKey(const Key('themeEditor.save')));
+    await settle(tester);
+    expect((await saved(tester)).map((e) => e.name), ['Default copy']);
+  });
+}
+
+/// The harness's repository, except that making a theme active fails.
+class _FailingSetActive extends ThemeRepository {
+  _FailingSetActive(ThemeHarness t)
+    : super(t.h.db, t.h.stamp, SettingsRepository(t.h.db));
+
+  @override
+  Future<void> setActive(String id) async =>
+      throw StateError('settings unwritable');
 }

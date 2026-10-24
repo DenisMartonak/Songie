@@ -123,6 +123,10 @@ class ThemesPage extends ConsumerWidget {
     final r = await ref.read(themeFilesProvider).importFile(path);
     switch (r) {
       case Ok():
+        // A font the file brought is usable at once, as after the editor's
+        // Import font….
+        ref.invalidate(resolvedFontFamilyProvider);
+        ref.invalidate(importedFontsProvider);
         snacks.show(content: const Text('Theme imported'));
       case Err(:final failure):
         snacks.show(content: Text(failure.message));
@@ -142,7 +146,10 @@ class _ThemeCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final spec = theme.spec;
-    final family = ref.read(fontServiceProvider).resolveFamily(spec);
+    // Rebuilt when the imported fonts change, so a newly registered font
+    // shows.
+    ref.watch(importedFontsProvider);
+    final family = ref.watch(fontServiceProvider).resolveFamily(spec);
     final cardRadius = BorderRadius.circular(12);
     final previewRadius = BorderRadius.circular(
       spec.cornerRadius.clamp(0.0, 24.0) / 2,

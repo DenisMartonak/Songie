@@ -69,6 +69,16 @@ class ImportedFontFile {
   final Uint8List bytes;
 }
 
+/// The result of [FontService.importFont].
+class FontImport {
+  const FontImport(this.entry, {required this.created});
+
+  final FontEntry entry;
+
+  /// Whether the import added the font (false: it was already there).
+  final bool created;
+}
+
 final _styleSuffix = RegExp(
   r'(?:[-_ ]+(?:Regular|Bold|SemiBold|ExtraBold|Light|ExtraLight|Medium|Thin|Black|Heavy|Book|Italic|Oblique|Variable|VF))+$',
   caseSensitive: false,
@@ -164,7 +174,7 @@ class FontService {
       ? s.fontFamily
       : _fallbackFamily;
 
-  Result<String> _notAFont() =>
+  Result<T> _notAFont<T>() =>
       Err(Failure(FailureKind.invalidInput, "That file isn't a font"));
 
   static bool _hasFontMagic(List<int> b) {
@@ -200,7 +210,15 @@ class FontService {
   }
 
   /// Imports the `.ttf`/`.otf` at [path]; returns its family name.
-  Future<Result<String>> import(String path) async {
+  Future<Result<String>> import(String path) async =>
+      switch (await importFont(path)) {
+        Ok(:final value) => Ok(value.entry.family),
+        Err(:final failure) => Err(failure),
+      };
+
+  /// Like [import], returning the font's entry (with its file hash) and
+  /// whether this call added it.
+  Future<Result<FontImport>> importFont(String path) async {
     final ext = p.extension(path).toLowerCase().replaceFirst('.', '');
     if (ext != 'ttf' && ext != 'otf') return _notAFont();
 
@@ -208,7 +226,7 @@ class FontService {
     try {
       final file = File(path);
       if (await file.length() > _maxFontBytes) {
-        return Err(
+        return const Err(
           Failure(FailureKind.invalidInput, 'Font files must be under 10 MB'),
         );
       }
@@ -235,7 +253,12 @@ class FontService {
               if (!await _tryRegister(r.family, bytes)) return _notAFont();
               _registered.add(r.family);
             }
-            return Ok(r.family);
+            return Ok(
+              FontImport(
+                FontEntry(family: r.family, fileHash: r.fileHash, ext: r.ext),
+                created: false,
+              ),
+            );
           }
         }
 
@@ -268,13 +291,47 @@ class FontService {
               ),
             );
         _registered.add(family);
-        return Ok(family);
+        return Ok(
+          FontImport(
+            FontEntry(family: family, fileHash: hash, ext: ext),
+            created: true,
+          ),
+        );
       });
     } on FileSystemException catch (e) {
       return Err(Failure(FailureKind.io, "Couldn't save that font", cause: e));
     } catch (e) {
       AppLog.w('Font registration failed', e);
       return Err(Failure(FailureKind.unknown, "That file isn't a font"));
+    }
+  }
+
+  /// Undoes an [importFont] that `created` the font with [fileHash]: its row
+  /// is tombstoned, its file deleted and its family no longer resolves. (The
+  /// engine keeps the registration; nothing names the family any more.)
+  Future<void> removeImported(String fileHash) async {
+    final rows =
+        await (_db.select(_db.fonts)..where(
+              (f) => f.fileHash.equals(fileHash) & f.deleted.equals(false),
+            ))
+            .get();
+    for (final row in rows) {
+      final s = await _stamp.next();
+      await (_db.update(_db.fonts)..where((f) => f.id.equals(row.id))).write(
+        FontsCompanion(
+          deleted: const Value(true),
+          clock: Value(s.clock),
+          originDevice: Value(s.originDevice),
+          localSeq: Value(s.localSeq),
+        ),
+      );
+      _registered.remove(row.family);
+      final file = File(p.join(_fontsDir.path, '${row.fileHash}.${row.ext}'));
+      try {
+        if (await file.exists()) await file.delete();
+      } on FileSystemException catch (e) {
+        AppLog.w('Could not delete font file ${file.path}', e);
+      }
     }
   }
 }

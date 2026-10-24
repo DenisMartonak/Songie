@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -185,16 +184,18 @@ class ThemeFiles {
     }
 
     var spec = file.spec;
+    FontImport? added;
     if (file.font case final font?) {
       final imported = await _importFont(font);
       switch (imported) {
         case Err(:final failure):
           return Err(failure);
         case Ok(:final value):
+          if (value.created) added = value;
           spec = ThemeSpec.fromJson({
             ...spec.toJson(),
-            'fontFamily': value,
-            'fontFileHash': sha256.convert(font.bytes).toString(),
+            'fontFamily': value.entry.family,
+            'fontFileHash': value.entry.fileHash,
           });
       }
     }
@@ -202,7 +203,12 @@ class ThemeFiles {
     final name = file.name.length > _maxNameLength
         ? file.name.substring(0, _maxNameLength).trimRight()
         : file.name;
-    return _themes.save(null, name, spec);
+    final saved = await _themes.save(null, name, spec);
+    if (saved is Err<String> && added != null) {
+      // Never half an import: drop the font this import brought.
+      await _fonts.removeImported(added.entry.fileHash);
+    }
+    return saved;
   }
 
   /// Reads the file at [path] and imports it as [import] does; a file too
@@ -223,7 +229,7 @@ class ThemeFiles {
 
   /// Hands [font] to [FontService.import] from a temporary file named after
   /// its family, deleted afterwards.
-  Future<Result<String>> _importFont(ThemeFileFont font) async {
+  Future<Result<FontImport>> _importFont(ThemeFileFont font) async {
     Directory? dir;
     try {
       dir = await Directory.systemTemp.createTemp('songies_theme_font');
@@ -233,7 +239,7 @@ class ThemeFiles {
         '${safe.isEmpty ? 'Font' : safe}.${font.ext}',
       );
       await File(path).writeAsBytes(font.bytes, flush: true);
-      return await _fonts.import(path);
+      return await _fonts.importFont(path);
     } on FileSystemException catch (e) {
       return Err(Failure(FailureKind.io, "Couldn't import the font", cause: e));
     } finally {

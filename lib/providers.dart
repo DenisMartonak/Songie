@@ -345,6 +345,12 @@ final fontServiceProvider = Provider<FontService>(
   (ref) => _unwired('fontServiceProvider'),
 );
 
+/// The fonts the user imported. Widgets that resolve a theme's font watch it
+/// to update once a new font is imported and registered.
+final importedFontsProvider = StreamProvider.autoDispose<List<FontEntry>>(
+  (ref) => ref.watch(fontServiceProvider).watchAll(),
+);
+
 // --- Downloads -------------------------------------------------------------
 
 /// This device's YouTube download rows. `main()` overrides it with the

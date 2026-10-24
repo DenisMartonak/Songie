@@ -19,6 +19,7 @@ import '../helpers/test_db.dart';
 
 void main() {
   late AppDatabase db;
+  late SyncStamp stamp;
   late Directory tmp;
   late ThemeRepository themes;
   late FontService fonts;
@@ -27,7 +28,7 @@ void main() {
 
   setUp(() async {
     db = testDb();
-    final stamp = await SyncStamp.load(db);
+    stamp = await SyncStamp.load(db);
     tmp = await Directory.systemTemp.createTemp('theme_file_test');
     themes = ThemeRepository(db, stamp, SettingsRepository(db));
     fonts = FontService(
@@ -133,6 +134,31 @@ void main() {
       });
     }
 
+    test('a file in the exact spec shape (no mutedText) is a theme file', () {
+      final spec = {
+        'base': 'black',
+        'background': '#000000',
+        'surface': '#141414',
+        'text': '#ffffff',
+        'accent': '#00e5ff',
+        'followCover': false,
+        'glowStrength': 0.4,
+        'cornerRadius': 0,
+        'fontFamily': 'JetBrains Mono',
+        'fontFileHash': null,
+        'fontScale': 1.0,
+        'blurNowPlaying': true,
+      };
+      final back = decoded(
+        ThemeFile.decode(
+          withJson({'songiesTheme': 1, 'name': 'T', 'spec': spec}),
+        ),
+      );
+      expect(back.spec, ThemeSpec.terminal);
+      final out = jsonDecode(utf8.decode(back.encode())) as Map;
+      expect((out['spec'] as Map).containsKey('mutedText'), isFalse);
+    });
+
     test('names the file after the theme', () {
       expect(
         themeFileName('Night: Blue/Green'),
@@ -231,10 +257,54 @@ void main() {
       expect((await themes.watchAll().first).where((e) => !e.builtIn), isEmpty);
     });
 
+    test('a theme that fails to save rolls back the font it brought', () async {
+      final failing = ThemeFiles(_FailingSave(db, stamp), fonts);
+      final file = ThemeFile(
+        name: 'Fancy',
+        spec: custom,
+        font: ThemeFileFont(family: 'Fancy Sans', ext: 'ttf', bytes: fontBytes),
+      );
+
+      final r = await failing.import(file.encode());
+      expect(message(r), 'disk full');
+      expect(await fonts.watchAll().first, isEmpty);
+      final dir = Directory(p.join(tmp.path, 'fonts'));
+      expect(dir.existsSync() ? dir.listSync() : const [], isEmpty);
+      expect(fonts.resolveFamily(_withFamily(custom, 'Fancy Sans')), 'Inter');
+    });
+
+    test('a failed save keeps a font that was already there', () async {
+      final path = p.join(tmp.path, 'Fancy Sans.ttf');
+      await File(path).writeAsBytes(fontBytes);
+      await fonts.import(path);
+      final failing = ThemeFiles(_FailingSave(db, stamp), fonts);
+      final file = ThemeFile(
+        name: 'Fancy',
+        spec: custom,
+        font: ThemeFileFont(family: 'Fancy Sans', ext: 'ttf', bytes: fontBytes),
+      );
+
+      await failing.import(file.encode());
+      expect((await fonts.watchAll().first).single.family, 'Fancy Sans');
+    });
+
     test('a bad file saves nothing', () async {
       final r = await files.import(utf8.encode('{"hello": "world"}'));
       expect(message(r), notAThemeFile);
       expect((await themes.watchAll().first).where((e) => !e.builtIn), isEmpty);
     });
   });
+}
+
+ThemeSpec _withFamily(ThemeSpec s, String family) =>
+    ThemeSpec.fromJson({...s.toJson(), 'fontFamily': family});
+
+/// A repository whose saves fail, as on a full disk.
+class _FailingSave extends ThemeRepository {
+  _FailingSave(AppDatabase db, SyncStamp stamp)
+    : super(db, stamp, SettingsRepository(db));
+
+  @override
+  Future<Result<String>> save(String? id, String name, ThemeSpec spec) async =>
+      const Err(Failure(FailureKind.io, 'disk full'));
 }

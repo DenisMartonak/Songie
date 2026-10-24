@@ -20,6 +20,76 @@ void main() {
     expect(c.blurNowPlaying, true);
   });
 
+  const lightSpec = ThemeSpec(
+    base: 'light',
+    background: Color(0xFFF5F5F5),
+    surface: Color(0xFFFFFFFF),
+    text: Color(0xFF121212),
+    accent: Color(0xFF117A37),
+    followCover: false,
+    glowStrength: 0.4,
+    cornerRadius: 6,
+    fontFamily: 'Inter',
+    fontFileHash: null,
+    fontScale: 1.0,
+    blurNowPlaying: true,
+  );
+
+  test('a light base builds a light theme and colour scheme', () {
+    final theme = buildThemeData(lightSpec);
+    expect(theme.brightness, Brightness.light);
+    expect(theme.colorScheme.brightness, Brightness.light);
+    expect(theme.colorScheme.surface, const Color(0xFFFFFFFF));
+    expect(theme.colorScheme.onSurface, const Color(0xFF121212));
+    expect(buildThemeData(ThemeSpec.terminal).brightness, Brightness.dark);
+  });
+
+  testWidgets('a light theme draws dialogs and switches light', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildThemeData(lightSpec),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Switch(value: false, onChanged: (_) {}),
+            floatingActionButton: FloatingActionButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => const AlertDialog(title: Text('Hi')),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    final dialog = tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    expect(dialog.color!.computeLuminance(), greaterThan(0.5));
+    final title = tester.widget<DefaultTextStyle>(
+      find
+          .ancestor(
+            of: find.text('Hi'),
+            matching: find.byType(DefaultTextStyle),
+          )
+          .first,
+    );
+    expect(title.style.color!.computeLuminance(), lessThan(0.2));
+    // An off switch's track is light on a light theme.
+    final theme = Theme.of(tester.element(find.byType(Switch)));
+    final track =
+        theme.switchTheme.trackColor?.resolve({}) ??
+        theme.colorScheme.surfaceContainerHighest;
+    expect(track.computeLuminance(), greaterThan(0.5));
+  });
+
   test('glow is the accent at glowStrength opacity', () {
     final c = buildThemeData(ThemeSpec.builtInDefault)
         .extension<SongiesColors>()!;

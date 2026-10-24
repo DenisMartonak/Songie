@@ -50,6 +50,7 @@ class ThemeHarness {
     WidgetTester tester, {
     required String location,
     List<Override> extraOverrides = const [],
+    ThemeRepository? themesInApp,
   }) async {
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1;
@@ -59,7 +60,7 @@ class ThemeHarness {
         initialLocation: location,
         extraOverrides: [
           fontServiceProvider.overrideWithValue(fonts),
-          themeRepositoryProvider.overrideWithValue(themes),
+          themeRepositoryProvider.overrideWithValue(themesInApp ?? themes),
           ...extraOverrides,
         ],
         routes: [
