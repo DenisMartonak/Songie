@@ -9,6 +9,8 @@ import 'ui/playlist/playlist_page.dart';
 import 'ui/now_playing/now_playing_page.dart';
 import 'ui/search/search_page.dart';
 import 'ui/settings/settings_page.dart';
+import 'ui/settings/themes/theme_editor_page.dart';
+import 'ui/settings/themes/themes_page.dart';
 import 'ui/shell/adaptive_shell.dart';
 import 'ui/shell/fade_through_branches.dart';
 import 'ui/widgets/page_surface.dart';
@@ -55,6 +57,30 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
                 state,
                 const PageSurface(child: SettingsPage()),
               ),
+              routes: [
+                GoRoute(
+                  path: 'themes',
+                  pageBuilder: (context, state) => sharedAxisPage(
+                    context,
+                    state,
+                    const PageSurface(child: ThemesPage()),
+                  ),
+                  routes: [
+                    GoRoute(
+                      path: 'edit/:id',
+                      pageBuilder: (context, state) => sharedAxisPage(
+                        context,
+                        state,
+                        PageSurface(
+                          child: ThemeEditorPage(
+                            id: state.pathParameters['id']!,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ],
         ),

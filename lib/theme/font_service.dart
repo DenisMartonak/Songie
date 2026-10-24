@@ -56,6 +56,19 @@ class FontEntry {
   int get hashCode => Object.hash(family, fileHash, ext);
 }
 
+/// An imported font's family, extension and file contents.
+class ImportedFontFile {
+  const ImportedFontFile({
+    required this.family,
+    required this.ext,
+    required this.bytes,
+  });
+
+  final String family;
+  final String ext;
+  final Uint8List bytes;
+}
+
 final _styleSuffix = RegExp(
   r'(?:[-_ ]+(?:Regular|Bold|SemiBold|ExtraBold|Light|ExtraLight|Medium|Thin|Black|Heavy|Book|Italic|Oblique|Variable|VF))+$',
   caseSensitive: false,
@@ -118,6 +131,30 @@ class FontService {
                 FontEntry(family: r.family, fileHash: r.fileHash, ext: r.ext),
             ],
           );
+
+  /// The stored file of the imported font with [fileHash] (for a theme
+  /// export), or null when there is no such font or its file is missing.
+  Future<ImportedFontFile?> importedFile(String fileHash) async {
+    final row =
+        await (_db.select(_db.fonts)
+              ..where(
+                (f) => f.fileHash.equals(fileHash) & f.deleted.equals(false),
+              )
+              ..limit(1))
+            .getSingleOrNull();
+    if (row == null) return null;
+    final file = File(p.join(_fontsDir.path, '${row.fileHash}.${row.ext}'));
+    try {
+      return ImportedFontFile(
+        family: row.family,
+        ext: row.ext,
+        bytes: await file.readAsBytes(),
+      );
+    } on FileSystemException catch (e) {
+      AppLog.w('Font file missing for ${row.family}', e);
+      return null;
+    }
+  }
 
   /// The font family [s] should render with: a bundled or registered family,
   /// else Inter.

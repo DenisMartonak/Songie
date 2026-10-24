@@ -20,6 +20,7 @@ import 'package:songies/ui/now_playing/now_playing_page.dart';
 import 'package:songies/ui/search/search_page.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
+import 'package:songies/ui/settings/themes/themes_page.dart';
 import 'package:songies/ui/shell/bottom_nav.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
@@ -105,6 +106,10 @@ void main() {
     expect(find.byType(SettingsPage), findsOneWidget);
     // Settings lives in the shell, so the phone keeps its bottom nav.
     expect(find.byType(BottomNav), findsOneWidget);
+
+    router.go('/settings/themes');
+    await tester.pumpAndSettle();
+    expect(find.byType(ThemesPage), findsOneWidget);
   });
 
   testWidgets('openNowPlaying pushes once, then does nothing', (tester) async {

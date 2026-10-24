@@ -329,6 +329,16 @@ class _AppearanceSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SettingsSectionTitle('Appearance'),
+        ListTile(
+          key: const Key('settings.themes'),
+          title: Text('Themes', style: TextStyle(color: colors.text)),
+          subtitle: Text(
+            ref.watch(activeThemeProvider).value?.name ?? '',
+            style: TextStyle(color: colors.mutedText, fontSize: 12),
+          ),
+          trailing: Icon(Icons.chevron_right_rounded, color: colors.mutedText),
+          onTap: () => context.push('/settings/themes'),
+        ),
         SwitchListTile(
           key: const Key('settings.reduceMotion'),
           title: Text(

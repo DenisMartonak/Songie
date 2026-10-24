@@ -11,6 +11,7 @@ import 'package:songies/core/log.dart';
 import 'package:songies/core/paths.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/data/settings_repository.dart';
+import 'package:songies/theme/theme_repository.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
@@ -62,6 +63,12 @@ void main() {
           GoRoute(
             path: '/settings',
             builder: (_, _) => const Scaffold(body: SettingsPage()),
+            routes: [
+              GoRoute(
+                path: 'themes',
+                builder: (_, _) => const Scaffold(body: Text('Themes page')),
+              ),
+            ],
           ),
         ],
       ),
@@ -365,6 +372,27 @@ void main() {
   });
 
   group('appearance', () {
+    uiTest('Themes shows the active theme and opens the Themes page', (
+      tester,
+    ) async {
+      await real(
+        tester,
+        () =>
+            SettingsRepository(h.db)
+                .setString(kActiveThemeId, kTerminalThemeId),
+      );
+      await pumpSettings(tester);
+      final row = find.byKey(const Key('settings.themes'));
+      expect(
+        find.descendant(of: row, matching: find.text('Terminal')),
+        findsOneWidget,
+      );
+
+      await tester.tap(row);
+      await settle(tester);
+      expect(find.text('Themes page'), findsOneWidget);
+    });
+
     uiTest('Reduce animations is off by default and saves the setting', (
       tester,
     ) async {
