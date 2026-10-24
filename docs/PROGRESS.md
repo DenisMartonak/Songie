@@ -2,10 +2,10 @@
 
 _Last updated: 2026-10-25_
 
-## Plan 4 (a living UI and the theme engine) — done and reviewed task by task; final whole-branch review still to come
+## Plan 4 (a living UI and the theme engine) — done, reviewed, final review fixed
 
 - **Branch:** `plan-4-alive-ui-themes`, made from `plan-3-downloads-fixes` at `766750b` (Plan 3 isn't merged, so Plan 4 builds on it). Plan: [Plan 4](superpowers/plans/2026-10-23-songies-plan-4-alive-ui-and-themes.md). Nothing is pushed or merged.
-- **Status:** Tasks 1–10 are implemented, and Tasks 1–9 were reviewed by separate reviewers, with their fixes applied. **The final whole-branch review (and its one fix wave) is still to come.** Tests: 1,036 passing, `flutter analyze` clean, `flutter build apk --release` (79.9 MB) and `flutter build linux --release` (bundle 34 MB) succeed. Windows is built on your PC.
+- **Status:** Tasks 1–10 are implemented and each was reviewed by a separate reviewer, with its fixes applied. The final whole-branch review ran and its one fix wave landed. Tests at `69dce2c`: 1,047 passing, `flutter analyze` clean, `flutter build apk --release` (79.9 MB) and `flutter build linux --release` (bundle 34 MB) succeed. Windows is built on your PC.
 - **What it does now:**
   - **Themes:** Settings → Appearance → Themes lists the three built-ins (Default, Album glow, Terminal) and your own. A live editor changes base, colours, follow-cover, glow, corner radius, font, font size and the Now Playing blur; editing a built-in saves "<name> copy". Themes export and import as spec §9 JSON files (with their imported font), and themes and fonts live in tables ready for device sync (schema v5: `themes`, `fonts`; the sync itself is Plan 6). A fresh install starts on Album glow.
   - **Fonts:** Inter, Outfit and JetBrains Mono are bundled (OFL); `.ttf`/`.otf` files can be imported and are kept in `<appData>/fonts/<sha256>.<ext>`.
@@ -17,9 +17,9 @@ _Last updated: 2026-10-25_
 - **Rulings:** see [plan-4-session-log.md](plan-4-session-log.md) for the full list, each with its cost if wrong. The main ones: fresh install gets Album glow (decided once); theme names are unique ignoring case and against built-ins; Album glow's glow strength is 0.65; static font weights cut from Google's variable Outfit/JetBrains Mono; Songies' own HSV colour picker; `animations` 3.0.0; muted text is worked out, not stored (Terminal's grey becomes #a0a0a0); light themes get light-style dialogs and switches; imported theme files are saved but not switched to; the playlist page's Play button floats (the one layout change); shimmer may run while loading but stops in the background.
 - **Final review:** the final whole-branch review ran (ready to merge with fixes), and its fix wave landed: `fromJson` clamps and opaque colours, a readable Now Playing top on light Follow-cover themes, muted text from the readable text, a guarded font rollback on a failed theme import, and theme-text tints (not white) for hover, the selected sidebar row, the mini-player track and the title-bar buttons. Tests: 1,047 passing, `flutter analyze` clean.
 - **Parked items (deferred minors):** the "Smaller issues left for the final review" list in the session log, task by task. Done in the final fix wave: `ThemeSpec.fromJson` now clamps glow strength, corner radius and font scale and makes every colour opaque, and theme files with out-of-range values or a see-through colour are rejected. Still open from earlier: the APK build prints a harmless "Expected to find fonts for CupertinoIcons" note. Device sync (Plan 6) must re-register a synced font when its file arrives.
-- **Next:** the final whole-branch review and its fix wave, then your device checks (the Plan 4 section of the [manual checklist](manual-test-checklist.md)), then **Plan 5 (lyrics)**, written from spec §10.
+- **Next:** your device checks (the Plan 4 section of the [manual checklist](manual-test-checklist.md)), then **Plan 5 (lyrics)**, written from spec §10.
 - **To resume in a new Claude session:**
-  > Songies Plan 4 is implemented on branch `plan-4-alive-ui-themes` (Tasks 1–10 done, 1,036 tests). Next: the final whole-branch review and one fix wave, then the device checks, then write Plan 5 (lyrics) from docs/superpowers/specs/2026-10-21-songies-design.md §10. Read docs/plan-4-session-log.md. Don't push or merge.
+  > Songies Plan 4 is implemented on branch `plan-4-alive-ui-themes` (Tasks 1–10 done and reviewed, final review fixed, 1,047 tests). Next: the device checks, then write Plan 5 (lyrics) from docs/superpowers/specs/2026-10-21-songies-design.md §10. Read docs/plan-4-session-log.md. Don't push or merge.
 
 ## Plan 3 (bug fixes + downloads) — done and reviewed; final whole-branch review done and its fixes applied
 

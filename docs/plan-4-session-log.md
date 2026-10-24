@@ -1,9 +1,9 @@
 # Songies Plan 4: session log (kept current after every task)
 
-_Last updated: 2026-10-25, after Task 10 (final review running)._
+_Last updated: 2026-10-25. Plan 4 is finished: all tasks reviewed, final review fixed._
 
-**To resume in a new Claude session:**
-> Continue Songies Plan 4 subagent-driven on branch `plan-4-alive-ui-themes`. Read docs/plan-4-session-log.md and the ledger it names. Don't push or merge.
+**Plan 4 is finished.** Next: your device checks (below and in the manual checklist), then Plan 5 (lyrics), written from spec §10. To start that in a new session:
+> Songies Plan 4 is done on branch `plan-4-alive-ui-themes`. Write Plan 5 (lyrics) from docs/superpowers/specs/2026-10-21-songies-design.md §10. Read docs/PROGRESS.md. Don't push or merge.
 
 **Where things are:**
 - **Branch:** `plan-4-alive-ui-themes`, made from `plan-3-downloads-fixes` at `766750b`. Plan 3 is finished but not merged, so Plan 4 builds on it. Nothing is pushed or merged.
@@ -25,9 +25,9 @@ _Last updated: 2026-10-25, after Task 10 (final review running)._
 | 8. Living shell | done, reviewed | `bb0d546`, `55da22b` |
 | 9. Theme list and editor | done, reviewed | `4babfce`, `9489d18` |
 | 10. Idle test, docs, builds | done, reviewed | `08e7bb8` |
-| Final whole-branch review + one fix wave | **in progress** | |
+| Final whole-branch review + one fix wave | done, re-reviewed | `c860a4b`, `69dce2c` |
 
-Tests at `08e7bb8`: 1,036 passing, `flutter analyze` clean; release APK (79.9 MB) and Linux build made. The idle test proves no frames are scheduled while paused (Home and Now Playing, phone and desktop) or in the background.
+Tests at `69dce2c` (checked by me at the end): 1,047 passing, `flutter analyze` clean; release APK (79.9 MB) and Linux build (34 MB) made. The idle test proves no frames are scheduled while paused (Home and Now Playing, phone and desktop) or in the background.
 
 
 ## Decisions made on your behalf (each with its cost if wrong)
@@ -58,6 +58,7 @@ Tests at `08e7bb8`: 1,036 passing, `flutter analyze` clean; release APK (79.9 MB
 - **Imported theme files are saved but not switched to.** *If wrong:* one call.
 - **A font error inside a theme file** shows the font's own message ("That file isn't a font"); other problems say "That isn't a Songies theme file". Nothing is half-saved. *If wrong:* copy.
 - **Light themes get light-style Material widgets** (dialogs, switches, sliders). *If wrong:* nothing.
+- **Final review fixes:** saved themes are clamped to safe ranges and forced opaque, but theme *files* with bad values are refused; on a light theme with cover colours, the top of Now Playing blends toward the background until text is readable (on charcoal this also lightens Album glow's top very slightly); muted text comes from the readable text colour; hover and highlight tints use the theme's text colour so they show on light themes. *If wrong:* a refused file instead of a clamped one.
 - **Page palettes don't wait behind the song's:** the playlist header and Home glow ask for their cover colours through a path the "newest wins" queue can't cancel. *If wrong:* one parameter.
 - **Playlist page Play button floats** and pins to the top bar, as the plan asks, so Play left its old row and Back moved into the bar. That's the one exception to "nothing moves". *If wrong:* restoring the old row order.
 - **The playlist header colour** is blended toward the background until its text reaches 4.5:1. *If wrong:* less cover colour on pale covers.
@@ -76,6 +77,7 @@ Tests at `08e7bb8`: 1,036 passing, `flutter analyze` clean; release APK (79.9 MB
 - Task 8: the nav bounce uses plain ease curves; the volume slider shows no thumb on a touch drag and sliders have no focus cue; the title transition is rebuilt every drag frame; dragged mini-player content slides under the play button; state is changed inside build; the reduced-motion test was never seen failing.
 - Task 9: a font rollback after a failed theme save isn't guarded against a second database error; leaving the Themes page mid-import can throw; the base-colour table lives in a UI file; the colour square has no screen-reader value.
 - Task 10: imported themes aren't range-checked (glow, radius, font scale): queued for the final fix wave. The idle test covers Home and Now Playing only.
+- Final review: 43 smaller items can wait (full list in the workspace's `final-review.md`, kept on purpose), e.g. a light theme *without* cover colours has no contrast step at the top of Now Playing; `resolveFamily` ignores the font hash (matters for Plan 6); the Reduce animations setting loads asynchronously at startup.
 - Device sync (Plan 6) must re-register a synced font when its file arrives.
 
 ## Your checks (phone/desktop), once Plan 4 is done
