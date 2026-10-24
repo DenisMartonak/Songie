@@ -42,6 +42,9 @@ class AndroidDownloadNotifier implements DownloadNotifier {
     _gate?.cancel();
     _gate = null;
     _pending = null;
+    // Nothing came of the run (e.g. its playlist was turned off): clear the
+    // progress notification without a "Downloaded 0 songs" summary.
+    if (completed + failed == 0) return _invoke('finished', {});
     final songs = completed == 1 ? 'song' : 'songs';
     await _invoke('finished', {
       'text':

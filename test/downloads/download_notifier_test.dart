@@ -172,6 +172,19 @@ void main() {
     });
   });
 
+  test('a run that downloaded nothing only clears the notification', () {
+    fakeAsync((async) {
+      final n = AndroidDownloadNotifier(now: () => base);
+      n.update(snap(done: 0));
+      n.update(snap(done: 0, active: 0, queued: 1));
+      n.finished(0, 0);
+      async.elapse(const Duration(seconds: 5));
+      expect(calls.map((c) => c.method), ['update', 'finished']);
+      // No text: the native side stops the service and posts no summary.
+      expect(args(1), isEmpty);
+    });
+  });
+
   test('a channel failure is swallowed', () {
     fakeAsync((async) {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

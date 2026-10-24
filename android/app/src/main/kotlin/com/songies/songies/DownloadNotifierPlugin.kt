@@ -11,7 +11,7 @@ import io.flutter.plugin.common.MethodChannel
 /**
  * `songies/download_notifier`: `update` (title, text, progress, max) starts or
  * refreshes the foreground service; `finished` (text) stops it and posts a
- * dismissible summary; `apiLevel` answers Build.VERSION.SDK_INT.
+ * dismissible summary, or only clears the progress when text is absent; `apiLevel` answers Build.VERSION.SDK_INT.
  */
 class DownloadNotifierPlugin(
     private val context: Context,
@@ -30,7 +30,7 @@ class DownloadNotifierPlugin(
                     result.success(null)
                 }
                 "finished" -> {
-                    finished(call.argument<String>("text") ?: "")
+                    finished(call.argument<String>("text"))
                     result.success(null)
                 }
                 "apiLevel" -> result.success(Build.VERSION.SDK_INT)
@@ -67,7 +67,7 @@ class DownloadNotifierPlugin(
         )
     }
 
-    private fun finished(text: String) {
+    private fun finished(text: String?) {
         if (serviceStarted) {
             // Through the service, so the stop is delivered after the start
             // intent and its startForeground (stopService could beat it).
@@ -82,6 +82,7 @@ class DownloadNotifierPlugin(
         serviceStarted = false
         DownloadForegroundService.foregroundRefused = false
         NotificationManagerCompat.from(context).cancel(DownloadForegroundService.PROGRESS_ID)
+        if (text == null) return
         DownloadForegroundService.post(
             context,
             DownloadForegroundService.DONE_ID,
