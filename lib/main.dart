@@ -33,6 +33,7 @@ import 'player/stream_resolver.dart';
 import 'player/track_resolver.dart';
 import 'providers.dart';
 import 'router.dart';
+import 'theme/font_service.dart';
 import 'ui/library/import_dialog.dart';
 import 'youtube/android_ytdlp_runner.dart';
 import 'youtube/desktop_ytdlp_runner.dart';
@@ -68,6 +69,10 @@ Future<void> main() async {
     artCache,
     library,
   );
+
+  // Imported fonts must be registered before the first frame.
+  final fonts = FontService(db, stamp, paths.fonts);
+  await fonts.loadImported();
 
   // YouTube. Nothing here touches the network or runs yt-dlp: that only
   // happens on a user action or during playback.
@@ -180,6 +185,7 @@ Future<void> main() async {
         downloadRepositoryProvider.overrideWithValue(downloadRepo),
         downloadNotifierProvider.overrideWithValue(downloadNotifier),
         downloadServiceProvider.overrideWithValue(downloads),
+        fontServiceProvider.overrideWithValue(fonts),
       ],
       child: SongiesApp(router: router),
     ),

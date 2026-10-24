@@ -17,6 +17,7 @@ import 'library/play_history_repository.dart';
 import 'library/scan_queue.dart';
 import 'library/search_repository.dart';
 import 'player/player_service.dart';
+import 'theme/font_service.dart';
 import 'theme/theme_spec.dart';
 import 'ui/shell/window_controls.dart';
 import 'youtube/yt_import_service.dart';
@@ -217,6 +218,11 @@ final playlistRowProvider = StreamProvider.autoDispose
     .family<Playlist?, String>(
       (ref, id) => ref.watch(libraryRepositoryProvider).watchPlaylist(id),
     );
+
+/// Bundled and imported fonts.
+final fontServiceProvider = Provider<FontService>(
+  (ref) => _unwired('fontServiceProvider'),
+);
 
 // --- Downloads -------------------------------------------------------------
 
