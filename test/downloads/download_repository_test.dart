@@ -460,4 +460,59 @@ void main() {
     await pumpEventQueue();
     expect(s.last, {'y1': 'queued'});
   });
+
+  test(
+    'yt watchers and reconcileMissing work past the SQL variable limit',
+    () async {
+      // More local-library rows than SQLite binds variables in one query
+      // (32766), so a query binding every row's track id would fail.
+      const n = 33000;
+      await db.batch((b) {
+        b.insertAll(db.tracks, [
+          for (var i = 0; i < n; i++)
+            trackRow(id: 'l$i', source: 'local', fileHash: 'h$i'),
+        ]);
+        b.insertAll(db.localFiles, [
+          for (var i = 0; i < n; i++)
+            LocalFilesCompanion.insert(
+              trackId: 'l$i',
+              path: '/m/l$i.mp3',
+              state: 'done',
+              bytes: 1,
+              mtimeMs: 0,
+            ),
+        ]);
+      });
+      await track('y1');
+      await track('y2');
+      await entry('A', 'y1');
+      await db
+          .into(db.playlists)
+          .insert(
+            PlaylistsCompanion.insert(
+              id: 'A',
+              clock: 'c',
+              originDevice: 'dev',
+              localSeq: 99,
+              name: 'A',
+              source: 'local',
+            ),
+          );
+      final f = File('${ytDir.path}/y1.opus')..writeAsStringSync('x');
+      await setRow('y1', 'done', path: f.path, bytes: 30);
+      await setRow('y2', 'done', path: '${ytDir.path}/gone.opus', bytes: 5);
+
+      await repo.reconcileMissing();
+      expect(await row('y2'), isNull);
+      expect((await row('l0'))!.state, 'done');
+
+      expect(
+        [for (final r in await repo.watchYtRows().first) r.trackId],
+        ['y1'],
+      );
+      expect(await repo.watchTotalBytes().first, 30);
+      expect(await repo.watchBytesPerPlaylist().first, [('A', 30)]);
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 }

@@ -133,6 +133,16 @@ class DownloadRepository {
     return {for (final t in rows) t.id: t};
   }
 
+  /// The row belongs to a live YouTube track. Filtered in SQL, so local
+  /// library rows are never loaded nor bound as variables.
+  Expression<bool> _isYtRow($LocalFilesTable f) => f.trackId.isInQuery(
+    _db.selectOnly(_db.tracks)
+      ..addColumns([_db.tracks.id])
+      ..where(
+        _db.tracks.source.equals('yt') & _db.tracks.deleted.equals(false),
+      ),
+  );
+
   Future<Set<String>> _manualIds() async {
     final rows = await (_db.select(
       _db.localFiles,
@@ -436,11 +446,9 @@ class DownloadRepository {
   Future<void> reconcileMissing() async {
     final done = await (_db.select(
       _db.localFiles,
-    )..where((f) => f.state.equals('done'))).get();
-    final yt = await _ytTracks(done.map((r) => r.trackId));
+    )..where((f) => f.state.equals('done') & _isYtRow(f))).get();
     final gone = <String>[];
     for (final r in done) {
-      if (!yt.containsKey(r.trackId)) continue;
       if (r.path.isEmpty || !await File(r.path).exists()) gone.add(r.trackId);
     }
     if (gone.isEmpty) return;
@@ -509,15 +517,10 @@ class DownloadRepository {
       _watch([_db.playlistDevicePrefs, _db.playlists], _enabledPlaylistIds);
 
   /// Every download row that belongs to a YouTube track.
-  Stream<List<LocalFile>> watchYtRows() =>
-      _watch([_db.localFiles, _db.tracks], () async {
-        final rows = await _db.select(_db.localFiles).get();
-        final yt = await _ytTracks(rows.map((r) => r.trackId));
-        return [
-          for (final r in rows)
-            if (yt.containsKey(r.trackId)) r,
-        ];
-      });
+  Stream<List<LocalFile>> watchYtRows() => _watch([
+    _db.localFiles,
+    _db.tracks,
+  ], () => (_db.select(_db.localFiles)..where(_isYtRow)).get());
 
   Stream<PlaylistDownloadStatus> watchPlaylist(String playlistId) => _watch(
     [
@@ -564,11 +567,8 @@ class DownloadRepository {
       _watch([_db.localFiles, _db.tracks], () async {
         final rows = await (_db.select(
           _db.localFiles,
-        )..where((f) => f.state.equals('done'))).get();
-        final yt = await _ytTracks(rows.map((r) => r.trackId));
-        return rows
-            .where((r) => yt.containsKey(r.trackId))
-            .fold<int>(0, (a, r) => a + r.bytes);
+        )..where((f) => f.state.equals('done') & _isYtRow(f))).get();
+        return rows.fold<int>(0, (a, r) => a + r.bytes);
       });
 
   /// Finished-download bytes of each playlist that has any.
@@ -578,12 +578,8 @@ class DownloadRepository {
         () async {
           final done = await (_db.select(
             _db.localFiles,
-          )..where((f) => f.state.equals('done'))).get();
-          final yt = await _ytTracks(done.map((r) => r.trackId));
-          final bytes = {
-            for (final r in done)
-              if (yt.containsKey(r.trackId)) r.trackId: r.bytes,
-          };
+          )..where((f) => f.state.equals('done') & _isYtRow(f))).get();
+          final bytes = {for (final r in done) r.trackId: r.bytes};
           if (bytes.isEmpty) return <(String, int)>[];
           final entries =
               await (_db.select(_db.playlistEntries)..where(
