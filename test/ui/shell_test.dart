@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,8 @@ import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/home/home_page.dart';
 import 'package:songies/ui/library/library_page.dart';
+import 'package:songies/ui/motion/equalizer_bars.dart';
+import 'package:songies/ui/motion/motion.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/search/search_page.dart';
 import 'package:songies/ui/settings/settings_page.dart';
@@ -27,6 +30,7 @@ import 'package:songies/ui/shell/bottom_nav.dart';
 import 'package:songies/ui/shell/desktop_shell.dart';
 import 'package:songies/ui/shell/title_bar.dart';
 import 'package:songies/ui/shell/mini_player.dart';
+import 'package:songies/ui/shell/player_bar.dart';
 import 'package:songies/ui/shell/window_controls.dart';
 
 import '../helpers/fake_audio_backend.dart';
@@ -371,6 +375,112 @@ void main() {
       expect(router.state.uri.path, nowPlayingLocation);
     });
 
+    testWidgets('swiping the mini-player left skips next, right previous', (
+      tester,
+    ) async {
+      await pumpApp(tester, phone);
+      await startPlaying(tester);
+      final pill = find.byKey(const Key('miniPlayer.pill'));
+
+      await tester.drag(pill, const Offset(-160, 0));
+      await tester.pumpAndSettle();
+      expect(player.state.current?.id, 'b');
+      expect(find.text('Title b'), findsOneWidget);
+      expect(router.state.uri.path, isNot(nowPlayingLocation));
+
+      await tester.drag(pill, const Offset(160, 0));
+      await tester.pumpAndSettle();
+      expect(player.state.current?.id, 'a');
+      expect(router.state.uri.path, isNot(nowPlayingLocation));
+    });
+
+    testWidgets('with reduced motion a swipe skips instantly', (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      await pumpApp(tester, phone);
+      await startPlaying(tester);
+      final before = tester.getTopLeft(find.text('Title a'));
+
+      await tester.drag(
+        find.byKey(const Key('miniPlayer.pill')),
+        const Offset(-160, 0),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(player.state.current?.id, 'b');
+      expect(find.text('Title a'), findsNothing);
+      expect(tester.getTopLeft(find.text('Title b')), before);
+    });
+
+    testWidgets('the mini-player content slides with the finger', (
+      tester,
+    ) async {
+      await pumpApp(tester, phone);
+      await startPlaying(tester);
+      final before = tester.getTopLeft(find.text('Title a'));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('miniPlayer.pill'))),
+      );
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-30, 0));
+      await tester.pump();
+      expect(tester.getTopLeft(find.text('Title a')).dx, lessThan(before.dx));
+
+      // A short drag springs back without skipping.
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(player.state.current?.id, 'a');
+      expect(tester.getTopLeft(find.text('Title a')), before);
+    });
+
+    testWidgets('a vertical drag on the mini-player does not skip', (
+      tester,
+    ) async {
+      await pumpApp(tester, phone);
+      await startPlaying(tester);
+      await tester.drag(
+        find.byKey(const Key('miniPlayer.pill')),
+        const Offset(0, -120),
+      );
+      await tester.pumpAndSettle();
+      expect(player.state.current?.id, 'a');
+    });
+
+    testWidgets('mini-player fill is the theme tint', (tester) async {
+      await pumpApp(tester, phone);
+      await startPlaying(tester);
+      final colors = colorsOf(tester, MiniPlayer);
+      final pill = tester.widget<Container>(
+        find.byKey(const Key('miniPlayer.pill')),
+      );
+      expect((pill.decoration! as BoxDecoration).color, colors.miniPlayer);
+    });
+
+    testWidgets('a tab tap bounces its icon once (1.0 -> 1.12 -> 1.0)', (
+      tester,
+    ) async {
+      await pumpApp(tester, phone);
+      double scale(int i) => tester
+          .widget<ScaleTransition>(find.byKey(Key('nav.bounce.$i')))
+          .scale
+          .value;
+      expect(scale(1), 1.0);
+
+      await tester.tap(navLabel('Search'));
+      await tester.pump();
+      await tester.pump(Motion.standard ~/ 2);
+      expect(scale(1), greaterThan(1.05));
+      expect(scale(1), lessThanOrEqualTo(1.12));
+      expect(scale(0), 1.0);
+
+      await tester.pumpAndSettle();
+      expect(scale(1), 1.0);
+      expect(tester.binding.hasScheduledFrame, isFalse);
+    });
+
     testWidgets('mini-player progress line follows the position', (
       tester,
     ) async {
@@ -543,6 +653,138 @@ void main() {
       await tester.tap(find.byKey(const Key('playerBar.queue')));
       await tester.pumpAndSettle();
       expect(router.state.uri.path, nowPlayingLocation);
+    });
+
+    testWidgets('player bar is the surface blended with the tint at 40 %', (
+      tester,
+    ) async {
+      await pumpApp(tester, desktop);
+      final colors = colorsOf(tester, PlayerBar);
+      final box = tester.widget<ColoredBox>(
+        find.byKey(const Key('playerBar.background')),
+      );
+      expect(box.color, Color.lerp(colors.surface, colors.miniPlayer, 0.4));
+      expect(
+        tester.getSize(find.byKey(const Key('playerBar.background'))).width,
+        1280,
+      );
+    });
+
+    for (final key in ['playerBar.scrubber', 'playerBar.volume']) {
+      testWidgets('hovering $key thickens it from 4 to 6 px and shows the '
+          'thumb', (tester) async {
+        await pumpApp(tester, desktop);
+        await startPlaying(tester);
+        backend.setDuration(const Duration(seconds: 200));
+        await tester.pumpAndSettle();
+        SliderThemeData theme() =>
+            SliderTheme.of(tester.element(find.byKey(Key(key))));
+        expect(theme().trackHeight, 4);
+        expect(theme().thumbShape!.getPreferredSize(true, false).width, 0);
+
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        await mouse.addPointer(location: Offset.zero);
+        addTearDown(mouse.removePointer);
+        await mouse.moveTo(tester.getCenter(find.byKey(Key(key))));
+        await tester.pumpAndSettle();
+        expect(theme().trackHeight, 6);
+        expect(
+          theme().thumbShape!.getPreferredSize(true, false).width,
+          greaterThan(0),
+        );
+
+        await mouse.moveTo(Offset.zero);
+        await tester.pumpAndSettle();
+        expect(theme().trackHeight, 4);
+      });
+    }
+
+    testWidgets('the playing playlist row shows EqualizerBars', (tester) async {
+      await pumpApp(tester, desktop);
+      Finder bars(String id) => find.descendant(
+        of: find.byKey(Key('sidebar.playlist.$id')),
+        matching: find.byType(EqualizerBars),
+      );
+      expect(bars('p1'), findsNothing);
+
+      unawaited(player.playQueue([track('a')], sourcePlaylistId: 'p1'));
+      await tester.pump();
+      await tester.pump();
+      expect(bars('p1'), findsOneWidget);
+      expect(bars('p2'), findsNothing);
+      expect(tester.widget<EqualizerBars>(bars('p1')).playing, isTrue);
+
+      unawaited(player.pause());
+      await tester.pumpAndSettle();
+      expect(tester.widget<EqualizerBars>(bars('p1')).playing, isFalse);
+    });
+
+    testWidgets('sidebar rows highlight on hover', (tester) async {
+      await pumpApp(tester, desktop);
+      Color? fill() =>
+          (tester
+                      .widget<AnimatedContainer>(
+                        find.byKey(const Key('sidebar.hover.playlist.p1')),
+                      )
+                      .decoration
+                  as BoxDecoration?)
+              ?.color;
+      expect(fill()?.a ?? 0, 0);
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(
+        tester.getCenter(find.byKey(const Key('sidebar.playlist.p1'))),
+      );
+      await tester.pumpAndSettle();
+      expect(fill()!.a, greaterThan(0));
+    });
+
+    testWidgets('the selection bar slides between sidebar rows', (
+      tester,
+    ) async {
+      await pumpApp(tester, desktop);
+      final bar = find.byKey(const Key('sidebar.selectionBar.nav'));
+      final homeTop = tester.getRect(bar).top;
+      expect(
+        tester.getRect(bar).center.dy,
+        closeTo(tester.getCenter(find.byKey(const Key('sidebar.home'))).dy, 1),
+      );
+
+      await tester.tap(find.byKey(const Key('sidebar.search')));
+      await tester.pump();
+      await tester.pump(Motion.standard ~/ 2);
+      final searchCentre = tester
+          .getCenter(find.byKey(const Key('sidebar.search')))
+          .dy;
+      final mid = tester.getRect(bar).center.dy;
+      expect(tester.getRect(bar).top, greaterThan(homeTop));
+      expect(mid, lessThan(searchCentre - 1));
+
+      await tester.pumpAndSettle();
+      expect(tester.getRect(bar).center.dy, closeTo(searchCentre, 1));
+
+      final rowElement = tester.element(
+        find.byKey(const Key('sidebar.playlist.p1')),
+      );
+      // A playlist takes the selection: the nav bar goes, its own appears.
+      await tester.tap(find.byKey(const Key('sidebar.playlist.p1')));
+      await tester.pumpAndSettle();
+      expect(bar, findsNothing);
+      final listBar = find.byKey(const Key('sidebar.selectionBar.playlists'));
+      expect(
+        tester.getRect(listBar).center.dy,
+        closeTo(
+          tester.getCenter(find.byKey(const Key('sidebar.playlist.p1'))).dy,
+          1,
+        ),
+      );
+      // The list was not rebuilt from scratch when the bar appeared.
+      expect(
+        tester.element(find.byKey(const Key('sidebar.playlist.p1'))),
+        same(rowElement),
+      );
     });
 
     testWidgets('volume slider sets the player volume', (tester) async {

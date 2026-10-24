@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../theme/app_theme.dart';
+import '../motion/motion.dart';
 
 class _Tab {
   const _Tab(this.label, this.inactiveIcon, this.activeIcon);
@@ -18,7 +19,8 @@ const _tabs = [
 
 /// The phone's tab bar: icon above label. The active tab is white and bold
 /// (filled house / 3 px stroke); the others are muted outlines (2 px stroke).
-/// The bar fades into the background above it.
+/// A newly active icon bounces once and the label colours animate. The bar
+/// fades into the background above it.
 class BottomNav extends StatelessWidget {
   const BottomNav(this.index, this.onTap, {super.key});
 
@@ -64,7 +66,7 @@ class BottomNav extends StatelessWidget {
   }
 }
 
-class _TabButton extends StatelessWidget {
+class _TabButton extends StatefulWidget {
   const _TabButton({
     required this.tab,
     required this.position,
@@ -80,8 +82,51 @@ class _TabButton extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_TabButton> createState() => _TabButtonState();
+}
+
+class _TabButtonState extends State<_TabButton>
+    with SingleTickerProviderStateMixin {
+  /// One bounce when the tab becomes active: 1.0 -> 1.12 -> 1.0.
+  late final AnimationController _bounce = AnimationController(vsync: this);
+  late final Animation<double> _scale = TweenSequence([
+    TweenSequenceItem(
+      tween: Tween(
+        begin: 1.0,
+        end: 1.12,
+      ).chain(CurveTween(curve: Curves.easeOut)),
+      weight: 1,
+    ),
+    TweenSequenceItem(
+      tween: Tween(
+        begin: 1.12,
+        end: 1.0,
+      ).chain(CurveTween(curve: Curves.easeIn)),
+      weight: 1,
+    ),
+  ]).animate(_bounce);
+
+  @override
+  void didUpdateWidget(_TabButton old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) {
+      _bounce
+        ..duration = Motion.of(context).standard
+        ..forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _bounce.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = active ? colors.text : colors.mutedText;
+    final tab = widget.tab;
+    final active = widget.active;
+    final colors = widget.colors;
     return Semantics(
       button: true,
       selected: active,
@@ -89,31 +134,39 @@ class _TabButton extends StatelessWidget {
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: onTap,
+        onTap: widget.onTap,
         child: SizedBox(
           width: BottomNav._tabWidth,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SvgPicture.asset(
-                active ? tab.activeIcon : tab.inactiveIcon,
-                key: Key('nav.icon.$position'),
-                width: BottomNav._iconSize,
-                height: BottomNav._iconSize,
-                colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-              ),
-              const SizedBox(height: BottomNav._gap),
-              Text(
-                tab.label,
-                maxLines: 1,
-                style: TextStyle(
-                  color: color,
-                  fontSize: BottomNav._labelSize,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                  height: 1.2,
+          child: TweenAnimationBuilder<Color?>(
+            tween: ColorTween(end: active ? colors.text : colors.mutedText),
+            duration: Motion.of(context).standard,
+            builder: (context, color, _) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ScaleTransition(
+                  key: Key('nav.bounce.${widget.position}'),
+                  scale: _scale,
+                  child: SvgPicture.asset(
+                    active ? tab.activeIcon : tab.inactiveIcon,
+                    key: Key('nav.icon.${widget.position}'),
+                    width: BottomNav._iconSize,
+                    height: BottomNav._iconSize,
+                    colorFilter: ColorFilter.mode(color!, BlendMode.srcIn),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: BottomNav._gap),
+                Text(
+                  tab.label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: BottomNav._labelSize,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -8,11 +8,15 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../downloads/download_ring.dart';
 import '../downloads/downloads_sheet.dart';
+import '../motion/equalizer_bars.dart';
+import '../motion/motion.dart';
 import '../widgets/artwork.dart';
 import 'go_tab.dart';
 
 /// The desktop sidebar: Home / Search / Sync devices, the playlist list and a
-/// Settings entry. 260 px wide, or a 72 px icon rail when [collapsed].
+/// Settings entry. 260 px wide, or a 72 px icon rail when [collapsed]. Rows
+/// highlight on hover; the selected row carries an accent bar on its left
+/// edge that slides between the rows of its group.
 class Sidebar extends ConsumerWidget {
   const Sidebar({
     required this.shell,
@@ -37,6 +41,10 @@ class Sidebar extends ConsumerWidget {
     // Settings shares Home's branch but is not Home.
     final onSettings = path == '/settings';
     final homeSelected = current == 0 && !onSettings;
+    final navSelected = homeSelected ? 0 : (current == 1 ? 1 : null);
+    final playlistSelected = playlists.indexWhere(
+      (p) => path.endsWith('/playlist/${p.id}'),
+    );
     final boxColor = Color.alphaBlend(
       Colors.white.withAlpha(10),
       Color.alphaBlend(Colors.black.withAlpha(90), colors.background),
@@ -59,54 +67,60 @@ class Sidebar extends ConsumerWidget {
         child: Column(
           children: [
             box(
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Column(
-                  children: [
-                    _NavItem(
-                      key: const Key('sidebar.home'),
-                      label: 'Home',
-                      collapsed: collapsed,
-                      selected: homeSelected,
-                      icon: SvgPicture.asset(
-                        homeSelected
-                            ? 'assets/icons/home_filled.svg'
-                            : 'assets/icons/home_outline.svg',
-                        width: 22,
-                        height: 22,
-                        colorFilter: _tint(colors, homeSelected),
+              child: _SelectionTrack(
+                name: 'nav',
+                selected: navSelected,
+                extent: _NavItem.height,
+                top: 4,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Column(
+                    children: [
+                      _NavItem(
+                        key: const Key('sidebar.home'),
+                        label: 'Home',
+                        collapsed: collapsed,
+                        selected: homeSelected,
+                        icon: SvgPicture.asset(
+                          homeSelected
+                              ? 'assets/icons/home_filled.svg'
+                              : 'assets/icons/home_outline.svg',
+                          width: 22,
+                          height: 22,
+                          colorFilter: _tint(colors, homeSelected),
+                        ),
+                        onTap: () => goTab(shell, 0),
                       ),
-                      onTap: () => goTab(shell, 0),
-                    ),
-                    _NavItem(
-                      key: const Key('sidebar.search'),
-                      label: 'Search',
-                      collapsed: collapsed,
-                      selected: current == 1,
-                      icon: SvgPicture.asset(
-                        current == 1
-                            ? 'assets/icons/search_bold.svg'
-                            : 'assets/icons/search.svg',
-                        width: 22,
-                        height: 22,
-                        colorFilter: _tint(colors, current == 1),
+                      _NavItem(
+                        key: const Key('sidebar.search'),
+                        label: 'Search',
+                        collapsed: collapsed,
+                        selected: current == 1,
+                        icon: SvgPicture.asset(
+                          current == 1
+                              ? 'assets/icons/search_bold.svg'
+                              : 'assets/icons/search.svg',
+                          width: 22,
+                          height: 22,
+                          colorFilter: _tint(colors, current == 1),
+                        ),
+                        onTap: () => goTab(shell, 1),
                       ),
-                      onTap: () => goTab(shell, 1),
-                    ),
-                    _NavItem(
-                      key: const Key('sidebar.sync'),
-                      label: 'Sync devices',
-                      tooltip: 'Coming soon',
-                      collapsed: collapsed,
-                      selected: false,
-                      icon: Icon(
-                        Icons.sync_rounded,
-                        size: 22,
-                        color: colors.mutedText,
+                      _NavItem(
+                        key: const Key('sidebar.sync'),
+                        label: 'Sync devices',
+                        tooltip: 'Coming soon',
+                        collapsed: collapsed,
+                        selected: false,
+                        icon: Icon(
+                          Icons.sync_rounded,
+                          size: 22,
+                          color: colors.mutedText,
+                        ),
+                        onTap: null,
                       ),
-                      onTap: null,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -115,45 +129,51 @@ class Sidebar extends ConsumerWidget {
               child: box(
                 child: Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
-                      child: Row(
-                        children: [
-                          if (!collapsed)
-                            Expanded(
-                              child: _NavItem(
-                                key: const Key('sidebar.library'),
-                                label: 'Library',
-                                collapsed: false,
-                                selected: current == 2,
-                                icon: SvgPicture.asset(
-                                  current == 2
-                                      ? 'assets/icons/library_bold.svg'
-                                      : 'assets/icons/library.svg',
-                                  width: 22,
-                                  height: 22,
-                                  colorFilter: _tint(colors, current == 2),
+                    _SelectionTrack(
+                      name: 'library',
+                      selected: !collapsed && current == 2 ? 0 : null,
+                      extent: _NavItem.height,
+                      top: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+                        child: Row(
+                          children: [
+                            if (!collapsed)
+                              Expanded(
+                                child: _NavItem(
+                                  key: const Key('sidebar.library'),
+                                  label: 'Library',
+                                  collapsed: false,
+                                  selected: current == 2,
+                                  icon: SvgPicture.asset(
+                                    current == 2
+                                        ? 'assets/icons/library_bold.svg'
+                                        : 'assets/icons/library.svg',
+                                    width: 22,
+                                    height: 22,
+                                    colorFilter: _tint(colors, current == 2),
+                                  ),
+                                  onTap: () => goTab(shell, 2),
                                 ),
-                                onTap: () => goTab(shell, 2),
                               ),
+                            if (collapsed) const Spacer(),
+                            IconButton(
+                              key: const Key('sidebar.toggle'),
+                              tooltip: collapsed
+                                  ? 'Expand sidebar'
+                                  : 'Collapse sidebar',
+                              iconSize: 22,
+                              color: colors.mutedText,
+                              icon: Icon(
+                                collapsed
+                                    ? Icons.chevron_right
+                                    : Icons.chevron_left,
+                              ),
+                              onPressed: onToggle,
                             ),
-                          if (collapsed) const Spacer(),
-                          IconButton(
-                            key: const Key('sidebar.toggle'),
-                            tooltip: collapsed
-                                ? 'Expand sidebar'
-                                : 'Collapse sidebar',
-                            iconSize: 22,
-                            color: colors.mutedText,
-                            icon: Icon(
-                              collapsed
-                                  ? Icons.chevron_right
-                                  : Icons.chevron_left,
-                            ),
-                            onPressed: onToggle,
-                          ),
-                          if (collapsed) const Spacer(),
-                        ],
+                            if (collapsed) const Spacer(),
+                          ],
+                        ),
                       ),
                     ),
                     Padding(
@@ -161,16 +181,21 @@ class Sidebar extends ConsumerWidget {
                       child: DownloadsIndicator(compact: collapsed),
                     ),
                     Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
-                        itemCount: playlists.length,
-                        itemBuilder: (context, i) => _PlaylistRow(
-                          playlist: playlists[i],
-                          collapsed: collapsed,
-                          selected: path.endsWith(
-                            '/playlist/${playlists[i].id}',
+                      child: _SelectionTrack(
+                        name: 'playlists',
+                        selected: playlistSelected < 0
+                            ? null
+                            : playlistSelected,
+                        extent: _PlaylistRow.height,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+                          itemCount: playlists.length,
+                          itemBuilder: (context, i) => _PlaylistRow(
+                            playlist: playlists[i],
+                            collapsed: collapsed,
+                            selected: i == playlistSelected,
+                            colors: colors,
                           ),
-                          colors: colors,
                         ),
                       ),
                     ),
@@ -180,19 +205,25 @@ class Sidebar extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             box(
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: _NavItem(
-                  key: const Key('sidebar.settings'),
-                  label: 'Settings',
-                  collapsed: collapsed,
-                  selected: onSettings,
-                  icon: Icon(
-                    Icons.settings_outlined,
-                    size: 22,
-                    color: colors.mutedText,
+              child: _SelectionTrack(
+                name: 'settings',
+                selected: onSettings ? 0 : null,
+                extent: _NavItem.height,
+                top: 4,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: _NavItem(
+                    key: const Key('sidebar.settings'),
+                    label: 'Settings',
+                    collapsed: collapsed,
+                    selected: onSettings,
+                    icon: Icon(
+                      Icons.settings_outlined,
+                      size: 22,
+                      color: colors.mutedText,
+                    ),
+                    onTap: () => context.go('/settings'),
                   ),
-                  onTap: () => context.go('/settings'),
                 ),
               ),
             ),
@@ -222,6 +253,8 @@ class _NavItem extends StatelessWidget {
     super.key,
   });
 
+  static const double height = 40;
+
   final String label;
   final Widget icon;
   final bool collapsed;
@@ -237,7 +270,7 @@ class _NavItem extends StatelessWidget {
     final enabled = onTap != null;
     final color = selected ? colors.text : colors.mutedText;
     final row = SizedBox(
-      height: 40,
+      height: height,
       child: Row(
         mainAxisAlignment: collapsed
             ? MainAxisAlignment.center
@@ -278,8 +311,9 @@ class _NavItem extends StatelessWidget {
           triggerMode: message == null ? TooltipTriggerMode.manual : null,
           child: InkWell(
             borderRadius: BorderRadius.circular(colors.radius),
+            hoverColor: Colors.transparent,
             onTap: onTap,
-            child: row,
+            child: _HoverHighlight(enabled: enabled, child: row),
           ),
         ),
       ),
@@ -287,7 +321,7 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-class _PlaylistRow extends StatelessWidget {
+class _PlaylistRow extends ConsumerWidget {
   const _PlaylistRow({
     required this.playlist,
     required this.collapsed,
@@ -295,77 +329,294 @@ class _PlaylistRow extends StatelessWidget {
     required this.colors,
   });
 
+  static const double height = 56;
+
   final PlaylistSummary playlist;
   final bool collapsed;
   final bool selected;
   final SongiesColors colors;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final source = playlist.source == 'yt' ? 'YouTube' : 'Local';
-    final art = Artwork(playlist.coverRef, size: 40, seed: playlist.id);
+    final isSource = ref.watch(
+      playerStateProvider.select(
+        (s) =>
+            s.value?.current != null &&
+            s.value?.sourcePlaylistId == playlist.id,
+      ),
+    );
+    final playing =
+        isSource &&
+        ref.watch(playerStateProvider.select((s) => s.value?.playing ?? false));
+    Widget art = Artwork(playlist.coverRef, size: 40, seed: playlist.id);
+    if (isSource && collapsed) {
+      art = Stack(
+        children: [
+          art,
+          Positioned(
+            right: 2,
+            bottom: 2,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(150),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(2),
+                child: EqualizerBars(playing: playing, size: 12),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Tooltip(
       message: collapsed ? playlist.name : '',
       triggerMode: collapsed ? null : TooltipTriggerMode.manual,
       child: InkWell(
         key: Key('sidebar.playlist.${playlist.id}'),
         borderRadius: BorderRadius.circular(colors.radius),
+        hoverColor: Colors.transparent,
         onTap: () => context.go('/library/playlist/${playlist.id}'),
-        child: Container(
-          height: 56,
-          decoration: BoxDecoration(
-            color: selected ? Colors.white.withAlpha(20) : null,
-            borderRadius: BorderRadius.circular(colors.radius),
-          ),
-          padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 8),
-          child: Row(
-            mainAxisAlignment: collapsed
-                ? MainAxisAlignment.center
-                : MainAxisAlignment.start,
-            children: [
-              art,
-              if (!collapsed) ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        playlist.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.text,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+        child: _HoverHighlight(
+          highlightKey: Key('sidebar.hover.playlist.${playlist.id}'),
+          child: Container(
+            height: height,
+            decoration: BoxDecoration(
+              color: selected ? Colors.white.withAlpha(20) : null,
+              borderRadius: BorderRadius.circular(colors.radius),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 8),
+            child: Row(
+              mainAxisAlignment: collapsed
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
+              children: [
+                art,
+                if (!collapsed) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          playlist.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.text,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              '$source · ${playlist.trackCount}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: colors.mutedText,
-                                fontSize: 11,
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                '$source · ${playlist.trackCount}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colors.mutedText,
+                                  fontSize: 11,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          DownloadRing(playlistId: playlist.id),
-                        ],
-                      ),
-                    ],
+                            const SizedBox(width: 6),
+                            DownloadRing(playlistId: playlist.id),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  if (isSource) ...[
+                    const SizedBox(width: 8),
+                    EqualizerBars(playing: playing),
+                    const SizedBox(width: 4),
+                  ],
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A soft fill behind [child] while the mouse is over it, fading in and out
+/// over [Motion.quick]. Inert when not [enabled].
+class _HoverHighlight extends StatefulWidget {
+  const _HoverHighlight({
+    required this.child,
+    this.enabled = true,
+    this.highlightKey,
+  });
+
+  final Widget child;
+  final bool enabled;
+
+  /// The key of the fill (an [AnimatedContainer]).
+  final Key? highlightKey;
+
+  @override
+  State<_HoverHighlight> createState() => _HoverHighlightState();
+}
+
+class _HoverHighlightState extends State<_HoverHighlight> {
+  bool _hovered = false;
+
+  void _setHovered(bool hovered) {
+    if (hovered != _hovered) setState(() => _hovered = hovered);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final lit = _hovered && widget.enabled;
+    return MouseRegion(
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
+      child: AnimatedContainer(
+        key: widget.highlightKey,
+        duration: Motion.of(context).quick,
+        decoration: BoxDecoration(
+          color: Colors.white.withAlpha(lit ? 13 : 0),
+          borderRadius: BorderRadius.circular(colors.radius),
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Draws the accent selection bar on the left edge of the [selected] row of
+/// a group of equal rows, each [extent] high, the first [top] below the top.
+/// When the selection moves within the group the bar slides there over
+/// [Motion.standard]; it appears and disappears in place. If the rows
+/// scroll, the bar follows them.
+class _SelectionTrack extends StatefulWidget {
+  const _SelectionTrack({
+    required this.name,
+    required this.selected,
+    required this.extent,
+    required this.child,
+    this.top = 0,
+  });
+
+  static const double _width = 3;
+
+  /// Names the bar's key: `sidebar.selectionBar.<name>`.
+  final String name;
+  final int? selected;
+  final double extent;
+  final double top;
+  final Widget child;
+
+  @override
+  State<_SelectionTrack> createState() => _SelectionTrackState();
+}
+
+class _SelectionTrackState extends State<_SelectionTrack>
+    with SingleTickerProviderStateMixin {
+  /// How far the rows have scrolled.
+  final _scroll = ValueNotifier<double>(0);
+  late final AnimationController _slide = AnimationController(
+    vsync: this,
+    value: 1,
+  );
+  late double _from = (widget.selected ?? 0).toDouble();
+  late double _to = _from;
+
+  /// The bar's row position, fractional while sliding.
+  double get _position =>
+      _from + (_to - _from) * Motion.standardCurve.transform(_slide.value);
+
+  @override
+  void didUpdateWidget(_SelectionTrack old) {
+    super.didUpdateWidget(old);
+    final selected = widget.selected;
+    if (selected == null || selected == old.selected) return;
+    if (old.selected == null) {
+      _from = _to = selected.toDouble();
+      _slide.value = 1;
+      return;
+    }
+    _from = _position;
+    _to = selected.toDouble();
+    _slide
+      ..duration = Motion.of(context).standard
+      ..forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _slide.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = NotificationListener<ScrollMetricsNotification>(
+      onNotification: (n) {
+        if (n.depth == 0) _scroll.value = n.metrics.pixels;
+        return false;
+      },
+      child: NotificationListener<ScrollUpdateNotification>(
+        onNotification: (n) {
+          if (n.depth == 0) _scroll.value = n.metrics.pixels;
+          return false;
+        },
+        child: widget.child,
+      ),
+    );
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final barHeight = widget.extent / 2;
+    // Always a Stack, so the rows (and their scroll position) survive the
+    // selection coming and going.
+    return Stack(
+      children: [
+        rows,
+        if (widget.selected != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ClipRect(
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([_slide, _scroll]),
+                  builder: (context, _) {
+                    final offset = _scroll.value;
+                    return Stack(
+                      children: [
+                        Positioned(
+                          key: Key('sidebar.selectionBar.${widget.name}'),
+                          left: 0,
+                          top:
+                              widget.top +
+                              _position * widget.extent +
+                              (widget.extent - barHeight) / 2 -
+                              offset,
+                          width: _SelectionTrack._width,
+                          height: barHeight,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colors.accent,
+                              borderRadius: BorderRadius.circular(
+                                _SelectionTrack._width / 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

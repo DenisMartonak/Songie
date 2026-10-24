@@ -8,35 +8,45 @@ import '../../player/player_service.dart';
 import '../../providers.dart';
 import '../../router.dart';
 import '../../theme/app_theme.dart';
+import '../motion/motion.dart';
 import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
 import '../widgets/artwork.dart';
 
 /// The desktop's bottom player bar, 72 px high: the current track on the left;
 /// shuffle, previous, play/pause, next, repeat and a scrubber in the middle;
-/// queue and volume on the right.
+/// queue and volume on the right. The background is the surface blended with
+/// the theme's tint at 40 %.
 class PlayerBar extends ConsumerWidget {
   const PlayerBar({super.key});
 
   static const double height = 72;
 
+  /// How much of the tint goes into the background.
+  static const double _tintBlend = 0.4;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
     return SizedBox(
       key: const Key('playerBar'),
       height: height,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: LayoutBuilder(
-          builder: (context, box) {
-            final middle = (box.maxWidth * 0.4).clamp(300.0, 620.0);
-            return Row(
-              children: [
-                const Expanded(child: _NowPlaying()),
-                SizedBox(width: middle, child: const _Transport()),
-                const Expanded(child: _QueueAndVolume()),
-              ],
-            );
-          },
+      child: ColoredBox(
+        key: const Key('playerBar.background'),
+        color: Color.lerp(colors.surface, colors.miniPlayer, _tintBlend)!,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final middle = (box.maxWidth * 0.4).clamp(300.0, 620.0);
+              return Row(
+                children: [
+                  const Expanded(child: _NowPlaying()),
+                  SizedBox(width: middle, child: const _Transport()),
+                  const Expanded(child: _QueueAndVolume()),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -277,28 +287,24 @@ class _ScrubberState extends ConsumerState<_Scrubber> {
             ),
           ),
           Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 3,
+            child: _HoverSlider(
+              sliderKey: const Key('playerBar.scrubber'),
+              dragging: _drag != null,
+              theme: SliderTheme.of(context).copyWith(
                 activeTrackColor: colors.accent,
                 inactiveTrackColor: colors.text.withAlpha(51),
                 thumbColor: colors.text,
                 disabledThumbColor: Colors.transparent,
                 disabledActiveTrackColor: colors.text.withAlpha(51),
                 disabledInactiveTrackColor: colors.text.withAlpha(51),
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                overlayShape: SliderComponentShape.noOverlay,
                 trackShape: const RoundedRectSliderTrackShape(),
               ),
-              child: Slider(
-                key: const Key('playerBar.scrubber'),
-                value: shown,
-                onChanged: seekable ? (v) => setState(() => _drag = v) : null,
-                onChangeEnd: (v) {
-                  setState(() => _drag = null);
-                  ref.read(playerServiceProvider).seek(total * v);
-                },
-              ),
+              value: shown,
+              onChanged: seekable ? (v) => setState(() => _drag = v) : null,
+              onChangeEnd: (v) {
+                setState(() => _drag = null);
+                ref.read(playerServiceProvider).seek(total * v);
+              },
             ),
           ),
           SizedBox(width: 38, child: Text(formatDuration(total), style: style)),
@@ -340,23 +346,92 @@ class _QueueAndVolume extends ConsumerWidget {
         ),
         SizedBox(
           width: 104,
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 3,
+          child: _HoverSlider(
+            sliderKey: const Key('playerBar.volume'),
+            theme: SliderTheme.of(context).copyWith(
               activeTrackColor: colors.text,
               inactiveTrackColor: colors.text.withAlpha(51),
               thumbColor: colors.text,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-              overlayShape: SliderComponentShape.noOverlay,
             ),
-            child: Slider(
-              key: const Key('playerBar.volume'),
-              value: volume,
-              onChanged: (v) => ref.read(playerServiceProvider).setVolume(v),
-            ),
+            value: volume,
+            onChanged: (v) => ref.read(playerServiceProvider).setVolume(v),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A slider whose track thickens from 4 to 6 px, and whose thumb appears,
+/// while the mouse is over it (or it is being dragged); one [Motion.quick]
+/// transition each way.
+class _HoverSlider extends StatefulWidget {
+  const _HoverSlider({
+    required this.theme,
+    required this.value,
+    required this.onChanged,
+    this.onChangeEnd,
+    this.dragging = false,
+    this.sliderKey,
+  });
+
+  static const double _restTrack = 4;
+  static const double _hoverTrack = 6;
+  static const double _thumbRadius = 6;
+
+  /// Colours and shapes; track height and thumb are set here.
+  final SliderThemeData theme;
+  final double value;
+  final ValueChanged<double>? onChanged;
+  final ValueChanged<double>? onChangeEnd;
+
+  /// Keeps the hover look while a drag is in progress.
+  final bool dragging;
+
+  /// The key of the [Slider] inside.
+  final Key? sliderKey;
+
+  @override
+  State<_HoverSlider> createState() => _HoverSliderState();
+}
+
+class _HoverSliderState extends State<_HoverSlider> {
+  bool _hovered = false;
+
+  void _setHovered(bool hovered) {
+    if (hovered != _hovered) setState(() => _hovered = hovered);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lifted = _hovered || widget.dragging;
+    return MouseRegion(
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: lifted ? 1 : 0),
+        duration: Motion.of(context).quick,
+        builder: (context, t, _) => SliderTheme(
+          data: widget.theme.copyWith(
+            trackHeight:
+                _HoverSlider._restTrack +
+                (_HoverSlider._hoverTrack - _HoverSlider._restTrack) * t,
+            thumbShape: RoundSliderThumbShape(
+              enabledThumbRadius: _HoverSlider._thumbRadius * t,
+              disabledThumbRadius: 0,
+              elevation: 0,
+              pressedElevation: 0,
+            ),
+            overlayShape: SliderComponentShape.noOverlay,
+          ),
+          child: Slider(
+            key: widget.sliderKey,
+            value: widget.value,
+            onChanged: widget.onChanged,
+            onChangeEnd: widget.onChangeEnd,
+          ),
+        ),
+      ),
     );
   }
 }
