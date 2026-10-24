@@ -1,6 +1,6 @@
 # Songies Plan 4: session log (kept current after every task)
 
-_Last updated: 2026-10-24, after Task 7._
+_Last updated: 2026-10-24. Stopped at your request during Task 8's fix round._
 
 **To resume in a new Claude session:**
 > Continue Songies Plan 4 subagent-driven on branch `plan-4-alive-ui-themes`. Read docs/plan-4-session-log.md and the ledger it names. Don't push or merge.
@@ -22,12 +22,19 @@ _Last updated: 2026-10-24, after Task 7._
 | 5. Motion kit and page transitions | done, reviewed | `6ef2dd9`, `3d45fb7` |
 | 6. Living Now Playing | done, reviewed | `7bcee50`, `bb00ceb`, `4bbc441` |
 | 7. Living pages | done, reviewed | `6d8e776`, `e912745`, `e3d7b06` |
-| 8. Living shell | not started | |
+| 8. Living shell | **built, review found fixes; fix round not started** (see below) | `bb0d546` |
 | 9. Theme list and editor | not started | |
 | 10. Idle test, docs, builds | not started | |
 | Final whole-branch review + one fix wave | not started | |
 
-Tests at `e3d7b06`: 964 passing, `flutter analyze` clean.
+Tests at `bb0d546`: 976 passing, `flutter analyze` clean (from the Task 8 helper's report).
+
+## Where Task 8 stopped
+
+Task 8 is built and committed (`bb0d546`), and its review asked for fixes. The fix round was sent, then stopped before any file changed, so the working tree is clean. Next session: run fix round 1 with these three findings (full detail in `.superpowers/sdd/2026-10-23-songies-plan-4-alive-ui-and-themes/task-8-review.md`), then a scoped re-review of the fix commits after `bb0d546`:
+1. **Mini player swipe direction lingers** (`mini_player.dart:67`): a swipe that doesn't change the track (restart mid-song, or Next at the queue's end) leaves the direction set, so the next unrelated song change slides in from the wrong side.
+2. **Sidebar hover fill is hard-coded white** (`sidebar.dart:486`), so it's invisible on light themes. It should come from the theme's text colour.
+3. **Ruling:** on a playlist page, only the playlist row shows the accent selection bar, not the Library header as well (`sidebar.dart:134`, `:186`).
 
 
 ## Decisions made on your behalf (each with its cost if wrong)
@@ -50,6 +57,9 @@ Tests at `e3d7b06`: 964 passing, `flutter analyze` clean.
 - **Now Playing swipe-down works on desktop too**, and Default/Terminal keep their pre-Plan-4 Now Playing gradient. *If wrong:* one platform check.
 - **The time label shows remaining time** (`-m:ss`), per the plan. *If wrong:* one label.
 - **A swipe-close doesn't fly the cover** back to the mini player (Flutter skips that on gestures); the close button still does. *If wrong:* nothing practical.
+- **Sidebar selection bar** slides between rows within a section and just appears when you jump to another section. *If wrong:* one overlay widget.
+- **Shell values the plan left open:** swipe-to-skip at 64 px or a 400 px/s fling, a 3 px selection bar, and a slider thumb that grows to 6 px on hover. *If wrong:* numbers.
+- **The title bar is unchanged** (the plan gives it no new behaviour). *If wrong:* nothing.
 - **Page palettes don't wait behind the song's:** the playlist header and Home glow ask for their cover colours through a path the "newest wins" queue can't cancel. *If wrong:* one parameter.
 - **Playlist page Play button floats** and pins to the top bar, as the plan asks, so Play left its old row and Back moved into the bar. That's the one exception to "nothing moves". *If wrong:* restoring the old row order.
 - **The playlist header colour** is blended toward the background until its text reaches 4.5:1. *If wrong:* less cover colour on pale covers.
@@ -65,6 +75,7 @@ Tests at `e3d7b06`: 964 passing, `flutter analyze` clean.
 - Task 5: transition durations are fixed when a page is built; router transitions under the setting aren't tested end-to-end; a few test-strength gaps.
 - Task 6: skip direction is worked out inside build; the queue's lift animation and ripples ignore reduced motion; queue tests only run with animations off.
 - Task 7: the playlist header always rebuilds; some tests end with playback running; `playlist_page.dart` is ~1,165 lines (the header belongs in its own file); no end-to-end import-skeleton test; queued palette requests can't be cancelled.
+- Task 8: the nav bounce uses plain ease curves; the volume slider shows no thumb on a touch drag and sliders have no focus cue; the title transition is rebuilt every drag frame; dragged mini-player content slides under the play button; state is changed inside build; the reduced-motion test was never seen failing.
 - Device sync (Plan 6) must re-register a synced font when its file arrives.
 
 ## Your checks (phone/desktop), once Plan 4 is done
@@ -72,4 +83,5 @@ Tests at `e3d7b06`: 964 passing, `flutter analyze` clean.
 - The three built-in themes look as specified; Outfit and JetBrains Mono show real bold weights.
 - Now Playing: dragging it down shows the app underneath; rotate the phone mid-drag and press back mid-drag, and nothing freezes; the blur stays smooth while dragging (performance overlay).
 - Playlist page: readable header over a pale cover; long titles fit with Android's Large font; nothing sits under a side notch in landscape.
+- Shell: swipe the mini player to skip; the bottom-nav icon bounces; the desktop scrubber and volume thicken on hover; sidebar hover works on a light theme.
 - Colours follow each new song within a second; fast skipping never flashes a skipped song's colours.
