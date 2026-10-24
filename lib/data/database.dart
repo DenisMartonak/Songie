@@ -18,6 +18,8 @@ part 'database.g.dart';
     LibraryFolders,
     Settings,
     PlayHistory,
+    Themes,
+    Fonts,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -28,7 +30,7 @@ class AppDatabase extends _$AppDatabase {
       AppDatabase(NativeDatabase.createInBackground(f));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -40,6 +42,10 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(playlistDevicePrefs);
         await m.addColumn(localFiles, localFiles.requestedAt);
         await m.addColumn(localFiles, localFiles.manual);
+      }
+      if (from < 5) {
+        await m.createTable(themes);
+        await m.createTable(fonts);
       }
     },
     beforeOpen: (details) async {

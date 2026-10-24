@@ -58,7 +58,7 @@ void main() {
     expect(await db.select(db.playHistory).get(), hasLength(1));
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 4);
+    expect(version.data.values.single, 5);
   });
 
   test('a v2 database opened with v3 code gains yt_seen and keeps data', () async {
@@ -118,7 +118,7 @@ void main() {
       throwsA(anything),
     );
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 4);
+    expect(version.data.values.single, 5);
   });
 
   test(
@@ -162,7 +162,53 @@ void main() {
       expect(pref.downloadEnabled, isFalse);
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 4);
+      expect(version.data.values.single, 5);
     },
   );
+
+  test('a v4 database opened with v5 code gains themes and fonts', () async {
+    final dir = await Directory.systemTemp.createTemp('songies_migration');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File('${dir.path}/songies.db');
+
+    // Create a current database, drop the v5 tables and step back to v4.
+    final first = AppDatabase.open(file);
+    await first.customSelect('select 1').get();
+    await first.customStatement('DROP TABLE themes');
+    await first.customStatement('DROP TABLE fonts');
+    await first.customStatement('PRAGMA user_version = 4');
+    await first.close();
+
+    final db = AppDatabase.open(file);
+    addTearDown(db.close);
+    await db
+        .into(db.themes)
+        .insert(
+          ThemesCompanion.insert(
+            id: 'th1',
+            clock: 'c',
+            originDevice: 'dev',
+            localSeq: 1,
+            name: 'Mine',
+            specJson: '{}',
+          ),
+        );
+    await db
+        .into(db.fonts)
+        .insert(
+          FontsCompanion.insert(
+            id: 'f1',
+            clock: 'c',
+            originDevice: 'dev',
+            localSeq: 2,
+            family: 'Fira',
+            fileHash: 'abc',
+            ext: 'ttf',
+          ),
+        );
+    expect(await db.select(db.themes).get(), hasLength(1));
+    expect((await db.select(db.fonts).getSingle()).family, 'Fira');
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data.values.single, 5);
+  });
 }

@@ -4106,6 +4106,977 @@ class PlayHistoryCompanion extends UpdateCompanion<PlayHistoryEntry> {
   }
 }
 
+class $ThemesTable extends Themes with TableInfo<$ThemesTable, ThemeRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ThemesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clockMeta = const VerificationMeta('clock');
+  @override
+  late final GeneratedColumn<String> clock = GeneratedColumn<String>(
+    'clock',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _originDeviceMeta = const VerificationMeta(
+    'originDevice',
+  );
+  @override
+  late final GeneratedColumn<String> originDevice = GeneratedColumn<String>(
+    'origin_device',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedMeta = const VerificationMeta(
+    'deleted',
+  );
+  @override
+  late final GeneratedColumn<bool> deleted = GeneratedColumn<bool>(
+    'deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _localSeqMeta = const VerificationMeta(
+    'localSeq',
+  );
+  @override
+  late final GeneratedColumn<int> localSeq = GeneratedColumn<int>(
+    'local_seq',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _specJsonMeta = const VerificationMeta(
+    'specJson',
+  );
+  @override
+  late final GeneratedColumn<String> specJson = GeneratedColumn<String>(
+    'spec_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    clock,
+    originDevice,
+    deleted,
+    localSeq,
+    name,
+    specJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'themes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ThemeRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('clock')) {
+      context.handle(
+        _clockMeta,
+        clock.isAcceptableOrUnknown(data['clock']!, _clockMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_clockMeta);
+    }
+    if (data.containsKey('origin_device')) {
+      context.handle(
+        _originDeviceMeta,
+        originDevice.isAcceptableOrUnknown(
+          data['origin_device']!,
+          _originDeviceMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_originDeviceMeta);
+    }
+    if (data.containsKey('deleted')) {
+      context.handle(
+        _deletedMeta,
+        deleted.isAcceptableOrUnknown(data['deleted']!, _deletedMeta),
+      );
+    }
+    if (data.containsKey('local_seq')) {
+      context.handle(
+        _localSeqMeta,
+        localSeq.isAcceptableOrUnknown(data['local_seq']!, _localSeqMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localSeqMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('spec_json')) {
+      context.handle(
+        _specJsonMeta,
+        specJson.isAcceptableOrUnknown(data['spec_json']!, _specJsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_specJsonMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ThemeRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ThemeRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      clock: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}clock'],
+      )!,
+      originDevice: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}origin_device'],
+      )!,
+      deleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}deleted'],
+      )!,
+      localSeq: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}local_seq'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      specJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}spec_json'],
+      )!,
+    );
+  }
+
+  @override
+  $ThemesTable createAlias(String alias) {
+    return $ThemesTable(attachedDatabase, alias);
+  }
+}
+
+class ThemeRow extends DataClass implements Insertable<ThemeRow> {
+  final String id;
+  final String clock;
+  final String originDevice;
+  final bool deleted;
+  final int localSeq;
+  final String name;
+  final String specJson;
+  const ThemeRow({
+    required this.id,
+    required this.clock,
+    required this.originDevice,
+    required this.deleted,
+    required this.localSeq,
+    required this.name,
+    required this.specJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['clock'] = Variable<String>(clock);
+    map['origin_device'] = Variable<String>(originDevice);
+    map['deleted'] = Variable<bool>(deleted);
+    map['local_seq'] = Variable<int>(localSeq);
+    map['name'] = Variable<String>(name);
+    map['spec_json'] = Variable<String>(specJson);
+    return map;
+  }
+
+  ThemesCompanion toCompanion(bool nullToAbsent) {
+    return ThemesCompanion(
+      id: Value(id),
+      clock: Value(clock),
+      originDevice: Value(originDevice),
+      deleted: Value(deleted),
+      localSeq: Value(localSeq),
+      name: Value(name),
+      specJson: Value(specJson),
+    );
+  }
+
+  factory ThemeRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ThemeRow(
+      id: serializer.fromJson<String>(json['id']),
+      clock: serializer.fromJson<String>(json['clock']),
+      originDevice: serializer.fromJson<String>(json['originDevice']),
+      deleted: serializer.fromJson<bool>(json['deleted']),
+      localSeq: serializer.fromJson<int>(json['localSeq']),
+      name: serializer.fromJson<String>(json['name']),
+      specJson: serializer.fromJson<String>(json['specJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'clock': serializer.toJson<String>(clock),
+      'originDevice': serializer.toJson<String>(originDevice),
+      'deleted': serializer.toJson<bool>(deleted),
+      'localSeq': serializer.toJson<int>(localSeq),
+      'name': serializer.toJson<String>(name),
+      'specJson': serializer.toJson<String>(specJson),
+    };
+  }
+
+  ThemeRow copyWith({
+    String? id,
+    String? clock,
+    String? originDevice,
+    bool? deleted,
+    int? localSeq,
+    String? name,
+    String? specJson,
+  }) => ThemeRow(
+    id: id ?? this.id,
+    clock: clock ?? this.clock,
+    originDevice: originDevice ?? this.originDevice,
+    deleted: deleted ?? this.deleted,
+    localSeq: localSeq ?? this.localSeq,
+    name: name ?? this.name,
+    specJson: specJson ?? this.specJson,
+  );
+  ThemeRow copyWithCompanion(ThemesCompanion data) {
+    return ThemeRow(
+      id: data.id.present ? data.id.value : this.id,
+      clock: data.clock.present ? data.clock.value : this.clock,
+      originDevice: data.originDevice.present
+          ? data.originDevice.value
+          : this.originDevice,
+      deleted: data.deleted.present ? data.deleted.value : this.deleted,
+      localSeq: data.localSeq.present ? data.localSeq.value : this.localSeq,
+      name: data.name.present ? data.name.value : this.name,
+      specJson: data.specJson.present ? data.specJson.value : this.specJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ThemeRow(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('name: $name, ')
+          ..write('specJson: $specJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, clock, originDevice, deleted, localSeq, name, specJson);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ThemeRow &&
+          other.id == this.id &&
+          other.clock == this.clock &&
+          other.originDevice == this.originDevice &&
+          other.deleted == this.deleted &&
+          other.localSeq == this.localSeq &&
+          other.name == this.name &&
+          other.specJson == this.specJson);
+}
+
+class ThemesCompanion extends UpdateCompanion<ThemeRow> {
+  final Value<String> id;
+  final Value<String> clock;
+  final Value<String> originDevice;
+  final Value<bool> deleted;
+  final Value<int> localSeq;
+  final Value<String> name;
+  final Value<String> specJson;
+  final Value<int> rowid;
+  const ThemesCompanion({
+    this.id = const Value.absent(),
+    this.clock = const Value.absent(),
+    this.originDevice = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.localSeq = const Value.absent(),
+    this.name = const Value.absent(),
+    this.specJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ThemesCompanion.insert({
+    required String id,
+    required String clock,
+    required String originDevice,
+    this.deleted = const Value.absent(),
+    required int localSeq,
+    required String name,
+    required String specJson,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       clock = Value(clock),
+       originDevice = Value(originDevice),
+       localSeq = Value(localSeq),
+       name = Value(name),
+       specJson = Value(specJson);
+  static Insertable<ThemeRow> custom({
+    Expression<String>? id,
+    Expression<String>? clock,
+    Expression<String>? originDevice,
+    Expression<bool>? deleted,
+    Expression<int>? localSeq,
+    Expression<String>? name,
+    Expression<String>? specJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (clock != null) 'clock': clock,
+      if (originDevice != null) 'origin_device': originDevice,
+      if (deleted != null) 'deleted': deleted,
+      if (localSeq != null) 'local_seq': localSeq,
+      if (name != null) 'name': name,
+      if (specJson != null) 'spec_json': specJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ThemesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? clock,
+    Value<String>? originDevice,
+    Value<bool>? deleted,
+    Value<int>? localSeq,
+    Value<String>? name,
+    Value<String>? specJson,
+    Value<int>? rowid,
+  }) {
+    return ThemesCompanion(
+      id: id ?? this.id,
+      clock: clock ?? this.clock,
+      originDevice: originDevice ?? this.originDevice,
+      deleted: deleted ?? this.deleted,
+      localSeq: localSeq ?? this.localSeq,
+      name: name ?? this.name,
+      specJson: specJson ?? this.specJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (clock.present) {
+      map['clock'] = Variable<String>(clock.value);
+    }
+    if (originDevice.present) {
+      map['origin_device'] = Variable<String>(originDevice.value);
+    }
+    if (deleted.present) {
+      map['deleted'] = Variable<bool>(deleted.value);
+    }
+    if (localSeq.present) {
+      map['local_seq'] = Variable<int>(localSeq.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (specJson.present) {
+      map['spec_json'] = Variable<String>(specJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ThemesCompanion(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('name: $name, ')
+          ..write('specJson: $specJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $FontsTable extends Fonts with TableInfo<$FontsTable, FontRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FontsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clockMeta = const VerificationMeta('clock');
+  @override
+  late final GeneratedColumn<String> clock = GeneratedColumn<String>(
+    'clock',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _originDeviceMeta = const VerificationMeta(
+    'originDevice',
+  );
+  @override
+  late final GeneratedColumn<String> originDevice = GeneratedColumn<String>(
+    'origin_device',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedMeta = const VerificationMeta(
+    'deleted',
+  );
+  @override
+  late final GeneratedColumn<bool> deleted = GeneratedColumn<bool>(
+    'deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _localSeqMeta = const VerificationMeta(
+    'localSeq',
+  );
+  @override
+  late final GeneratedColumn<int> localSeq = GeneratedColumn<int>(
+    'local_seq',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _familyMeta = const VerificationMeta('family');
+  @override
+  late final GeneratedColumn<String> family = GeneratedColumn<String>(
+    'family',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fileHashMeta = const VerificationMeta(
+    'fileHash',
+  );
+  @override
+  late final GeneratedColumn<String> fileHash = GeneratedColumn<String>(
+    'file_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _extMeta = const VerificationMeta('ext');
+  @override
+  late final GeneratedColumn<String> ext = GeneratedColumn<String>(
+    'ext',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    clock,
+    originDevice,
+    deleted,
+    localSeq,
+    family,
+    fileHash,
+    ext,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'fonts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FontRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('clock')) {
+      context.handle(
+        _clockMeta,
+        clock.isAcceptableOrUnknown(data['clock']!, _clockMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_clockMeta);
+    }
+    if (data.containsKey('origin_device')) {
+      context.handle(
+        _originDeviceMeta,
+        originDevice.isAcceptableOrUnknown(
+          data['origin_device']!,
+          _originDeviceMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_originDeviceMeta);
+    }
+    if (data.containsKey('deleted')) {
+      context.handle(
+        _deletedMeta,
+        deleted.isAcceptableOrUnknown(data['deleted']!, _deletedMeta),
+      );
+    }
+    if (data.containsKey('local_seq')) {
+      context.handle(
+        _localSeqMeta,
+        localSeq.isAcceptableOrUnknown(data['local_seq']!, _localSeqMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localSeqMeta);
+    }
+    if (data.containsKey('family')) {
+      context.handle(
+        _familyMeta,
+        family.isAcceptableOrUnknown(data['family']!, _familyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_familyMeta);
+    }
+    if (data.containsKey('file_hash')) {
+      context.handle(
+        _fileHashMeta,
+        fileHash.isAcceptableOrUnknown(data['file_hash']!, _fileHashMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fileHashMeta);
+    }
+    if (data.containsKey('ext')) {
+      context.handle(
+        _extMeta,
+        ext.isAcceptableOrUnknown(data['ext']!, _extMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_extMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FontRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FontRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      clock: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}clock'],
+      )!,
+      originDevice: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}origin_device'],
+      )!,
+      deleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}deleted'],
+      )!,
+      localSeq: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}local_seq'],
+      )!,
+      family: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}family'],
+      )!,
+      fileHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_hash'],
+      )!,
+      ext: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}ext'],
+      )!,
+    );
+  }
+
+  @override
+  $FontsTable createAlias(String alias) {
+    return $FontsTable(attachedDatabase, alias);
+  }
+}
+
+class FontRow extends DataClass implements Insertable<FontRow> {
+  final String id;
+  final String clock;
+  final String originDevice;
+  final bool deleted;
+  final int localSeq;
+  final String family;
+  final String fileHash;
+
+  /// 'ttf' | 'otf'
+  final String ext;
+  const FontRow({
+    required this.id,
+    required this.clock,
+    required this.originDevice,
+    required this.deleted,
+    required this.localSeq,
+    required this.family,
+    required this.fileHash,
+    required this.ext,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['clock'] = Variable<String>(clock);
+    map['origin_device'] = Variable<String>(originDevice);
+    map['deleted'] = Variable<bool>(deleted);
+    map['local_seq'] = Variable<int>(localSeq);
+    map['family'] = Variable<String>(family);
+    map['file_hash'] = Variable<String>(fileHash);
+    map['ext'] = Variable<String>(ext);
+    return map;
+  }
+
+  FontsCompanion toCompanion(bool nullToAbsent) {
+    return FontsCompanion(
+      id: Value(id),
+      clock: Value(clock),
+      originDevice: Value(originDevice),
+      deleted: Value(deleted),
+      localSeq: Value(localSeq),
+      family: Value(family),
+      fileHash: Value(fileHash),
+      ext: Value(ext),
+    );
+  }
+
+  factory FontRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FontRow(
+      id: serializer.fromJson<String>(json['id']),
+      clock: serializer.fromJson<String>(json['clock']),
+      originDevice: serializer.fromJson<String>(json['originDevice']),
+      deleted: serializer.fromJson<bool>(json['deleted']),
+      localSeq: serializer.fromJson<int>(json['localSeq']),
+      family: serializer.fromJson<String>(json['family']),
+      fileHash: serializer.fromJson<String>(json['fileHash']),
+      ext: serializer.fromJson<String>(json['ext']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'clock': serializer.toJson<String>(clock),
+      'originDevice': serializer.toJson<String>(originDevice),
+      'deleted': serializer.toJson<bool>(deleted),
+      'localSeq': serializer.toJson<int>(localSeq),
+      'family': serializer.toJson<String>(family),
+      'fileHash': serializer.toJson<String>(fileHash),
+      'ext': serializer.toJson<String>(ext),
+    };
+  }
+
+  FontRow copyWith({
+    String? id,
+    String? clock,
+    String? originDevice,
+    bool? deleted,
+    int? localSeq,
+    String? family,
+    String? fileHash,
+    String? ext,
+  }) => FontRow(
+    id: id ?? this.id,
+    clock: clock ?? this.clock,
+    originDevice: originDevice ?? this.originDevice,
+    deleted: deleted ?? this.deleted,
+    localSeq: localSeq ?? this.localSeq,
+    family: family ?? this.family,
+    fileHash: fileHash ?? this.fileHash,
+    ext: ext ?? this.ext,
+  );
+  FontRow copyWithCompanion(FontsCompanion data) {
+    return FontRow(
+      id: data.id.present ? data.id.value : this.id,
+      clock: data.clock.present ? data.clock.value : this.clock,
+      originDevice: data.originDevice.present
+          ? data.originDevice.value
+          : this.originDevice,
+      deleted: data.deleted.present ? data.deleted.value : this.deleted,
+      localSeq: data.localSeq.present ? data.localSeq.value : this.localSeq,
+      family: data.family.present ? data.family.value : this.family,
+      fileHash: data.fileHash.present ? data.fileHash.value : this.fileHash,
+      ext: data.ext.present ? data.ext.value : this.ext,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FontRow(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('family: $family, ')
+          ..write('fileHash: $fileHash, ')
+          ..write('ext: $ext')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    clock,
+    originDevice,
+    deleted,
+    localSeq,
+    family,
+    fileHash,
+    ext,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FontRow &&
+          other.id == this.id &&
+          other.clock == this.clock &&
+          other.originDevice == this.originDevice &&
+          other.deleted == this.deleted &&
+          other.localSeq == this.localSeq &&
+          other.family == this.family &&
+          other.fileHash == this.fileHash &&
+          other.ext == this.ext);
+}
+
+class FontsCompanion extends UpdateCompanion<FontRow> {
+  final Value<String> id;
+  final Value<String> clock;
+  final Value<String> originDevice;
+  final Value<bool> deleted;
+  final Value<int> localSeq;
+  final Value<String> family;
+  final Value<String> fileHash;
+  final Value<String> ext;
+  final Value<int> rowid;
+  const FontsCompanion({
+    this.id = const Value.absent(),
+    this.clock = const Value.absent(),
+    this.originDevice = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.localSeq = const Value.absent(),
+    this.family = const Value.absent(),
+    this.fileHash = const Value.absent(),
+    this.ext = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  FontsCompanion.insert({
+    required String id,
+    required String clock,
+    required String originDevice,
+    this.deleted = const Value.absent(),
+    required int localSeq,
+    required String family,
+    required String fileHash,
+    required String ext,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       clock = Value(clock),
+       originDevice = Value(originDevice),
+       localSeq = Value(localSeq),
+       family = Value(family),
+       fileHash = Value(fileHash),
+       ext = Value(ext);
+  static Insertable<FontRow> custom({
+    Expression<String>? id,
+    Expression<String>? clock,
+    Expression<String>? originDevice,
+    Expression<bool>? deleted,
+    Expression<int>? localSeq,
+    Expression<String>? family,
+    Expression<String>? fileHash,
+    Expression<String>? ext,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (clock != null) 'clock': clock,
+      if (originDevice != null) 'origin_device': originDevice,
+      if (deleted != null) 'deleted': deleted,
+      if (localSeq != null) 'local_seq': localSeq,
+      if (family != null) 'family': family,
+      if (fileHash != null) 'file_hash': fileHash,
+      if (ext != null) 'ext': ext,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  FontsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? clock,
+    Value<String>? originDevice,
+    Value<bool>? deleted,
+    Value<int>? localSeq,
+    Value<String>? family,
+    Value<String>? fileHash,
+    Value<String>? ext,
+    Value<int>? rowid,
+  }) {
+    return FontsCompanion(
+      id: id ?? this.id,
+      clock: clock ?? this.clock,
+      originDevice: originDevice ?? this.originDevice,
+      deleted: deleted ?? this.deleted,
+      localSeq: localSeq ?? this.localSeq,
+      family: family ?? this.family,
+      fileHash: fileHash ?? this.fileHash,
+      ext: ext ?? this.ext,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (clock.present) {
+      map['clock'] = Variable<String>(clock.value);
+    }
+    if (originDevice.present) {
+      map['origin_device'] = Variable<String>(originDevice.value);
+    }
+    if (deleted.present) {
+      map['deleted'] = Variable<bool>(deleted.value);
+    }
+    if (localSeq.present) {
+      map['local_seq'] = Variable<int>(localSeq.value);
+    }
+    if (family.present) {
+      map['family'] = Variable<String>(family.value);
+    }
+    if (fileHash.present) {
+      map['file_hash'] = Variable<String>(fileHash.value);
+    }
+    if (ext.present) {
+      map['ext'] = Variable<String>(ext.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FontsCompanion(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('family: $family, ')
+          ..write('fileHash: $fileHash, ')
+          ..write('ext: $ext, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4121,6 +5092,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LibraryFoldersTable libraryFolders = $LibraryFoldersTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
   late final $PlayHistoryTable playHistory = $PlayHistoryTable(this);
+  late final $ThemesTable themes = $ThemesTable(this);
+  late final $FontsTable fonts = $FontsTable(this);
   late final Index playlistEntriesPlaylistPosition = Index(
     'playlist_entries_playlist_position',
     'CREATE INDEX playlist_entries_playlist_position ON playlist_entries (playlist_id, position)',
@@ -4139,6 +5112,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     libraryFolders,
     settings,
     playHistory,
+    themes,
+    fonts,
     playlistEntriesPlaylistPosition,
   ];
 }
@@ -6331,6 +7306,506 @@ typedef $$PlayHistoryTableProcessedTableManager =
       PlayHistoryEntry,
       PrefetchHooks Function()
     >;
+typedef $$ThemesTableCreateCompanionBuilder = ThemesCompanion Function({
+  required String id,
+  required String clock,
+  required String originDevice,
+  Value<bool> deleted,
+  required int localSeq,
+  required String name,
+  required String specJson,
+  Value<int> rowid,
+});
+typedef $$ThemesTableUpdateCompanionBuilder = ThemesCompanion Function({
+  Value<String> id,
+  Value<String> clock,
+  Value<String> originDevice,
+  Value<bool> deleted,
+  Value<int> localSeq,
+  Value<String> name,
+  Value<String> specJson,
+  Value<int> rowid,
+});
+
+class $$ThemesTableFilterComposer
+    extends Composer<_$AppDatabase, $ThemesTable> {
+  $$ThemesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get specJson => $composableBuilder(
+    column: $table.specJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ThemesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ThemesTable> {
+  $$ThemesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get specJson => $composableBuilder(
+    column: $table.specJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ThemesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ThemesTable> {
+  $$ThemesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get clock =>
+      $composableBuilder(column: $table.clock, builder: (column) => column);
+
+  GeneratedColumn<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get deleted =>
+      $composableBuilder(column: $table.deleted, builder: (column) => column);
+
+  GeneratedColumn<int> get localSeq =>
+      $composableBuilder(column: $table.localSeq, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get specJson =>
+      $composableBuilder(column: $table.specJson, builder: (column) => column);
+}
+
+class $$ThemesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ThemesTable,
+          ThemeRow,
+          $$ThemesTableFilterComposer,
+          $$ThemesTableOrderingComposer,
+          $$ThemesTableAnnotationComposer,
+          $$ThemesTableCreateCompanionBuilder,
+          $$ThemesTableUpdateCompanionBuilder,
+          (ThemeRow, BaseReferences<_$AppDatabase, $ThemesTable, ThemeRow>),
+          ThemeRow,
+          PrefetchHooks Function()
+        > {
+  $$ThemesTableTableManager(_$AppDatabase db, $ThemesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ThemesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ThemesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ThemesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> clock = const Value.absent(),
+                Value<String> originDevice = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<int> localSeq = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> specJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ThemesCompanion(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                name: name,
+                specJson: specJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String clock,
+                required String originDevice,
+                Value<bool> deleted = const Value.absent(),
+                required int localSeq,
+                required String name,
+                required String specJson,
+                Value<int> rowid = const Value.absent(),
+              }) => ThemesCompanion.insert(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                name: name,
+                specJson: specJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ThemesTable, ThemeRow>(table),
+                  BaseReferences<_$AppDatabase, $ThemesTable, ThemeRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ThemesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ThemesTable,
+      ThemeRow,
+      $$ThemesTableFilterComposer,
+      $$ThemesTableOrderingComposer,
+      $$ThemesTableAnnotationComposer,
+      $$ThemesTableCreateCompanionBuilder,
+      $$ThemesTableUpdateCompanionBuilder,
+      (ThemeRow, BaseReferences<_$AppDatabase, $ThemesTable, ThemeRow>),
+      ThemeRow,
+      PrefetchHooks Function()
+    >;
+typedef $$FontsTableCreateCompanionBuilder = FontsCompanion Function({
+  required String id,
+  required String clock,
+  required String originDevice,
+  Value<bool> deleted,
+  required int localSeq,
+  required String family,
+  required String fileHash,
+  required String ext,
+  Value<int> rowid,
+});
+typedef $$FontsTableUpdateCompanionBuilder = FontsCompanion Function({
+  Value<String> id,
+  Value<String> clock,
+  Value<String> originDevice,
+  Value<bool> deleted,
+  Value<int> localSeq,
+  Value<String> family,
+  Value<String> fileHash,
+  Value<String> ext,
+  Value<int> rowid,
+});
+
+class $$FontsTableFilterComposer extends Composer<_$AppDatabase, $FontsTable> {
+  $$FontsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get family => $composableBuilder(
+    column: $table.family,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fileHash => $composableBuilder(
+    column: $table.fileHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ext => $composableBuilder(
+    column: $table.ext,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$FontsTableOrderingComposer
+    extends Composer<_$AppDatabase, $FontsTable> {
+  $$FontsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get family => $composableBuilder(
+    column: $table.family,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fileHash => $composableBuilder(
+    column: $table.fileHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ext => $composableBuilder(
+    column: $table.ext,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$FontsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FontsTable> {
+  $$FontsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get clock =>
+      $composableBuilder(column: $table.clock, builder: (column) => column);
+
+  GeneratedColumn<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get deleted =>
+      $composableBuilder(column: $table.deleted, builder: (column) => column);
+
+  GeneratedColumn<int> get localSeq =>
+      $composableBuilder(column: $table.localSeq, builder: (column) => column);
+
+  GeneratedColumn<String> get family =>
+      $composableBuilder(column: $table.family, builder: (column) => column);
+
+  GeneratedColumn<String> get fileHash =>
+      $composableBuilder(column: $table.fileHash, builder: (column) => column);
+
+  GeneratedColumn<String> get ext =>
+      $composableBuilder(column: $table.ext, builder: (column) => column);
+}
+
+class $$FontsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FontsTable,
+          FontRow,
+          $$FontsTableFilterComposer,
+          $$FontsTableOrderingComposer,
+          $$FontsTableAnnotationComposer,
+          $$FontsTableCreateCompanionBuilder,
+          $$FontsTableUpdateCompanionBuilder,
+          (FontRow, BaseReferences<_$AppDatabase, $FontsTable, FontRow>),
+          FontRow,
+          PrefetchHooks Function()
+        > {
+  $$FontsTableTableManager(_$AppDatabase db, $FontsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FontsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FontsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FontsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> clock = const Value.absent(),
+                Value<String> originDevice = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<int> localSeq = const Value.absent(),
+                Value<String> family = const Value.absent(),
+                Value<String> fileHash = const Value.absent(),
+                Value<String> ext = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => FontsCompanion(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                family: family,
+                fileHash: fileHash,
+                ext: ext,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String clock,
+                required String originDevice,
+                Value<bool> deleted = const Value.absent(),
+                required int localSeq,
+                required String family,
+                required String fileHash,
+                required String ext,
+                Value<int> rowid = const Value.absent(),
+              }) => FontsCompanion.insert(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                family: family,
+                fileHash: fileHash,
+                ext: ext,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$FontsTable, FontRow>(table),
+                  BaseReferences<_$AppDatabase, $FontsTable, FontRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$FontsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FontsTable,
+      FontRow,
+      $$FontsTableFilterComposer,
+      $$FontsTableOrderingComposer,
+      $$FontsTableAnnotationComposer,
+      $$FontsTableCreateCompanionBuilder,
+      $$FontsTableUpdateCompanionBuilder,
+      (FontRow, BaseReferences<_$AppDatabase, $FontsTable, FontRow>),
+      FontRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6353,4 +7828,8 @@ class $AppDatabaseManager {
       $$SettingsTableTableManager(_db, _db.settings);
   $$PlayHistoryTableTableManager get playHistory =>
       $$PlayHistoryTableTableManager(_db, _db.playHistory);
+  $$ThemesTableTableManager get themes =>
+      $$ThemesTableTableManager(_db, _db.themes);
+  $$FontsTableTableManager get fonts =>
+      $$FontsTableTableManager(_db, _db.fonts);
 }

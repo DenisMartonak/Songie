@@ -36,6 +36,41 @@ class ThemeSpec {
     blurNowPlaying: true,
   );
 
+  /// The built-in Album glow theme: Default's charcoal base, Outfit, rounder
+  /// corners, and an accent that follows the cover (green is the fallback).
+  static const ThemeSpec albumGlow = ThemeSpec(
+    base: 'charcoal',
+    background: Color(0xFF121212),
+    surface: Color(0xFF2A2A2A),
+    text: Color(0xFFFFFFFF),
+    mutedText: Color(0xFFA7A7A7),
+    accent: Color(0xFF1DB954),
+    followCover: true,
+    glowStrength: 0.4,
+    cornerRadius: 12,
+    fontFamily: 'Outfit',
+    fontFileHash: null,
+    fontScale: 1.0,
+    blurNowPlaying: true,
+  );
+
+  /// The built-in Terminal theme: pure black, cyan, square, monospace.
+  static const ThemeSpec terminal = ThemeSpec(
+    base: 'black',
+    background: Color(0xFF000000),
+    surface: Color(0xFF141414),
+    text: Color(0xFFFFFFFF),
+    mutedText: Color(0xFFA7A7A7),
+    accent: Color(0xFF00E5FF),
+    followCover: false,
+    glowStrength: 0.4,
+    cornerRadius: 0,
+    fontFamily: 'JetBrains Mono',
+    fontFileHash: null,
+    fontScale: 1.0,
+    blurNowPlaying: true,
+  );
+
   final String base;
   final Color background;
   final Color surface;

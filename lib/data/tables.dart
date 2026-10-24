@@ -67,6 +67,24 @@ class YtSeen extends Table with SyncColumns {
   ];
 }
 
+/// Synced: a user-saved theme. [specJson] is the `ThemeSpec` JSON (spec §9).
+/// The built-in themes are never stored here.
+@DataClassName('ThemeRow')
+class Themes extends Table with SyncColumns {
+  TextColumn get name => text()();
+  TextColumn get specJson => text()();
+}
+
+/// Synced: an imported font. The file lives at `<appData>/fonts/<fileHash>.<ext>`.
+@DataClassName('FontRow')
+class Fonts extends Table with SyncColumns {
+  TextColumn get family => text()();
+  TextColumn get fileHash => text()();
+
+  /// 'ttf' | 'otf'
+  TextColumn get ext => text()();
+}
+
 /// Device-local: where a track's audio file lives on this device. Not synced.
 ///
 /// Local-library tracks use states 'done' | 'missing'. YouTube downloads
