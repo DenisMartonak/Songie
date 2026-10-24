@@ -82,6 +82,7 @@ class DownloadSnapshot {
     this.totalThisRun = 0,
     this.progress = const {},
     this.pause,
+    this.userPaused = false,
     this.extractorFailing = false,
     this.currentTitle,
   });
@@ -95,6 +96,10 @@ class DownloadSnapshot {
   /// Running downloads by track id.
   final Map<String, TrackProgress> progress;
   final DownloadPause? pause;
+
+  /// The user paused downloads ([DownloadService.pauseByUser]): no new
+  /// download starts, running ones finish.
+  final bool userPaused;
 
   /// The last download failed in a way that suggests yt-dlp is outdated;
   /// cleared by the next success.
@@ -115,6 +120,7 @@ class DownloadSnapshot {
       other.totalThisRun == totalThisRun &&
       _maps.equals(other.progress, progress) &&
       other.pause == pause &&
+      other.userPaused == userPaused &&
       other.extractorFailing == extractorFailing &&
       other.currentTitle == currentTitle;
 
@@ -127,6 +133,7 @@ class DownloadSnapshot {
     totalThisRun,
     _maps.hash(progress),
     pause,
+    userPaused,
     extractorFailing,
     currentTitle,
   );
@@ -135,7 +142,7 @@ class DownloadSnapshot {
   String toString() =>
       'DownloadSnapshot(queued: $queued, active: $active, '
       'done: $completedThisRun, failed: $failedThisRun, '
-      'total: $totalThisRun, pause: $pause, '
+      'total: $totalThisRun, pause: $pause, userPaused: $userPaused, '
       'extractorFailing: $extractorFailing, title: $currentTitle)';
 }
 
@@ -232,6 +239,7 @@ class DownloadService {
   int _backoffStep = 0;
   Timer? _backoff;
   bool _extractorFailing = false;
+  bool _userPaused = false;
 
   bool _inRun = false;
   bool _checkingEnd = false;
@@ -353,6 +361,21 @@ class DownloadService {
     kick();
   }
 
+  /// The user's pause, held in memory only: no new download starts until
+  /// [resumeByUser]; running ones finish. [resume] does not clear it.
+  void pauseByUser() {
+    if (_disposed || _userPaused) return;
+    _userPaused = true;
+    _update();
+  }
+
+  void resumeByUser() {
+    if (_disposed || !_userPaused) return;
+    _userPaused = false;
+    _update();
+    kick();
+  }
+
   // --- events --------------------------------------------------------------
 
   void _onNetwork(NetworkKind k) {
@@ -417,7 +440,7 @@ class DownloadService {
   }
 
   Future<void> _fill() async {
-    while (_started && !_disposed && _pause() == null) {
+    while (_started && !_disposed && !_userPaused && _pause() == null) {
       // Starts the run (and zeroes its counts) before any job is counted.
       _update();
       final free = _concurrency - _jobs.length;
@@ -428,7 +451,7 @@ class DownloadService {
       ].take(free).toList();
       if (next.isEmpty) return;
       for (final r in next) {
-        if (_disposed || _pause() != null) return;
+        if (_disposed || _userPaused || _pause() != null) return;
         await _startJob(r.trackId);
       }
     }
@@ -708,6 +731,7 @@ class DownloadService {
       totalThisRun: _completed + _failed + _jobs.length + queued,
       progress: Map.unmodifiable(_progress),
       pause: pause,
+      userPaused: _userPaused,
       extractorFailing: _extractorFailing,
       currentTitle: _jobs.isEmpty ? null : _jobs.values.last.title,
     );

@@ -238,3 +238,76 @@ final downloadNotifierProvider = Provider<DownloadNotifier>(
 final downloadServiceProvider = Provider<DownloadService>(
   (ref) => _unwired('downloadServiceProvider'),
 );
+
+/// Asks for the notification permission (Android 13+) when the user starts a
+/// download; never blocks. Tests replace it to keep off platform channels.
+final notificationPermissionProvider = Provider<Future<void> Function()>(
+  (ref) => ensureNotificationPermission,
+);
+
+/// The download queue's state, starting with its current value.
+final downloadSnapshotProvider = StreamProvider<DownloadSnapshot>(
+  (ref) => ref.watch(downloadServiceProvider).snapshots,
+);
+
+/// Whether songs are downloading or waiting to (the app-wide indicator).
+final downloadsActiveProvider = Provider<bool>(
+  (ref) => ref.watch(
+    downloadSnapshotProvider.select((a) {
+      final s = a.value;
+      return s != null && s.active + s.queued > 0;
+    }),
+  ),
+);
+
+/// How far one playlist's downloads have come on this device.
+final playlistDownloadProvider = StreamProvider.autoDispose
+    .family<PlaylistDownloadStatus, String>(
+      (ref, playlistId) =>
+          ref.watch(downloadRepositoryProvider).watchPlaylist(playlistId),
+    );
+
+/// Download state by track id for one playlist's YouTube tracks (only those
+/// with a download row): one stream per playlist, which its rows select from.
+final trackDownloadStatesProvider = StreamProvider.autoDispose
+    .family<Map<String, String>, String>((ref, playlistId) {
+      // The ids only, so a change elsewhere in the rows doesn't resubscribe.
+      final ids = ref.watch(
+        playlistTracksProvider(playlistId)
+            .select((a) => a.value?.map((e) => e.track.id).join('\n')),
+      );
+      if (ids == null) return const Stream.empty();
+      return ref
+          .watch(downloadRepositoryProvider)
+          .watchTrackStates(ids.isEmpty ? const [] : ids.split('\n'));
+    });
+
+/// One YouTube track's download state (null without a download row).
+final trackDownloadStateProvider = StreamProvider.autoDispose
+    .family<String?, String>(
+      (ref, trackId) => ref
+          .watch(downloadRepositoryProvider)
+          .watchTrackStates([trackId])
+          .map((states) => states[trackId]),
+    );
+
+/// The playlists downloaded on this device.
+final downloadEnabledPlaylistsProvider = StreamProvider<Set<String>>(
+  (ref) => ref.watch(downloadRepositoryProvider).watchEnabledPlaylists(),
+);
+
+/// A downloading track, for its title in the downloads sheet.
+final downloadTrackProvider = FutureProvider.autoDispose.family<Track?, String>(
+  (ref, trackId) => ref.watch(downloadRepositoryProvider).ytTrack(trackId),
+);
+
+/// Bytes of all finished YouTube downloads, for Settings.
+final downloadTotalBytesProvider = StreamProvider.autoDispose<int>(
+  (ref) => ref.watch(downloadRepositoryProvider).watchTotalBytes(),
+);
+
+/// Finished-download bytes per playlist, for Settings.
+final downloadBytesPerPlaylistProvider =
+    StreamProvider.autoDispose<List<(String playlistId, int bytes)>>(
+      (ref) => ref.watch(downloadRepositoryProvider).watchBytesPerPlaylist(),
+    );

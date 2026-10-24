@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../downloads/downloads_banner.dart';
+import '../downloads/downloads_sheet.dart';
 import 'bottom_nav.dart';
 import 'go_tab.dart';
 import 'mini_player.dart';
@@ -23,6 +25,8 @@ class PhoneShell extends ConsumerWidget {
     final hasMini = ref.watch(
       playerStateProvider.select((s) => s.value?.current != null),
     );
+    final downloading = ref.watch(downloadsActiveProvider);
+    final banner = ref.watch(downloadsBannerVisibleProvider);
     final media = MediaQuery.of(context);
     // The keyboard replaces the bars instead of pushing them up.
     final keyboardOpen = media.viewInsets.bottom > 0;
@@ -32,7 +36,9 @@ class PhoneShell extends ConsumerWidget {
         ? 0.0
         : BottomNav.height +
               bottomInset +
-              (hasMini ? MiniPlayer.height + MiniPlayer.gapAboveNav : 0);
+              (hasMini ? MiniPlayer.height + MiniPlayer.gapAboveNav : 0) +
+              (downloading ? DownloadsIndicator.height : 0) +
+              (banner ? DownloadsBanner.height : 0);
 
     return Scaffold(
       body: Stack(
@@ -55,6 +61,12 @@ class PhoneShell extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (banner) const DownloadsBanner(),
+                  if (downloading)
+                    ColoredBox(
+                      color: colors.background,
+                      child: const DownloadsIndicator(),
+                    ),
                   if (hasMini) ...[
                     const MiniPlayer(),
                     const SizedBox(height: MiniPlayer.gapAboveNav),

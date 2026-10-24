@@ -110,24 +110,9 @@ void main() {
     expect(find.text('Could not download yt-dlp'), findsOneWidget);
   });
 
-  uiTest('the Wi-Fi toggle writes wifi_only', (tester) async {
+  uiTest('Wi-Fi only moved to the Downloads section', (tester) async {
     await pumpSection(tester);
-    final tile = find.widgetWithText(SwitchListTile, 'Wi-Fi only streaming');
-    expect(tile, findsOneWidget);
-    // Desktop default is off.
-    expect(tester.widget<SwitchListTile>(tile).value, isFalse);
-
-    await tester.tap(tile);
-    await settle(tester);
-    expect(await stored(tester, kWifiOnly), isTrue);
-    expect(tester.widget<SwitchListTile>(tile).value, isTrue);
-  });
-
-  uiTest('Wi-Fi only defaults to on for Android', (tester) async {
-    h.isAndroid = true;
-    await pumpSection(tester);
-    final tile = find.widgetWithText(SwitchListTile, 'Wi-Fi only streaming');
-    expect(tester.widget<SwitchListTile>(tile).value, isTrue);
+    expect(find.textContaining('Wi-Fi only'), findsNothing);
   });
 
   uiTest('the system yt-dlp toggle is hidden off Linux', (tester) async {

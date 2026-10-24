@@ -7,6 +7,7 @@ import 'package:songies/library/library_repository.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
+import 'package:songies/downloads/download_service.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/router.dart';
 import 'package:songies/theme/app_theme.dart';
@@ -83,6 +84,17 @@ void main() {
           ytDlpVersionProvider.overrideWith((ref) async => null),
           wifiOnlySettingProvider.overrideWith((ref) => Stream.value(false)),
           useSystemYtDlpProvider.overrideWith((ref) => Stream.value(false)),
+          // The download UI reads these.
+          downloadSnapshotProvider.overrideWith(
+            (ref) => Stream.value(const DownloadSnapshot()),
+          ),
+          downloadEnabledPlaylistsProvider.overrideWith(
+            (ref) => Stream.value(const <String>{}),
+          ),
+          downloadTotalBytesProvider.overrideWith((ref) => Stream.value(0)),
+          downloadBytesPerPlaylistProvider.overrideWith(
+            (ref) => Stream.value(const []),
+          ),
           playlistTracksProvider.overrideWith(
             (ref, id) => Stream.value(const []),
           ),

@@ -6,6 +6,7 @@ import '../../data/database.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../downloads/download_ring.dart';
 import '../shell/adaptive_shell.dart';
 import '../widgets/artwork.dart';
 
@@ -309,11 +310,19 @@ class _PlaylistCard extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            Text(
-              '$source · ${playlist.trackCount}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: colors.mutedText, fontSize: 11.5),
+            Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    '$source · ${playlist.trackCount}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: colors.mutedText, fontSize: 11.5),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                DownloadRing(playlistId: playlist.id),
+              ],
             ),
           ],
         ),

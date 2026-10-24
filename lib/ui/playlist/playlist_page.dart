@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -7,9 +8,13 @@ import 'package:path/path.dart' as p;
 
 import '../../core/log.dart';
 import '../../core/result.dart';
+import '../../downloads/download_repository.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../downloads/download_status_line.dart';
+import '../downloads/download_toggle.dart';
+import '../downloads/track_download_icon.dart';
 import '../library/add_folder_flow.dart' show folderPickFailureMessage;
 import '../library/add_songs_sheet.dart';
 import '../library/pickers.dart';
@@ -129,6 +134,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
                 onDismissed: (_) => _remove(rows, i),
                 child: _TrackRow(
                   key: ValueKey('row.${row.entryId}'),
+                  playlistId: _id,
                   row: row,
                   index: i,
                   playing: row.track.id == current,
@@ -517,7 +523,14 @@ class _Header extends StatelessWidget {
           ),
           if (isYt) ...[
             const SizedBox(height: 8),
-            YtSyncButton(playlistId: summary.id),
+            Row(
+              children: [
+                YtSyncButton(playlistId: summary.id),
+                const SizedBox(width: 8),
+                DownloadToggle(playlistId: summary.id),
+              ],
+            ),
+            DownloadStatusLine(playlistId: summary.id),
           ],
         ],
       ),
@@ -527,6 +540,7 @@ class _Header extends StatelessWidget {
 
 class _TrackRow extends StatelessWidget {
   const _TrackRow({
+    required this.playlistId,
     required this.row,
     required this.index,
     required this.playing,
@@ -535,6 +549,7 @@ class _TrackRow extends StatelessWidget {
     super.key,
   });
 
+  final String playlistId;
   final PlaylistTrack row;
   final int index;
   final bool playing;
@@ -618,6 +633,8 @@ class _TrackRow extends StatelessWidget {
                 if (missing)
                   TextButton(onPressed: onLocate, child: const Text('Locate')),
                 if (removed) YtRemovedActions(entryId: row.entryId),
+                if (track.source == 'yt')
+                  TrackDownloadIcon(playlistId: playlistId, trackId: track.id),
                 Opacity(
                   opacity: dim,
                   child: Padding(
@@ -628,6 +645,12 @@ class _TrackRow extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (track.source == 'yt' && !unavailable)
+                  _TrackMenu(
+                    key: Key('track.menu.${row.entryId}'),
+                    playlistId: playlistId,
+                    trackId: track.id,
+                  ),
                 ReorderableDragStartListener(
                   index: index,
                   child: Padding(
@@ -645,6 +668,74 @@ class _TrackRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+enum _TrackAction { download, removeDownload }
+
+/// A YouTube track's ⋯ menu: Download, or Remove download once it has one.
+class _TrackMenu extends ConsumerWidget {
+  const _TrackMenu({
+    required this.playlistId,
+    required this.trackId,
+    super.key,
+  });
+
+  final String playlistId;
+  final String trackId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return PopupMenuButton<_TrackAction>(
+      tooltip: 'More',
+      icon: Icon(Icons.more_vert, size: 20, color: colors.mutedText),
+      onSelected: (action) => _run(context, ref, action),
+      // Read when the menu opens, so the row doesn't rebuild on changes.
+      itemBuilder: (_) {
+        final state = ref
+            .read(trackDownloadStatesProvider(playlistId))
+            .value?[trackId];
+        return [
+          if (state == null)
+            const PopupMenuItem(
+              value: _TrackAction.download,
+              child: Text('Download'),
+            )
+          else
+            const PopupMenuItem(
+              value: _TrackAction.removeDownload,
+              child: Text('Remove download'),
+            ),
+        ];
+      },
+    );
+  }
+
+  Future<void> _run(
+    BuildContext context,
+    WidgetRef ref,
+    _TrackAction action,
+  ) async {
+    final snacks = PageSnackBars.of(context);
+    final repo = ref.read(downloadRepositoryProvider);
+    try {
+      switch (action) {
+        case _TrackAction.download:
+          unawaited(ref.read(notificationPermissionProvider)());
+          if (!await repo.downloadTrack(trackId)) {
+            snacks.show(content: const Text("Couldn't download that song"));
+          }
+        case _TrackAction.removeDownload:
+          await repo.removeTrackDownload(
+            trackId,
+            ref.read(appPathsProvider).libraryYt,
+          );
+      }
+    } on DownloadDbException catch (e, s) {
+      AppLog.w('Changing a song download failed', e, s);
+      snacks.show(content: const Text("Couldn't change that download"));
+    }
   }
 }
 

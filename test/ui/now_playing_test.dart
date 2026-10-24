@@ -2,11 +2,13 @@ import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:songies/data/database.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
 
+import '../helpers/test_db.dart';
 import '../helpers/ui_harness.dart';
 
 void main() {
@@ -86,6 +88,38 @@ void main() {
       await settle(tester);
       expect(h.player.state.playing, isFalse);
       expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+    });
+
+    uiTest('a downloaded YouTube song shows download_done', (tester) async {
+      final yt = await real(tester, () async {
+        await h.db
+            .into(h.db.tracks)
+            .insert(
+              trackRow(id: 'y1', source: 'yt', ytVideoId: 'v1', title: 'Yt'),
+            );
+        await h.db
+            .into(h.db.localFiles)
+            .insert(
+              LocalFilesCompanion.insert(
+                trackId: 'y1',
+                path: '/yt/v1.webm',
+                state: 'done',
+                bytes: 1,
+                mtimeMs: 0,
+              ),
+            );
+        return (h.db.select(
+          h.db.tracks,
+        )..where((t) => t.id.equals('y1'))).getSingle();
+      });
+      await pumpApp(tester);
+      await playThree(tester);
+      // A local song (t1) has no download mark.
+      expect(find.byIcon(Icons.download_done), findsNothing);
+
+      await real(tester, () => h.player.playQueue([yt]));
+      await settle(tester);
+      expect(find.byIcon(Icons.download_done), findsOneWidget);
     });
 
     uiTest('the art is at most 360 square', (tester) async {

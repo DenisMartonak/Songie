@@ -90,9 +90,67 @@ class CountingDownloadService extends DownloadService {
       );
 
   int kicks = 0;
+  final List<String> calls = [];
 
   @override
   void kick() => kicks++;
+
+  @override
+  void pauseByUser() {
+    calls.add('pauseByUser');
+    super.pauseByUser();
+  }
+
+  @override
+  void resumeByUser() {
+    calls.add('resumeByUser');
+    super.resumeByUser();
+  }
+
+  @override
+  Future<void> resume() {
+    calls.add('resume');
+    return super.resume();
+  }
+}
+
+/// The real repository on the test db, recording the UI's download actions.
+class RecordingDownloadRepository extends DownloadRepository {
+  RecordingDownloadRepository(super.db);
+
+  final List<String> calls = [];
+  final List<List<String>> removed = [];
+
+  @override
+  Future<int> setPlaylistDownload(String playlistId, bool enabled) {
+    calls.add('setPlaylistDownload($playlistId, $enabled)');
+    return super.setPlaylistDownload(playlistId, enabled);
+  }
+
+  @override
+  Future<int> removeFiles(List<String> trackIds, Directory ytDir) {
+    calls.add('removeFiles');
+    removed.add(List.of(trackIds));
+    return super.removeFiles(trackIds, ytDir);
+  }
+
+  @override
+  Future<bool> downloadTrack(String trackId) {
+    calls.add('downloadTrack($trackId)');
+    return super.downloadTrack(trackId);
+  }
+
+  @override
+  Future<void> removeTrackDownload(String trackId, Directory ytDir) {
+    calls.add('removeTrackDownload($trackId)');
+    return super.removeTrackDownload(trackId, ytDir);
+  }
+
+  @override
+  Future<void> retryFailed({String? playlistId, String? trackId}) {
+    calls.add('retryFailed(playlist: $playlistId, track: $trackId)');
+    return super.retryFailed(playlistId: playlistId, trackId: trackId);
+  }
 }
 
 /// An in-memory app: database, repositories, a player on a fake backend and a
@@ -122,6 +180,11 @@ class UiHarness {
     db,
     YtDlpClient(ytRunner),
   );
+  late final RecordingDownloadRepository downloadRepo =
+      RecordingDownloadRepository(db);
+
+  /// How often the UI asked for the notification permission.
+  int permissionAsks = 0;
 
   /// The platform the YouTube settings think they run on.
   bool isAndroid = false;
@@ -177,6 +240,10 @@ class UiHarness {
     ytDlpRunnerProvider.overrideWithValue(ytRunner),
     ytImportServiceProvider.overrideWithValue(importService),
     downloadServiceProvider.overrideWithValue(downloads),
+    downloadRepositoryProvider.overrideWithValue(downloadRepo),
+    notificationPermissionProvider.overrideWithValue(
+      () async => permissionAsks++,
+    ),
     isAndroidProvider.overrideWithValue(isAndroid),
     isLinuxProvider.overrideWithValue(isLinux),
   ];

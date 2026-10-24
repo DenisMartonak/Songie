@@ -633,4 +633,43 @@ void main() {
     expect(e.row('y1')!.state, 'downloading');
     expect(e.network.hasListeners, isFalse);
   });
+
+  run('a user pause lets running downloads finish but starts no new ones', (e) {
+    e.queued(['y1', 'y2', 'y3', 'y4']);
+    e.wait(e.service.start());
+    expect(e.runner.started, ['dl-y1', 'dl-y2', 'dl-y3']);
+
+    e.service.pauseByUser();
+    e.settle();
+    expect(e.snap.userPaused, isTrue);
+    expect(e.snap.pause, isNull, reason: 'not an automatic pause');
+    expect(e.runner.cancelled, isEmpty);
+
+    e.succeed('y1');
+    expect(e.row('y1')!.state, 'done');
+    expect(e.runner.started, hasLength(3), reason: 'no new slot while paused');
+    expect(e.snap.queued, 1);
+
+    e.service.resumeByUser();
+    e.settle();
+    expect(e.snap.userPaused, isFalse);
+    expect(e.runner.started.last, 'dl-y4');
+  });
+
+  run('a user pause outlasts other pauses and does not end the run', (e) {
+    e.queued(['y1']);
+    e.service.pauseByUser();
+    e.wait(e.service.start());
+    expect(e.runner.started, isEmpty);
+    expect(e.snap.queued, 1);
+    expect(e.snap.userPaused, isTrue);
+
+    e.wait(e.service.resume());
+    expect(e.runner.started, isEmpty, reason: 'resume() keeps a user pause');
+    expect(e.notifier.finishes, isEmpty);
+
+    e.service.resumeByUser();
+    e.settle();
+    expect(e.runner.started, ['dl-y1']);
+  });
 }

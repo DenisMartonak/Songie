@@ -12,11 +12,13 @@ import '../widgets/page_snack_bar.dart';
 import 'add_folder_flow.dart';
 import 'import_dialog.dart';
 
-/// Filter chips above the playlist list. Downloaded arrives with a later plan.
+/// Filter chips above the playlist list. Downloaded keeps the playlists
+/// downloaded on this device.
 enum _Filter {
   all('All', null),
   local('Local', 'local'),
-  youtube('YouTube', 'yt');
+  youtube('YouTube', 'yt'),
+  downloaded('Downloaded', null);
 
   const _Filter(this.label, this.source);
 
@@ -70,6 +72,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final playlists = ref.watch(playlistsProvider);
+    final downloaded = _filter == _Filter.downloaded
+        ? ref.watch(downloadEnabledPlaylistsProvider).value ?? const <String>{}
+        : null;
     final bottom = MediaQuery.paddingOf(context).bottom;
 
     return SafeArea(
@@ -135,12 +140,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               data: (all) {
                 if (all.isEmpty) return _EmptyLibrary(onAdd: _addFolder);
                 final source = _filter.source;
-                final shown = source == null
-                    ? all
-                    : [
-                        for (final pl in all)
-                          if (pl.source == source) pl,
-                      ];
+                final shown = [
+                  for (final pl in all)
+                    if ((source == null || pl.source == source) &&
+                        (downloaded == null || downloaded.contains(pl.id)))
+                      pl,
+                ];
                 return ListView.builder(
                   padding: EdgeInsets.only(bottom: bottom + 16),
                   itemCount: shown.length,

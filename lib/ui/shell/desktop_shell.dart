@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../downloads/downloads_banner.dart';
 import 'go_tab.dart';
 import 'player_bar.dart';
 import 'player_error_snacks.dart';
@@ -176,20 +177,21 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                             child: ColoredBox(
                               color: colors.background,
                               child: PlayerErrorSnacks(
-                                child: hasTitleBar
-                                    ? widget.shell
-                                    : Column(
-                                        children: [
-                                          _SearchRow(
-                                            controller: _searchController,
-                                            focus: _searchFocus,
-                                            onChanged: _onQueryChanged,
-                                            onTapOutside:
-                                                _rootFocus.requestFocus,
-                                          ),
-                                          Expanded(child: widget.shell),
-                                        ],
+                                child: Column(
+                                  children: [
+                                    const ExcludeFocus(
+                                      child: DownloadsBanner(),
+                                    ),
+                                    if (!hasTitleBar)
+                                      _SearchRow(
+                                        controller: _searchController,
+                                        focus: _searchFocus,
+                                        onChanged: _onQueryChanged,
+                                        onTapOutside: _rootFocus.requestFocus,
                                       ),
+                                    Expanded(child: widget.shell),
+                                  ],
+                                ),
                               ),
                             ),
                           ),

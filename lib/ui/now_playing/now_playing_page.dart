@@ -265,14 +265,22 @@ class _PlayerTab extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  track.artist,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.text.withAlpha(179),
-                    fontSize: 14,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        track.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.text.withAlpha(179),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    NowPlayingDownloadedIcon(trackId: track.id),
+                  ],
                 ),
               ],
             ),

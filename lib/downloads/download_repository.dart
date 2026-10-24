@@ -330,7 +330,9 @@ class DownloadRepository {
     await removeFiles([trackId], ytDir);
   }
 
-  Future<void> retryFailed({String? playlistId}) {
+  /// Queues failed rows again: all of them, those of [playlistId], or only
+  /// [trackId].
+  Future<void> retryFailed({String? playlistId, String? trackId}) {
     return _tx(() async {
       final failed = await (_db.select(
         _db.localFiles,
@@ -340,6 +342,7 @@ class DownloadRepository {
           : await _activeTrackIds([playlistId]);
       for (final f in failed) {
         if (scope != null && !scope.contains(f.trackId)) continue;
+        if (trackId != null && f.trackId != trackId) continue;
         await (_db.update(
           _db.localFiles,
         )..where((x) => x.trackId.equals(f.trackId))).write(
@@ -352,6 +355,18 @@ class DownloadRepository {
       }
     });
   }
+
+  /// Why [trackId]'s download failed; null when it has no failed row.
+  Future<String?> downloadError(String trackId) async {
+    final r = await _row(trackId);
+    return r?.state == 'failed' ? r?.error : null;
+  }
+
+  /// Bytes of the finished downloads among [trackIds].
+  Future<int> doneBytes(Iterable<String> trackIds) async => [
+    for (final r in await _rows(trackIds))
+      if (r.state == 'done') r.bytes,
+  ].fold<int>(0, (a, b) => a + b);
 
   // --- queue ---------------------------------------------------------------
 

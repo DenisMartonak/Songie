@@ -78,23 +78,8 @@ class AndroidDownloadNotifier implements DownloadNotifier {
     };
   }
 
-  String _pausedText(DownloadPause p) => switch (p.reason) {
-    DownloadPauseReason.wifiOnly => 'Paused — waiting for Wi-Fi',
-    DownloadPauseReason.offline => 'Paused — offline',
-    DownloadPauseReason.diskFull => 'Paused — storage is full',
-    DownloadPauseReason.throttled =>
-      'Paused — YouTube is limiting downloads, retrying in ${_minutes(p)} min',
-    DownloadPauseReason.retrying =>
-      'Paused — connection problem, retrying in ${_minutes(p)} min',
-  };
-
-  /// Whole minutes until the retry, rounded up, at least 1.
-  int _minutes(DownloadPause p) {
-    final at = p.resumesAt;
-    if (at == null) return 1;
-    final ms = at.difference(_now()).inMilliseconds;
-    return ms <= 0 ? 1 : (ms / Duration.millisecondsPerMinute).ceil();
-  }
+  String _pausedText(DownloadPause p) =>
+      'Paused — ${downloadPauseText(p, _now())}';
 
   Future<void> _invoke(String method, Map<String, Object?> args) async {
     try {

@@ -9,8 +9,33 @@ import '../../youtube/yt_models.dart';
 import '../widgets/page_snack_bar.dart';
 import 'settings_page.dart';
 
-/// Settings → YouTube: the yt-dlp version with Install / Update, Wi-Fi only
-/// streaming and (Linux) the system yt-dlp switch.
+/// Updates (or installs) yt-dlp and says how it went; true when it worked.
+/// Settings → YouTube and the "Downloads failing" banner both use it.
+Future<bool> updateYtDlp(
+  WidgetRef ref,
+  PageSnackBars snacks, {
+  required bool Function() mounted,
+}) async {
+  final runner = ref.read(ytDlpRunnerProvider);
+  final result = await runner.update();
+  switch (result) {
+    case Ok():
+      if (mounted()) ref.invalidate(ytDlpVersionProvider);
+      final version = await runner.version();
+      snacks.show(
+        content: Text(
+          version == null ? 'yt-dlp updated' : 'yt-dlp updated to $version',
+        ),
+      );
+      return true;
+    case Err(:final failure):
+      snacks.show(content: Text(ytErrorUserMessage(failure)));
+      return false;
+  }
+}
+
+/// Settings → YouTube: the yt-dlp version with Install / Update and (Linux)
+/// the system yt-dlp switch.
 class YouTubeSettingsSection extends ConsumerStatefulWidget {
   const YouTubeSettingsSection({super.key});
 
@@ -26,23 +51,9 @@ class _YouTubeSettingsSectionState
   Future<void> _update() async {
     if (_updating) return;
     final snacks = PageSnackBars.of(context);
-    final runner = ref.read(ytDlpRunnerProvider);
     setState(() => _updating = true);
     try {
-      final result = await runner.update();
-      if (!mounted) return;
-      switch (result) {
-        case Ok():
-          ref.invalidate(ytDlpVersionProvider);
-          final version = await ref.read(ytDlpVersionProvider.future);
-          snacks.show(
-            content: Text(
-              version == null ? 'yt-dlp updated' : 'yt-dlp updated to $version',
-            ),
-          );
-        case Err(:final failure):
-          snacks.show(content: Text(ytErrorUserMessage(failure)));
-      }
+      await updateYtDlp(ref, snacks, mounted: () => mounted);
     } finally {
       if (mounted) setState(() => _updating = false);
     }
@@ -56,9 +67,6 @@ class _YouTubeSettingsSectionState
     final version = ref.watch(ytDlpVersionProvider);
     final installed = version.value;
     final install = !isAndroid && version.hasValue && installed == null;
-    final wifiOnly =
-        ref.watch(wifiOnlySettingProvider).value ??
-        wifiOnlyDefault(isAndroid: isAndroid);
     final useSystem = ref.watch(useSystemYtDlpProvider).value ?? false;
 
     return Column(
@@ -87,15 +95,6 @@ class _YouTubeSettingsSectionState
                 : Icon(install ? Icons.download_rounded : Icons.update_rounded),
             label: Text(install ? 'Install yt-dlp' : 'Update yt-dlp'),
           ),
-        ),
-        SwitchListTile(
-          title: Text(
-            'Wi-Fi only streaming',
-            style: TextStyle(color: colors.text),
-          ),
-          value: wifiOnly,
-          onChanged: (v) =>
-              ref.read(settingsRepositoryProvider).setBool(kWifiOnly, v),
         ),
         if (isLinux)
           SwitchListTile(

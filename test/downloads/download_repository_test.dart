@@ -324,6 +324,30 @@ void main() {
     expect((await row('y2'))!.error, isNull);
   });
 
+  test('retryFailed can retry one track', () async {
+    await track('y1');
+    await track('y2');
+    await setRow('y1', 'failed');
+    await setRow('y2', 'failed');
+    await repo.retryFailed(trackId: 'y2');
+    expect((await row('y1'))!.state, 'failed');
+    expect((await row('y2'))!.state, 'queued');
+  });
+
+  test('downloadError and doneBytes read single rows', () async {
+    await track('y1');
+    await track('y2');
+    await track('y3');
+    await setRow('y1', 'done', bytes: 100);
+    await setRow('y2', 'done', bytes: 50);
+    await setRow('y3', 'queued', bytes: 7);
+    await repo.markFailed('y3', 'This video is private');
+    expect(await repo.downloadError('y3'), 'This video is private');
+    expect(await repo.downloadError('y1'), isNull);
+    expect(await repo.downloadError('nope'), isNull);
+    expect(await repo.doneBytes(['y1', 'y2', 'y3', 'nope']), 150);
+  });
+
   test('queue moves update state, path, bytes and error', () async {
     await track('y1');
     await setRow('y1', 'queued', requestedAt: 1);

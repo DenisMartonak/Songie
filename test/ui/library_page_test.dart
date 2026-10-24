@@ -155,6 +155,22 @@ void main() {
     expect(find.text('Mine'), findsOneWidget);
   });
 
+  uiTest('the Downloaded chip keeps playlists downloaded here', (tester) async {
+    await real(tester, () async {
+      await h.addPlaylist('Mine', []);
+      final yt = await h.addPlaylist('Tube mix', []);
+      await h.addPlaylist('Other mix', []);
+      await h.downloadRepo.setPlaylistDownload(yt, true);
+    });
+    await pumpLibrary(tester);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Downloaded'));
+    await settle(tester);
+    expect(find.text('Tube mix'), findsOneWidget);
+    expect(find.text('Mine'), findsNothing);
+    expect(find.text('Other mix'), findsNothing);
+  });
+
   group('new playlist', () {
     uiTest('Save stays disabled while the name is empty', (tester) async {
       await pumpLibrary(tester);

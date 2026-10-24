@@ -152,3 +152,27 @@ class _Tab extends StatelessWidget {
     );
   }
 }
+
+/// A small download_done mark next to the artist when the playing YouTube
+/// song is downloaded on this device.
+class NowPlayingDownloadedIcon extends ConsumerWidget {
+  const NowPlayingDownloadedIcon({required this.trackId, super.key});
+
+  final String trackId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final done = ref.watch(trackDownloadStateProvider(trackId)).value == 'done';
+    if (!done) return const SizedBox.shrink();
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Icon(
+        Icons.download_done,
+        size: 16,
+        semanticLabel: 'Downloaded',
+        color: colors.accent,
+      ),
+    );
+  }
+}

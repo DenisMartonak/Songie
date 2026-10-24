@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../downloads/download_ring.dart';
+import '../downloads/downloads_sheet.dart';
 import '../widgets/artwork.dart';
 import 'go_tab.dart';
 
@@ -153,6 +155,10 @@ class Sidebar extends ConsumerWidget {
                           if (collapsed) const Spacer(),
                         ],
                       ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: DownloadsIndicator(compact: collapsed),
                     ),
                     Expanded(
                       child: ListView.builder(
@@ -335,11 +341,22 @@ class _PlaylistRow extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Text(
-                        '$source · ${playlist.trackCount}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: colors.mutedText, fontSize: 11),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              '$source · ${playlist.trackCount}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          DownloadRing(playlistId: playlist.id),
+                        ],
                       ),
                     ],
                   ),
