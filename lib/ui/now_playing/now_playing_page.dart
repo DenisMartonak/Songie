@@ -140,8 +140,8 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage> {
   }
 }
 
-/// The artwork blurred (σ 40) when the theme asks for it, else a glow
-/// gradient fading into the background.
+/// The artwork blurred (σ 40) when the theme asks for it, else the theme's
+/// Now Playing gradient.
 class _Background extends ConsumerWidget {
   const _Background();
 
@@ -186,7 +186,7 @@ class _Background extends ConsumerWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [colors.glow, colors.background],
+          colors: [colors.nowPlayingTop, colors.nowPlayingBottom],
         ),
       ),
     );

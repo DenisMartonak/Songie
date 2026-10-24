@@ -34,6 +34,7 @@ import 'player/track_resolver.dart';
 import 'providers.dart';
 import 'router.dart';
 import 'theme/font_service.dart';
+import 'theme/theme_repository.dart';
 import 'ui/library/import_dialog.dart';
 import 'youtube/android_ytdlp_runner.dart';
 import 'youtube/desktop_ytdlp_runner.dart';
@@ -70,13 +71,18 @@ Future<void> main() async {
     library,
   );
 
+  final settings = SettingsRepository(db);
+
   // Imported fonts must be registered before the first frame.
   final fonts = FontService(db, stamp, paths.fonts);
   await fonts.loadImported();
 
+  // The active theme, so the first frame already shows it.
+  final themes = ThemeRepository(db, stamp, settings);
+  final initialTheme = await themes.watchActive().first;
+
   // YouTube. Nothing here touches the network or runs yt-dlp: that only
   // happens on a user action or during playback.
-  final settings = SettingsRepository(db);
   final runner = await _ytDlpRunner(paths, settings);
   final ytClient = YtDlpClient(runner);
   final ytImport = YtImportService(
@@ -186,6 +192,8 @@ Future<void> main() async {
         downloadNotifierProvider.overrideWithValue(downloadNotifier),
         downloadServiceProvider.overrideWithValue(downloads),
         fontServiceProvider.overrideWithValue(fonts),
+        themeRepositoryProvider.overrideWithValue(themes),
+        initialThemeSpecProvider.overrideWithValue(initialTheme.spec),
       ],
       child: SongiesApp(router: router),
     ),

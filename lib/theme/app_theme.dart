@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'contrast.dart';
 import 'theme_spec.dart';
 
 /// Colours and shape values the app's own widgets read from the theme.
@@ -12,9 +13,37 @@ class SongiesColors extends ThemeExtension<SongiesColors> {
     required this.accent,
     required this.glow,
     required this.miniPlayer,
+    required this.nowPlayingTop,
+    required this.nowPlayingBottom,
     required this.radius,
+    required this.fontFamily,
     required this.blurNowPlaying,
   });
+
+  /// The colours of [spec] with its own accent. [fontFamily] is the family
+  /// the theme renders with (see `FontService.resolveFamily`), by default the
+  /// spec's. Text that misses 4.5:1 on the background falls back to white or
+  /// black.
+  factory SongiesColors.fromSpec(ThemeSpec spec, {String? fontFamily}) {
+    final accent = spec.accent;
+    return SongiesColors(
+      background: spec.background,
+      surface: spec.surface,
+      text: readableOn(spec.background, preferred: spec.text),
+      mutedText: spec.mutedText,
+      accent: accent,
+      glow: accent.withValues(alpha: spec.glowStrength),
+      miniPlayer: Color.alphaBlend(
+        accent.withValues(alpha: 0.25),
+        spec.surface,
+      ),
+      nowPlayingTop: darken(accent),
+      nowPlayingBottom: spec.background,
+      radius: spec.cornerRadius,
+      fontFamily: fontFamily ?? spec.fontFamily,
+      blurNowPlaying: spec.blurNowPlaying,
+    );
+  }
 
   final Color background;
   final Color surface;
@@ -22,12 +51,17 @@ class SongiesColors extends ThemeExtension<SongiesColors> {
   final Color mutedText;
   final Color accent;
 
-  /// The accent at `glowStrength` opacity.
+  /// The header glow: the accent at `glowStrength` opacity.
   final Color glow;
 
-  /// The mini-player fill: the accent at 25% over the surface.
+  /// The mini-player tint: the accent blended over the surface.
   final Color miniPlayer;
+
+  /// The Now Playing gradient, top to bottom.
+  final Color nowPlayingTop;
+  final Color nowPlayingBottom;
   final double radius;
+  final String fontFamily;
   final bool blurNowPlaying;
 
   @override
@@ -39,7 +73,10 @@ class SongiesColors extends ThemeExtension<SongiesColors> {
     Color? accent,
     Color? glow,
     Color? miniPlayer,
+    Color? nowPlayingTop,
+    Color? nowPlayingBottom,
     double? radius,
+    String? fontFamily,
     bool? blurNowPlaying,
   }) => SongiesColors(
     background: background ?? this.background,
@@ -49,13 +86,19 @@ class SongiesColors extends ThemeExtension<SongiesColors> {
     accent: accent ?? this.accent,
     glow: glow ?? this.glow,
     miniPlayer: miniPlayer ?? this.miniPlayer,
+    nowPlayingTop: nowPlayingTop ?? this.nowPlayingTop,
+    nowPlayingBottom: nowPlayingBottom ?? this.nowPlayingBottom,
     radius: radius ?? this.radius,
+    fontFamily: fontFamily ?? this.fontFamily,
     blurNowPlaying: blurNowPlaying ?? this.blurNowPlaying,
   );
 
+  /// Interpolates every colour and [radius]; [fontFamily] and
+  /// [blurNowPlaying] switch at t = 0.5.
   @override
   SongiesColors lerp(ThemeExtension<SongiesColors>? other, double t) {
     if (other is! SongiesColors) return this;
+    final second = t >= 0.5;
     return SongiesColors(
       background: Color.lerp(background, other.background, t)!,
       surface: Color.lerp(surface, other.surface, t)!,
@@ -64,53 +107,87 @@ class SongiesColors extends ThemeExtension<SongiesColors> {
       accent: Color.lerp(accent, other.accent, t)!,
       glow: Color.lerp(glow, other.glow, t)!,
       miniPlayer: Color.lerp(miniPlayer, other.miniPlayer, t)!,
+      nowPlayingTop: Color.lerp(nowPlayingTop, other.nowPlayingTop, t)!,
+      nowPlayingBottom: Color.lerp(
+        nowPlayingBottom,
+        other.nowPlayingBottom,
+        t,
+      )!,
       radius: radius + (other.radius - radius) * t,
-      blurNowPlaying: t < 0.5 ? blurNowPlaying : other.blurNowPlaying,
+      fontFamily: second ? other.fontFamily : fontFamily,
+      blurNowPlaying: second ? other.blurNowPlaying : blurNowPlaying,
     );
   }
+
+  // Value equality, so an unchanged theme never restarts the theme animation.
+  @override
+  bool operator ==(Object other) =>
+      other is SongiesColors &&
+      other.background == background &&
+      other.surface == surface &&
+      other.text == text &&
+      other.mutedText == mutedText &&
+      other.accent == accent &&
+      other.glow == glow &&
+      other.miniPlayer == miniPlayer &&
+      other.nowPlayingTop == nowPlayingTop &&
+      other.nowPlayingBottom == nowPlayingBottom &&
+      other.radius == radius &&
+      other.fontFamily == fontFamily &&
+      other.blurNowPlaying == blurNowPlaying;
+
+  @override
+  int get hashCode => Object.hash(
+    background,
+    surface,
+    text,
+    mutedText,
+    accent,
+    glow,
+    miniPlayer,
+    nowPlayingTop,
+    nowPlayingBottom,
+    radius,
+    fontFamily,
+    blurNowPlaying,
+  );
 }
 
-/// Builds the dark [ThemeData] for [spec].
-ThemeData buildThemeData(ThemeSpec spec) {
-  final colors = SongiesColors(
-    background: spec.background,
-    surface: spec.surface,
-    text: spec.text,
-    mutedText: spec.mutedText,
-    accent: spec.accent,
-    glow: spec.accent.withValues(alpha: spec.glowStrength),
-    miniPlayer: Color.alphaBlend(
-      spec.accent.withValues(alpha: 0.25),
-      spec.surface,
-    ),
-    radius: spec.cornerRadius,
-    blurNowPlaying: spec.blurNowPlaying,
-  );
+/// [c] darkened by [amount] (0..1) towards black; used for the top of the
+/// Now Playing gradient.
+Color darken(Color c, [double amount = 0.55]) =>
+    Color.lerp(c, const Color(0xFF000000), amount)!;
+
+/// Builds the dark [ThemeData] for [spec], from [colors] when given (e.g.
+/// cover-derived ones), else from the spec alone. Font sizes are not scaled
+/// here: `fontScale` goes through `MediaQuery.textScaler`.
+ThemeData buildThemeData(ThemeSpec spec, {SongiesColors? colors}) {
+  final c = colors ?? SongiesColors.fromSpec(spec);
 
   final scheme =
       ColorScheme.fromSeed(
-        seedColor: spec.accent,
+        seedColor: c.accent,
         brightness: Brightness.dark,
       ).copyWith(
-        primary: spec.accent,
-        onPrimary: spec.background,
-        surface: spec.surface,
-        onSurface: spec.text,
-        onSurfaceVariant: spec.mutedText,
+        primary: c.accent,
+        onPrimary: readableOn(c.accent, preferred: c.background),
+        surface: c.surface,
+        onSurface: readableOn(c.surface, preferred: c.text),
+        onSurfaceVariant: c.mutedText,
       );
 
   final base = ThemeData(
     brightness: Brightness.dark,
     useMaterial3: true,
     colorScheme: scheme,
-    fontFamily: spec.fontFamily,
-    scaffoldBackgroundColor: spec.background,
-    canvasColor: spec.background,
-    extensions: [colors],
+    fontFamily: c.fontFamily,
+    scaffoldBackgroundColor: c.background,
+    canvasColor: c.background,
+    extensions: [c],
   );
 
   // A raw ThemeData has no font sizes until MaterialApp localizes it, so merge
-  // the English-like geometry in first; only then can sizes be scaled.
+  // the English-like geometry in first.
   final geometry = Typography.material2021().geometryThemeFor(
     ScriptCategory.englishLike,
   );
@@ -118,10 +195,9 @@ ThemeData buildThemeData(ThemeSpec spec) {
     textTheme: base.textTheme
         .merge(geometry)
         .apply(
-          bodyColor: spec.text,
-          displayColor: spec.text,
-          fontFamily: spec.fontFamily,
-        )
-        .apply(fontSizeFactor: spec.fontScale),
+          bodyColor: c.text,
+          displayColor: c.text,
+          fontFamily: c.fontFamily,
+        ),
   );
 }

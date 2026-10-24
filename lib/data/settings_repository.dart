@@ -6,6 +6,7 @@ import 'database.dart';
 
 const kWifiOnly = 'wifi_only';
 const kYtdlpUseSystem = 'ytdlp_use_system';
+const kReduceMotion = 'reduce_motion';
 
 /// Default of the Wi-Fi only setting: on for Android (metered data), off on
 /// desktop. [isAndroid] exists so tests don't depend on the host.

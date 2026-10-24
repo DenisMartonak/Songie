@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'providers.dart';
-import 'theme/app_theme.dart';
+import 'theme/theme_service.dart';
+import 'ui/motion/motion.dart';
 
 class SongiesApp extends ConsumerWidget {
   const SongiesApp({required this.router, super.key});
@@ -12,12 +13,45 @@ class SongiesApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final spec = ref.watch(themeSpecProvider);
+    final theme = ref.watch(songiesThemeProvider);
     return MaterialApp.router(
       title: 'Songies',
       debugShowCheckedModeBanner: false,
-      theme: buildThemeData(spec),
+      theme: theme,
+      // The builder's AnimatedTheme below does the animating, where
+      // MediaQuery (for reduced motion) is available.
+      themeAnimationStyle: AnimationStyle.noAnimation,
       routerConfig: router,
+      builder: (context, child) => _ThemeScope(theme: theme, child: child!),
+    );
+  }
+}
+
+/// Tweens every colour together over [Motion.colour] when the theme changes
+/// (instantly with reduced motion), and applies the theme's `fontScale` on
+/// top of the system text scaling. Nothing animates while the theme is
+/// unchanged.
+class _ThemeScope extends ConsumerWidget {
+  const _ThemeScope({required this.theme, required this.child});
+
+  final ThemeData theme;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reduce =
+        ref.watch(reduceMotionProvider) ||
+        MediaQuery.disableAnimationsOf(context);
+    final fontScale = ref.watch(themeSpecProvider.select((s) => s.fontScale));
+    final media = MediaQuery.of(context);
+    return MediaQuery(
+      data: media.copyWith(textScaler: scaleText(media.textScaler, fontScale)),
+      child: AnimatedTheme(
+        data: theme,
+        duration: reduce ? Duration.zero : Motion.colour,
+        curve: Curves.linear,
+        child: child,
+      ),
     );
   }
 }
