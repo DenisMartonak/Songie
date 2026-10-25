@@ -1,0 +1,1 @@
+{"status":200,"json":{"responseContext":{"visitorData":"FAKE_VISITOR_DATA","maxAgeSeconds":0,"responseId":"FAKE_RESPONSE_ID"},"playabilityStatus":{"status":"LOGIN_REQUIRED","reason":"Sign in to confirm you’re not a bot"},"trackingParams":"FAKE_TRACKING_PARAMS"}}

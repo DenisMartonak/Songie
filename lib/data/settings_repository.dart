@@ -8,6 +8,10 @@ const kWifiOnly = 'wifi_only';
 const kYtdlpUseSystem = 'ytdlp_use_system';
 const kReduceMotion = 'reduce_motion';
 
+/// YouTube's anonymous visitor id (`visitorData`), sent on every Innertube
+/// request. Device-local: never synced, never tied to an account.
+const kYtVisitorData = 'yt_visitor_data';
+
 /// Default of the Wi-Fi only setting: on for Android (metered data), off on
 /// desktop. [isAndroid] exists so tests don't depend on the host.
 bool wifiOnlyDefault({bool? isAndroid}) => isAndroid ?? Platform.isAndroid;

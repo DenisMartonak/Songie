@@ -12,6 +12,7 @@ import 'downloads/android_download_notifier.dart';
 import 'downloads/download_notifier.dart';
 import 'downloads/download_repository.dart';
 import 'downloads/download_service.dart';
+import 'innertube/innertube_client.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
 import 'library/library_scanner.dart';
@@ -305,6 +306,11 @@ final ytDlpRunnerProvider = Provider<YtDlpRunner>(
 
 final ytImportServiceProvider = Provider<YtImportService>(
   (ref) => _unwired('ytImportServiceProvider'),
+);
+
+/// YouTube's Innertube API (YouTube Music browse/search, instant streaming).
+final innertubeClientProvider = Provider<InnertubeClient>(
+  (ref) => _unwired('innertubeClientProvider'),
 );
 
 /// Platform flags for the YouTube settings; tests override them.

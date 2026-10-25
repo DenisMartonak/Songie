@@ -1,0 +1,1 @@
+{"status":200,"json":{"responseContext":{"visitorData":"FAKE_VISITOR_DATA","maxAgeSeconds":0},"trackingParams":"FAKE_TRACKING_PARAMS","onResponseReceivedActions":[{"clickTrackingParams":"FAKE_TRACKING_PARAMS","navigateAction":{"endpoint":{"clickTrackingParams":"FAKE_TRACKING_PARAMS","browseEndpoint":{"browseId":"FEconsent"}}}}]}}

@@ -18,6 +18,8 @@ import 'downloads/android_download_notifier.dart';
 import 'downloads/download_notifier.dart';
 import 'downloads/download_repository.dart';
 import 'downloads/download_service.dart';
+import 'innertube/innertube_client.dart';
+import 'innertube/transport.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
 import 'library/library_scanner.dart';
@@ -94,6 +96,7 @@ Future<void> main() async {
       (u) => httpDownload(u, totalTimeout: const Duration(seconds: 15)),
     ),
   );
+  final innertube = InnertubeClient(HttpInnertubeTransport(), settings);
   final network = ConnectivityPlusStatus();
   final streams = StreamResolver(
     ytClient,
@@ -188,6 +191,7 @@ Future<void> main() async {
         settingsRepositoryProvider.overrideWithValue(settings),
         ytDlpRunnerProvider.overrideWithValue(runner),
         ytImportServiceProvider.overrideWithValue(ytImport),
+        innertubeClientProvider.overrideWithValue(innertube),
         downloadRepositoryProvider.overrideWithValue(downloadRepo),
         downloadNotifierProvider.overrideWithValue(downloadNotifier),
         downloadServiceProvider.overrideWithValue(downloads),

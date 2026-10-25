@@ -1,0 +1,77 @@
+# Innertube notes (Plan 5 probe)
+
+Probed 2026-10-25 on Linux (Nobara), from an EU home connection, with `dart run tool/innertube_probe.dart` (the probe is a dev tool: it uses the real network and is never imported by `lib/` or tests). Client values come from yt-dlp master `yt_dlp/extractor/youtube/_base.py` `INNERTUBE_CLIENTS`, fetched the same day.
+
+## Request shape (all endpoints)
+- `POST https://<host>/youtubei/v1/<endpoint>?prettyPrint=false`, JSON body `{"context": {"client": {...}}, ...endpoint fields}`.
+- `context.client`: `clientName`, `clientVersion`, `userAgent`, `hl: "en"`, `utcOffsetMinutes`, the identity's extra fields, and `visitorData` once one is known. The probe also sent `gl: "US"` and `timeZone: "UTC"`; the app sends no `gl`, so YouTube picks the region from the IP.
+- Headers: `Content-Type: application/json`, `User-Agent`, `X-YouTube-Client-Name` (numeric id), `X-YouTube-Client-Version`, `Origin: https://<host>`, `X-Goog-Visitor-Id` once known. Redirects are not followed.
+- `player` body: `videoId`, `playbackContext.contentPlaybackContext.html5Preference: "HTML5_PREF_WANTS"`, `contentCheckOk: true`, `racyCheckOk: true` (as yt-dlp sends). None of the clients below needs `signatureTimestamp` (yt-dlp marks them `REQUIRE_JS_PLAYER: False`, except tv).
+- No API response set any cookie.
+
+## Visitor id: required for `player`
+- Most WEB_REMIX responses (search, browse, the home page) carry `responseContext.visitorData`, an opaque base64 string; not all do (the `next` radio response's `responseContext` has none). A real visitor id encodes the visitor's country, so it is never committed: fixtures hold `FAKE_VISITOR_DATA`.
+- **A `player` call without a visitor id fails**: VISIONOS and ANDROID_VR both return HTTP 200 with `playabilityStatus.status: "LOGIN_REQUIRED"`, reason "Sign in to confirm you're not a bot" (fixture `player_visionos_no_visitor_4D7u5KF7SP8.json`). With the visitor id from a WEB_REMIX `browse`, the same call returns `OK`. Checked three times in a row each way. So the stream source (Task 2) must make sure a visitor id is stored before its first `player` call (any WEB_REMIX call stores one).
+
+## Player clients
+| Client (yt-dlp key) | clientName / version / nameId | Result for both videos |
+|---|---|---|
+| visionos | `VISIONOS` / `1.02` / 101 | `OK`. Audio 139, 140, 249, 250, 251, all with plain `url` (no `signatureCipher`). Ranged GET of 251 with the client UA: 206 `audio/webm`. Has `playbackTracking`, also `serverAbrStreamingUrl` (SABR, unused). URL has `c=VISIONOS`. |
+| android_vr | `ANDROID_VR` / `1.65.10` / 28 | `OK`. Audio 139, 140, 249, 251 (no 250), all plain `url`. Ranged GET of 251: 206 `audio/webm`. Has `playbackTracking`. yt-dlp's source says "Since 2026.08.17, ALL formats are 403'd with version 1.65.10"; that was not the case from here today (only the first 1 KB was fetched). |
+| tv | `TVHTML5` / `7.20260707.07.00` / 7 | `UNPLAYABLE`, "The page needs to be reloaded." No formats. (yt-dlp needs the JS player for tv.) |
+| ios | `IOS` / `21.26.4` / 5 | `OK`, audio 139, 140, 249, 250, 251 listed but with **neither** `url` nor `signatureCipher` (SABR only, needs a PO token). Its response also carries a consent flow (see Consent). |
+
+User agents and extra `context.client` fields, verbatim from yt-dlp (all verified by the calls above):
+- VISIONOS: UA `Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15`; `deviceMake: Apple`, `deviceModel: RealityDevice17,1`, `osName: visionOS`, `osVersion: 26.5.23O471`.
+- ANDROID_VR: UA `com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip`; `deviceMake: Oculus`, `deviceModel: Quest 3`, `androidSdkVersion: 32`, `osName: Android`, `osVersion: 12L`.
+- TVHTML5: UA `Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold (unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)`; no extra fields.
+- IOS: UA `com.google.ios.youtube/21.26.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)`; `deviceMake: Apple`, `deviceModel: iPhone16,2`, `osName: iPhone`, `osVersion: 18.3.2.22D82`.
+
+**`kPlayerClients` = [VISIONOS, ANDROID_VR]**, the two that returned plain `url` audio. TVHTML5 and IOS are left out: neither gave a playable URL, and trying them would only delay the yt-dlp fallback.
+
+### Stream URLs and `playbackTracking`
+- Format URL: `https://rrN---sn-<node>.googlevideo.com/videoplayback?expire=<unix s>&ei=..&ip=<client ip>&id=..&itag=251&...&mime=audio%2Fwebm&clen=..&dur=..&c=VISIONOS&...&sig=..&lsig=..`. `expire` is about 6 h after the response (`streamingData.expiresInSeconds` is `21540`). Each format also has `bitrate`, `averageBitrate`, `contentLength`, `approxDurationMs`, `audioQuality`, `loudnessDb`.
+- `playbackTracking` (visionOS and android_vr): `videostatsPlaybackUrl`, `videostatsDelayplayUrl`, `videostatsWatchtimeUrl`, `ptrackingUrl`, `qoeUrl`, `atrUrl` (each `{baseUrl}`), plus `videostatsScheduledFlushWalltimeSeconds` and `videostatsDefaultFlushIntervalSeconds`. The base URLs are `https://s.youtube.com/api/stats/playback?cl=..&docid=<videoId>&ei=..&ns=yt&plid=..&el=detailpage&len=<seconds>&of=..&vm=..` (watchtime the same path `/api/stats/watchtime`). Tasks 2 and 6 read playback and watchtime from here.
+
+## YouTube Music (WEB_REMIX)
+- Identity: `WEB_REMIX` / `1.20260707.12.00` / 67, host `music.youtube.com`. yt-dlp gives no UA for it; we send yt-dlp's default desktop UA (Chrome 148 on Windows, as in the Plan 2 notes).
+- `search` with only `query` (the all tab): `contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents` = one `itemSectionRenderer` with a `messageRenderer` ("About these results"), one `musicCardShelfRenderer` (top result, here the artist Daft Punk, with 3 rows), then **29 `itemSectionRenderer`s holding one `musicResponsiveListItemRenderer` each** (not one `musicShelfRenderer` per kind as older ytmusicapi parsers expect).
+- `search` with a filter `params` (songs): an `itemSectionRenderer` then one `musicShelfRenderer` with 20 `musicResponsiveListItemRenderer`s and a `continuations` token.
+- Search filter `params`, read live from the all tab's `chipCloudChipRenderer` chips:
+
+  | Filter | `params` |
+  |---|---|
+  | Songs | `EgWKAQIIAWoSEAUQCRADEAQQEBAKEA4QFRAR` |
+  | Videos | `EgWKAQIQAWoSEAUQCRADEAQQEBAKEA4QFRAR` |
+  | Albums | `EgWKAQIYAWoSEAUQCRADEAQQEBAKEA4QFRAR` |
+  | Artists | `EgWKAQIgAWoSEAUQCRADEAQQEBAKEA4QFRAR` |
+  | Community playlists | `EgeKAQQoAEABahIQBRAJEAMQBBAQEAoQDhAVEBE%3D` |
+  | Featured playlists | `EgeKAQQoADgBahIQBRAJEAMQBBAQEAoQDhAVEBE%3D` |
+  | (also Episodes `...AkgB...`, Podcasts `...AlAB...`, Profiles `...AlgB...`) | |
+
+  The filter is the first bytes (`EgWKAQI` + `I`/`Q`/`Y`/`g` for songs/videos/albums/artists; `EgeKAQQoA` + `EAB`/`DgB` for community/featured playlists); the tail after `Wo`/`ah` lists result options, and its order changed between two runs an hour apart (`EAUQCRADEAoQBBAQEBUQDhAR` earlier), both accepted. ytmusicapi builds the same prefixes. Send the value as-is (the `%3D` included, as the web client does). For "playlists" use Community playlists, or merge both.
+- `browse` `FEmusic_home`: `singleColumnBrowseResultsRenderer.tabs[0]...sectionListRenderer` with 3 `musicCarouselShelfRenderer` shelves on the first page ("Quick picks" of `musicResponsiveListItemRenderer`s, "Take it easy", "All hits" of `musicTwoRowItemRenderer`s) and a continuation for more.
+- Artist (`UCRr1xG_2WIDs18a6cIiCxeA`, Daft Punk): `musicImmersiveHeaderRenderer` header, a top-songs `musicShelfRenderer` and carousels (albums, singles, videos, related).
+- Album (`MPREb_K8qWMWVqXGi`, Random Access Memories): `twoColumnBrowseResultsRenderer`, `musicResponsiveHeaderRenderer` header, 13 tracks in `secondaryContents`' `musicShelfRenderer`, album playlist id `OLAK5uy_kNhM2yaBTOVwrcZJepB1C9P3-n5_Sfy5c`, and an "Other versions" carousel.
+- Playlist (`VLPL-hvaaoSDXQJpFhQYRkEjc_Zh4Sd65c-e`): `musicResponsiveHeaderRenderer`, the first page of tracks (about 40 rows) and a continuation.
+- `next` radio for `4D7u5KF7SP8`: body `videoId`, `playlistId: RDAMVM4D7u5KF7SP8`, `params: wAEB`, `isAudioOnly: true`, `enablePersistentPlaylistPanel: true`, `tunerSettingValue: AUTOMIX_SETTING_NORMAL`. The queue is in `...musicQueueRenderer.content.playlistPanelRenderer.contents` (`playlistPanelVideoRenderer`s, the first is the seed) with continuations.
+
+## Consent
+- `GET https://music.youtube.com/` with no cookies: **302 to `https://consent.youtube.com/m?...`** from here. With `Cookie: SOCS=CAI`: 200, no redirect.
+- The Innertube API itself was **not** redirected: every POST above returned 200 with normal content, without any cookie, and the WEB_REMIX responses carry no consent marker. So search, browse and playback work without consent from here.
+- The **IOS** player response does carry a consent flow: `onResponseReceivedActions[0].startEomFlowCommand.eomFlowRenderer.webViewRenderer.url` = `https://consent.youtube.com/yt-app-main?...&vd=<visitorData>...` with `consentMoment: CONSENT_MOMENT_INITIAL`. `InnertubeClient` treats a `https://consent.youtube.com/` link anywhere in a response, a 3xx to consent.youtube.com, or an `FEconsent` browse id as "consent required".
+- How open-source clients get past it: yt-dlp sets the cookie `SOCS=CAI` on `.youtube.com` ("accept all", `_initialize_consent`) unless the user's own cookies already consented; ytmusicapi and NewPipe send the same kind of `SOCS` cookie. For Task 9: **Accept** stores a device-local consent flag and from then on sends `Cookie: SOCS=CAI` on Innertube requests; Not now sends nothing extra.
+
+## Fixtures (`test/fixtures/innertube/`)
+Each file is `{"status": <http status>, "json": <response>}`, compact JSON (read with `jq`).
+- `player_<client>_<videoId>.json` for visionos, android_vr, tv, ios and both videos; `player_visionos_no_visitor_4D7u5KF7SP8.json` (LOGIN_REQUIRED).
+- `search_all.json`, `search_songs.json` (query "daft punk"), `browse_home.json`, `browse_artist.json`, `browse_album.json`, `browse_playlist.json`, `next_radio.json`.
+- `consent_browse_handcrafted.json` is **hand-crafted** (no consent page was served to the API from here): a minimal browse response whose `navigateAction` points at `FEconsent`.
+
+Scrubbed (the repo is public):
+- Client IP → `203.0.113.1` (query `ip=` and `/ip/` path pairs in manifest URLs).
+- Every key containing `visitorData` (also `updatedVisitorData` in the IOS consent flow) → `FAKE_VISITOR_DATA` (also the `vd=` parameter in consent links); `trackingParams`/`clickTrackingParams` → `FAKE_TRACKING_PARAMS`; `continuation`/`token` → `FAKE_CONTINUATION`/`FAKE_TOKEN`; `serializedShareEntity`, `serializedContextData`, `responseId`, `eventId`, `rolloutToken`, `queueContextParams` → fixed fakes; URL parameters `fexp` and `initcwndbps` → `FAKE_FEXP`/`FAKE_CWND`.
+- URL parameters `ei vm sig lsig n pot cpn of s id plid oid bui spc xpc` → `FAKE_*`, `gcr` → `zz`, `mn` → `sn-fake`, and `rrN---sn-<node>.googlevideo.com` hosts → `rr1---sn-fake.googlevideo.com`. So fixture URLs keep their shape and `expire`, but do not play.
+- The probe fails if any seen IP or visitor id is left in a fixture, or if any string value base64-decodes to visitor-shaped data (protobuf `0x0A 0x0B` + 11 chars). `test/innertube/fixtures_scrubbed_test.dart` runs the same check on every committed fixture.
+
+Trimmed (to keep the repo small): dropped `frameworkUpdates`, `responseContext.serviceTrackingParams` and other web response context, `storyboards`, `attestation`, `playerConfig`, ad fields, `annotations`, `endscreen`, `cards`, `captions`, `heartbeatParams`, `messages`, `description`, sign-in `modalEndpoint`s; menus keep only navigation entries (Go to artist/album, radio), not queue/library/feedback service entries; `musicCarouselShelfRenderer` lists are cut to 6 items; the radio queue to 25 songs. Search result shelves, album and playlist track lists are complete.
