@@ -22,6 +22,7 @@ import 'library/scan_queue.dart';
 import 'library/search_repository.dart';
 import 'library/yt_tracks.dart';
 import 'player/player_service.dart';
+import 'player/radio_controller.dart';
 import 'theme/app_theme.dart';
 import 'theme/cover_palette.dart';
 import 'theme/font_service.dart';
@@ -324,6 +325,17 @@ final ytmServiceProvider = Provider<YtmService>(
 final ytTrackStoreProvider = Provider<YtTrackStore>(
   (ref) => _unwired('ytTrackStoreProvider'),
 );
+
+/// Plays YouTube Music songs with their radio queued after them.
+final radioControllerProvider = Provider<RadioController>((ref) {
+  final c = RadioController(
+    ref.watch(playerServiceProvider),
+    ref.watch(ytmServiceProvider),
+    ref.watch(ytTrackStoreProvider),
+  );
+  ref.onDispose(c.dispose);
+  return c;
+});
 
 /// Platform flags for the YouTube settings; tests override them.
 final isAndroidProvider = Provider<bool>((ref) => Platform.isAndroid);

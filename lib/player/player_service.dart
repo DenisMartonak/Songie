@@ -227,8 +227,15 @@ class PlayerService {
   /// The entry whose successor was already prefetched.
   _Entry? _prefetchedFor;
 
+  int _queueEpoch = 0;
+
   Stream<PlayerState> get states => _controller.stream;
   PlayerState get state => _state;
+
+  /// Changes on every [playQueue] call (synchronously, when it is called), and
+  /// never on [playNext], [addToQueue] or other edits. Lets a caller that
+  /// built a queue (radio) tell whether it is still the one playing.
+  int get queueEpoch => _queueEpoch;
 
   // --- commands -------------------------------------------------------------
 
@@ -236,7 +243,16 @@ class PlayerService {
     List<Track> tracks, {
     int startIndex = 0,
     String? sourcePlaylistId,
-  }) => _locked(() async {
+  }) {
+    _queueEpoch++;
+    return _playQueue(tracks, startIndex, sourcePlaylistId);
+  }
+
+  Future<void> _playQueue(
+    List<Track> tracks,
+    int startIndex,
+    String? sourcePlaylistId,
+  ) => _locked(() async {
     _engineFailures = 0;
     _failedStarts = 0;
     final entries = [for (final t in tracks) _Entry(t)];
@@ -278,6 +294,64 @@ class PlayerService {
     );
     await _startFirstPlayable(_candidates(start, wrap: _wraps));
   });
+
+  /// Inserts [tracks] right after the current song, in both the playing
+  /// order and the unshuffled one, so they play next whether or not shuffle is
+  /// on (or is turned off later). On an empty queue they become the queue,
+  /// with the first one current but not started.
+  Future<void> playNext(List<Track> tracks) => _locked(() async {
+    if (tracks.isEmpty) return;
+    final entries = [for (final t in tracks) _Entry(t)];
+    final current = _currentEntry;
+    if (current == null) {
+      _becomeQueue(entries);
+      return;
+    }
+    _queue.insertAll(_state.index + 1, entries);
+    final o = _original.indexOf(current);
+    _original.insertAll(o < 0 ? _original.length : o + 1, entries);
+    _queueEdited();
+  });
+
+  /// Appends [tracks] to both orders; with shuffle on they still come after
+  /// the current song. On an empty queue they become the queue, with the
+  /// first one current but not started.
+  Future<void> addToQueue(List<Track> tracks) => _locked(() async {
+    if (tracks.isEmpty) return;
+    final entries = [for (final t in tracks) _Entry(t)];
+    if (_currentEntry == null) {
+      _becomeQueue(entries);
+      return;
+    }
+    _queue.addAll(entries);
+    _original.addAll(entries);
+    _queueEdited();
+  });
+
+  void _becomeQueue(List<_Entry> entries) {
+    _queue
+      ..clear()
+      ..addAll(entries);
+    _original
+      ..clear()
+      ..addAll(entries);
+    _emit(
+      _state.copyWith(
+        queue: _queueTracks(),
+        index: 0,
+        position: Duration.zero,
+        buffered: Duration.zero,
+        duration: _durationOf(entries.first.track),
+      ),
+    );
+  }
+
+  /// Publishes an insertion that left the current song where it was. The
+  /// song after it may have changed, so the next prefetch is redone.
+  void _queueEdited() {
+    _prefetchedFor = null;
+    _emit(_state.copyWith(queue: _queueTracks()));
+  }
 
   Future<void> play() => _locked(_playNow);
 
