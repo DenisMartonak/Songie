@@ -18,6 +18,15 @@ class _FakeSource implements StreamSource {
   }
 }
 
+class _ThrowingSource implements StreamSource {
+  @override
+  String get name => 'innertube';
+
+  @override
+  Future<Result<YtStream>> resolveStream(String videoId) =>
+      throw RangeError('boom');
+}
+
 final _ok = Ok<YtStream>(YtStream(url: Uri.parse('https://yt.example/a')));
 
 void main() {
@@ -31,6 +40,20 @@ void main() {
     expect((r as Ok<YtStream>).value.url.host, 'yt.example');
     expect(it.calls, ['v']);
     expect(yt.calls, ['v']);
+  });
+
+  test('a source that throws falls through to yt-dlp Ok', () async {
+    final yt = _FakeSource('yt-dlp', _ok);
+    final r = await FallbackStreamSource([_ThrowingSource(), yt])
+        .resolveStream('v');
+    expect(r, isA<Ok<YtStream>>());
+    expect(yt.calls, ['v']);
+  });
+
+  test('a throwing last source is a non-notFound Err', () async {
+    final r = await FallbackStreamSource([_ThrowingSource()])
+        .resolveStream('v');
+    expect(ytErrorKindOf((r as Err<YtStream>).failure), YtErrorKind.extractor);
   });
 
   test('a plain (non-yt) Err also falls through', () async {

@@ -44,6 +44,9 @@ class InnertubeStreamSource implements StreamSource {
   Future<void>? _bootstrapping;
 
   static const _maxTracked = 50;
+
+  /// DateTime's largest epoch, in seconds.
+  static const _maxEpochS = 8640000000000;
   // Insertion-ordered (a map literal is a LinkedHashMap): oldest first.
   final _tracking = <String, PlaybackTracking>{};
 
@@ -55,6 +58,17 @@ class InnertubeStreamSource implements StreamSource {
 
   @override
   Future<Result<YtStream>> resolveStream(String videoId) async {
+    // Never throws: anything unexpected falls through to the next source.
+    try {
+      return await _resolve(videoId);
+    } catch (e) {
+      return Err(
+        ytFailure(YtErrorKind.extractor, 'innertube $videoId: $e', cause: e),
+      );
+    }
+  }
+
+  Future<Result<YtStream>> _resolve(String videoId) async {
     await _ensureVisitor();
     final preferred = _preferred;
     final order = [
@@ -133,11 +147,13 @@ class InnertubeStreamSource implements StreamSource {
     final url = _bestAudio(formats);
     if (url == null) return const _Outcome.fail('no plain audio url');
     final expire = int.tryParse(url.queryParameters['expire'] ?? '');
+    // Out of DateTime's range (or nonsense): unknown, the resolver's TTL.
+    final validExpire = expire != null && expire > 0 && expire <= _maxEpochS;
     return _Outcome.ok(
       YtStream(
         url: url,
         headers: {'User-Agent': c.userAgent},
-        expiresAt: expire == null
+        expiresAt: !validExpire
             ? null
             : DateTime.fromMillisecondsSinceEpoch(expire * 1000, isUtc: true),
       ),

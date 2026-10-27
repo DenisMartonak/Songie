@@ -118,6 +118,23 @@ void main() {
       expect(s.expiresAt, isNull);
     });
 
+    test('an out-of-range expire does not throw (expiry unknown)', () async {
+      for (final expire in ['99999999999999999', '-5', '0']) {
+        transport.reply(
+          editedFormats((f) {
+            final opus = f.firstWhere((m) => m['itag'] == 251);
+            opus['url'] = (opus['url']! as String).replaceFirst(
+              RegExp(r'expire=\d+'),
+              'expire=$expire',
+            );
+          }),
+        );
+        final s = (await go() as Ok<YtStream>).value;
+        expect(_itag(s.url), '251');
+        expect(s.expiresAt, isNull, reason: 'expire=$expire');
+      }
+    });
+
     test('a format with only signatureCipher is skipped', () async {
       transport.reply(
         editedFormats((f) {
@@ -245,6 +262,22 @@ void main() {
       expect(source.trackingFor('other'), isNull);
     });
   });
+
+  test(
+    'an exception inside resolveStream becomes a non-notFound Err',
+    () async {
+      // A closed database makes the visitor id read throw.
+      await settings.setString(kYtVisitorData, null);
+      client.dispose();
+      client = InnertubeClient(transport, settings);
+      source = InnertubeStreamSource(client);
+      await db.close();
+      final r = await go() as Err<YtStream>;
+      expect(ytErrorKindOf(r.failure), YtErrorKind.extractor);
+      expect(transport.requests, isEmpty);
+      db = testDb(); // for tearDown
+    },
+  );
 
   group('visitor id bootstrap', () {
     setUp(() async {

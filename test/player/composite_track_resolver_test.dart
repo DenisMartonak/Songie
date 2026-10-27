@@ -5,13 +5,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/data/settings_repository.dart';
+import 'package:songies/innertube/innertube_client.dart';
+import 'package:songies/innertube/player_stream_source.dart';
+import 'package:songies/innertube/transport.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/composite_track_resolver.dart';
 import 'package:songies/player/stream_resolver.dart';
+import 'package:songies/player/stream_source.dart';
 import 'package:songies/player/track_resolver.dart';
 import 'package:songies/youtube/yt_models.dart';
 import 'package:songies/youtube/ytdlp_client.dart';
 
+import '../helpers/fake_innertube_transport.dart';
 import '../helpers/fake_network_status.dart';
 import '../helpers/fake_ytdlp_runner.dart';
 import '../helpers/test_db.dart';
@@ -96,6 +101,54 @@ void main() {
     expect(src.headers, {'X': 'y'});
     expect(metadata, hasLength(1));
     expect(metadata.single.$2.title, 'New');
+  });
+
+  group('wired like main (Innertube, then yt-dlp)', () {
+    late FakeTransport transport;
+    late InnertubeClient innertube;
+
+    setUp(() async {
+      final settings = SettingsRepository(db);
+      await settings.setString(kYtVisitorData, 'STORED_VISITOR');
+      transport = FakeTransport();
+      innertube = InnertubeClient(transport, settings);
+      streams.dispose();
+      streams = StreamResolver(
+        FallbackStreamSource([
+          InnertubeStreamSource(innertube),
+          YtDlpClient(runner),
+        ]),
+        FakeNetworkStatus(),
+        settings,
+      );
+      resolver = CompositeTrackResolver(
+        LocalTrackResolver(db),
+        streams,
+        onStreamMetadata: (t, s) async => metadata.add((t, s)),
+      );
+    });
+    tearDown(() => innertube.dispose());
+
+    test('an Innertube-served stream fires no onStreamMetadata', () async {
+      transport.reply(fixture('player_visionos_4D7u5KF7SP8'));
+      final t = await insert(id: 't1', videoId: 'vid1');
+      final r = await resolver.resolve(t) as Ok<AudioSourceRef>;
+      expect((r.value as UrlSource).url.host, 'rr1---sn-fake.googlevideo.com');
+      await pumpEventQueue();
+      expect(metadata, isEmpty);
+      expect(runner.calls, isEmpty);
+    });
+
+    test('a yt-dlp-served stream (Innertube refused) fires it', () async {
+      transport
+        ..reply(const InnertubeResponse(403, {'error': {}}))
+        ..reply(const InnertubeResponse(403, {'error': {}}));
+      final t = await insert(id: 't1', videoId: 'vid1');
+      final r = await resolver.resolve(t) as Ok<AudioSourceRef>;
+      expect((r.value as UrlSource).url.host, 'rr.example');
+      await pumpEventQueue();
+      expect(metadata.single.$2.title, 'New');
+    });
   });
 
   test('unavailable is notFound with no runner call', () async {

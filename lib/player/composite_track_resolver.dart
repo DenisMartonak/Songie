@@ -18,6 +18,8 @@ class CompositeTrackResolver extends TrackResolver {
 
   final LocalTrackResolver _local;
   final StreamResolver _streams;
+
+  /// Called after a stream that carries metadata (served by yt-dlp) resolves.
   final Future<void> Function(Track t, YtStream s)? onStreamMetadata;
 
   static bool _streamable(Track t) =>
@@ -46,7 +48,9 @@ class CompositeTrackResolver extends TrackResolver {
 
   void _reportMetadata(Track t, YtStream s) {
     final cb = onStreamMetadata;
-    if (cb == null) return;
+    // Only yt-dlp-served streams carry metadata (Innertube's carry none), so
+    // this fires for yt-dlp only: no empty update, no cover refresh.
+    if (cb == null || !s.hasMetadata) return;
     unawaited(
       Future.sync(() => cb(t, s)).catchError((Object e, StackTrace st) {
         AppLog.w('Updating metadata of ${t.id} failed', e, st);

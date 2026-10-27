@@ -48,6 +48,11 @@ class YtStream {
   final String? artist;
   final String? album;
   final int? durationMs;
+
+  /// Whether any rough metadata came with the stream. Only yt-dlp sets it;
+  /// Innertube streams carry none.
+  bool get hasMetadata =>
+      title != null || artist != null || album != null || durationMs != null;
 }
 
 enum YtErrorKind {

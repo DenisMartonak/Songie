@@ -26,7 +26,15 @@ class FallbackStreamSource implements StreamSource {
     final sw = Stopwatch()..start();
     Result<YtStream>? last;
     for (final s in _sources) {
-      final r = await s.resolveStream(videoId);
+      Result<YtStream> r;
+      try {
+        r = await s.resolveStream(videoId);
+      } catch (e, st) {
+        AppLog.w('stream $videoId: ${s.name} threw', e, st);
+        r = Err(
+          ytFailure(YtErrorKind.extractor, '${s.name} threw: $e', cause: e),
+        );
+      }
       switch (r) {
         case Ok():
           AppLog.i(
