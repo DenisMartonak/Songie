@@ -12,7 +12,7 @@ import '../downloads/download_status_line.dart'
 import 'settings_page.dart';
 import 'storage_usage.dart';
 
-/// Settings → Downloads: Wi-Fi only, the space downloads take (in all and
+/// Settings → Downloads: Wi-Fi only downloads and streaming, the space downloads take (in all and
 /// per playlist) and Pause / Resume.
 class DownloadsSettingsSection extends ConsumerWidget {
   const DownloadsSettingsSection({super.key});
@@ -24,6 +24,8 @@ class DownloadsSettingsSection extends ConsumerWidget {
     final wifiOnly =
         ref.watch(wifiOnlySettingProvider).value ??
         wifiOnlyDefault(isAndroid: isAndroid);
+    final wifiOnlyStreaming =
+        ref.watch(wifiOnlyStreamingSettingProvider).value ?? false;
     final total = ref.watch(downloadTotalBytesProvider).value;
     final perPlaylist =
         ref.watch(downloadBytesPerPlaylistProvider).value ?? const [];
@@ -54,10 +56,23 @@ class DownloadsSettingsSection extends ConsumerWidget {
       children: [
         const SettingsSectionTitle('Downloads'),
         SwitchListTile(
-          title: Text('Wi-Fi only', style: TextStyle(color: colors.text)),
+          title: Text(
+            'Wi-Fi only downloads',
+            style: TextStyle(color: colors.text),
+          ),
           value: wifiOnly,
           onChanged: (v) =>
               ref.read(settingsRepositoryProvider).setBool(kWifiOnly, v),
+        ),
+        SwitchListTile(
+          title: Text(
+            'Wi-Fi only streaming',
+            style: TextStyle(color: colors.text),
+          ),
+          value: wifiOnlyStreaming,
+          onChanged: (v) => ref
+              .read(settingsRepositoryProvider)
+              .setBool(kWifiOnlyStreaming, v),
         ),
         line('Downloaded songs · ${total == null ? '…' : formatBytes(total)}'),
         for (final (id, bytes) in perPlaylist)

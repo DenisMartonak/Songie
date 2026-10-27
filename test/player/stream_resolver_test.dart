@@ -7,6 +7,8 @@ import 'package:songies/data/database.dart';
 import 'package:songies/data/settings_repository.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/stream_resolver.dart';
+import 'package:songies/player/stream_source.dart';
+import 'package:songies/youtube/yt_models.dart';
 import 'package:songies/youtube/ytdlp_client.dart';
 import 'package:songies/youtube/ytdlp_runner.dart';
 
@@ -27,13 +29,8 @@ void main() {
   late DateTime now;
   late StreamResolver resolver;
 
-  StreamResolver make() => StreamResolver(
-    YtDlpClient(runner),
-    net,
-    settings,
-    now: () => now,
-    wifiOnlyFallback: false,
-  );
+  StreamResolver make() =>
+      StreamResolver(YtDlpClient(runner), net, settings, now: () => now);
 
   int expireOf(DateTime t) => t.millisecondsSinceEpoch ~/ 1000;
 
@@ -109,35 +106,56 @@ void main() {
     expect(runner.calls, isEmpty);
   });
 
-  test('wifi only + mobile is refused with the exact message', () async {
-    await settings.setBool('wifi_only', true);
-    net.kind = NetworkKind.mobile;
-    final r = await go() as Err<UrlSource>;
-    expect(r.failure.kind, FailureKind.network);
-    expect(r.failure.message, 'Wi-Fi only is on — connect to Wi-Fi to stream');
-    expect(runner.calls, isEmpty);
-  });
+  test(
+    'Wi-Fi only streaming + mobile is refused with the exact message',
+    () async {
+      await settings.setBool(kWifiOnlyStreaming, true);
+      net.kind = NetworkKind.mobile;
+      final r = await go() as Err<UrlSource>;
+      expect(r.failure.kind, FailureKind.network);
+      expect(
+        r.failure.message,
+        'Wi-Fi only is on — connect to Wi-Fi to stream',
+      );
+      expect(runner.calls, isEmpty);
+    },
+  );
 
-  test('wifi only + wifi is ok; mobile ok when off', () async {
-    await settings.setBool('wifi_only', true);
+  test('Wi-Fi only streaming + wifi is ok; mobile ok when off', () async {
+    await settings.setBool(kWifiOnlyStreaming, true);
     expect(await go(), isA<Ok<UrlSource>>());
-    await settings.setBool('wifi_only', false);
+    await settings.setBool(kWifiOnlyStreaming, false);
     net.kind = NetworkKind.mobile;
     resolver.invalidate('abc');
     expect(await go(), isA<Ok<UrlSource>>());
   });
 
-  test('fallback applies when the setting is unset', () async {
+  test('Wi-Fi only downloads does not stop streaming on mobile', () async {
+    await settings.setBool(kWifiOnly, true);
+    await settings.setBool(kWifiOnlyStreaming, false);
+    net.kind = NetworkKind.mobile;
+    expect(await go(), isA<Ok<UrlSource>>());
+  });
+
+  test(
+    'unset Wi-Fi only streaming defaults to off (streams on mobile)',
+    () async {
+      net.kind = NetworkKind.mobile;
+      expect(await go(), isA<Ok<UrlSource>>());
+    },
+  );
+
+  test('the source is a StreamSource (any route, not only yt-dlp)', () async {
     resolver.dispose();
     resolver = StreamResolver(
-      YtDlpClient(runner),
+      _FixedSource(YtStream(url: Uri.parse('https://it.example/a'))),
       net,
       settings,
       now: () => now,
-      wifiOnlyFallback: true,
     );
-    net.kind = NetworkKind.mobile;
-    expect(await go(), isA<Err<UrlSource>>());
+    final r = await go() as Ok<UrlSource>;
+    expect(r.value.url.host, 'it.example');
+    expect(runner.calls, isEmpty);
   });
 
   test('unavailable video maps to notFound', () async {
@@ -260,4 +278,15 @@ class _GatedRunner extends FakeYtDlpRunner {
       processId: processId,
     );
   }
+}
+
+class _FixedSource implements StreamSource {
+  _FixedSource(this.stream);
+  final YtStream stream;
+
+  @override
+  String get name => 'fixed';
+
+  @override
+  Future<Result<YtStream>> resolveStream(String videoId) async => Ok(stream);
 }

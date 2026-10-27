@@ -19,6 +19,7 @@ import 'downloads/download_notifier.dart';
 import 'downloads/download_repository.dart';
 import 'downloads/download_service.dart';
 import 'innertube/innertube_client.dart';
+import 'innertube/player_stream_source.dart';
 import 'innertube/transport.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
@@ -32,6 +33,7 @@ import 'player/just_audio_backend.dart';
 import 'player/media_controls.dart';
 import 'player/player_service.dart';
 import 'player/stream_resolver.dart';
+import 'player/stream_source.dart';
 import 'player/track_resolver.dart';
 import 'providers.dart';
 import 'router.dart';
@@ -98,11 +100,11 @@ Future<void> main() async {
   );
   final innertube = InnertubeClient(HttpInnertubeTransport(), settings);
   final network = ConnectivityPlusStatus();
+  // Instant streams from Innertube; yt-dlp when every client is refused.
   final streams = StreamResolver(
-    ytClient,
+    FallbackStreamSource([InnertubeStreamSource(innertube), ytClient]),
     network,
     settings,
-    wifiOnlyFallback: Platform.isAndroid,
   );
   final resolver = CompositeTrackResolver(
     LocalTrackResolver(db),

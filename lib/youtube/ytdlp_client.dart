@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../core/result.dart';
+import '../player/stream_source.dart';
 import 'yt_json.dart';
 import 'yt_models.dart';
 import 'ytdlp_runner.dart';
@@ -52,7 +53,7 @@ YtErrorKind classifyYtDlpStderr(String stderr) {
   return YtErrorKind.extractor;
 }
 
-class YtDlpClient {
+class YtDlpClient implements StreamSource {
   YtDlpClient(this._runner);
 
   final YtDlpRunner _runner;
@@ -86,6 +87,10 @@ class YtDlpClient {
     }
   }
 
+  @override
+  String get name => 'yt-dlp';
+
+  @override
   Future<Result<YtStream>> resolveStream(String videoId) async {
     final run = await _run([
       '-J',

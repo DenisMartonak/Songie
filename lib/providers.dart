@@ -295,7 +295,7 @@ final hasCustomTitleBarProvider = Provider<bool>(
 
 // --- YouTube ---------------------------------------------------------------
 
-/// Device-local settings (Wi-Fi only, system yt-dlp).
+/// Device-local settings (Wi-Fi only downloads/streaming, system yt-dlp).
 final settingsRepositoryProvider = Provider<SettingsRepository>(
   (ref) => SettingsRepository(ref.watch(databaseProvider)),
 );
@@ -323,7 +323,8 @@ final ytDlpVersionProvider = FutureProvider.autoDispose<String?>(
   (ref) => ref.watch(ytDlpRunnerProvider).version(),
 );
 
-/// The Wi-Fi only setting: its stored value, else the platform default.
+/// The Wi-Fi only downloads setting: its stored value, else the platform
+/// default.
 final wifiOnlySettingProvider = StreamProvider.autoDispose<bool>(
   (ref) => ref
       .watch(settingsRepositoryProvider)
@@ -331,6 +332,13 @@ final wifiOnlySettingProvider = StreamProvider.autoDispose<bool>(
         kWifiOnly,
         fallback: wifiOnlyDefault(isAndroid: ref.watch(isAndroidProvider)),
       ),
+);
+
+/// The Wi-Fi only streaming setting (off unless turned on).
+final wifiOnlyStreamingSettingProvider = StreamProvider.autoDispose<bool>(
+  (ref) => ref
+      .watch(settingsRepositoryProvider)
+      .watchBool(kWifiOnlyStreaming, fallback: false),
 );
 
 /// Whether Linux runs the system yt-dlp (read by `main()` at startup).

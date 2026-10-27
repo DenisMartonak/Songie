@@ -5,31 +5,29 @@ import '../core/log.dart';
 import '../core/result.dart';
 import '../data/settings_repository.dart';
 import '../youtube/yt_models.dart';
-import '../youtube/ytdlp_client.dart';
 import 'audio_backend.dart';
+import 'stream_source.dart';
 
 const _expiryMargin = Duration(minutes: 10);
 const _unknownExpiryTtl = Duration(hours: 1);
 
-/// Resolves YouTube video ids to playable stream URLs, cached in memory only.
+/// Resolves YouTube video ids to playable stream URLs through a
+/// [StreamSource], cached in memory only.
 class StreamResolver {
   StreamResolver(
-    this._client,
+    this._source,
     this._net,
     this._settings, {
     DateTime Function()? now,
-    bool? wifiOnlyFallback,
-  }) : _now = now ?? DateTime.now,
-       _wifiOnlyFallback = wifiOnlyFallback ?? wifiOnlyDefault() {
+  }) : _now = now ?? DateTime.now {
     // URLs are tied to the device's IP, so any network change invalidates them.
     _sub = _net.changes.listen((_) => _clear());
   }
 
-  final YtDlpClient _client;
+  final StreamSource _source;
   final NetworkStatus _net;
   final SettingsRepository _settings;
   final DateTime Function() _now;
-  final bool _wifiOnlyFallback;
   late final StreamSubscription<NetworkKind> _sub;
 
   final Map<String, ({YtStream stream, DateTime validUntil})> _cache = {};
@@ -72,7 +70,7 @@ class StreamResolver {
       return const Err(Failure(FailureKind.network, "You're offline"));
     }
     if (net == NetworkKind.mobile &&
-        await _settings.getBool(kWifiOnly, fallback: _wifiOnlyFallback)) {
+        await _settings.getBool(kWifiOnlyStreaming, fallback: false)) {
       return const Err(
         Failure(
           FailureKind.network,
@@ -96,7 +94,7 @@ class StreamResolver {
 
   Future<Result<YtStream>> _fetch(String videoId, Object token) async {
     try {
-      final r = await _client.resolveStream(videoId);
+      final r = await _source.resolveStream(videoId);
       switch (r) {
         case Ok(:final value):
           if (identical(_tokens[videoId], token)) {

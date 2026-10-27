@@ -36,7 +36,6 @@ void main() {
       YtDlpClient(runner),
       FakeNetworkStatus(),
       SettingsRepository(db),
-      wifiOnlyFallback: false,
     );
     tmp = await Directory.systemTemp.createTemp('composite_test');
     metadata = [];

@@ -87,9 +87,10 @@ void main() {
     expect(find.text('Downloaded songs · 0 B'), findsOneWidget);
   });
 
-  uiTest('the Wi-Fi only toggle writes wifi_only', (tester) async {
+  uiTest('"Wi-Fi only downloads" writes wifi_only', (tester) async {
     await pumpSection(tester);
-    final tile = find.widgetWithText(SwitchListTile, 'Wi-Fi only');
+    expect(find.text('Wi-Fi only'), findsNothing);
+    final tile = find.widgetWithText(SwitchListTile, 'Wi-Fi only downloads');
     expect(tile, findsOneWidget);
     // Desktop default is off.
     expect(tester.widget<SwitchListTile>(tile).value, isFalse);
@@ -97,14 +98,35 @@ void main() {
     await tester.tap(tile);
     await settle(tester);
     expect(await stored(tester, kWifiOnly), isTrue);
+    expect(await stored(tester, kWifiOnlyStreaming), isNull);
     expect(tester.widget<SwitchListTile>(tile).value, isTrue);
   });
 
-  uiTest('Wi-Fi only defaults to on for Android', (tester) async {
+  uiTest('Wi-Fi only downloads defaults to on for Android', (tester) async {
     h.isAndroid = true;
     await pumpSection(tester);
-    final tile = find.widgetWithText(SwitchListTile, 'Wi-Fi only');
+    final tile = find.widgetWithText(SwitchListTile, 'Wi-Fi only downloads');
     expect(tester.widget<SwitchListTile>(tile).value, isTrue);
+  });
+
+  uiTest('"Wi-Fi only streaming" writes wifi_only_streaming', (tester) async {
+    await pumpSection(tester);
+    final tile = find.widgetWithText(SwitchListTile, 'Wi-Fi only streaming');
+    expect(tile, findsOneWidget);
+    expect(tester.widget<SwitchListTile>(tile).value, isFalse);
+
+    await tester.tap(tile);
+    await settle(tester);
+    expect(await stored(tester, kWifiOnlyStreaming), isTrue);
+    expect(await stored(tester, kWifiOnly), isNull);
+    expect(tester.widget<SwitchListTile>(tile).value, isTrue);
+  });
+
+  uiTest('Wi-Fi only streaming is off by default on Android', (tester) async {
+    h.isAndroid = true;
+    await pumpSection(tester);
+    final tile = find.widgetWithText(SwitchListTile, 'Wi-Fi only streaming');
+    expect(tester.widget<SwitchListTile>(tile).value, isFalse);
   });
 
   uiTest('a full disk can be resumed from Settings', (tester) async {

@@ -4,7 +4,12 @@ import 'package:drift/drift.dart';
 
 import 'database.dart';
 
+/// Wi-Fi only *downloads* (the key predates the streaming switch).
 const kWifiOnly = 'wifi_only';
+
+/// Wi-Fi only streaming: refuse to stream on mobile data. Device-local,
+/// off by default on every platform.
+const kWifiOnlyStreaming = 'wifi_only_streaming';
 const kYtdlpUseSystem = 'ytdlp_use_system';
 const kReduceMotion = 'reduce_motion';
 
@@ -12,7 +17,7 @@ const kReduceMotion = 'reduce_motion';
 /// request. Device-local: never synced, never tied to an account.
 const kYtVisitorData = 'yt_visitor_data';
 
-/// Default of the Wi-Fi only setting: on for Android (metered data), off on
+/// Default of the Wi-Fi only downloads setting: on for Android (metered data), off on
 /// desktop. [isAndroid] exists so tests don't depend on the host.
 bool wifiOnlyDefault({bool? isAndroid}) => isAndroid ?? Platform.isAndroid;
 
