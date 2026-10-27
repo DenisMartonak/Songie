@@ -109,7 +109,11 @@ class YtmHero extends ConsumerWidget {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final insets = MediaQuery.paddingOf(context);
     final dominant = ref
-        .watch(ytmCoverPaletteProvider(thumbnailUrl))
+        .watch(
+          ytmCoverPaletteProvider(
+            YtmArtwork.imageFor(context, ref, thumbnailUrl, _coverSize),
+          ),
+        )
         .value
         ?.dominant;
     // Without a cover palette, the playlist hero's soft accent wash.

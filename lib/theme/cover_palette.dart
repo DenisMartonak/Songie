@@ -57,6 +57,31 @@ class CoverPalette {
 Future<CoverPalette?> extractCoverPalette(Uint8List bytes) async {
   final decoded = img.decodeImage(bytes);
   if (decoded == null) return null;
+  return _paletteOf(decoded);
+}
+
+/// [extractCoverPalette] for an image already decoded to [rgba] pixels
+/// (`ImageByteFormat.rawRgba`, [width] x [height]), such as one the UI has
+/// on screen. Run it in an isolate.
+Future<CoverPalette?> extractCoverPaletteFromRgba(
+  Uint8List rgba,
+  int width,
+  int height,
+) {
+  if (width <= 0 || height <= 0 || rgba.length < width * height * 4) {
+    return Future.value();
+  }
+  return _paletteOf(
+    img.Image.fromBytes(
+      width: width,
+      height: height,
+      bytes: Uint8List.fromList(rgba).buffer,
+      numChannels: 4,
+    ),
+  );
+}
+
+Future<CoverPalette?> _paletteOf(img.Image decoded) async {
   final small = img.copyResize(decoded,
       width: 64, height: 64, interpolation: img.Interpolation.average);
   final pixels = <int>[];

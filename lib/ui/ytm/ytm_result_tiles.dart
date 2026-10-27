@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../innertube/ytm_models.dart';
+import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
@@ -10,7 +12,7 @@ import 'ytm_nav.dart';
 /// Cover art from a YouTube Music thumbnail URL, with [Artwork]'s gradient
 /// placeholder (seeded by [seed]) while it loads, without a URL, or when it
 /// fails. [circle] for artists.
-class YtmArtwork extends StatelessWidget {
+class YtmArtwork extends ConsumerWidget {
   const YtmArtwork(
     this.url, {
     required this.seed,
@@ -24,24 +26,38 @@ class YtmArtwork extends StatelessWidget {
   final double size;
   final bool circle;
 
+  /// The image a [YtmArtwork] of [size] shows for [url] (null without one);
+  /// a hero reads its palette from this same image, already in the image
+  /// cache.
+  static ImageProvider? imageFor(
+    BuildContext context,
+    WidgetRef ref,
+    String? url,
+    double size,
+  ) => url == null
+      ? null
+      : ref.watch(ytmImageProvider)(
+          url,
+          (size * MediaQuery.devicePixelRatioOf(context)).round(),
+        );
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final radius = circle ? size / 2 : null;
     final placeholder = Artwork(null, size: size, seed: seed, radius: radius);
-    final src = url;
-    if (src == null) return placeholder;
+    final image = imageFor(context, ref, url, size);
+    if (image == null) return placeholder;
     final corner =
         radius ?? Theme.of(context).extension<SongiesColors>()!.radius;
     return SizedBox.square(
       dimension: size,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(corner),
-        child: Image.network(
-          src,
+        child: Image(
+          image: image,
           width: size,
           height: size,
           fit: BoxFit.cover,
-          cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
           frameBuilder: (_, child, frame, _) =>
               frame == null ? placeholder : child,
           errorBuilder: (_, _, _) => placeholder,

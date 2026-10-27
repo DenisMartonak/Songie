@@ -1,13 +1,19 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/contrast.dart';
-import 'package:songies/theme/cover_palette.dart';
+import 'package:songies/library/art_cache.dart';
+import 'package:songies/providers.dart';
+import 'package:songies/ui/playlist/playlist_page.dart' show playlistHeroTop;
 import 'package:songies/ui/motion/shimmer.dart';
 import 'package:songies/ui/ytm/album_page.dart';
 import 'package:songies/ui/ytm/ytm_playlist_page.dart';
@@ -37,6 +43,49 @@ YtmAlbumPage _album({String? playlistId = 'OLAK5uy_disc', String? thumb}) =>
       [for (var i = 1; i <= 4; i++) _track('t$i')],
     );
 
+/// A 16x16 PNG of one colour.
+Uint8List _solidPng(int r, int g, int b) {
+  final image = img.Image(width: 16, height: 16);
+  img.fill(image, color: img.ColorRgb8(r, g, b));
+  return img.encodePng(image);
+}
+
+/// An in-memory cover that counts how often it is loaded (decoded), which
+/// for a network image is how often it would be requested.
+class _CountingImage extends MemoryImage {
+  _CountingImage(super.bytes);
+
+  // A list, so the (immutable) provider can still count.
+  final List<void> _loads = [];
+
+  int get loads => _loads.length;
+
+  @override
+  ImageStreamCompleter loadImage(MemoryImage key, ImageDecoderCallback decode) {
+    _loads.add(null);
+    return super.loadImage(key, decode);
+  }
+}
+
+/// Lets the image decode and the palette isolate finish on the real clock.
+Future<void> _waitForPalette(WidgetTester tester) async {
+  for (var i = 0; i < 5; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await settle(tester);
+  }
+}
+
+Color _heroTop(WidgetTester tester) {
+  final hero = tester.widget<DecoratedBox>(
+    find.byKey(const Key('ytm.heroBackground')),
+  );
+  return ((hero.decoration as BoxDecoration).gradient! as LinearGradient)
+      .colors
+      .first;
+}
+
 void main() {
   late UiHarness h;
 
@@ -48,12 +97,14 @@ void main() {
     Widget page, {
     Size size = const Size(400, 1600),
     bool settleAfter = true,
+    List<Override> extraOverrides = const [],
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       h.app(
+        extraOverrides: extraOverrides,
         initialLocation: '/page',
         routes: [
           GoRoute(
@@ -207,30 +258,67 @@ void main() {
     uiTest('a near-white cover still leaves the hero text readable', (
       tester,
     ) async {
-      h.ytmPalette = (url) async => url == 'https://art.test/white.jpg'
-          ? const CoverPalette(
-              dominant: Color(0xFFF6F4EE),
-              vibrant: Color(0xFFE02060),
-              muted: Color(0xFFDDDDDD),
-            )
-          : null;
+      final cover = _CountingImage(_solidPng(0xF6, 0xF4, 0xEE));
+      h.ytmImages = (url, _) => url == 'https://art.test/white.jpg'
+          ? cover
+          : throw StateError('unexpected image $url');
       h.ytm.albumAnswers['MPREb_x'] = Ok(
         _album(thumb: 'https://art.test/white.jpg'),
       );
       await pumpPage(tester, const AlbumPage(browseId: 'MPREb_x'));
+      await _waitForPalette(tester);
 
-      final hero = tester.widget<DecoratedBox>(
-        find.byKey(const Key('ytm.heroBackground')),
-      );
-      final top =
-          ((hero.decoration as BoxDecoration).gradient! as LinearGradient)
-              .colors
-              .first;
+      final top = _heroTop(tester);
       final colors = Theme.of(tester.element(find.byType(AlbumPage)))
           .extension<SongiesColors>()!;
-      // Cover-derived, not the plain background.
-      expect(top, isNot(colors.background));
+      // Derived from the cover the hero shows.
+      expect(top, playlistHeroTop(const Color(0xFFF6F4EE), colors));
       expect(contrastRatio(colors.text, top), greaterThanOrEqualTo(4.5));
+      expect(contrastRatio(colors.mutedText, top), greaterThanOrEqualTo(4.5));
+    });
+
+    uiTest('the palette comes from the shown image: opening the page again '
+        'loads nothing more, and nothing is written to the art cache', (
+      tester,
+    ) async {
+      final artDir = Directory.systemTemp.createTempSync('songies-art');
+      addTearDown(() => artDir.deleteSync(recursive: true));
+      final cover = _CountingImage(_solidPng(0x33, 0x55, 0x77));
+      h.ytmImages = (url, _) => cover;
+      h.ytm.albumAnswers['MPREb_x'] = Ok(
+        _album(thumb: 'https://art.test/cover.jpg'),
+      );
+      await pumpPage(
+        tester,
+        const AlbumPage(browseId: 'MPREb_x'),
+        extraOverrides: [artCacheProvider.overrideWithValue(ArtCache(artDir))],
+      );
+      await _waitForPalette(tester);
+      final colors = Theme.of(tester.element(find.byType(AlbumPage)))
+          .extension<SongiesColors>()!;
+      expect(
+        _heroTop(tester),
+        playlistHeroTop(const Color(0xFF335577), colors),
+      );
+      expect(cover.loads, 1);
+
+      // Away and back: the page and its palette are built again.
+      final router = GoRouter.of(tester.element(find.byType(AlbumPage)));
+      router.go('/library/playlist/p1');
+      await settle(tester);
+      expect(find.byType(AlbumPage), findsNothing);
+      router.go('/page');
+      await settle(tester);
+      await _waitForPalette(tester);
+
+      expect(
+        _heroTop(tester),
+        playlistHeroTop(const Color(0xFF335577), colors),
+      );
+      expect(cover.loads, 1, reason: 'no second load (request) of the cover');
+      expect(artDir.listSync(recursive: true), isEmpty);
+      // No thumbnail was fetched through the track store either.
+      expect(h.ytStore.upserted, isEmpty);
     });
   });
 
@@ -279,6 +367,55 @@ void main() {
       await tester.drag(find.byType(Scrollable).first, const Offset(0, 4000));
       await settle(tester);
       expect(find.text('Chill Mix'), findsOneWidget);
+    });
+
+    YtmPlaylistPage more(List<String> ids, String? next) => YtmPlaylistPage(
+      const YtmPlaylist(browseId: 'VLPLabc', title: ''),
+      [for (final id in ids) _track(id)],
+      next,
+    );
+
+    Future<void> scrollToTheEnd(WidgetTester tester) async {
+      for (var i = 0; i < 6; i++) {
+        await tester.drag(
+          find.byType(Scrollable).first,
+          const Offset(0, -3000),
+        );
+        await settle(tester);
+      }
+    }
+
+    uiTest('paging stops at an empty page, even with a new token', (
+      tester,
+    ) async {
+      h.ytm.playlistAnswers['VLPLabc'] = Ok(firstPage());
+      h.ytm.playlistAnswers['VLPLabc@C1'] = Ok(more(const [], 'C2'));
+      h.ytm.playlistAnswers['VLPLabc@C2'] = Ok(more(['p31'], null));
+      await pumpPage(
+        tester,
+        const YtmPlaylistScreen(browseId: 'VLPLabc'),
+        size: const Size(400, 800),
+      );
+      await scrollToTheEnd(tester);
+      expect(h.ytm.browseCalls, ['playlist:VLPLabc', 'playlist:VLPLabc@C1']);
+    });
+
+    uiTest('paging stops at a token seen before', (tester) async {
+      h.ytm.playlistAnswers['VLPLabc'] = Ok(firstPage());
+      h.ytm.playlistAnswers['VLPLabc@C1'] = Ok(more(['p31'], 'C2'));
+      h.ytm.playlistAnswers['VLPLabc@C2'] = Ok(more(['p32'], 'C1'));
+      await pumpPage(
+        tester,
+        const YtmPlaylistScreen(browseId: 'VLPLabc'),
+        size: const Size(400, 800),
+      );
+      await scrollToTheEnd(tester);
+      expect(h.ytm.browseCalls, [
+        'playlist:VLPLabc',
+        'playlist:VLPLabc@C1',
+        'playlist:VLPLabc@C2',
+      ]);
+      expect(find.byKey(const Key('ytm.song.p32')), findsOneWidget);
     });
 
     uiTest('a tapped song plays the playlist from it', (tester) async {

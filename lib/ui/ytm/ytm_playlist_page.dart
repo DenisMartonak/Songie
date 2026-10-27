@@ -41,11 +41,15 @@ class _YtmPlaylistScreenState extends ConsumerState<YtmPlaylistScreen> {
   bool _loading = false;
   bool _failed = false;
 
+  /// Every token fetched for [_first]: one coming back again would loop.
+  final Set<String> _seenTokens = {};
+
   /// Starts over when the first page is (re)loaded.
   void _adopt(YtmPlaylistPage first) {
     if (identical(first, _first)) return;
     _first = first;
     _more.clear();
+    _seenTokens.clear();
     _next = first.continuation;
     _loading = false;
     _failed = false;
@@ -60,6 +64,7 @@ class _YtmPlaylistScreenState extends ConsumerState<YtmPlaylistScreen> {
       _loading = true;
       _failed = false;
     });
+    _seenTokens.add(token);
     final res = await ref
         .read(ytmServiceProvider)
         .playlist(widget.browseId, continuation: token);
@@ -69,8 +74,13 @@ class _YtmPlaylistScreenState extends ConsumerState<YtmPlaylistScreen> {
       switch (res) {
         case Ok(:final value):
           _more.addAll(value.tracks);
-          // A token that comes back again would load the same page forever.
-          _next = value.continuation == token ? null : value.continuation;
+          // An empty page, or a token seen before, ends the paging: either
+          // would load the same nothing forever.
+          final next = value.continuation;
+          _next =
+              value.tracks.isEmpty || next == null || _seenTokens.contains(next)
+              ? null
+              : next;
         case Err(:final failure):
           AppLog.w('ytm playlist continuation failed: ${failure.message}');
           _failed = true;

@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart' show ThemeData;
+import 'package:flutter/material.dart'
+    show ImageProvider, NetworkImage, ResizeImage, ThemeData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/connectivity.dart';
@@ -29,11 +30,11 @@ import 'player/radio_controller.dart';
 import 'theme/app_theme.dart';
 import 'theme/cover_palette.dart';
 import 'theme/font_service.dart';
+import 'theme/image_palette.dart';
 import 'theme/theme_repository.dart';
 import 'theme/theme_service.dart';
 import 'theme/theme_spec.dart';
 import 'ui/shell/window_controls.dart';
-import 'youtube/thumbnail_fetcher.dart';
 import 'youtube/yt_import_service.dart';
 import 'youtube/ytdlp_runner.dart';
 
@@ -438,23 +439,24 @@ final ytmPlaylistProvider = FutureProvider.autoDispose
       retry: (_, _) => null,
     );
 
-/// Downloads YouTube thumbnails into the art cache.
-final thumbnailFetcherProvider = Provider<ThumbnailFetcher>(
-  (ref) => _unwired('thumbnailFetcherProvider'),
-);
+/// The image a YouTube Music cover shows for a thumbnail URL, decoded at
+/// [cacheWidth] pixels wide (like `Image.network`'s `cacheWidth`). Tests
+/// replace it so that nothing touches the network.
+final ytmImageProvider =
+    Provider<ImageProvider Function(String url, int? cacheWidth)>(
+      (ref) =>
+          (url, cacheWidth) =>
+              ResizeImage.resizeIfNeeded(cacheWidth, null, NetworkImage(url)),
+    );
 
-/// The palette of a YouTube Music cover for a page's hero, by its URL: the
-/// image is fetched into the art cache once its page opens (a user action),
-/// then read like any cover. Null without a URL or when it cannot be read.
+/// The palette of a YouTube Music cover for a page's hero, from the very
+/// [ImageProvider] the hero shows: read through Flutter's image cache, so
+/// opening a page (again) makes no second request and browsing writes nothing
+/// to the art cache. Null without an image or when it cannot be read.
 final ytmCoverPaletteProvider = FutureProvider.autoDispose
-    .family<CoverPalette?, String?>((ref, url) async {
-      if (url == null) return null;
-      final art = await ref.watch(thumbnailFetcherProvider).fetchBest([url]);
-      if (art == null) return null;
-      return ref
-          .watch(coverPaletteServiceProvider)
-          .paletteFor(art, supersede: false);
-    });
+    .family<CoverPalette?, ImageProvider?>(
+      (ref, image) async => image == null ? null : paletteOfImage(image),
+    );
 
 /// YouTube asking the user to accept its terms (see [InnertubeClient]).
 final ytConsentRequiredProvider = StreamProvider<bool>(
