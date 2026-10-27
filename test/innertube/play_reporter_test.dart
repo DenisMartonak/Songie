@@ -168,4 +168,64 @@ void main() {
     // The playback GET failed; the watchtime GET still went out once.
     expect(transport.gets, hasLength(2));
   });
+
+  void tick(Track t, int ms, {bool playing = true, int? lengthMs}) => states.add(
+    PlayerState(
+      queue: [t],
+      index: 0,
+      playing: playing,
+      position: Duration(milliseconds: ms),
+      duration: lengthMs == null ? null : Duration(milliseconds: lengthMs),
+    ),
+  );
+
+  test('20 s song with ticks 0.4..19.6 s then a track change is reported once',
+      () async {
+    final a = _track('a', durationMs: 20000);
+    for (var ms = 400; ms <= 19600; ms += 1200) {
+      tick(a, ms);
+    }
+    tick(a, 19600);
+    states.add(
+      PlayerState(
+        queue: [a, _track('b')],
+        index: 1,
+        playing: true,
+      ),
+    );
+    await _settle();
+    expect(transport.gets, hasLength(2));
+    expect(transport.gets[0].url.queryParameters['docid'], 'vid_a');
+  });
+
+  test('20 s song ending with playing=false at 19.5 s is reported once',
+      () async {
+    final a = _track('a', durationMs: 20000);
+    for (var ms = 500; ms < 19500; ms += 1000) {
+      tick(a, ms);
+    }
+    tick(a, 19500, playing: false);
+    tick(a, 19500, playing: false);
+    await _settle();
+    expect(transport.gets, hasLength(2));
+  });
+
+  test('20 s of a long song A, a track change, 20 s of B sends nothing',
+      () async {
+    final a = _track('a');
+    play(a, 0, 20);
+    final b = _track('b');
+    for (var s = 0; s <= 20; s++) {
+      states.add(
+        PlayerState(
+          queue: [a, b],
+          index: 1,
+          playing: true,
+          position: Duration(seconds: s),
+        ),
+      );
+    }
+    await _settle();
+    expect(transport.gets, isEmpty);
+  });
 }

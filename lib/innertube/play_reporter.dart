@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import '../core/log.dart';
+import '../data/database.dart';
 import '../player/play_rules.dart';
 import '../player/player_service.dart';
 import 'clients.dart';
@@ -45,32 +46,71 @@ class PlayReporter {
 
   void dispose() => _sub.cancel();
 
+  /// A short song counts as heard when it got within this of its end:
+  /// ticks are sparse, so the last one rarely lands exactly on the duration.
+  static const _endTolerance = Duration(seconds: 1);
+
+  /// A first tick this close to the start is credited as heard.
+  static const _startCredit = Duration(seconds: 2);
+
+  Track? _track;
+  bool _wasPlaying = false;
+  Duration? _length;
+
   void _onState(PlayerState s) {
     final t = s.current;
     if (t?.id != _trackId) {
+      // Natural end or skip: judge the song we are leaving on what was heard.
+      _finish();
       _trackId = t?.id;
       _heard = Duration.zero;
       _reported = false;
       _lastPos = null;
+      _wasPlaying = false;
     }
+    _track = t;
     if (t == null) return;
+    _length =
+        s.duration ??
+        (t.durationMs <= 0 ? null : Duration(milliseconds: t.durationMs));
     final last = _lastPos;
     _lastPos = s.position;
     if (_reported) return;
-    if (s.playing && last != null) {
-      final step = s.position - last;
-      if (step > Duration.zero && step <= _maxStep) _heard += step;
+    // The step into a stopping state counts: playing was true until then.
+    if (s.playing || _wasPlaying) {
+      if (last == null) {
+        if (s.playing && s.position <= _startCredit) _heard += s.position;
+      } else {
+        final step = s.position - last;
+        if (step > Duration.zero && step <= _maxStep) _heard += step;
+      }
     }
-    final length =
-        s.duration ??
-        (t.durationMs <= 0 ? null : Duration(milliseconds: t.durationMs));
-    if (!s.playing || !reachedPlay(_heard, length)) return;
-    final videoId = t.source == 'yt' ? t.ytVideoId : null;
+    _wasPlaying = s.playing;
+    if (s.playing && reachedPlay(_heard, _length)) {
+      _report();
+    } else if (!s.playing && last != null) {
+      // Stopped or completed: the end of a short song may land here.
+      _finish();
+    }
+  }
+
+  /// Reports the current track if its heard time makes a play, allowing the
+  /// end tolerance for songs shorter than the threshold.
+  void _finish() {
+    if (_reported || _track == null) return;
+    final length = _length;
+    final adjusted = length == null ? null : length - _endTolerance;
+    if (reachedPlay(_heard, adjusted)) _report();
+  }
+
+  void _report() {
+    final t = _track;
+    final videoId = t != null && t.source == 'yt' ? t.ytVideoId : null;
     if (videoId == null) return;
     final tracking = _src.trackingFor(videoId);
     if (tracking == null) return;
     _reported = true;
-    unawaited(_send(videoId, tracking, _heard, s.position));
+    unawaited(_send(videoId, tracking, _heard, _lastPos ?? _heard));
   }
 
   Future<void> _send(
