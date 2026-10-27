@@ -193,6 +193,31 @@ void main() {
     });
   });
 
+  Future<void> addEntry(
+    String id,
+    String playlistId,
+    String trackId, {
+    String status = 'active',
+    bool deleted = false,
+  }) {
+    return db
+        .into(db.playlistEntries)
+        .insert(
+          PlaylistEntriesCompanion.insert(
+            id: id,
+            clock: '0000000000001-00000-dev',
+            originDevice: 'dev',
+            localSeq: 1,
+            playlistId: playlistId,
+            trackId: trackId,
+            position: 'a0',
+            addedAt: DateTime(2026),
+            status: Value(status),
+            deleted: Value(deleted),
+          ),
+        );
+  }
+
   group('allTracks', () {
     test('returns live local tracks ordered by title', () async {
       await addTrack('1', 'beta', 'A');
@@ -201,6 +226,18 @@ void main() {
       await addTrack('4', 'Remote', 'A', source: 'yt');
       final all = await repo.allTracks().first;
       expect([for (final t in all) t.title], ['Alpha', 'beta']);
+    });
+
+    test('yt tracks need an active entry in a live playlist', () async {
+      await addTrack('1', 'orphan', 'A', source: 'yt');
+      await addTrack('2', 'active', 'A', source: 'yt');
+      await addTrack('3', 'tomb', 'A', source: 'yt');
+      await addPlaylist('p1', 'P');
+      await addEntry('e2', 'p1', '2');
+      await addEntry('e3', 'p1', '3', deleted: true);
+      final all = await repo.allTracks().first;
+      expect([for (final t in all) t.title], ['active']);
+      expect(await titles('a'), ['active']);
     });
   });
 }

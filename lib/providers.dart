@@ -20,6 +20,7 @@ import 'library/library_scanner.dart';
 import 'library/play_history_repository.dart';
 import 'library/scan_queue.dart';
 import 'library/search_repository.dart';
+import 'library/yt_tracks.dart';
 import 'player/player_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/cover_palette.dart';
@@ -317,6 +318,11 @@ final innertubeClientProvider = Provider<InnertubeClient>(
 /// YouTube Music search, radio and (later) browse.
 final ytmServiceProvider = Provider<YtmService>(
   (ref) => YtmService(ref.watch(innertubeClientProvider)),
+);
+
+/// Track rows for played YouTube Music results.
+final ytTrackStoreProvider = Provider<YtTrackStore>(
+  (ref) => _unwired('ytTrackStoreProvider'),
 );
 
 /// Platform flags for the YouTube settings; tests override them.

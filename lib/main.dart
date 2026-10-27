@@ -27,6 +27,7 @@ import 'library/library_scanner.dart';
 import 'library/play_history_repository.dart';
 import 'library/search_repository.dart';
 import 'library/tag_reader.dart';
+import 'library/yt_tracks.dart';
 import 'player/audio_session_binding.dart';
 import 'player/composite_track_resolver.dart';
 import 'player/just_audio_backend.dart';
@@ -89,15 +90,12 @@ Future<void> main() async {
   // happens on a user action or during playback.
   final runner = await _ytDlpRunner(paths, settings);
   final ytClient = YtDlpClient(runner);
-  final ytImport = YtImportService(
-    db,
-    stamp,
-    ytClient,
-    ThumbnailFetcher(
-      artCache,
-      (u) => httpDownload(u, totalTimeout: const Duration(seconds: 15)),
-    ),
+  final thumbnails = ThumbnailFetcher(
+    artCache,
+    (u) => httpDownload(u, totalTimeout: const Duration(seconds: 15)),
   );
+  final ytImport = YtImportService(db, stamp, ytClient, thumbnails);
+  final ytTracks = YtTrackStore(db, stamp, thumbnails);
   final innertube = InnertubeClient(HttpInnertubeTransport(), settings);
   final network = ConnectivityPlusStatus();
   // Instant streams from Innertube; yt-dlp when every client is refused.
@@ -193,6 +191,7 @@ Future<void> main() async {
         settingsRepositoryProvider.overrideWithValue(settings),
         ytDlpRunnerProvider.overrideWithValue(runner),
         ytImportServiceProvider.overrideWithValue(ytImport),
+        ytTrackStoreProvider.overrideWithValue(ytTracks),
         innertubeClientProvider.overrideWithValue(innertube),
         downloadRepositoryProvider.overrideWithValue(downloadRepo),
         downloadNotifierProvider.overrideWithValue(downloadNotifier),

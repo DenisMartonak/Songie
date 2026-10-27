@@ -24,7 +24,7 @@ class SearchRepository {
     if (tokens.isEmpty) return Stream.value(const []);
     return (_db.select(_db.tracks)
           ..where((t) {
-            var match = t.deleted.equals(false);
+            var match = t.deleted.equals(false) & _inLibrary;
             for (final token in tokens) {
               match =
                   match &
@@ -53,13 +53,25 @@ class SearchRepository {
     });
   }
 
-  /// Every live local track, ordered by title.
+  /// Every live track in the library, ordered by title: local tracks and YouTube
+  /// tracks reachable from a playlist (see [_inLibrary]).
   Stream<List<Track>> allTracks() {
     return (_db.select(_db.tracks)
-          ..where((t) => t.deleted.equals(false) & t.source.equals('local'))
+          ..where((t) => t.deleted.equals(false) & _inLibrary)
           ..orderBy(_titleOrder))
         .watch();
   }
+
+  /// Local tracks always count. A YouTube track (an imported one, or one played
+  /// from search and never added anywhere) counts only while an active entry
+  /// of a non-deleted playlist points at it.
+  static final Expression<bool> _inLibrary = CustomExpression<bool>(
+    "(tracks.source <> 'yt' OR EXISTS ("
+    'SELECT 1 FROM playlist_entries e '
+    'JOIN playlists p ON p.id = e.playlist_id '
+    "WHERE e.track_id = tracks.id AND e.deleted = 0 AND e.status = 'active' "
+    'AND p.deleted = 0))',
+  );
 
   static final List<OrderingTerm Function($TracksTable)> _titleOrder = [
     (t) => OrderingTerm.asc(t.title.lower()),
