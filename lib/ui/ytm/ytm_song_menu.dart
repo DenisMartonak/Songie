@@ -5,6 +5,7 @@ import '../../core/log.dart';
 import '../../core/result.dart';
 import '../../data/database.dart';
 import '../../innertube/ytm_models.dart';
+import '../../library/yt_tracks.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../library/add_to_playlist_sheet.dart';
@@ -84,17 +85,16 @@ Future<void> showYtmSongMenu(
     case _SongAction.radio:
       await ref.read(radioControllerProvider).playWithRadio(song);
     case _SongAction.playNext:
-      final track = await _store(context, ref, song);
-      if (track != null) {
-        await ref.read(playerServiceProvider).playNext([track]);
-      }
+      // Read before the first await: ref may be gone once it returns.
+      final player = ref.read(playerServiceProvider);
+      final track = await _store(context, ref.read(ytTrackStoreProvider), song);
+      if (track != null) await player.playNext([track]);
     case _SongAction.addToQueue:
-      final track = await _store(context, ref, song);
-      if (track != null) {
-        await ref.read(playerServiceProvider).addToQueue([track]);
-      }
+      final player = ref.read(playerServiceProvider);
+      final track = await _store(context, ref.read(ytTrackStoreProvider), song);
+      if (track != null) await player.addToQueue([track]);
     case _SongAction.addToPlaylist:
-      final track = await _store(context, ref, song);
+      final track = await _store(context, ref.read(ytTrackStoreProvider), song);
       if (track != null && context.mounted) {
         await showAddToPlaylistSheet(context, ref, [track.id]);
       }
@@ -102,9 +102,13 @@ Future<void> showYtmSongMenu(
 }
 
 /// [song]'s track row, or null (with a snack bar) when it cannot be stored.
-Future<Track?> _store(BuildContext context, WidgetRef ref, YtmSong song) async {
+Future<Track?> _store(
+  BuildContext context,
+  YtTrackStore store,
+  YtmSong song,
+) async {
   final snacks = PageSnackBars.of(context);
-  switch (await ref.read(ytTrackStoreProvider).upsert(song)) {
+  switch (await store.upsert(song)) {
     case Ok(:final value):
       return value;
     case Err(:final failure):

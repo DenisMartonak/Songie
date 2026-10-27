@@ -117,12 +117,21 @@ class YtmService {
     }
   }
 
+  /// A first page with no sections at all means YouTube changed the home
+  /// shape: an unexpected-shape Err (Home shows Retry), not a silent empty
+  /// feed. An empty continuation page is just the end of the feed.
   Future<Result<YtmHome>> home({String? continuation}) async {
     final res = await _browse('FEmusic_home', continuation: continuation);
-    return switch (res) {
-      Err(:final failure) => Err(failure),
-      Ok(:final value) => Ok(parseHome(value)),
-    };
+    switch (res) {
+      case Err(:final failure):
+        return Err(failure);
+      case Ok(:final value):
+        if (continuation == null && browseSections(value).sections.isEmpty) {
+          AppLog.w('ytm parse: home first page has no sections');
+          return _unexpected('home');
+        }
+        return Ok(parseHome(value));
+    }
   }
 
   Future<Result<YtmArtistPage>> artist(String browseId) async {

@@ -29,6 +29,8 @@ User agents and extra `context.client` fields, verbatim from yt-dlp (all verifie
 
 **`kPlayerClients` = [VISIONOS, ANDROID_VR]**, the two that returned plain `url` audio. TVHTML5 and IOS are left out: neither gave a playable URL, and trying them would only delay the yt-dlp fallback.
 
+**Unavailable songs (ruling R12, supersedes R2's stop-on-notFound).** `InnertubeStreamSource` still returns `notFound` when every client reports a video-level status (UNPLAYABLE, an ERROR that isn't "reload", or an age LOGIN_REQUIRED). That verdict is a heuristic, so `FallbackStreamSource` no longer stops on it: an earlier source's `notFound` moves on to yt-dlp like any other failure, and only the LAST source's `notFound` (yt-dlp's) marks the song unavailable. Cost: about 2 s once per truly dead song.
+
 ### Stream URLs and `playbackTracking`
 - Format URL: `https://rrN---sn-<node>.googlevideo.com/videoplayback?expire=<unix s>&ei=..&ip=<client ip>&id=..&itag=251&...&mime=audio%2Fwebm&clen=..&dur=..&c=VISIONOS&...&sig=..&lsig=..`. `expire` is about 6 h after the response (`streamingData.expiresInSeconds` is `21540`). Each format also has `bitrate`, `averageBitrate`, `contentLength`, `approxDurationMs`, `audioQuality`, `loudnessDb`.
 - `playbackTracking` (visionOS and android_vr): `videostatsPlaybackUrl`, `videostatsDelayplayUrl`, `videostatsWatchtimeUrl`, `ptrackingUrl`, `qoeUrl`, `atrUrl` (each `{baseUrl}`), plus `videostatsScheduledFlushWalltimeSeconds` and `videostatsDefaultFlushIntervalSeconds`. The base URLs are `https://s.youtube.com/api/stats/playback?cl=..&docid=<videoId>&ei=..&ns=yt&plid=..&el=detailpage&len=<seconds>&of=..&vm=..` (watchtime the same path `/api/stats/watchtime`). Tasks 2 and 6 read playback and watchtime from here.

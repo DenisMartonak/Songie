@@ -68,15 +68,45 @@ void main() {
     );
   });
 
-  test('notFound is returned without calling yt-dlp', () async {
+  test('innertube notFound falls through to yt-dlp Ok (R12)', () async {
     final it = _FakeSource(
       'innertube',
       Err(ytFailure(YtErrorKind.notFound, 'innertube: Video unavailable')),
     );
     final yt = _FakeSource('yt-dlp', _ok);
     final r = await FallbackStreamSource([it, yt]).resolveStream('v');
-    expect(ytErrorKindOf((r as Err<YtStream>).failure), YtErrorKind.notFound);
-    expect(yt.calls, isEmpty);
+    expect(r, isA<Ok<YtStream>>());
+    expect(it.calls, ['v']);
+    expect(yt.calls, ['v']);
+  });
+
+  test('innertube notFound then yt-dlp notFound is notFound', () async {
+    final it = _FakeSource(
+      'innertube',
+      Err(ytFailure(YtErrorKind.notFound, 'innertube: Video unavailable')),
+    );
+    final yt = _FakeSource(
+      'yt-dlp',
+      Err(ytFailure(YtErrorKind.notFound, 'yt-dlp: Video unavailable')),
+    );
+    final r = await FallbackStreamSource([it, yt]).resolveStream('v');
+    final f = (r as Err<YtStream>).failure;
+    expect(ytErrorKindOf(f), YtErrorKind.notFound);
+    expect(f.message, contains('yt-dlp'));
+    expect(yt.calls, ['v']);
+  });
+
+  test('innertube notFound then a yt-dlp network Err is that Err', () async {
+    final it = _FakeSource(
+      'innertube',
+      Err(ytFailure(YtErrorKind.notFound, 'innertube: Video unavailable')),
+    );
+    final yt = _FakeSource(
+      'yt-dlp',
+      Err(ytFailure(YtErrorKind.network, 'Unable to connect')),
+    );
+    final r = await FallbackStreamSource([it, yt]).resolveStream('v');
+    expect(ytErrorKindOf((r as Err<YtStream>).failure), YtErrorKind.network);
   });
 
   test('a first Ok stops there', () async {

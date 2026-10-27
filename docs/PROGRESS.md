@@ -20,7 +20,8 @@ _Last updated: 2026-10-27_
 - **Linux / libmpv:** `mpv-libs-devel` is **not** installed on this host and is not needed: the Linux release build links and runs against the runtime `mpv-libs` (0.41), which is installed. If a future Linux build fails on a missing libmpv, install the headers with `sudo dnf install mpv-libs-devel`.
 - **Rulings** (each with its cost if wrong; the full text is in the session log):
   - **R1, R11:** commits end with `Co-Authored-By` and `Claude-Session` trailers; R11 names the session that made the commit.
-  - **R2:** Innertube reports a song unavailable only when every client tried says so at video level (unplayable, an error that isn't "reload", or an age login); any other failure falls through to yt-dlp. Cost: a few truly unavailable songs take one slow yt-dlp try before the skip.
+  - **R2** (stop-on-notFound superseded by R12): Innertube reports a song unavailable only when every client tried says so at video level (unplayable, an error that isn't "reload", or an age login); any other failure falls through to yt-dlp. Cost: a few truly unavailable songs take one slow yt-dlp try before the skip.
+  - **R12** (supersedes R2's stop-on-notFound): `FallbackStreamSource` stops on `notFound` only from the LAST source; an Innertube `notFound` falls through to yt-dlp, and only yt-dlp's `notFound` marks the song unavailable. Cost: about 2 s once per truly dead song.
   - **R2b:** a visitor id is fetched (one request) before the first `player` call when none is stored; a "not a bot" login is a client-level failure. Cost: one request on first play.
   - **R3:** fixtures YouTube didn't serve here (per-kind search tabs, video-level unplayable) are hand-made from real rows (`*_handcrafted.json`). Cost: tab parsers rest on reshaped rows; the live run above covered search.
   - **R4:** play reports use `playbackUrl` + `ver=2&cpn=…`, and watchtime adds `st=0&et=<heard s>&cmt=<pos s>`. Cost: YouTube may ignore them and the feed is less personal.
@@ -32,7 +33,7 @@ _Last updated: 2026-10-27_
   - **R10:** real-network timing uses the dev tool (stream lookup, not player start-up); the Linux build is recorded as blocked if libmpv is the only failure.
   - Task 1: the fixture scrub also replaces the `fexp` and `initcwndbps` URL parameters (nothing parses them).
 - **Parked items (deferred minors that matter):** the full list is in the ledger and session log. The ones worth doing first:
-  - Radio: `_continuation` is set before `addToQueue` completes (possible early fetch) and `_start` has no try/catch; `_becomeQueue` doesn't clear the source playlist or notice.
+  - Radio: `_start` has no try/catch; `_becomeQueue` doesn't clear the source playlist or notice. (The early continuation fetch is fixed: `_continuation` is set after `addToQueue` returns.)
   - Now Playing title/artist stay stale after a metadata upgrade (branch-wide).
   - Song menu: Play next / Add to queue use `ref` after `await` without a `mounted` check.
   - Consent: `ConsentListener` is mounted only on Home (move it to the shell); an in-flight request can re-store the old visitor id right after Reset.

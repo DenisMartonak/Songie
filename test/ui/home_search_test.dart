@@ -425,7 +425,10 @@ void main() {
     uiTest('an empty query shows the hint', (tester) async {
       await seed(tester);
       await pumpPage(tester, const SearchPage());
-      expect(find.text('Search your library'), findsOneWidget);
+      expect(
+        find.text('Search your library and YouTube Music'),
+        findsOneWidget,
+      );
       expect(find.byKey(const Key('search.emptyIcon')), findsOneWidget);
       expect(find.text('Songs'), findsNothing);
     });
@@ -444,7 +447,7 @@ void main() {
       expect(find.text('Halo'), findsOneWidget);
       expect(find.text('Yellow'), findsNothing);
       expect(find.text('Beyoncé hits'), findsOneWidget);
-      expect(find.text('Search your library'), findsNothing);
+      expect(find.text('Search your library and YouTube Music'), findsNothing);
       // The results fade in.
       expect(
         find.ancestor(

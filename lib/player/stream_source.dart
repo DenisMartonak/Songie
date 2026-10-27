@@ -19,9 +19,12 @@ List<StreamSource> playbackSources({
   bool forceYtDlp = false,
 }) => forceYtDlp ? [ytDlp] : [innertube, ytDlp];
 
-/// Tries [StreamSource]s in order. A video that is unavailable (`notFound`)
-/// ends the search at once; any other failure moves on to the next source,
-/// so a failing fast route only costs time, never an error by itself.
+/// Tries [StreamSource]s in order; any failure moves on to the next source,
+/// so a failing fast route only costs time, never an error by itself. That
+/// includes an earlier source's `notFound` (Innertube's verdict is a
+/// heuristic): only the LAST source (yt-dlp) can confirm a video is
+/// unavailable (ruling R12, superseding R2's stop-on-notFound). When every
+/// source fails, the last source's result is returned.
 class FallbackStreamSource implements StreamSource {
   FallbackStreamSource(this._sources) : assert(_sources.isNotEmpty);
 
@@ -51,16 +54,13 @@ class FallbackStreamSource implements StreamSource {
           );
           return r;
         case Err(:final failure):
-          if (ytErrorKindOf(failure) == YtErrorKind.notFound) {
-            AppLog.i(
-              'stream $videoId unavailable via ${s.name} in '
-              '${sw.elapsedMilliseconds} ms: ${failure.message}',
-            );
-            return r;
-          }
+          final notFound = ytErrorKindOf(failure) == YtErrorKind.notFound;
           AppLog.i(
-            'stream $videoId: ${s.name} failed after '
-            '${sw.elapsedMilliseconds} ms: ${failure.message}',
+            notFound
+                ? 'stream $videoId unavailable via ${s.name} in '
+                      '${sw.elapsedMilliseconds} ms: ${failure.message}'
+                : 'stream $videoId: ${s.name} failed after '
+                      '${sw.elapsedMilliseconds} ms: ${failure.message}',
           );
           last = r;
       }

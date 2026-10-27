@@ -110,6 +110,21 @@ class FakeStore implements YtTrackStore {
 
 List<String> ids(List<Track> q) => [for (final t in q) t.id];
 
+/// A player whose [addToQueue] waits for [addGate] when set, to hold the
+/// radio's append window open.
+class _GatedPlayer extends PlayerService {
+  _GatedPlayer(super.backend, super.resolver, {super.random});
+
+  Completer<void>? addGate;
+
+  @override
+  Future<void> addToQueue(List<Track> tracks) async {
+    final g = addGate;
+    if (g != null) await g.future;
+    return super.addToQueue(tracks);
+  }
+}
+
 void main() {
   late FakeAudioBackend backend;
   late PlayerService player;
@@ -208,6 +223,35 @@ void main() {
   });
 
   group('continuation', () {
+    test('a playing tick while a page is being queued does not fetch the '
+        'next page early', () async {
+      final gated = _GatedPlayer(backend, _Resolver(), random: Random(1));
+      final r2 = RadioController(gated, ytm, store);
+      addTearDown(() async {
+        await r2.dispose();
+        await gated.dispose();
+      });
+      ytm.answers['s'] = Ok(page(['r1', 'r2', 'r3'], cont: 'c1'));
+      ytm.answers['cont:c1'] = Ok(page(['r4']));
+      gated.addGate = Completer<void>();
+      final done = r2.playWithRadio(song('s'));
+      await pumpEventQueue();
+      // The seed plays alone (last of 1) while the radio page waits to be
+      // queued: a tick now must not spend the continuation.
+      expect(gated.state.queue, hasLength(1));
+      backend.setPosition(const Duration(seconds: 1));
+      await pumpEventQueue();
+      expect(ytm.calls, ['s']);
+
+      gated.addGate!.complete();
+      gated.addGate = null;
+      await done;
+      expect(gated.state.queue, hasLength(4));
+      backend.setPosition(const Duration(seconds: 2));
+      await pumpEventQueue();
+      expect(ytm.calls, ['s']); // the seed is first of 4: not near the end
+    });
+
     test('reaching the second-to-last song fetches it exactly once', () async {
       ytm.answers['s'] = Ok(page(['r1', 'r2', 'r3'], cont: 'c1'));
       ytm.answers['cont:c1'] = Ok(page(['r4', 'r5']));

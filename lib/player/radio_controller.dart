@@ -109,13 +109,20 @@ class RadioController {
         if (_seen.add(t.id)) t,
     ];
     // A page with nothing new ends the radio rather than asking again.
-    _continuation = fresh.isEmpty ? null : page.continuation;
-    if (fresh.isEmpty) return;
+    if (fresh.isEmpty) {
+      _continuation = null;
+      return;
+    }
     try {
       await _player.addToQueue(fresh);
     } catch (e, st) {
       AppLog.w('Radio: queueing failed', e, st);
+      return;
     }
+    // The token is armed only once the page is in the queue: a playing tick
+    // during the append would otherwise see the old end and fetch early.
+    if (_player.queueEpoch != epoch || _epoch != epoch) return;
+    _continuation = page.continuation;
   }
 
   void _onState(PlayerState s) {

@@ -655,6 +655,9 @@ String? _headerThumb(Object? header) => bestThumbnail(
   ]),
 );
 
+/// "EP" / "EPs" as a word, so "Deep cuts" is not a singles shelf.
+final _epWord = RegExp(r'\beps?\b', caseSensitive: false);
+
 /// The artist page; null when the header (and so the name) is missing.
 YtmArtistPage? parseArtistPage(Json json, String browseId) =>
     _guard('artist page', () {
@@ -690,7 +693,7 @@ YtmArtistPage? parseArtistPage(Json json, String browseId) =>
         if (shelf.items.every((i) => i is YtmArtist)) {
           similar.addAll(shelf.items.cast<YtmArtist>());
         } else if (shelf.items.every((i) => i is YtmAlbum)) {
-          final target = title.contains('single') || title.contains('ep')
+          final target = title.contains('single') || _epWord.hasMatch(title)
               ? singles
               : title.contains('album')
               ? albums

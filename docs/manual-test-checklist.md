@@ -159,6 +159,7 @@ Search, Home and pages
 
 Network and settings
 - [ ] Wi-Fi only streaming is off after the update. With it on, mobile data blocks streaming but not browsing.
+  Upgrade note: someone who had "Wi-Fi only" on before the update will now stream on mobile data, because the new "Wi-Fi only streaming" setting defaults to off. They must turn it on again to keep streaming on Wi-Fi only.
 - [ ] With Wi-Fi off and Innertube blocked (a firewall rule), songs still play through yt-dlp.
 
 Consent and recommendations

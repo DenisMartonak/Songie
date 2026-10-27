@@ -86,9 +86,11 @@ void main() {
     await settle(tester);
   }
 
-  uiTest('the empty query keeps "Search your library"', (tester) async {
+  uiTest('the empty query keeps "Search your library and YouTube Music"', (
+    tester,
+  ) async {
     await pumpSearch(tester);
-    expect(find.text('Search your library'), findsOneWidget);
+    expect(find.text('Search your library and YouTube Music'), findsOneWidget);
     expect(find.byKey(const Key('search.tabs')), findsNothing);
     expect(h.ytm.calls, isEmpty);
   });

@@ -216,7 +216,7 @@ class _Results extends ConsumerWidget {
     final q = query.trim();
     if (q.isEmpty) {
       return _Message(
-        'Search your library',
+        'Search your library and YouTube Music',
         color: colors.mutedText,
         icon: Icon(
           Icons.manage_search_rounded,

@@ -57,6 +57,30 @@ void main() {
   });
 
   group('home', () {
+    test(
+      'a first page with no section list is an unexpected-shape Err',
+      () async {
+        final json = mutable('browse_home')..remove('contents');
+        transport.reply(ok(json));
+        final r = await ytm.home();
+        expect(r, isA<Err<YtmHome>>());
+        expect((r as Err<YtmHome>).failure.message, contains('unexpected'));
+      },
+    );
+
+    test('a first page with an empty section list is an Err too', () async {
+      final json = mutable('browse_home');
+      homeSections(json).clear();
+      transport.reply(ok(json));
+      expect(await ytm.home(), isA<Err<YtmHome>>());
+    });
+
+    test('an empty continuation page is still Ok', () async {
+      transport.reply(ok(const {}));
+      final r = await ytm.home(continuation: 'TOK');
+      expect((r as Ok<YtmHome>).value.shelves, isEmpty);
+    });
+
     test('parses shelves of songs, playlists and albums', () async {
       transport.reply(fixture('browse_home'));
       final home = ((await ytm.home()) as Ok<YtmHome>).value;
@@ -184,6 +208,45 @@ void main() {
       expect(page.albums, isEmpty);
       expect(page.topSongs, isNotEmpty);
       expect(page.singles, isNotEmpty);
+    });
+
+    group('album shelf titles match "EP" as a word', () {
+      void retitle(Map<String, Object?> json, int section, String title) {
+        final header = shelfBody(homeSections(json)[section])['header']! as Map;
+        final runs =
+            ((header['musicCarouselShelfBasicHeaderRenderer']! as Map)['title']!
+                    as Map)['runs']!
+                as List;
+        (runs.first as Map)['text'] = title;
+      }
+
+      Future<YtmArtistPage> load(Map<String, Object?> json) async {
+        transport.reply(ok(json));
+        return ((await ytm.artist(
+          'UCRr1xG_2WIDs18a6cIiCxeA',
+        )) as Ok<YtmArtistPage>).value;
+      }
+
+      test('"Deep cuts" is not singles', () async {
+        final base = await load(mutable('browse_artist'));
+        final json = mutable('browse_artist');
+        retitle(json, 1, 'Deep cuts');
+        final page = await load(json);
+        expect(page.albums, isEmpty);
+        expect(page.singles.length, base.singles.length);
+      });
+
+      test('"EPs" and "Singles & EPs" are singles', () async {
+        final json = mutable('browse_artist');
+        retitle(json, 1, 'EPs');
+        final page = await load(json);
+        expect(page.albums, isEmpty);
+        expect(page.singles, isNotEmpty);
+        expect(
+          page.singles.length,
+          greaterThan((await load(mutable('browse_artist'))).singles.length),
+        );
+      });
     });
 
     test('no header and no name is an Err', () async {
