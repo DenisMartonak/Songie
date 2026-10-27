@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -161,13 +162,28 @@ Future<void> showSongMenu(
   final radio = ref.read(radioControllerProvider);
   final askPermission = ref.read(notificationPermissionProvider);
   final snacks = PageSnackBars.of(context);
-
   final playable = song.isYouTube && !song.unavailable;
+  // Only Remove download needs it. Null where the app paths are not set up
+  // (Remove download then says it couldn't).
+  Directory? ytDir;
+  if (playable) {
+    try {
+      ytDir = ref.read(appPathsProvider).libraryYt;
+    } catch (e, s) {
+      AppLog.w('Song menu: no app paths for downloads', e, s);
+    }
+  }
+
   var downloaded = false;
   if (playable) {
     final known = song.track ?? await store.find(song.ytm!.videoId);
     if (known != null) {
-      downloaded = (await downloads.rowIds([known.id])).isNotEmpty;
+      try {
+        downloaded = (await downloads.rowIds([known.id])).isNotEmpty;
+      } catch (e, s) {
+        // The menu still opens; it offers Download.
+        AppLog.w('Song menu: reading the download state failed', e, s);
+      }
     }
     if (!context.mounted) return;
   }
@@ -201,7 +217,9 @@ Future<void> showSongMenu(
   final action = anchor == null
       ? await _sheet(context, song, entries)
       : await _popup(context, anchor, entries);
-  if (action == null || !context.mounted) return;
+  // The row may be gone now (the list changed while the menu was open): the
+  // actions that need its context check it; the others run regardless.
+  if (action == null) return;
 
   /// [song]'s track row, storing a YouTube Music song first; null (with a
   /// snack bar) when it cannot be stored.
@@ -235,9 +253,9 @@ Future<void> showSongMenu(
         await radio.startRadio(song.track!);
       }
     case SongMenuAction.goToArtist:
-      context.goYtmArtist(song.artistId!);
+      if (context.mounted) context.goYtmArtist(song.artistId!);
     case SongMenuAction.goToAlbum:
-      context.goYtmAlbum(song.albumId!);
+      if (context.mounted) context.goYtmAlbum(song.albumId!);
     case SongMenuAction.download:
       final t = await track();
       if (t == null) return;
@@ -252,10 +270,14 @@ Future<void> showSongMenu(
       }
     case SongMenuAction.removeDownload:
       final t = await track();
-      if (t == null || !context.mounted) return;
-      final ytDir = ref.read(appPathsProvider).libraryYt;
+      final dir = ytDir;
+      if (t == null) return;
+      if (dir == null) {
+        snacks.show(content: const Text("Couldn't change that download"));
+        return;
+      }
       try {
-        await downloads.removeTrackDownload(t.id, ytDir);
+        await downloads.removeTrackDownload(t.id, dir);
       } on DownloadDbException catch (e, s) {
         AppLog.w('Removing a song download failed', e, s);
         snacks.show(content: const Text("Couldn't change that download"));

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/log.dart';
 import '../../core/result.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
@@ -48,7 +49,15 @@ Future<void> showAddToPlaylistSheet(
     }
   }
   // Songs the playlist already holds are not added again.
-  final present = choice.isNew ? const <String>{} : await repo.trackIdsIn(id!);
+  var present = const <String>{};
+  if (!choice.isNew) {
+    try {
+      present = await repo.trackIdsIn(id!);
+    } catch (e, s) {
+      // Add anyway rather than not at all.
+      AppLog.w('Reading playlist $id before adding failed', e, s);
+    }
+  }
   final fresh = [
     for (final t in trackIds)
       if (!present.contains(t)) t,

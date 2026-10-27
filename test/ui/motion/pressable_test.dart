@@ -206,16 +206,19 @@ void main() {
       ),
     );
     final centre = tester.getCenter(find.byType(Pressable));
-    await tester.tapAt(
+    final gesture = await tester.startGesture(
       centre,
       buttons: kSecondaryButton,
       kind: PointerDeviceKind.mouse,
     );
+    await tester.pump();
+    await tester.pump(Motion.quick ~/ 2);
+    // A right-click doesn't dip the row like a press.
+    expect(scale(tester), 1.0);
+    await gesture.up();
     await tester.pumpAndSettle();
     expect(at, centre);
     expect(taps, 0);
-    // A right-click doesn't dip the row like a press.
-    expect(scale(tester), 1.0);
   });
 
   testWidgets('a right-click alone makes it interactive', (tester) async {

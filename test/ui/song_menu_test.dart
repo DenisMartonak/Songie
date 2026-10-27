@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/result.dart';
+import 'package:songies/library/library_repository.dart';
 import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/ui/home/home_page.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
@@ -419,6 +420,44 @@ void main() {
       expect(await real(tester, () => h.orderOf(pid)), ['t1', 't2']);
     });
 
+    uiTest('removes the right song after the list changed under the menu', (
+      tester,
+    ) async {
+      final pid = await real(tester, () async {
+        for (final id in ['t1', 't2', 't3', 't4']) {
+          await h.addTrack(id);
+        }
+        return h.addPlaylist('Road trip', ['t1', 't2', 't3']);
+      });
+      await pumpPlaylist(tester, pid);
+
+      await longPress(tester, find.text('Song t2'));
+      expect(item('removeFromPlaylist'), findsOneWidget);
+      // While the menu is open, t1 goes away and t4 is added at the end.
+      await real(tester, () async {
+        // A plain read: a stream subscribed here would wait on the fake
+        // clock.
+        final first = await (h.db.select(
+          h.db.playlistEntries,
+        )..where((e) => e.trackId.equals('t1'))).getSingle();
+        await h.repo.removeEntry(first.id);
+      });
+      // The page catches up between writes (drift's stream re-query runs on
+      // the test's clock).
+      await settle(tester);
+      await real(tester, () => h.repo.addTracks(pid, ['t4']));
+      await settle(tester);
+      expect(await real(tester, () => h.orderOf(pid)), ['t2', 't3', 't4']);
+
+      await choose(tester, 'removeFromPlaylist');
+      expect(await real(tester, () => h.orderOf(pid)), ['t3', 't4']);
+      expect(find.text('Removed Song t2'), findsOneWidget);
+
+      await tester.tap(find.text('Undo'));
+      await settle(tester);
+      expect(await real(tester, () => h.orderOf(pid)), ['t2', 't3', 't4']);
+    });
+
     uiTest('does not show outside a playlist', (tester) async {
       await recents(tester);
       await pumpHome(tester);
@@ -471,6 +510,39 @@ void main() {
     });
   });
 
+  group('a failed database read', () {
+    uiTest('still opens the menu, as not downloaded', (tester) async {
+      final pid = await real(tester, () async {
+        await addYtTrack('y1');
+        return h.addPlaylist('Mix', ['y1']);
+      });
+      h.downloadRepo = _FailingRowIds(h.db);
+      await pumpPlaylist(tester, pid);
+      await longPress(tester, find.text('Song y1'));
+      expect(sheet, findsOneWidget);
+      expect(item('download'), findsOneWidget);
+      expect(item('removeDownload'), findsNothing);
+    });
+
+    uiTest('still adds to the playlist', (tester) async {
+      late String gym;
+      await real(tester, () async {
+        await h.addTrack('t1');
+        await h.addTrack('t2');
+        gym = await h.addPlaylist('Gym', ['t2']);
+      });
+      h.repo = _FailingTrackIdsIn(h.db, h.stamp);
+      await pumpPlaylist(tester, gym);
+      await longPress(tester, find.text('Song t2'));
+      await choose(tester, 'addToPlaylist');
+      await tester.tap(find.byKey(Key('addToPlaylist.$gym')));
+      await settle(tester);
+      // Without the check it adds (a duplicate here) rather than failing.
+      expect(find.text('Added to Gym'), findsOneWidget);
+      expect(await real(tester, () => h.orderOf(gym)), ['t2', 't2']);
+    });
+  });
+
   group('Go to', () {
     uiTest('artist and album hide for a library song (ids unknown)', (
       tester,
@@ -494,6 +566,9 @@ void main() {
       await longPress(tester, find.byKey(const Key('ytm.song.v1')));
       expect(item('goToArtist'), findsOneWidget);
       expect(item('goToAlbum'), findsOneWidget);
+      // Opening the menu writes nothing: the song is stored only by an action.
+      expect(h.ytStore.upserted, isEmpty);
+      expect(await real(tester, () => h.db.select(h.db.tracks).get()), isEmpty);
     });
   });
 
@@ -510,4 +585,22 @@ void main() {
       expect(h.ytStore.upserted, isEmpty);
     });
   });
+}
+
+/// A download repository whose download-row lookup fails.
+class _FailingRowIds extends RecordingDownloadRepository {
+  _FailingRowIds(super.db);
+
+  @override
+  Future<Set<String>> rowIds(Iterable<String> trackIds) =>
+      Future.error(StateError('database is locked'));
+}
+
+/// A library repository whose playlist-contents lookup fails.
+class _FailingTrackIdsIn extends LibraryRepository {
+  _FailingTrackIdsIn(super.db, super.stamp);
+
+  @override
+  Future<Set<String>> trackIdsIn(String playlistId) =>
+      Future.error(StateError('database is locked'));
 }

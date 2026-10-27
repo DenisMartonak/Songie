@@ -167,7 +167,9 @@ class UiHarness {
 
   final AppDatabase db;
   final SyncStamp stamp;
-  late final LibraryRepository repo = LibraryRepository(db, stamp);
+
+  /// Replaceable before the app is pumped (a test's failing subclass).
+  late LibraryRepository repo = LibraryRepository(db, stamp);
   late final SearchRepository search = SearchRepository(db);
   final PlayHistoryRepository history;
   final FakeAudioBackend backend;
@@ -181,8 +183,11 @@ class UiHarness {
     db,
     YtDlpClient(ytRunner),
   );
-  late final RecordingDownloadRepository downloadRepo =
-      RecordingDownloadRepository(db);
+
+  /// Replaceable before the app is pumped (a test's failing subclass).
+  late RecordingDownloadRepository downloadRepo = RecordingDownloadRepository(
+    db,
+  );
 
   /// YouTube Music: search answers, radio and track rows, all faked.
   final FakeYtmService ytm = FakeYtmService();
