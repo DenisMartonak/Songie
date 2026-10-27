@@ -20,10 +20,27 @@ class InnertubeClient {
 
   bool _visitorLoaded = false;
   String? _visitor;
+  bool? _consentGiven;
+
+  /// The cookie yt-dlp, ytmusicapi and NewPipe send for "accept all"
+  /// (see docs/innertube-notes.md, Consent).
+  static const consentCookie = 'SOCS=CAI';
 
   /// Emits `true` whenever a response asks the user to accept YouTube's
   /// terms (a consent.youtube.com redirect or link, or an FEconsent browse).
+  /// Silent once consent was given on this device.
   Stream<bool> get consentRequired => _consent.stream;
+
+  /// Whether the user accepted YouTube's terms on this device.
+  Future<bool> consentGiven() async =>
+      _consentGiven ??= await _settings.getString(kYtConsentGiven) != null;
+
+  /// Records the user's consent (device-local); every later request sends
+  /// the [consentCookie].
+  Future<void> acceptConsent() async {
+    _consentGiven = true;
+    await _settings.setString(kYtConsentGiven, '1');
+  }
 
   /// The stored visitor id, if any.
   Future<String?> visitorData() async {
@@ -51,6 +68,7 @@ class InnertubeClient {
   }) async {
     try {
       final visitor = await visitorData();
+      final consented = await consentGiven();
       final request = <String, Object?>{
         ...body,
         'context': {
@@ -71,6 +89,7 @@ class InnertubeClient {
         'X-YouTube-Client-Version': c.version,
         'Origin': 'https://${c.host}',
         'X-Goog-Visitor-Id': ?visitor,
+        if (consented) 'Cookie': consentCookie,
       };
       final res = await _t.post(c.endpoint(endpoint, query), request, headers);
       return await _handle(c, endpoint, res);
@@ -102,7 +121,7 @@ class InnertubeClient {
   ) async {
     final redirect = res.redirect;
     if (redirect != null && _isConsentHost(redirect)) {
-      _consent.add(true);
+      await _askForConsent();
       return Err(
         Failure(
           FailureKind.network,
@@ -130,8 +149,12 @@ class InnertubeClient {
       );
     }
     await _storeVisitor(json);
-    if (_asksForConsent(json)) _consent.add(true);
+    if (_asksForConsent(json)) await _askForConsent();
     return Ok(json);
+  }
+
+  Future<void> _askForConsent() async {
+    if (!await consentGiven() && !_consent.isClosed) _consent.add(true);
   }
 
   /// Stores the first visitor id YouTube hands out; a stored one is kept.

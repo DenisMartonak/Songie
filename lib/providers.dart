@@ -395,6 +395,49 @@ final ytmSearchProvider = FutureProvider.autoDispose
       retry: (_, _) => null,
     );
 
+/// The YouTube Music home feed: fetched when Home is first shown, kept for the
+/// session, and fetched again only by pull to refresh, Retry, accepting
+/// consent or resetting recommendations (each invalidates it). Never retried
+/// on its own: no idle requests.
+///
+/// Fails with [YtmOffline] when offline (without a request) or when a network
+/// failure turns out to be the device going offline, else [YtmLoadFailed].
+final ytmHomeProvider = FutureProvider<YtmHome>((ref) async {
+  final network = ref.watch(networkStatusProvider);
+  final ytm = ref.watch(ytmServiceProvider);
+  if (await network.current() == NetworkKind.offline) {
+    throw const YtmOffline();
+  }
+  switch (await ytm.home()) {
+    case Ok(:final value):
+      return value;
+    case Err(:final failure):
+      if (failure.kind == FailureKind.network &&
+          await network.current() == NetworkKind.offline) {
+        throw const YtmOffline();
+      }
+      throw YtmLoadFailed(failure);
+  }
+}, retry: (_, _) => null);
+
+/// YouTube asking the user to accept its terms (see [InnertubeClient]).
+final ytConsentRequiredProvider = StreamProvider<bool>(
+  (ref) => ref.watch(innertubeClientProvider).consentRequired,
+);
+
+/// Whether the consent sheet was already shown this session (Not now holds
+/// until the app restarts; Accept holds for good, in the client).
+final consentAskedProvider = NotifierProvider<ConsentAsked, bool>(
+  ConsentAsked.new,
+);
+
+class ConsentAsked extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void markAsked() => state = true;
+}
+
 /// Platform flags for the YouTube settings; tests override them.
 final isAndroidProvider = Provider<bool>((ref) => Platform.isAndroid);
 final isLinuxProvider = Provider<bool>((ref) => Platform.isLinux);

@@ -11,6 +11,7 @@ import 'package:songies/app.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/downloads/download_service.dart';
+import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/library/library_repository.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/player_service.dart';
@@ -24,6 +25,7 @@ import 'package:songies/ui/motion/equalizer_bars.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 import 'package:songies/ui/shell/window_controls.dart';
+import 'package:songies/ui/ytm/ytm_shelf_row.dart';
 
 import '../helpers/fake_audio_backend.dart';
 
@@ -148,6 +150,16 @@ void main() {
             (ref, query) => Stream.value(_playlists),
           ),
           windowControlsProvider.overrideWithValue(_Window()),
+          // A loaded YouTube Music feed below the library part of Home.
+          ytmHomeProvider.overrideWith(
+            (ref) async => const YtmHome([
+              YtmShelf('Quick picks', [
+                YtmSong(videoId: 'v1', title: 'Feed song'),
+                YtmAlbum(browseId: 'MPREb_1', title: 'Feed album'),
+              ]),
+            ], null),
+          ),
+          ytConsentRequiredProvider.overrideWith((ref) => const Stream.empty()),
           hasCustomTitleBarProvider.overrideWithValue(size.width >= 720),
         ],
         child: SongiesApp(router: router),
@@ -193,6 +205,7 @@ void main() {
       ) async {
         await pumpApp(tester, size);
         expect(find.byType(HomePage), findsOneWidget);
+        expect(find.byType(YtmShelfRow), findsOneWidget);
         await play(tester, title: _longTitle);
         // Playing does animate (or this test would prove nothing).
         expect(find.byType(EqualizerBars), findsWidgets);

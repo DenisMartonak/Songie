@@ -17,6 +17,10 @@ const kReduceMotion = 'reduce_motion';
 /// request. Device-local: never synced, never tied to an account.
 const kYtVisitorData = 'yt_visitor_data';
 
+/// Set once the user accepts YouTube's terms (the EU consent sheet); from
+/// then on Innertube requests carry the `SOCS=CAI` cookie. Device-local.
+const kYtConsentGiven = 'yt_consent_given';
+
 /// Default of the Wi-Fi only downloads setting: on for Android (metered data), off on
 /// desktop. [isAndroid] exists so tests don't depend on the host.
 bool wifiOnlyDefault({bool? isAndroid}) => isAndroid ?? Platform.isAndroid;

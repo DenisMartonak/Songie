@@ -5,12 +5,14 @@ import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/log.dart';
 import 'package:songies/core/paths.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/data/settings_repository.dart';
+import 'package:songies/providers.dart';
 import 'package:songies/theme/theme_repository.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/settings/settings_page.dart';
@@ -411,6 +413,46 @@ void main() {
         ),
         isTrue,
       );
+    });
+  });
+
+  group('youtube', () {
+    Finder reset() => find.text('Reset YouTube recommendations');
+
+    ProviderContainer container(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(SettingsPage)));
+
+    uiTest('Reset YouTube recommendations asks first; Cancel keeps all', (
+      tester,
+    ) async {
+      await pumpSettings(tester);
+      await tester.ensureVisible(reset());
+      await tester.tap(reset());
+      await settle(tester);
+      expect(find.text('Reset YouTube recommendations?'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await settle(tester);
+      expect(h.innertube.resets, 0);
+    });
+
+    uiTest('confirming forgets the visitor id and reloads the feed', (
+      tester,
+    ) async {
+      await pumpSettings(tester);
+      await real(tester, () => container(tester).read(ytmHomeProvider.future));
+      expect(h.ytm.homeCalls, hasLength(1));
+
+      await tester.ensureVisible(reset());
+      await tester.tap(reset());
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('settings.ytReset.confirm')));
+      await settle(tester);
+
+      expect(h.innertube.resets, 1);
+      expect(find.text('YouTube recommendations reset'), findsOneWidget);
+      await real(tester, () => container(tester).read(ytmHomeProvider.future));
+      expect(h.ytm.homeCalls, hasLength(2));
     });
   });
 

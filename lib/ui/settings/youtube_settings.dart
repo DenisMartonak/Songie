@@ -34,8 +34,8 @@ Future<bool> updateYtDlp(
   }
 }
 
-/// Settings → YouTube: the yt-dlp version with Install / Update and (Linux)
-/// the system yt-dlp switch.
+/// Settings → YouTube: the yt-dlp version with Install / Update, (Linux)
+/// the system yt-dlp switch, and Reset YouTube recommendations.
 class YouTubeSettingsSection extends ConsumerStatefulWidget {
   const YouTubeSettingsSection({super.key});
 
@@ -57,6 +57,39 @@ class _YouTubeSettingsSectionState
     } finally {
       if (mounted) setState(() => _updating = false);
     }
+  }
+
+  /// Forgets YouTube's anonymous visitor id (after asking), so the feed
+  /// starts fresh, and reloads the feed.
+  Future<void> _resetRecommendations() async {
+    final snacks = PageSnackBars.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset YouTube recommendations?'),
+        content: const Text(
+          'Songies forgets the anonymous id YouTube uses to tailor your Home '
+          'feed on this device, and the feed starts fresh. Your library and '
+          'history stay.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('settings.ytReset.confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (!(confirmed ?? false) || !mounted) return;
+    await ref.read(innertubeClientProvider).resetVisitor();
+    if (!mounted) return;
+    ref.invalidate(ytmHomeProvider);
+    snacks.show(content: const Text('YouTube recommendations reset'));
   }
 
   @override
@@ -111,6 +144,15 @@ class _YouTubeSettingsSectionState
                 .read(settingsRepositoryProvider)
                 .setBool(kYtdlpUseSystem, v),
           ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: TextButton.icon(
+            key: const Key('settings.ytReset'),
+            onPressed: _resetRecommendations,
+            icon: const Icon(Icons.restart_alt_rounded),
+            label: const Text('Reset YouTube recommendations'),
+          ),
+        ),
       ],
     );
   }

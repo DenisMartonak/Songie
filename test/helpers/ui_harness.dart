@@ -188,6 +188,7 @@ class UiHarness {
   final FakeYtmService ytm = FakeYtmService();
   final RecordingRadioController radio = RecordingRadioController();
   late final RecordingYtTrackStore ytStore = RecordingYtTrackStore(db, stamp);
+  final FakeInnertubeClient innertube = FakeInnertubeClient();
 
   /// The network the app thinks it is on.
   final FakeNetworkStatus network = FakeNetworkStatus();
@@ -229,6 +230,7 @@ class UiHarness {
     // Not awaited: a command started on the fake test clock can still be
     // queued in the player, and dispose() waits for the queue to drain.
     unawaited(player.dispose());
+    innertube.dispose();
     await db.close();
   }
 
@@ -255,6 +257,7 @@ class UiHarness {
     ),
     isAndroidProvider.overrideWithValue(isAndroid),
     isLinuxProvider.overrideWithValue(isLinux),
+    innertubeClientProvider.overrideWithValue(innertube),
     ytmServiceProvider.overrideWithValue(ytm),
     radioControllerProvider.overrideWithValue(radio),
     ytTrackStoreProvider.overrideWithValue(ytStore),

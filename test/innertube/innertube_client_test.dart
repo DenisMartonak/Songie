@@ -252,5 +252,47 @@ void main() {
       expect(r, isA<Ok<Map<String, Object?>>>());
       expect(seen, [true]);
     });
+
+    test('without consent no cookie is sent', () async {
+      transport.reply(fixture('search_all'));
+      await search();
+      expect(transport.requests.single.headers.containsKey('Cookie'), isFalse);
+      expect(await client.consentGiven(), isFalse);
+    });
+
+    test('accepting stores yt_consent_given and sends SOCS=CAI', () async {
+      await client.acceptConsent();
+      expect(await settings.getString(kYtConsentGiven), isNotNull);
+      expect(await client.consentGiven(), isTrue);
+      transport.reply(fixture('search_all'));
+      await search();
+      expect(transport.requests.single.headers['Cookie'], 'SOCS=CAI');
+    });
+
+    test(
+      'accepted consent survives a restart and is never asked again',
+      () async {
+        await client.acceptConsent();
+        // A new client on the same device settings, as after a restart.
+        final again = InnertubeClient(transport, settings);
+        addTearDown(again.dispose);
+        final asked = <bool>[];
+        again.consentRequired.listen(asked.add);
+        expect(await again.consentGiven(), isTrue);
+        transport.reply(fixture('consent_browse_handcrafted'));
+        await again.call(kWebRemix, 'browse', {'browseId': 'FEmusic_home'});
+        transport.reply(
+          InnertubeResponse(
+            302,
+            null,
+            redirect: Uri.parse('https://consent.youtube.com/m?continue=x'),
+          ),
+        );
+        await again.call(kWebRemix, 'search', const {});
+        await pumpEventQueue();
+        expect(transport.requests.first.headers['Cookie'], 'SOCS=CAI');
+        expect(asked, isEmpty);
+      },
+    );
   });
 }

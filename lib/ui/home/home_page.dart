@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/database.dart';
+import '../../innertube/ytm_models.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
@@ -17,6 +18,9 @@ import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
 import '../shell/adaptive_shell.dart';
 import '../widgets/artwork.dart';
+import '../ytm/consent_sheet.dart';
+import '../ytm/ytm_result_tiles.dart';
+import '../ytm/ytm_shelf_row.dart';
 
 /// "Good morning" from 05:00, "Good afternoon" from 12:00, "Good evening" from
 /// 18:00 until 05:00.
@@ -61,7 +65,8 @@ Color homeGlowColor(Color glow, CoverPalette? palette) {
 
 /// Greeting over a glow tinted by the last played cover, quick tiles for the
 /// playlists you play most recently, all playlists as cards, and the last
-/// tracks played.
+/// tracks played; then the YouTube Music feed rows (pull to refresh reloads
+/// them). Asks for YouTube's consent when YouTube does ([ConsentListener]).
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
@@ -82,115 +87,193 @@ class HomePage extends ConsumerWidget {
     final isPhone = MediaQuery.sizeOf(context).width < phoneBreakpoint;
     final bottom = MediaQuery.paddingOf(context).bottom;
     final tiles = quickTilePlaylists(playlists, recentIds);
+    final feed = ref.watch(ytmHomeProvider);
 
-    return Stack(
-      children: [
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          height: 220,
-          child: TweenAnimationBuilder<Color?>(
-            tween: ColorTween(end: homeGlowColor(colors.glow, palette)),
-            duration: Motion.of(context).colour,
-            builder: (context, glow, child) => DecoratedBox(
-              key: const Key('home.glow'),
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(-0.5, -1),
-                  radius: 1.3,
-                  colors: [glow!, glow.withAlpha(0)],
+    return ConsentListener(
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: 220,
+            child: TweenAnimationBuilder<Color?>(
+              tween: ColorTween(end: homeGlowColor(colors.glow, palette)),
+              duration: Motion.of(context).colour,
+              builder: (context, glow, child) => DecoratedBox(
+                key: const Key('home.glow'),
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(-0.5, -1),
+                    radius: 1.3,
+                    colors: [glow!, glow.withAlpha(0)],
+                  ),
                 ),
+                child: child,
               ),
-              child: child,
-            ),
-            // Fades the glow out before the box ends, so it has no edge.
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: const [0.3, 1],
-                  colors: [colors.background.withAlpha(0), colors.background],
+              // Fades the glow out before the box ends, so it has no edge.
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0.3, 1],
+                    colors: [colors.background.withAlpha(0), colors.background],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        SafeArea(
-          bottom: false,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: _maxContentWidth),
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: _Header(greeting: greeting, showSettings: isPhone),
-                  ),
-                  if (loading)
-                    const SliverToBoxAdapter(child: _SkeletonTiles())
-                  else if (playlists.isEmpty)
-                    const SliverToBoxAdapter(child: _EmptyHome())
-                  else ...[
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      sliver: SliverGrid.builder(
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              mainAxisSpacing: 8,
-                              crossAxisSpacing: 8,
-                              mainAxisExtent: _QuickTile.height,
-                            ),
-                        itemCount: tiles.length,
-                        itemBuilder: (_, i) => FadeSlideIn(
-                          index: i,
-                          id: 'tile.${tiles[i].id}',
-                          child: _QuickTile(playlist: tiles[i]),
+          SafeArea(
+            bottom: false,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+                child: RefreshIndicator(
+                  key: const Key('home.refresh'),
+                  // Errors show in the feed area; the spinner just ends.
+                  onRefresh: () => ref
+                      .refresh(ytmHomeProvider.future)
+                      .then<void>((_) {}, onError: (Object _) {}),
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: _Header(
+                          greeting: greeting,
+                          showSettings: isPhone,
                         ),
                       ),
-                    ),
-                    const SliverToBoxAdapter(
-                      child: _SectionTitle('Your playlists'),
-                    ),
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: _PlaylistCard.height,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
+                      if (loading)
+                        const SliverToBoxAdapter(child: _SkeletonTiles())
+                      else if (playlists.isEmpty)
+                        const SliverToBoxAdapter(child: _EmptyHome())
+                      else ...[
+                        SliverPadding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: playlists.length,
-                          separatorBuilder: (_, _) => const SizedBox(width: 12),
-                          itemBuilder: (_, i) => FadeSlideIn(
-                            index: i,
-                            id: 'card.${playlists[i].id}',
-                            child: _PlaylistCard(playlist: playlists[i]),
+                          sliver: SliverGrid.builder(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 8,
+                                  crossAxisSpacing: 8,
+                                  mainAxisExtent: _QuickTile.height,
+                                ),
+                            itemCount: tiles.length,
+                            itemBuilder: (_, i) => FadeSlideIn(
+                              index: i,
+                              id: 'tile.${tiles[i].id}',
+                              child: _QuickTile(playlist: tiles[i]),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                  if (recentTracks.isNotEmpty) ...[
-                    const SliverToBoxAdapter(
-                      child: _SectionTitle('Recently played'),
-                    ),
-                    SliverList.builder(
-                      itemCount: recentTracks.length,
-                      itemBuilder: (_, i) => FadeSlideIn(
-                        index: i,
-                        id: 'recent.${recentTracks[i].id}',
-                        child: _RecentRow(tracks: recentTracks, index: i),
-                      ),
-                    ),
-                  ],
-                  SliverToBoxAdapter(child: SizedBox(height: bottom + 16)),
-                ],
+                        const SliverToBoxAdapter(
+                          child: _SectionTitle('Your playlists'),
+                        ),
+                        SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: _PlaylistCard.height,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              itemCount: playlists.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: 12),
+                              itemBuilder: (_, i) => FadeSlideIn(
+                                index: i,
+                                id: 'card.${playlists[i].id}',
+                                child: _PlaylistCard(playlist: playlists[i]),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (recentTracks.isNotEmpty) ...[
+                        const SliverToBoxAdapter(
+                          child: _SectionTitle('Recently played'),
+                        ),
+                        SliverList.builder(
+                          itemCount: recentTracks.length,
+                          itemBuilder: (_, i) => FadeSlideIn(
+                            index: i,
+                            id: 'recent.${recentTracks[i].id}',
+                            child: _RecentRow(tracks: recentTracks, index: i),
+                          ),
+                        ),
+                      ],
+                      ..._feedSlivers(feed, ref),
+                      SliverToBoxAdapter(child: SizedBox(height: bottom + 16)),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// The feed area: skeleton shelves while loading, the shelves, or (when
+  /// it failed) an offline note or Couldn't load with Retry.
+  static List<Widget> _feedSlivers(AsyncValue<YtmHome> feed, WidgetRef ref) {
+    if (feed.hasError && !feed.isLoading) {
+      if (feed.error is YtmOffline) {
+        return const [SliverToBoxAdapter(child: _FeedOffline())];
+      }
+      return [
+        SliverToBoxAdapter(
+          child: YtmLoadProblem(
+            offline: false,
+            onRetry: () => ref.invalidate(ytmHomeProvider),
+          ),
         ),
-      ],
+      ];
+    }
+    final home = feed.value;
+    if (home == null) {
+      return const [
+        SliverToBoxAdapter(
+          child: YtmShelfSkeleton(key: Key('home.feed.skeleton')),
+        ),
+      ];
+    }
+    return [
+      SliverList.builder(
+        itemCount: home.shelves.length,
+        itemBuilder: (_, i) =>
+            YtmShelfRow(key: Key('home.shelf.$i'), shelf: home.shelves[i]),
+      ),
+    ];
+  }
+}
+
+/// Offline: the feed area says so, quietly; the library part stays.
+class _FeedOffline extends StatelessWidget {
+  const _FeedOffline();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Padding(
+      key: const Key('home.feed.offline'),
+      padding: const EdgeInsets.fromLTRB(16, 32, 16, 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.cloud_off_rounded, size: 20, color: colors.mutedText),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Connect to see recommendations',
+              style: TextStyle(color: colors.mutedText, fontSize: 14),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
