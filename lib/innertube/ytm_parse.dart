@@ -169,6 +169,25 @@ bool _isVideoType(String? musicVideoType, bool typeWordIsVideo) {
       musicVideoType.endsWith('_OFFICIAL_SOURCE_MUSIC'));
 }
 
+final _yearRe = RegExp(r'^\d{4}$');
+
+/// Artist and year of an album subtitle ("Album • Daft Punk • 2013",
+/// "Single • 2023", "2013").
+({String? artist, String? year}) _albumSubtitle(List<List<Json>> groups) {
+  String? artist;
+  String? year;
+  for (final g in _withoutType(groups)) {
+    final t = _runsText(g);
+    if (t == null) continue;
+    if (_yearRe.hasMatch(t)) {
+      year = t;
+    } else if (!_typeWords.contains(t)) {
+      artist ??= t;
+    }
+  }
+  return (artist: artist, year: year);
+}
+
 T? _guard<T>(String what, T? Function() parse) {
   try {
     return parse();
@@ -214,17 +233,12 @@ Object? parseListItem(Object? renderer) => _guard('list item', () {
   final browseId = _str(dig(nav, ['browseEndpoint', 'browseId']));
 
   if (pageType == 'MUSIC_PAGE_TYPE_ALBUM' && browseId != null) {
-    final rest = _withoutType(groups);
-    String? year;
-    for (final g in rest) {
-      final t = _runsText(g);
-      if (t != null && RegExp(r'^\d{4}$').hasMatch(t)) year = t;
-    }
+    final meta = _albumSubtitle(groups);
     return YtmAlbum(
       browseId: browseId,
       title: title,
-      artist: rest.isEmpty ? null : _runsText(rest.first),
-      year: year,
+      artist: meta.artist,
+      year: meta.year,
       thumbnailUrl: thumb,
       playlistId: _str(dig(play, ['watchPlaylistEndpoint', 'playlistId'])),
     );
@@ -261,13 +275,39 @@ Object? parseListItem(Object? renderer) => _guard('list item', () {
     ]),
   );
   if (videoType != null && videoType.contains('PODCAST_EPISODE')) return null;
-  final meta = _songMeta(subtitle);
+  final meta = _songMeta(
+    subtitle,
+    durationText: _runsText(
+      _runs(
+        dig(r, [
+          'fixedColumns',
+          0,
+          'musicResponsiveListItemFixedColumnRenderer',
+          'text',
+        ]),
+      ),
+    ),
+  );
+  var album = meta.album;
+  var albumId = meta.albumBrowseId;
+  if (album == null) {
+    // Artist-page and playlist rows put the album in a later column.
+    for (final c in cols.skip(2)) {
+      for (final run in c) {
+        final id = _browseId(run);
+        if (id != null && id.startsWith('MPRE') && _str(run['text']) != null) {
+          album = _str(run['text']);
+          albumId = id;
+        }
+      }
+    }
+  }
   return YtmSong(
     videoId: videoId,
     title: title,
     artists: meta.artists,
-    album: meta.album,
-    albumBrowseId: meta.albumBrowseId,
+    album: album,
+    albumBrowseId: albumId,
     durationMs: meta.durationMs,
     thumbnailUrl: thumb,
     isVideo: _isVideoType(videoType, typeWord == 'Video'),
@@ -419,3 +459,454 @@ String? parseContinuation(Object? continuations) {
     continuation: parseContinuation(_map(panel)?['continuations']),
   );
 }
+
+// ---------------------------------------------------------------------------
+// Browse pages: home, artist, album, playlist.
+
+/// A `musicTwoRowItemRenderer` (a carousel tile) as an album, playlist, artist
+/// or song / video; null for anything else or a tile with a missing piece.
+Object? parseTwoRowItem(Object? renderer) => _guard('two-row item', () {
+  final r = _map(renderer);
+  if (r == null) return null;
+  final title = _runsText(_runs(r['title']));
+  if (title == null) {
+    AppLog.i('ytm parse: two-row item without a title dropped');
+    return null;
+  }
+  final subtitle = _runs(r['subtitle']);
+  final groups = _groups(subtitle);
+  final thumb = bestThumbnail(
+    dig(r, [
+      'thumbnailRenderer',
+      'musicThumbnailRenderer',
+      'thumbnail',
+      'thumbnails',
+    ]),
+  );
+  final nav = r['navigationEndpoint'];
+  final pageType = _pageType(nav);
+  final browseId = _str(dig(nav, ['browseEndpoint', 'browseId']));
+
+  if (pageType == 'MUSIC_PAGE_TYPE_ALBUM' && browseId != null) {
+    final meta = _albumSubtitle(groups);
+    return YtmAlbum(
+      browseId: browseId,
+      title: title,
+      artist: meta.artist,
+      year: meta.year,
+      thumbnailUrl: thumb,
+      playlistId: _str(
+        dig(r, [
+          'thumbnailOverlay',
+          'musicItemThumbnailOverlayRenderer',
+          'content',
+          'musicPlayButtonRenderer',
+          'playNavigationEndpoint',
+          'watchPlaylistEndpoint',
+          'playlistId',
+        ]),
+      ),
+    );
+  }
+  if (pageType == 'MUSIC_PAGE_TYPE_ARTIST' && browseId != null) {
+    return YtmArtist(browseId: browseId, name: title, thumbnailUrl: thumb);
+  }
+  if (pageType == 'MUSIC_PAGE_TYPE_PLAYLIST' && browseId != null) {
+    final rest = _withoutType(groups);
+    return YtmPlaylist(
+      browseId: browseId,
+      title: title,
+      author: rest.isEmpty ? null : _runsText(rest.first),
+      thumbnailUrl: thumb,
+    );
+  }
+  if (pageType != null) return null;
+
+  final watch = _map(dig(nav, ['watchEndpoint']));
+  final videoId = _str(watch?['videoId']);
+  if (videoId == null) return null;
+  final videoType = _str(
+    dig(watch, [
+      'watchEndpointMusicSupportedConfigs',
+      'watchEndpointMusicConfig',
+      'musicVideoType',
+    ]),
+  );
+  if (videoType != null && videoType.contains('PODCAST_EPISODE')) return null;
+  final meta = _songMeta(subtitle);
+  return YtmSong(
+    videoId: videoId,
+    title: title,
+    artists: meta.artists,
+    album: meta.album,
+    albumBrowseId: meta.albumBrowseId,
+    thumbnailUrl: thumb,
+    isVideo: _isVideoType(videoType, false),
+  );
+});
+
+/// A shelf row: a list item or a two-row tile.
+Object? _shelfItem(Object? c) {
+  final list = dig(c, ['musicResponsiveListItemRenderer']);
+  if (list != null) return parseListItem(list);
+  final tile = dig(c, ['musicTwoRowItemRenderer']);
+  if (tile != null) return parseTwoRowItem(tile);
+  AppLog.i('ytm parse: skipped ${_map(c)?.keys.join(',')} in a shelf');
+  return null;
+}
+
+/// A `musicCarouselShelfRenderer` or `musicShelfRenderer` section as a shelf.
+/// Null for another section type, a shelf without a title, or one whose rows
+/// all fail to parse; a single bad row is dropped alone.
+YtmShelf? parseShelf(Object? section) => _guard('shelf', () {
+  final m = _map(section);
+  if (m == null) return null;
+  final key = m.keys.firstWhere(
+    (k) => k == 'musicCarouselShelfRenderer' || k == 'musicShelfRenderer',
+    orElse: () => '',
+  );
+  if (key.isEmpty) {
+    AppLog.i('ytm parse: skipped section ${m.keys.join(',')}');
+    return null;
+  }
+  final body = _map(m[key]);
+  final Object? titleNode = key == 'musicShelfRenderer'
+      ? dig(body, ['title'])
+      : dig(body, ['header', 'musicCarouselShelfBasicHeaderRenderer', 'title']);
+  final title = _runsText(_runs(titleNode));
+  final rows = _list(body?['contents']);
+  final items = <Object>[];
+  for (final c in rows) {
+    final item = _shelfItem(c);
+    if (item != null) items.add(item);
+  }
+  if (title == null || items.isEmpty) {
+    AppLog.i(
+      'ytm parse: dropped $key (title ${title == null ? 'missing' : 'ok'}, '
+      '${items.length} of ${rows.length} rows parsed)',
+    );
+    return null;
+  }
+  if (items.length < rows.length) {
+    AppLog.i('ytm parse: $key kept ${items.length} of ${rows.length} rows');
+  }
+  return YtmShelf(title, items);
+});
+
+/// Section list contents and continuation token of a browse response: a home
+/// continuation, a single-column page (home, artist) or the secondary column
+/// of a two-column page (album, playlist).
+({List<Object?> sections, String? continuation}) browseSections(Json json) {
+  final cont = dig(json, ['continuationContents', 'sectionListContinuation']);
+  final list =
+      cont ??
+      dig(json, [
+        'contents',
+        'singleColumnBrowseResultsRenderer',
+        'tabs',
+        0,
+        'tabRenderer',
+        'content',
+        'sectionListRenderer',
+      ]) ??
+      dig(json, [
+        'contents',
+        'twoColumnBrowseResultsRenderer',
+        'secondaryContents',
+        'sectionListRenderer',
+      ]);
+  return (
+    sections: _list(_map(list)?['contents']),
+    continuation: parseContinuation(_map(list)?['continuations']),
+  );
+}
+
+YtmHome parseHome(Json json) {
+  final page = browseSections(json);
+  final shelves = <YtmShelf>[];
+  for (final s in page.sections) {
+    final shelf = parseShelf(s);
+    if (shelf != null) shelves.add(shelf);
+  }
+  return YtmHome(shelves, page.continuation);
+}
+
+List<YtmSong> _songs(Iterable<Object?> rows, String what) {
+  final out = <YtmSong>[];
+  var dropped = 0;
+  for (final row in rows) {
+    final item = parseListItem(dig(row, ['musicResponsiveListItemRenderer']));
+    if (item is YtmSong) {
+      out.add(item);
+    } else {
+      dropped++;
+    }
+  }
+  if (dropped > 0) AppLog.i('ytm parse: $what dropped $dropped rows');
+  return out;
+}
+
+String? _headerThumb(Object? header) => bestThumbnail(
+  dig(header, [
+    'thumbnail',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]),
+);
+
+/// The artist page; null when the header (and so the name) is missing.
+YtmArtistPage? parseArtistPage(Json json, String browseId) =>
+    _guard('artist page', () {
+      final header =
+          dig(json, ['header', 'musicImmersiveHeaderRenderer']) ??
+          dig(json, ['header', 'musicVisualHeaderRenderer']);
+      final name = _runsText(_runs(dig(header, ['title'])));
+      if (name == null) {
+        AppLog.i('ytm parse: artist page without a header name');
+        return null;
+      }
+      final artist = YtmArtist(
+        browseId: browseId,
+        name: name,
+        thumbnailUrl: _headerThumb(header),
+      );
+      final topSongs = <YtmSong>[];
+      final albums = <YtmAlbum>[];
+      final singles = <YtmAlbum>[];
+      final similar = <YtmArtist>[];
+      var haveTop = false;
+      for (final s in browseSections(json).sections) {
+        final isSongShelf = dig(s, ['musicShelfRenderer']) != null;
+        if (isSongShelf && haveTop) continue;
+        final shelf = parseShelf(s);
+        if (shelf == null) continue;
+        if (isSongShelf) {
+          haveTop = true;
+          topSongs.addAll(shelf.items.whereType<YtmSong>());
+          continue;
+        }
+        final title = shelf.title.toLowerCase();
+        if (shelf.items.every((i) => i is YtmArtist)) {
+          similar.addAll(shelf.items.cast<YtmArtist>());
+        } else if (shelf.items.every((i) => i is YtmAlbum)) {
+          final target = title.contains('single') || title.contains('ep')
+              ? singles
+              : title.contains('album')
+              ? albums
+              : null;
+          if (target == null) {
+            AppLog.i('ytm parse: skipped album shelf "${shelf.title}"');
+            continue;
+          }
+          target.addAll(
+            shelf.items.cast<YtmAlbum>().map((a) => _withArtist(a, name)),
+          );
+        }
+        // Videos, playlists, live performances and the like are not used.
+      }
+      return YtmArtistPage(
+        artist: artist,
+        topSongs: topSongs,
+        albums: albums,
+        singles: singles,
+        similar: similar,
+        radioPlaylistId: _str(
+          dig(header, [
+            'startRadioButton',
+            'buttonRenderer',
+            'navigationEndpoint',
+            'watchEndpoint',
+            'playlistId',
+          ]),
+        ),
+      );
+    });
+
+YtmAlbum _withArtist(YtmAlbum a, String artist) => a.artist != null
+    ? a
+    : YtmAlbum(
+        browseId: a.browseId,
+        title: a.title,
+        artist: artist,
+        year: a.year,
+        thumbnailUrl: a.thumbnailUrl,
+        playlistId: a.playlistId,
+      );
+
+/// First value stored under [key] anywhere inside [v].
+Object? _findKey(Object? v, String key) {
+  if (v is Map) {
+    if (v.containsKey(key)) return v[key];
+    for (final x in v.values) {
+      final f = _findKey(x, key);
+      if (f != null) return f;
+    }
+  } else if (v is List) {
+    for (final x in v) {
+      final f = _findKey(x, key);
+      if (f != null) return f;
+    }
+  }
+  return null;
+}
+
+Object? _twoColumnHeader(Json json) => dig(json, [
+  'contents',
+  'twoColumnBrowseResultsRenderer',
+  'tabs',
+  0,
+  'tabRenderer',
+  'content',
+  'sectionListRenderer',
+  'contents',
+  0,
+  'musicResponsiveHeaderRenderer',
+]);
+
+String? _microformatTitle(Json json) =>
+    _str(dig(json, ['microformat', 'microformatDataRenderer', 'title']));
+
+/// The album page; null when no title can be found. Tracks without art take
+/// the album's art, and every track carries the album's title and id.
+YtmAlbumPage? parseAlbumPage(Json json, String browseId) =>
+    _guard('album page', () {
+      final header = _twoColumnHeader(json);
+      final title =
+          _runsText(_runs(dig(header, ['title']))) ?? _microformatTitle(json);
+      if (title == null) {
+        AppLog.i('ytm parse: album page without a title');
+        return null;
+      }
+      var playlistId = _str(
+        dig(_findKey(header, 'watchPlaylistEndpoint'), ['playlistId']),
+      );
+      if (playlistId == null) {
+        final canonical = _str(
+          dig(json, ['microformat', 'microformatDataRenderer', 'urlCanonical']),
+        );
+        final id = canonical == null
+            ? null
+            : Uri.tryParse(canonical)?.queryParameters['list'];
+        if (id != null && id.startsWith('OLAK5uy_')) playlistId = id;
+      }
+      final sub = _albumSubtitle(_groups(_runs(dig(header, ['subtitle']))));
+      final thumb = _headerThumb(header);
+      final shelf = _list(browseSections(json).sections)
+          .map((s) => dig(s, ['musicShelfRenderer']))
+          .firstWhere((s) => s != null, orElse: () => null);
+      final tracks = [
+        for (final t in _songs(_list(_map(shelf)?['contents']), 'album tracks'))
+          YtmSong(
+            videoId: t.videoId,
+            title: t.title,
+            artists: t.artists,
+            album: title,
+            albumBrowseId: browseId,
+            durationMs: t.durationMs,
+            thumbnailUrl: t.thumbnailUrl ?? thumb,
+            isVideo: t.isVideo,
+          ),
+      ];
+      final artist =
+          _runsText(_runs(dig(header, ['straplineTextOne']))) ??
+          (tracks.isEmpty || tracks.first.artists.isEmpty
+              ? sub.artist
+              : tracks.first.artistLine);
+      return YtmAlbumPage(
+        YtmAlbum(
+          browseId: browseId,
+          title: title,
+          artist: artist,
+          year: sub.year,
+          thumbnailUrl: thumb,
+          playlistId: playlistId,
+        ),
+        tracks,
+      );
+    });
+
+/// Playlist rows and token of a first page or a continuation (either the
+/// `continuationContents` or the `appendContinuationItemsAction` shape).
+({List<Object?> rows, String? continuation}) playlistRows(Json json) {
+  final cont =
+      dig(json, ['continuationContents', 'musicPlaylistShelfContinuation']) ??
+      dig(json, ['continuationContents', 'musicShelfContinuation']);
+  if (cont != null) {
+    return (
+      rows: _list(_map(cont)?['contents']),
+      continuation: parseContinuation(_map(cont)?['continuations']),
+    );
+  }
+  final items = _list(
+    dig(json, [
+      'onResponseReceivedActions',
+      0,
+      'appendContinuationItemsAction',
+      'continuationItems',
+    ]),
+  );
+  if (items.isNotEmpty) {
+    String? token;
+    final rows = <Object?>[];
+    for (final c in items) {
+      final t = _str(
+        dig(c, [
+          'continuationItemRenderer',
+          'continuationEndpoint',
+          'continuationCommand',
+          'token',
+        ]),
+      );
+      if (t != null) {
+        token ??= t;
+      } else {
+        rows.add(c);
+      }
+    }
+    return (rows: rows, continuation: token);
+  }
+  final page = browseSections(json);
+  for (final s in page.sections) {
+    final shelf =
+        dig(s, ['musicPlaylistShelfRenderer']) ??
+        dig(s, ['musicShelfRenderer']);
+    if (shelf != null) {
+      return (
+        rows: _list(_map(shelf)?['contents']),
+        continuation:
+            parseContinuation(_map(shelf)?['continuations']) ??
+            page.continuation,
+      );
+    }
+  }
+  return (rows: const [], continuation: page.continuation);
+}
+
+/// The playlist header; null when no title can be found.
+YtmPlaylist? parsePlaylistHeader(Json json, String browseId) => _guard(
+  'playlist header',
+  () {
+    final header = _twoColumnHeader(json);
+    final title =
+        _runsText(_runs(dig(header, ['title']))) ?? _microformatTitle(json);
+    if (title == null) {
+      AppLog.i('ytm parse: playlist page without a title');
+      return null;
+    }
+    final author =
+        _str(
+          dig(header, ['facepile', 'avatarStackViewModel', 'text', 'content']),
+        ) ??
+        _runsText(_runs(dig(header, ['straplineTextOne'])));
+    return YtmPlaylist(
+      browseId: browseId,
+      title: title,
+      author: author,
+      thumbnailUrl: _headerThumb(header),
+    );
+  },
+);
+
+List<YtmSong> parsePlaylistTracks(List<Object?> rows) =>
+    _songs(rows, 'playlist');

@@ -109,4 +109,78 @@ class YtmService {
         return Ok(YtmRadio(songs, page.continuation, current: current));
     }
   }
+
+  Future<Result<YtmHome>> home({String? continuation}) async {
+    final res = await _browse('FEmusic_home', continuation: continuation);
+    return switch (res) {
+      Err(:final failure) => Err(failure),
+      Ok(:final value) => Ok(parseHome(value)),
+    };
+  }
+
+  Future<Result<YtmArtistPage>> artist(String browseId) async {
+    final res = await _browse(browseId);
+    switch (res) {
+      case Err(:final failure):
+        return Err(failure);
+      case Ok(:final value):
+        final page = parseArtistPage(value, browseId);
+        return page == null ? _unexpected('artist') : Ok(page);
+    }
+  }
+
+  Future<Result<YtmAlbumPage>> album(String browseId) async {
+    final res = await _browse(browseId);
+    switch (res) {
+      case Err(:final failure):
+        return Err(failure);
+      case Ok(:final value):
+        final page = parseAlbumPage(value, browseId);
+        return page == null ? _unexpected('album') : Ok(page);
+    }
+  }
+
+  /// [browseId] may be given with or without the `VL` prefix. A continuation
+  /// page carries a stub [YtmPlaylistPage.playlist] (empty title): keep the
+  /// first page's.
+  Future<Result<YtmPlaylistPage>> playlist(
+    String browseId, {
+    String? continuation,
+  }) async {
+    final id = browseId.startsWith('VL') ? browseId : 'VL$browseId';
+    final res = await _browse(id, continuation: continuation);
+    switch (res) {
+      case Err(:final failure):
+        return Err(failure);
+      case Ok(:final value):
+        final page = playlistRows(value);
+        final tracks = parsePlaylistTracks(page.rows);
+        if (continuation != null) {
+          return Ok(
+            YtmPlaylistPage(
+              YtmPlaylist(browseId: id, title: ''),
+              tracks,
+              page.continuation,
+            ),
+          );
+        }
+        final header = parsePlaylistHeader(value, id);
+        return header == null
+            ? _unexpected('playlist')
+            : Ok(YtmPlaylistPage(header, tracks, page.continuation));
+    }
+  }
+
+  Future<Result<Json>> _browse(String browseId, {String? continuation}) =>
+      _c.call(
+        kWebRemix,
+        'browse',
+        continuation != null
+            ? {'continuation': continuation}
+            : {'browseId': browseId},
+        query: continuation == null ? null : _continuationQuery(continuation),
+      );
+
+  static Result<T> _unexpected<T>(String what) =>
+      Err(Failure(FailureKind.unknown, 'ytm $what: unexpected response shape'));
 }

@@ -97,3 +97,52 @@ class YtmRadio {
   final String? continuation;
   final YtmSong? current;
 }
+
+/// A titled row of home or artist-page items ([YtmSong], [YtmAlbum],
+/// [YtmArtist] and [YtmPlaylist], mixed).
+class YtmShelf {
+  const YtmShelf(this.title, this.items);
+
+  final String title;
+  final List<Object> items;
+}
+
+class YtmHome {
+  const YtmHome(this.shelves, this.continuation);
+
+  final List<YtmShelf> shelves;
+  final String? continuation;
+}
+
+class YtmArtistPage {
+  const YtmArtistPage({
+    required this.artist,
+    this.topSongs = const [],
+    this.albums = const [],
+    this.singles = const [],
+    this.similar = const [],
+    this.radioPlaylistId,
+  });
+
+  final YtmArtist artist;
+  final List<YtmSong> topSongs;
+  final List<YtmAlbum> albums;
+  final List<YtmAlbum> singles;
+  final List<YtmArtist> similar;
+  final String? radioPlaylistId;
+}
+
+class YtmAlbumPage {
+  const YtmAlbumPage(this.album, this.tracks);
+
+  final YtmAlbum album;
+  final List<YtmSong> tracks;
+}
+
+class YtmPlaylistPage {
+  const YtmPlaylistPage(this.playlist, this.tracks, this.continuation);
+
+  final YtmPlaylist playlist;
+  final List<YtmSong> tracks;
+  final String? continuation;
+}
