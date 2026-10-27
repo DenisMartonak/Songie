@@ -43,8 +43,11 @@ void main() {
   setUp(() async => h = await UiHarness.create());
   tearDown(() => h.dispose());
 
-  Future<void> pumpSearch(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(400, 900);
+  Future<void> pumpSearch(
+    WidgetTester tester, {
+    Size size = const Size(400, 900),
+  }) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
@@ -335,5 +338,83 @@ void main() {
     expect(tester.binding.transientCallbackCount, 0);
     await tester.pump(const Duration(seconds: 10));
     expect(tester.binding.hasScheduledFrame, isFalse);
+  });
+
+  group('library section', () {
+    /// 10 songs and 3 playlists matching "daft".
+    Future<void> seedMany(WidgetTester tester) => real(tester, () async {
+      final ids = [for (var i = 1; i <= 10; i++) 't$i'];
+      for (final (i, id) in ids.indexed) {
+        await h.addTrack(id, title: 'Daft song ${i + 1}', artist: 'Daft Punk');
+      }
+      for (final name in ['Daft A', 'Daft B', 'Daft C']) {
+        await h.addPlaylist(name, ids);
+      }
+    });
+
+    Future<void> search(WidgetTester tester) async {
+      h.ytm.answer('daft', YtmSearchKind.songs, [_lucky]);
+      await pumpSearch(tester, size: const Size(400, 700));
+      await type(tester, 'daft');
+      await settle(tester);
+    }
+
+    Iterable<String> shownLibraryRows(WidgetTester tester) => [
+      for (final e
+          in find
+              .byWidgetPredicate(
+                (w) =>
+                    w.key is ValueKey<String> &&
+                    ((w.key! as ValueKey<String>).value.startsWith(
+                          'search.song.',
+                        ) ||
+                        (w.key! as ValueKey<String>).value.startsWith(
+                          'search.playlist.',
+                        )),
+                skipOffstage: false,
+              )
+              .evaluate())
+        (e.widget.key! as ValueKey<String>).value,
+    ];
+
+    uiTest('shows only a few matches, with the tabs on the first screen', (
+      tester,
+    ) async {
+      await seedMany(tester);
+      await search(tester);
+
+      final rows = shownLibraryRows(tester).toList();
+      expect(rows.where((k) => k.startsWith('search.song.')), hasLength(3));
+      expect(rows.where((k) => k.startsWith('search.playlist.')), hasLength(2));
+      expect(find.text('Show all (8 more)'), findsOneWidget);
+      final tabs = find.byKey(const Key('search.tabs'));
+      expect(tabs, findsOneWidget);
+      expect(tester.getBottomLeft(tabs).dy, lessThanOrEqualTo(700));
+      expect(
+        tester.getBottomLeft(find.byKey(const Key('search.tab.songs'))).dy,
+        lessThanOrEqualTo(700),
+      );
+    });
+
+    uiTest('"Show all" reveals the rest in place', (tester) async {
+      await seedMany(tester);
+      await search(tester);
+
+      await tester.tap(find.byKey(const Key('search.library.showAll')));
+      await settle(tester);
+
+      final rows = shownLibraryRows(tester).toList();
+      expect(rows.where((k) => k.startsWith('search.song.')), hasLength(10));
+      expect(rows.where((k) => k.startsWith('search.playlist.')), hasLength(3));
+      expect(find.byKey(const Key('search.library.showAll')), findsNothing);
+      expect(tester.binding.transientCallbackCount, 0);
+    });
+
+    uiTest('a few matches need no "Show all"', (tester) async {
+      await seedLibrary(tester);
+      await search(tester);
+      expect(find.byKey(const Key('search.library.showAll')), findsNothing);
+      expect(find.text('One More Time'), findsOneWidget);
+    });
   });
 }

@@ -22,6 +22,14 @@ import '../ytm/ytm_song_row.dart';
 /// Music are searched.
 const Duration searchDebounce = Duration(milliseconds: 150);
 
+/// How many library songs and playlists show above the YouTube Music tabs
+/// before "Show all". Small enough that the library section plus the tab row
+/// (about 5 rows at 56 px, plus headers) fit on the first screen of a small
+/// phone, so the tabs are always visible without scrolling; large enough to
+/// show the obvious owned match or two.
+const int librarySongsShown = 3;
+const int libraryPlaylistsShown = 2;
+
 /// The YouTube Music result tabs, in order, with their labels.
 const Map<YtmSearchKind, String> ytmSearchTabs = {
   YtmSearchKind.songs: 'Songs',
@@ -61,8 +69,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   /// The tabs opened for [_searched], whose results are kept.
   Set<YtmSearchKind> _opened = {YtmSearchKind.songs};
 
+  /// Whether "Show all" expanded the library section for [_searched].
+  bool _libraryExpanded = false;
+
   void _search(String query) {
-    if (query.trim() != _searched.trim()) _opened = {_kind};
+    if (query.trim() != _searched.trim()) {
+      _opened = {_kind};
+      _libraryExpanded = false;
+    }
     _searched = query;
   }
 
@@ -136,6 +150,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               kind: _kind,
               opened: _opened,
               onSelect: _select,
+              libraryExpanded: _libraryExpanded,
+              onExpandLibrary: () => setState(() => _libraryExpanded = true),
             ),
           ),
         ],
@@ -183,12 +199,16 @@ class _Results extends ConsumerWidget {
     required this.kind,
     required this.opened,
     required this.onSelect,
+    required this.libraryExpanded,
+    required this.onExpandLibrary,
   });
 
   final String query;
   final YtmSearchKind kind;
   final Set<YtmSearchKind> opened;
   final ValueChanged<YtmSearchKind> onSelect;
+  final bool libraryExpanded;
+  final VoidCallback onExpandLibrary;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -214,17 +234,32 @@ class _Results extends ConsumerWidget {
       if (k != kind) ref.watch(ytmSearchProvider((q, k)));
     }
     final remote = ref.watch(ytmSearchProvider((q, kind)));
+    // A short section, so the tabs stay on the first screen.
+    final shownSongs = libraryExpanded
+        ? songs
+        : songs.take(librarySongsShown).toList();
+    final shownLists = libraryExpanded
+        ? lists
+        : lists.take(libraryPlaylistsShown).toList();
+    final hidden =
+        songs.length + lists.length - shownSongs.length - shownLists.length;
 
     final bottom = MediaQuery.paddingOf(context).bottom;
     final children = <Widget>[
       if (songs.isNotEmpty || lists.isNotEmpty) ...[
         const _SectionTitle('In your library', key: ValueKey('library')),
-        for (final track in songs)
+        for (final track in shownSongs)
           _SongRow(track: track, key: ValueKey('song.${track.id}')),
-        for (final playlist in lists)
+        for (final playlist in shownLists)
           _PlaylistRow(
             playlist: playlist,
             key: ValueKey('playlist.${playlist.id}'),
+          ),
+        if (hidden > 0)
+          _ShowAll(
+            hidden: hidden,
+            onTap: onExpandLibrary,
+            key: const ValueKey('library.showAll'),
           ),
       ],
       _Tabs(selected: kind, onSelect: onSelect, key: const ValueKey('tabs')),
@@ -295,6 +330,34 @@ class _Results extends ConsumerWidget {
           _ => null,
         },
     ];
+  }
+}
+
+/// Expands the library section in place; the rows it reveals fade in.
+class _ShowAll extends StatelessWidget {
+  const _ShowAll({required this.hidden, required this.onTap, super.key});
+
+  final int hidden;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Pressable(
+      key: const Key('search.library.showAll'),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Text(
+          'Show all ($hidden more)',
+          style: TextStyle(
+            color: colors.text,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
   }
 }
 
