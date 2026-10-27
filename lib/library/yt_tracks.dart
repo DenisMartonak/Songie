@@ -98,11 +98,14 @@ class YtTrackStore {
   /// is written (and no stamp issued) when nothing would change. Never throws.
   Future<void> upgradeFrom(Track t, YtmSong rich) async {
     try {
-      await guardDb<void>(_db, () async {
+      final r = await guardDb<void>(_db, () async {
         final cur = await _byId(t.id);
         await _fill(cur, rich);
         return const Ok(null);
       });
+      if (r case Err(:final failure)) {
+        AppLog.w('YtTrackStore.upgradeFrom failed: ${failure.message}');
+      }
       final cur = await _byIdOrNull(t.id);
       if (cur != null) _queueCover(cur, rich);
     } catch (e, st) {

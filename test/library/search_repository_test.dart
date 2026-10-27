@@ -240,4 +240,47 @@ void main() {
       expect(await titles('a'), ['active']);
     });
   });
+
+  group('reachability streams', () {
+    for (final name in ['allTracks', 'searchTracks']) {
+      test(
+        '$name re-emits on entry add, tombstone and playlist delete',
+        () async {
+          await addTrack('1', 'zed', 'A', source: 'yt');
+          await addPlaylist('p1', 'P');
+          final stream = name == 'allTracks'
+              ? repo.allTracks()
+              : repo.searchTracks('zed');
+          final emissions = <List<String>>[];
+          final sub = stream.listen(
+            (r) => emissions.add([for (final t in r) t.title]),
+          );
+          addTearDown(sub.cancel);
+          Future<void> settle() =>
+              Future<void>.delayed(const Duration(milliseconds: 50));
+          await settle();
+          expect(emissions.last, isEmpty);
+
+          await addEntry('e1', 'p1', '1');
+          await settle();
+          expect(emissions.last, ['zed']);
+
+          await (db.update(db.playlistEntries)..where((e) => e.id.equals('e1')))
+              .write(const PlaylistEntriesCompanion(deleted: Value(true)));
+          await settle();
+          expect(emissions.last, isEmpty);
+
+          await (db.update(db.playlistEntries)..where((e) => e.id.equals('e1')))
+              .write(const PlaylistEntriesCompanion(deleted: Value(false)));
+          await settle();
+          expect(emissions.last, ['zed']);
+
+          await (db.update(db.playlists)..where((p) => p.id.equals('p1')))
+              .write(const PlaylistsCompanion(deleted: Value(true)));
+          await settle();
+          expect(emissions.last, isEmpty);
+        },
+      );
+    }
+  });
 }
