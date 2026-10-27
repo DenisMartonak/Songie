@@ -49,20 +49,65 @@ class FakeYtmService implements YtmService {
     return homeAnswer;
   }
 
+  /// Artist, album and playlist requests (`artist:ID`, `album:ID`,
+  /// `playlist:ID` and `playlist:ID@CONTINUATION`), answered from the
+  /// maps (keyed the same way, without the kind) after [browseGate] (when
+  /// set) completes, else with an error.
+  final browseCalls = <String>[];
+  final artistAnswers = <String, Result<YtmArtistPage>>{};
+  final albumAnswers = <String, Result<YtmAlbumPage>>{};
+  final playlistAnswers = <String, Result<YtmPlaylistPage>>{};
+  Completer<void>? browseGate;
+
+  Future<Result<T>> _browse<T>(
+    String kind,
+    String key,
+    Map<String, Result<T>> answers,
+  ) async {
+    browseCalls.add('$kind:$key');
+    final gate = browseGate;
+    if (gate != null) await gate.future;
+    return answers[key] ??
+        Err(Failure(FailureKind.unknown, 'no $kind answer for $key'));
+  }
+
+  @override
+  Future<Result<YtmArtistPage>> artist(String browseId) =>
+      _browse('artist', browseId, artistAnswers);
+
+  @override
+  Future<Result<YtmAlbumPage>> album(String browseId) =>
+      _browse('album', browseId, albumAnswers);
+
+  @override
+  Future<Result<YtmPlaylistPage>> playlist(
+    String browseId, {
+    String? continuation,
+  }) => _browse(
+    'playlist',
+    continuation == null ? browseId : '$browseId@$continuation',
+    playlistAnswers,
+  );
+
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
-/// Records the songs played with radio (and radios started from tracks).
+/// Records the songs played with radio (and radios started from tracks,
+/// with the radio playlist each asked for in [startedPlaylists]).
 class RecordingRadioController implements RadioController {
   final played = <YtmSong>[];
   final started = <Track>[];
+  final startedPlaylists = <String?>[];
 
   @override
   Future<void> playWithRadio(YtmSong seed) async => played.add(seed);
 
   @override
-  Future<void> startRadio(Track t) async => started.add(t);
+  Future<void> startRadio(Track t, {String? playlistId}) async {
+    started.add(t);
+    startedPlaylists.add(playlistId);
+  }
 
   @override
   Future<void> dispose() async {}

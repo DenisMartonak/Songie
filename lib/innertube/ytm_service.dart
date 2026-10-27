@@ -74,7 +74,14 @@ class YtmService {
     YtmSearchKind.playlists => item is YtmPlaylist,
   };
 
-  Future<Result<YtmRadio>> radio(String videoId, {String? continuation}) async {
+  /// The radio queue for [videoId]: its own radio (`RDAMVM<videoId>`), or
+  /// with [playlistId] that radio playlist (an artist's radio) started from
+  /// [videoId].
+  Future<Result<YtmRadio>> radio(
+    String videoId, {
+    String? continuation,
+    String? playlistId,
+  }) async {
     final res = await _c.call(
       kWebRemix,
       'next',
@@ -82,7 +89,7 @@ class YtmService {
           ? {'continuation': continuation}
           : {
               'videoId': videoId,
-              'playlistId': 'RDAMVM$videoId',
+              'playlistId': playlistId ?? 'RDAMVM$videoId',
               'params': 'wAEB',
               'isAudioOnly': true,
               'enablePersistentPlaylistPanel': true,

@@ -22,6 +22,7 @@ import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/theme/app_theme.dart';
+import 'package:songies/theme/cover_palette.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/youtube/ytdlp_client.dart';
@@ -190,6 +191,10 @@ class UiHarness {
   late final RecordingYtTrackStore ytStore = RecordingYtTrackStore(db, stamp);
   final FakeInnertubeClient innertube = FakeInnertubeClient();
 
+  /// The palette of a YouTube Music cover (by its URL); none by default, and
+  /// nothing is downloaded.
+  Future<CoverPalette?> Function(String url) ytmPalette = (_) async => null;
+
   /// The network the app thinks it is on.
   final FakeNetworkStatus network = FakeNetworkStatus();
 
@@ -261,6 +266,9 @@ class UiHarness {
     ytmServiceProvider.overrideWithValue(ytm),
     radioControllerProvider.overrideWithValue(radio),
     ytTrackStoreProvider.overrideWithValue(ytStore),
+    ytmCoverPaletteProvider.overrideWith(
+      (ref, url) => url == null ? null : ytmPalette(url),
+    ),
     networkStatusProvider.overrideWithValue(network),
   ];
 

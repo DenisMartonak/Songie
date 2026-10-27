@@ -33,6 +33,7 @@ import 'theme/theme_repository.dart';
 import 'theme/theme_service.dart';
 import 'theme/theme_spec.dart';
 import 'ui/shell/window_controls.dart';
+import 'youtube/thumbnail_fetcher.dart';
 import 'youtube/yt_import_service.dart';
 import 'youtube/ytdlp_runner.dart';
 
@@ -373,24 +374,7 @@ class YtmLoadFailed implements Exception {
 /// failure turns out to be the device going offline, else [YtmLoadFailed].
 final ytmSearchProvider = FutureProvider.autoDispose
     .family<YtmSearchPage, (String, YtmSearchKind)>(
-      (ref, arg) async {
-        final (query, kind) = arg;
-        final network = ref.watch(networkStatusProvider);
-        final ytm = ref.watch(ytmServiceProvider);
-        if (await network.current() == NetworkKind.offline) {
-          throw const YtmOffline();
-        }
-        switch (await ytm.search(query, kind)) {
-          case Ok(:final value):
-            return value;
-          case Err(:final failure):
-            if (failure.kind == FailureKind.network &&
-                await network.current() == NetworkKind.offline) {
-              throw const YtmOffline();
-            }
-            throw YtmLoadFailed(failure);
-        }
-      },
+      (ref, arg) => _ytmLoad(ref, (ytm) => ytm.search(arg.$1, arg.$2)),
       // A failed search waits for the user's Retry: no idle requests.
       retry: (_, _) => null,
     );
@@ -402,13 +386,24 @@ final ytmSearchProvider = FutureProvider.autoDispose
 ///
 /// Fails with [YtmOffline] when offline (without a request) or when a network
 /// failure turns out to be the device going offline, else [YtmLoadFailed].
-final ytmHomeProvider = FutureProvider<YtmHome>((ref) async {
+final ytmHomeProvider = FutureProvider<YtmHome>(
+  (ref) => _ytmLoad(ref, (ytm) => ytm.home()),
+  retry: (_, _) => null,
+);
+
+/// Loads one YouTube Music page for a user's action: fails with [YtmOffline]
+/// when offline (without a request) or when a network failure turns out to
+/// be the device going offline, else [YtmLoadFailed].
+Future<T> _ytmLoad<T>(
+  Ref ref,
+  Future<Result<T>> Function(YtmService) load,
+) async {
   final network = ref.watch(networkStatusProvider);
   final ytm = ref.watch(ytmServiceProvider);
   if (await network.current() == NetworkKind.offline) {
     throw const YtmOffline();
   }
-  switch (await ytm.home()) {
+  switch (await load(ytm)) {
     case Ok(:final value):
       return value;
     case Err(:final failure):
@@ -418,7 +413,48 @@ final ytmHomeProvider = FutureProvider<YtmHome>((ref) async {
       }
       throw YtmLoadFailed(failure);
   }
-}, retry: (_, _) => null);
+}
+
+/// A YouTube Music artist page, fetched when its page opens and while it is
+/// shown. Never retried on its own (Retry invalidates it).
+final ytmArtistProvider = FutureProvider.autoDispose
+    .family<YtmArtistPage, String>(
+      (ref, browseId) => _ytmLoad(ref, (ytm) => ytm.artist(browseId)),
+      retry: (_, _) => null,
+    );
+
+/// A YouTube Music album page; like [ytmArtistProvider].
+final ytmAlbumProvider = FutureProvider.autoDispose
+    .family<YtmAlbumPage, String>(
+      (ref, browseId) => _ytmLoad(ref, (ytm) => ytm.album(browseId)),
+      retry: (_, _) => null,
+    );
+
+/// The first page of a YouTube Music playlist; like [ytmArtistProvider]. Its
+/// page fetches the continuations itself.
+final ytmPlaylistProvider = FutureProvider.autoDispose
+    .family<YtmPlaylistPage, String>(
+      (ref, browseId) => _ytmLoad(ref, (ytm) => ytm.playlist(browseId)),
+      retry: (_, _) => null,
+    );
+
+/// Downloads YouTube thumbnails into the art cache.
+final thumbnailFetcherProvider = Provider<ThumbnailFetcher>(
+  (ref) => _unwired('thumbnailFetcherProvider'),
+);
+
+/// The palette of a YouTube Music cover for a page's hero, by its URL: the
+/// image is fetched into the art cache once its page opens (a user action),
+/// then read like any cover. Null without a URL or when it cannot be read.
+final ytmCoverPaletteProvider = FutureProvider.autoDispose
+    .family<CoverPalette?, String?>((ref, url) async {
+      if (url == null) return null;
+      final art = await ref.watch(thumbnailFetcherProvider).fetchBest([url]);
+      if (art == null) return null;
+      return ref
+          .watch(coverPaletteServiceProvider)
+          .paletteFor(art, supersede: false);
+    });
 
 /// YouTube asking the user to accept its terms (see [InnertubeClient]).
 final ytConsentRequiredProvider = StreamProvider<bool>(

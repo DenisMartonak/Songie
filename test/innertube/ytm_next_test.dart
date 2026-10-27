@@ -97,6 +97,19 @@ void main() {
     expect(radio.continuation, 'NEXT');
   });
 
+  test(
+    'radio from a playlist (an artist\'s radio) sends that playlist',
+    () async {
+      transport.reply(fixture('next_radio'));
+      final res = await ytm.radio('4D7u5KF7SP8', playlistId: 'RDEMartist');
+      expect(res, isA<Ok<YtmRadio>>());
+      final body = transport.requests.last.body;
+      expect(body['videoId'], '4D7u5KF7SP8');
+      expect(body['playlistId'], 'RDEMartist');
+      expect(body['params'], 'wAEB');
+    },
+  );
+
   test('a transport error is passed through', () async {
     transport.reply(InnertubeResponse(403, null));
     final res = await ytm.radio('4D7u5KF7SP8');

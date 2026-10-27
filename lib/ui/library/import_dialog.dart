@@ -28,6 +28,19 @@ Future<void> showImportDialog(
   );
 }
 
+/// What an import did, as its snack bar says it.
+String importResultMessage(ImportResult r) {
+  final songs = r.added == 1 ? '1 song' : '${r.added} songs';
+  return r.alreadyExisted
+      ? 'Already in your library — use Sync to update it'
+      : 'Imported $songs';
+}
+
+/// A new import's page shows skeleton rows until its entries reach it.
+void markImportPending(ImportResult r, PendingImports pending) {
+  if (!r.alreadyExisted && r.added > 0) pending.add(r.playlistId);
+}
+
 class ImportDialog extends ConsumerStatefulWidget {
   const ImportDialog({
     required this.router,
@@ -94,21 +107,11 @@ class _ImportDialogState extends ConsumerState<ImportDialog> {
   }
 
   void _open(ImportResult r, PendingImports pending) {
-    if (!r.alreadyExisted && r.added > 0) {
-      // Its page shows skeleton rows until the entries reach it.
-      pending.add(r.playlistId);
-    }
+    markImportPending(r, pending);
     widget.router.go('/library/playlist/${r.playlistId}');
-    final songs = r.added == 1 ? '1 song' : '${r.added} songs';
     widget.snacks
       ..clear()
-      ..show(
-        content: Text(
-          r.alreadyExisted
-              ? 'Already in your library — use Sync to update it'
-              : 'Imported $songs',
-        ),
-      );
+      ..show(content: Text(importResultMessage(r)));
   }
 
   void _openSettings() {

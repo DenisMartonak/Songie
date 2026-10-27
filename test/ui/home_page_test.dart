@@ -59,7 +59,7 @@ void main() {
           ),
           for (final kind in ['artist', 'album', 'playlist'])
             GoRoute(
-              path: '/ytm/$kind/:id',
+              path: '/home/ytm/$kind/:id',
               builder: (_, s) =>
                   Scaffold(body: Text('YTM $kind ${s.pathParameters['id']}')),
             ),

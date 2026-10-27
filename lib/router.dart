@@ -14,6 +14,9 @@ import 'ui/settings/themes/themes_page.dart';
 import 'ui/shell/adaptive_shell.dart';
 import 'ui/shell/fade_through_branches.dart';
 import 'ui/widgets/page_surface.dart';
+import 'ui/ytm/album_page.dart';
+import 'ui/ytm/artist_page.dart';
+import 'ui/ytm/ytm_playlist_page.dart';
 
 const String nowPlayingLocation = '/now-playing';
 
@@ -46,7 +49,7 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
                 state,
                 const PageSurface(child: HomePage()),
               ),
-              routes: [_playlistRoute()],
+              routes: [_playlistRoute(), ..._ytmRoutes()],
             ),
             // Inside the shell so desktop keeps its title bar, sidebar and
             // player bar; Settings is not a tab, so it shares Home's branch.
@@ -93,7 +96,7 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
                 state,
                 const PageSurface(child: SearchPage()),
               ),
-              routes: [_playlistRoute()],
+              routes: [_playlistRoute(), ..._ytmRoutes()],
             ),
           ],
         ),
@@ -106,7 +109,7 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
                 state,
                 const PageSurface(child: LibraryPage()),
               ),
-              routes: [_playlistRoute()],
+              routes: [_playlistRoute(), ..._ytmRoutes()],
             ),
           ],
         ),
@@ -116,6 +119,14 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
     GoRoute(
       path: '/playlist/:id',
       redirect: (_, state) => '/library/playlist/${state.pathParameters['id']}',
+    ),
+    // YouTube Music pages opened outside a tab (a link, Settings) open in
+    // Search, with Search under them for Back.
+    GoRoute(
+      path: '/ytm/:kind/:id',
+      redirect: (_, state) =>
+          '/search/ytm/${state.pathParameters['kind']}/'
+          '${Uri.encodeComponent(state.pathParameters['id']!)}',
     ),
     GoRoute(path: nowPlayingLocation, pageBuilder: nowPlayingPage),
   ],
@@ -129,6 +140,24 @@ GoRoute _playlistRoute() => GoRoute(
     context,
     state,
     PageSurface(child: PlaylistPage(id: state.pathParameters['id']!)),
+  ),
+);
+
+/// YouTube Music artist, album and playlist pages, nested under each branch's
+/// root page like [_playlistRoute] (opened with the `goYtm…` helpers in
+/// `ui/ytm/ytm_nav.dart`).
+List<GoRoute> _ytmRoutes() => [
+  _ytmRoute('artist', (id) => ArtistPage(browseId: id)),
+  _ytmRoute('album', (id) => AlbumPage(browseId: id)),
+  _ytmRoute('playlist', (id) => YtmPlaylistScreen(browseId: id)),
+];
+
+GoRoute _ytmRoute(String kind, Widget Function(String id) page) => GoRoute(
+  path: 'ytm/$kind/:id',
+  pageBuilder: (context, state) => sharedAxisPage(
+    context,
+    state,
+    PageSurface(child: page(state.pathParameters['id']!)),
   ),
 );
 

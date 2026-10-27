@@ -60,18 +60,21 @@ class RadioController {
 
   /// [playWithRadio] for a track already in the library. A track without a
   /// YouTube video (a local file) has no radio: nothing happens (logged).
-  Future<void> startRadio(Track t) async {
+  ///
+  /// With [playlistId] the queue after [t] is that radio playlist (an
+  /// artist's radio, started from one of their songs) instead of [t]'s own.
+  Future<void> startRadio(Track t, {String? playlistId}) async {
     final videoId = t.ytVideoId;
     if (videoId == null || videoId.isEmpty) {
       AppLog.i('Radio: ${t.id} has no YouTube video; not starting radio');
       return;
     }
-    await _start(t, videoId);
+    await _start(t, videoId, playlistId: playlistId);
   }
 
   Future<void> dispose() => _sub.cancel();
 
-  Future<void> _start(Track seed, String videoId) async {
+  Future<void> _start(Track seed, String videoId, {String? playlistId}) async {
     // The stream start and the radio request go out together.
     final playing = _player.playQueue([seed]);
     final epoch = _player.queueEpoch;
@@ -81,7 +84,7 @@ class RadioController {
     _seen
       ..clear()
       ..add(seed.id);
-    final radio = _ytm.radio(videoId);
+    final radio = _ytm.radio(videoId, playlistId: playlistId);
     await playing;
     final res = await radio;
     switch (res) {

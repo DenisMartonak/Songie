@@ -64,10 +64,18 @@ class FakeYtm implements YtmService {
   final answers = <String, Result<YtmRadio>>{};
   Completer<void>? gate;
 
+  /// The radio playlist each first-page request asked for (null: the seed's).
+  final playlists = <String?>[];
+
   @override
-  Future<Result<YtmRadio>> radio(String videoId, {String? continuation}) async {
+  Future<Result<YtmRadio>> radio(
+    String videoId, {
+    String? continuation,
+    String? playlistId,
+  }) async {
     final key = continuation == null ? videoId : 'cont:$continuation';
     calls.add(key);
+    if (continuation == null) playlists.add(playlistId);
     final g = gate;
     if (g != null) await g.future;
     return answers[key] ??
@@ -273,6 +281,15 @@ void main() {
       await radio.startRadio(t);
       expect(ids(player.state.queue), ['id-v9', 'id-r1', 'id-r2']);
       expect(store.upgrades, ['id-v9<-v9']);
+    });
+
+    test('from an artist\'s radio playlist: asks for that playlist, seed '
+        'first', () async {
+      final t = ytTrack('v9');
+      ytm.answers['v9'] = Ok(page(['r1', 'r2'], current: song('v9')));
+      await radio.startRadio(t, playlistId: 'RDEMartist');
+      expect(ytm.playlists, ['RDEMartist']);
+      expect(ids(player.state.queue), ['id-v9', 'id-r1', 'id-r2']);
     });
 
     test('a local track has no radio: nothing changes', () async {

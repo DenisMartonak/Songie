@@ -20,12 +20,12 @@ import '../library/add_folder_flow.dart' show folderPickFailureMessage;
 import '../library/add_songs_sheet.dart';
 import '../library/pickers.dart';
 import '../motion/equalizer_bars.dart';
-import '../motion/motion.dart';
 import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
 import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../widgets/page_snack_bar.dart';
+import 'hero_backdrop.dart';
 import 'yt_playlist_actions.dart';
 
 const double _rowHeight = 64;
@@ -577,19 +577,9 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
           left: 0,
           right: 0,
           height: maxExtent,
-          child: TweenAnimationBuilder<Color?>(
-            tween: ColorTween(end: heroColor),
-            duration: Motion.of(context).colour,
-            builder: (context, color, _) => DecoratedBox(
-              key: const Key('playlist.heroBackground'),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [color!, colors.background],
-                ),
-              ),
-            ),
+          child: HeroBackdrop(
+            color: heroColor,
+            backgroundKey: const Key('playlist.heroBackground'),
           ),
         ),
         // The hero scrolls up under the bar.

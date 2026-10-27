@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
+import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
@@ -14,6 +15,7 @@ import 'package:songies/downloads/download_service.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/router.dart';
 import 'package:songies/ui/home/home_page.dart';
+import 'package:songies/ui/library/library_page.dart';
 import 'package:songies/ui/motion/motion.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
@@ -22,6 +24,10 @@ import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 import 'package:songies/ui/settings/themes/themes_page.dart';
 import 'package:songies/ui/shell/bottom_nav.dart';
+import 'package:songies/ui/ytm/album_page.dart';
+import 'package:songies/ui/ytm/artist_page.dart';
+import 'package:songies/ui/ytm/ytm_nav.dart';
+import 'package:songies/ui/ytm/ytm_playlist_page.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
 
@@ -73,6 +79,26 @@ Future<GoRouter> pumpRouter(
         downloadBytesPerPlaylistProvider.overrideWith(
           (ref) => Stream.value(const []),
         ),
+        // YouTube Music pages, answered without a request.
+        ytmAlbumProvider.overrideWith(
+          (ref, id) async => YtmAlbumPage(
+            YtmAlbum(browseId: id, title: 'Album $id'),
+            const [],
+          ),
+        ),
+        ytmArtistProvider.overrideWith(
+          (ref, id) async => YtmArtistPage(
+            artist: YtmArtist(browseId: id, name: 'Artist $id'),
+          ),
+        ),
+        ytmPlaylistProvider.overrideWith(
+          (ref, id) async => YtmPlaylistPage(
+            YtmPlaylist(browseId: id, title: 'Playlist $id'),
+            const [],
+            null,
+          ),
+        ),
+        ytmCoverPaletteProvider.overrideWith((ref, url) async => null),
       ],
       child: MaterialApp.router(
         theme: buildThemeData(ThemeSpec.builtInDefault),
@@ -110,6 +136,53 @@ void main() {
     router.go('/settings/themes');
     await tester.pumpAndSettle();
     expect(find.byType(ThemesPage), findsOneWidget);
+  });
+
+  testWidgets('/ytm/album/MPREb_x opens the album page inside the shell, and '
+      'Back returns to Search', (tester) async {
+    final router = await pumpRouter(tester);
+
+    router.go('/ytm/album/MPREb_x');
+    await tester.pumpAndSettle();
+    expect(router.state.uri.path, '/search/ytm/album/MPREb_x');
+    expect(find.byType(AlbumPage), findsOneWidget);
+    expect(find.text('Album MPREb_x'), findsOneWidget);
+    expect(find.byType(BottomNav), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlbumPage), findsNothing);
+    expect(find.byType(SearchPage), findsOneWidget);
+  });
+
+  testWidgets('YouTube Music pages open inside the tab they are opened from', (
+    tester,
+  ) async {
+    final router = await pumpRouter(tester);
+
+    router.go('/library');
+    await tester.pumpAndSettle();
+    tester.element(find.byType(LibraryPage)).goYtmArtist('UCx');
+    await tester.pumpAndSettle();
+    expect(router.state.uri.path, '/library/ytm/artist/UCx');
+    expect(find.byType(ArtistPage), findsOneWidget);
+
+    tester.element(find.byType(ArtistPage)).goYtmPlaylist('VLPLx');
+    await tester.pumpAndSettle();
+    expect(router.state.uri.path, '/library/ytm/playlist/VLPLx');
+    expect(find.byType(YtmPlaylistScreen), findsOneWidget);
+
+    router.go('/home');
+    await tester.pumpAndSettle();
+    tester.element(find.byType(HomePage)).goYtmAlbum('MPREb_y');
+    await tester.pumpAndSettle();
+    expect(router.state.uri.path, '/home/ytm/album/MPREb_y');
+    expect(find.byType(AlbumPage), findsOneWidget);
+
+    // Back goes to the page it was opened from.
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(HomePage), findsOneWidget);
   });
 
   testWidgets('openNowPlaying pushes once, then does nothing', (tester) async {
