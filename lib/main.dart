@@ -19,6 +19,7 @@ import 'downloads/download_notifier.dart';
 import 'downloads/download_repository.dart';
 import 'downloads/download_service.dart';
 import 'innertube/innertube_client.dart';
+import 'innertube/play_reporter.dart';
 import 'innertube/player_stream_source.dart';
 import 'innertube/transport.dart';
 import 'library/art_cache.dart';
@@ -99,8 +100,9 @@ Future<void> main() async {
   final innertube = InnertubeClient(HttpInnertubeTransport(), settings);
   final network = ConnectivityPlusStatus();
   // Instant streams from Innertube; yt-dlp when every client is refused.
+  final innertubeStreams = InnertubeStreamSource(innertube);
   final streams = StreamResolver(
-    FallbackStreamSource([InnertubeStreamSource(innertube), ytClient]),
+    FallbackStreamSource([innertubeStreams, ytClient]),
     network,
     settings,
   );
@@ -161,6 +163,8 @@ Future<void> main() async {
     onUnavailable: library.markUnavailable,
     network: network,
   );
+  // Reports songs heard for 30 s to YouTube; reacts to player state only.
+  PlayReporter(player.states, innertubeStreams, HttpInnertubeTransport());
   bindAudioSession(
     becomingNoisy: backend.becomingNoisy,
     interruptions: backend.interruptions,

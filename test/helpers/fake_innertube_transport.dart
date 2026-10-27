@@ -42,4 +42,16 @@ class FakeTransport implements InnertubeTransport {
     if (next is InnertubeResponse) return next;
     throw next;
   }
+
+  /// GET requests (play reports): url and headers, no body.
+  final gets = <FakeRequest>[];
+
+  @override
+  Future<InnertubeResponse> get(Uri url, Map<String, String> headers) async {
+    gets.add(FakeRequest(url, const {}, headers));
+    if (_replies.isEmpty) return const InnertubeResponse(204, null);
+    final next = _replies.removeAt(0);
+    if (next is InnertubeResponse) return next;
+    throw next;
+  }
 }

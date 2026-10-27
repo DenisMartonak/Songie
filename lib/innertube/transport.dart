@@ -22,6 +22,9 @@ abstract class InnertubeTransport {
     Map<String, Object?> body,
     Map<String, String> headers,
   );
+
+  /// A plain GET (play reports); the body is ignored.
+  Future<InnertubeResponse> get(Uri url, Map<String, String> headers);
 }
 
 /// The real transport: `dart:io` [HttpClient], gzip, 10 s timeouts.
@@ -66,5 +69,15 @@ class HttpInnertubeTransport implements InnertubeTransport {
       json,
       redirect: location == null ? null : url.resolve(location),
     );
+  }
+
+  @override
+  Future<InnertubeResponse> get(Uri url, Map<String, String> headers) async {
+    final req = await _client.getUrl(url).timeout(timeout);
+    req.followRedirects = false;
+    headers.forEach(req.headers.set);
+    final res = await req.close().timeout(timeout);
+    await res.drain<void>().timeout(timeout);
+    return InnertubeResponse(res.statusCode, null);
   }
 }
