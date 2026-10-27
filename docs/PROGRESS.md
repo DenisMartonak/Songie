@@ -2,10 +2,10 @@
 
 _Last updated: 2026-10-27_
 
-## Plan 5 (YouTube Music) — done, reviewed task by task
+## Plan 5 (YouTube Music) — done, reviewed, final review fixed
 
-- **Branch:** `plan-5-youtube-music`. Plan: [Plan 5](superpowers/plans/2026-10-25-songies-plan-5-youtube-music.md). Spec: [YouTube Music design](superpowers/specs/2026-10-25-songies-youtube-music-design.md). Session log: [plan-5-session-log.md](plan-5-session-log.md). Only Task 1 is pushed; nothing is merged.
-- **Status:** Tasks 1–11 are done; Tasks 1–10 were each reviewed by a separate reviewer, with their fixes applied. The final whole-branch review is still to run. Tests: 1,270 passing, `flutter analyze` clean, `flutter build apk --release` succeeds (80.2 MB), and `flutter build linux --release` succeeds (bundle 34 MB). The Linux release bundle was launched for 12 s with no errors (`media_kit_libs_linux registered`); audio was not listened to. The first APK attempt died when the Gradle daemon was OOM-killed on this 7 GB machine (`org.gradle.jvmargs=-Xmx8G`) while the NDK and SDK platform were first installed; the retry built cleanly. Windows is built on your PC.
+- **Branch:** `plan-5-youtube-music`. Plan: [Plan 5](superpowers/plans/2026-10-25-songies-plan-5-youtube-music.md). Spec: [YouTube Music design](superpowers/specs/2026-10-25-songies-youtube-music-design.md). Session log: [plan-5-session-log.md](plan-5-session-log.md). The branch is pushed; nothing is merged.
+- **Status:** Tasks 1–11 are done and each was reviewed by a separate reviewer, with its fixes applied. The final whole-branch review ran (ready to merge with fixes) and its one fix wave landed: yt-dlp now confirms an unavailable song before it is marked (R12), a broken home response shows Retry, the radio continuation waits for the queue append, the song menu reads providers before awaiting, artist shelves match "EPs" as a word, the empty Search text mentions YouTube Music, and the checklist spells out the Wi-Fi upgrade note. Tests: 1,278 passing (1,270 before the fix wave), `flutter analyze` clean, `flutter build apk --release` succeeds (80.2 MB), and `flutter build linux --release` succeeds (bundle 34 MB). The Linux release bundle was launched for 12 s with no errors (`media_kit_libs_linux registered`); audio was not listened to. The first APK attempt died when the Gradle daemon was OOM-killed on this 7 GB machine (`org.gradle.jvmargs=-Xmx8G`) while the NDK and SDK platform were first installed; the retry built cleanly. Windows is built on your PC.
 - **What it does now:**
   - **Instant streams:** songs resolve through YouTube's Innertube `player` API (one client after another), then yt-dlp, then the Plan 3 skip-and-notice path. A failing Innertube route never shows an error by itself. Live on this host: Innertube 68–148 ms per song, yt-dlp 1972–2493 ms (stream lookup only; see [innertube-notes.md](innertube-notes.md), "Live check").
   - **Search:** YouTube Music results under a short library section, with tabs (songs, albums, artists, playlists), song rows, a song menu and load-more. Only the last query's results are shown.
@@ -42,9 +42,9 @@ _Last updated: 2026-10-27_
   - Play reports: repeat-one doesn't re-report (decide for Plan 7); short forward seeks count as heard.
   - Parser robustness: artist page `title.contains('ep')` sorts "Deep cuts" as singles; a missing home section list logs nothing.
   - Tests: no test pins the `stream … via … in … ms` log line or a shared visitor bootstrap for concurrent first plays.
-- **Next:** the final whole-branch review and its fix round, your device checks (the Plan 5 section of the [manual checklist](manual-test-checklist.md)), then **Plan 6 (synced lyrics)**. The roadmap is now: **6 lyrics, 7 statistics, 8 device sync, 9 packaging.**
+- **Next:** your device checks (the Plan 5 section of the [manual checklist](manual-test-checklist.md)), then **Plan 6 (synced lyrics)**. The roadmap is now: **6 lyrics, 7 statistics, 8 device sync, 9 packaging.**
 - **To resume in a new Claude session:**
-  > Songies Plan 5 is implemented on branch `plan-5-youtube-music` (Tasks 1–11 done, 1,270 tests). Next: the final whole-branch review and fix round, the device checks, then write Plan 6 (synced lyrics). Read docs/plan-5-session-log.md. Don't merge.
+  > Songies Plan 5 is implemented on branch `plan-5-youtube-music` (Tasks 1–11 done and reviewed, final review fixed, 1,278 tests). Next: the device checks, then write Plan 6 (synced lyrics). Read docs/plan-5-session-log.md. Don't merge.
 
 ## Plan 4 (a living UI and the theme engine) — done, reviewed, final review fixed
 
