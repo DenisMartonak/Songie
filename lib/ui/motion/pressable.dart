@@ -8,13 +8,16 @@ import 'motion.dart';
 /// [pressedScale] over [Motion.quick] from the moment it is touched, keeps
 /// the ink ripple, and on desktop tints the surface with the text colour at
 /// 4 % under the mouse. A tap too quick to see still dips fully before scaling back. Like
-/// [InkWell], it needs a [Material] ancestor. With neither [onTap] nor
-/// [onLongPress] it is inert: no scale, ripple, hover, cursor or focus.
+/// [InkWell], it needs a [Material] ancestor. A right-click (desktop) runs
+/// [onSecondaryTapUp] with where it happened, without the dip. With none of
+/// [onTap], [onLongPress] and [onSecondaryTapUp] it is inert: no scale,
+/// ripple, hover, cursor or focus.
 class Pressable extends StatefulWidget {
   const Pressable({
     required this.child,
     this.onTap,
     this.onLongPress,
+    this.onSecondaryTapUp,
     this.pressedScale = 0.97,
     this.borderRadius,
     super.key,
@@ -23,6 +26,10 @@ class Pressable extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+
+  /// A right-click; its details carry the pointer's global position, where
+  /// a context menu opens.
+  final GestureTapUpCallback? onSecondaryTapUp;
   final double pressedScale;
 
   /// Clips the ripple and the hover highlight.
@@ -51,7 +58,10 @@ class _PressableState extends State<Pressable>
   /// Where the current press started; null when not pressed.
   Offset? _downAt;
 
-  bool get _enabled => widget.onTap != null || widget.onLongPress != null;
+  bool get _enabled =>
+      widget.onTap != null ||
+      widget.onLongPress != null ||
+      widget.onSecondaryTapUp != null;
 
   void _down() {
     _released = false;
@@ -126,6 +136,7 @@ class _PressableState extends State<Pressable>
         child: InkWell(
           onTap: widget.onTap,
           onLongPress: widget.onLongPress,
+          onSecondaryTapUp: widget.onSecondaryTapUp,
           // Lost to a scroll or a long press: let go now.
           onTapCancel: enabled ? _up : null,
           hoverColor: Pressable.hoverColorOf(context),

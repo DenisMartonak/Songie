@@ -5,11 +5,14 @@ import '../../data/database.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../motion/equalizer_bars.dart';
+import '../motion/pressable.dart';
 import '../widgets/artwork.dart';
+import '../widgets/song_menu.dart';
 
 /// The playing order as a reorderable list: drag a handle to move a song
 /// (the row lifts with a shadow), swipe a row away to remove it, tap one to
-/// play it. The playing row shows [EqualizerBars].
+/// play it, long-press or right-click one for the song menu. The playing row
+/// shows [EqualizerBars].
 class NowPlayingQueue extends ConsumerWidget {
   const NowPlayingQueue({super.key});
 
@@ -65,6 +68,7 @@ class NowPlayingQueue extends ConsumerWidget {
           current: i == playingIndex,
           playing: playing,
           onTap: () => player.playAt(i),
+          menu: songMenuOpeners(context, ref, MenuSong.track(queue[i])),
         ),
       ),
     );
@@ -90,6 +94,7 @@ class _QueueRow extends StatelessWidget {
     required this.current,
     required this.playing,
     required this.onTap,
+    required this.menu,
   });
 
   final int index;
@@ -100,14 +105,19 @@ class _QueueRow extends StatelessWidget {
   final bool playing;
   final VoidCallback onTap;
 
+  /// Opens the song menu.
+  final SongMenuOpeners menu;
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     return Material(
       key: Key('queue.row.$index'),
       type: MaterialType.transparency,
-      child: InkWell(
+      child: Pressable(
         onTap: onTap,
+        onLongPress: menu.onLongPress,
+        onSecondaryTapUp: menu.onSecondaryTapUp,
         child: SizedBox(
           height: NowPlayingQueue.rowHeight,
           child: Padding(

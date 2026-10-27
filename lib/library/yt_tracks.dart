@@ -85,6 +85,19 @@ class YtTrackStore {
     }
   }
 
+  /// The live row for [videoId], or null; writes nothing. Never throws.
+  Future<Track?> find(String videoId) async {
+    try {
+      return await (_db.select(_db.tracks)..where(
+            (t) => t.ytVideoId.equals(videoId) & t.deleted.equals(false),
+          ))
+          .getSingleOrNull();
+    } catch (e, st) {
+      AppLog.w('YtTrackStore.find failed', e, st);
+      return null;
+    }
+  }
+
   /// [upsert] for each song; songs that fail are left out.
   Future<List<Track>> upsertAll(List<YtmSong> s) async {
     final out = <Track>[];

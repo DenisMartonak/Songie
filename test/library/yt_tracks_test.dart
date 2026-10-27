@@ -88,6 +88,17 @@ void main() {
     expect((await rows()).single.artworkRef, 'yt2-abc.jpg');
   });
 
+  test('find returns the live row for a video, without writing', () async {
+    expect(await store.find('v1'), equals(null));
+    expect(await rows(), isEmpty);
+    final a = (await store.upsert(song())) as Ok<Track>;
+    expect((await store.find('v1'))?.id, a.value.id);
+    await (db.update(db.tracks)..where((t) => t.id.equals(a.value.id))).write(
+      const TracksCompanion(deleted: Value(true)),
+    );
+    expect(await store.find('v1'), equals(null));
+  });
+
   test('upsertAll returns tracks in order', () async {
     final r = await store.upsertAll([song(id: 'a'), song(id: 'b')]);
     expect([for (final t in r) t.ytVideoId], ['a', 'b']);

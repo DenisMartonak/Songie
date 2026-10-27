@@ -186,4 +186,58 @@ void main() {
     await gesture.up();
     semantics.dispose();
   });
+
+  testWidgets('a right-click reports where it happened, without a tap', (
+    tester,
+  ) async {
+    var taps = 0;
+    Offset? at;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Pressable(
+              onTap: () => taps++,
+              onSecondaryTapUp: (d) => at = d.globalPosition,
+              child: const SizedBox(width: 100, height: 40),
+            ),
+          ),
+        ),
+      ),
+    );
+    final centre = tester.getCenter(find.byType(Pressable));
+    await tester.tapAt(
+      centre,
+      buttons: kSecondaryButton,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pumpAndSettle();
+    expect(at, centre);
+    expect(taps, 0);
+    // A right-click doesn't dip the row like a press.
+    expect(scale(tester), 1.0);
+  });
+
+  testWidgets('a right-click alone makes it interactive', (tester) async {
+    var clicks = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Pressable(
+              onSecondaryTapUp: (_) => clicks++,
+              child: const SizedBox(width: 100, height: 40),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tapAt(
+      tester.getCenter(find.byType(Pressable)),
+      buttons: kSecondaryButton,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pumpAndSettle();
+    expect(clicks, 1);
+  });
 }

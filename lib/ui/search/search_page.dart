@@ -15,6 +15,7 @@ import '../motion/motion.dart';
 import '../motion/pressable.dart';
 import '../shell/adaptive_shell.dart';
 import '../widgets/artwork.dart';
+import '../widgets/song_menu.dart';
 import '../ytm/ytm_result_tiles.dart';
 import '../ytm/ytm_song_row.dart';
 
@@ -496,6 +497,8 @@ class _ResultRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.onLongPress,
+    this.onSecondaryTapUp,
   });
 
   final Key rowKey;
@@ -505,12 +508,18 @@ class _ResultRow extends StatelessWidget {
   final String subtitle;
   final VoidCallback onTap;
 
+  /// Long-press and right-click (a song's menu).
+  final VoidCallback? onLongPress;
+  final GestureTapUpCallback? onSecondaryTapUp;
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     return Pressable(
       key: rowKey,
       onTap: onTap,
+      onLongPress: onLongPress,
+      onSecondaryTapUp: onSecondaryTapUp,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Row(
@@ -553,14 +562,19 @@ class _SongRow extends ConsumerWidget {
   final Track track;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => _ResultRow(
-    rowKey: Key('search.song.${track.id}'),
-    artworkRef: track.artworkRef,
-    seed: track.id,
-    title: track.title,
-    subtitle: track.artist,
-    onTap: () => ref.read(playerServiceProvider).playQueue([track]),
-  );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final menu = songMenuOpeners(context, ref, MenuSong.track(track));
+    return _ResultRow(
+      rowKey: Key('search.song.${track.id}'),
+      artworkRef: track.artworkRef,
+      seed: track.id,
+      title: track.title,
+      subtitle: track.artist,
+      onTap: () => ref.read(playerServiceProvider).playQueue([track]),
+      onLongPress: menu.onLongPress,
+      onSecondaryTapUp: menu.onSecondaryTapUp,
+    );
+  }
 }
 
 class _PlaylistRow extends StatelessWidget {

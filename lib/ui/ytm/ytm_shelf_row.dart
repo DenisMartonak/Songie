@@ -7,15 +7,16 @@ import '../../theme/app_theme.dart';
 import '../motion/fade_slide_in.dart';
 import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
+import '../widgets/song_menu.dart';
 import 'ytm_nav.dart';
 import 'ytm_result_tiles.dart';
-import 'ytm_song_menu.dart';
 
 /// One YouTube Music shelf (Quick picks, Listen again, new releases, ...):
 /// its title over a horizontal row of cards in the style of Home's playlist
-/// cards. A song card plays the song with its radio (long press: its ⋯
-/// menu); album, artist and playlist cards open their pages. Items of an
-/// unknown kind are skipped, and a shelf left empty shows nothing.
+/// cards. A song card plays the song with its radio (long-press or
+/// right-click: the song menu); album, artist and playlist cards open their
+/// pages. Items of an unknown kind are skipped, and a shelf left empty shows
+/// nothing.
 class YtmShelfRow extends StatelessWidget {
   const YtmShelfRow({required this.shelf, super.key});
 
@@ -123,15 +124,17 @@ class YtmCard extends ConsumerWidget {
       _ => throw ArgumentError.value(item, 'item', 'not a feed item'),
     };
     final song = item is YtmSong ? item as YtmSong : null;
+    final menu = song == null
+        ? null
+        : songMenuOpeners(context, ref, MenuSong.ytm(song));
     return Material(
       type: MaterialType.transparency,
       child: Pressable(
         key: Key('ytm.card.$kind.$id'),
         borderRadius: BorderRadius.circular(colors.radius),
         onTap: onTap,
-        onLongPress: song == null
-            ? null
-            : () => showYtmSongMenu(context, ref, song),
+        onLongPress: menu?.onLongPress,
+        onSecondaryTapUp: menu?.onSecondaryTapUp,
         child: SizedBox(
           width: art,
           child: Column(

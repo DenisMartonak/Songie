@@ -399,6 +399,18 @@ void main() {
     });
   });
 
+  group('trackIdsIn', () {
+    test('the tracks a playlist holds now, not removed ones', () async {
+      await insertTracks(['t1', 't2', 't3']);
+      final p = await newPlaylist();
+      await repo.addTracks(p, ['t1', 't2', 't3']);
+      final e = [for (final x in await tracksOf(p)) x.entryId];
+      await repo.removeEntry(e[1]);
+      expect(await repo.trackIdsIn(p), {'t1', 't3'});
+      expect(await repo.trackIdsIn('nope'), isEmpty);
+    });
+  });
+
   group('removeEntry', () {
     test('tombstones the row and hides it', () async {
       await insertTracks(['t1', 't2', 't3']);

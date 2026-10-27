@@ -1,0 +1,513 @@
+// The one song menu: opened by long-press, right-click or ⋯ on every song
+// row and on Now Playing, with each item only where it applies.
+import 'package:drift/drift.dart' show Value;
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:songies/core/result.dart';
+import 'package:songies/innertube/ytm_models.dart';
+import 'package:songies/ui/home/home_page.dart';
+import 'package:songies/ui/now_playing/now_playing_page.dart';
+import 'package:songies/ui/playlist/playlist_page.dart';
+import 'package:songies/ui/search/search_page.dart';
+
+import '../helpers/test_db.dart';
+import '../helpers/ui_harness.dart';
+
+const _lucky = YtmSong(
+  videoId: 'v1',
+  title: 'Get Lucky',
+  artists: [YtmArtistRef(browseId: 'UCdaft', name: 'Daft Punk')],
+  album: 'Random Access Memories',
+  albumBrowseId: 'MPREb_ram',
+  durationMs: 369000,
+);
+
+void main() {
+  late UiHarness h;
+
+  setUp(() async => h = await UiHarness.create());
+  tearDown(() => h.dispose());
+
+  void phone(WidgetTester tester, [Size size = const Size(400, 900)]) {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+  }
+
+  Finder item(String action) => find.byKey(Key('songMenu.$action'));
+  final sheet = find.byKey(const Key('songMenu.sheet'));
+  final popup = find.byWidgetPredicate((w) => w is PopupMenuItem);
+
+  Future<void> longPress(WidgetTester tester, Finder row) async {
+    await tester.longPress(row);
+    await settle(tester);
+  }
+
+  Future<Offset> rightClick(WidgetTester tester, Finder row) async {
+    // Near the left edge, so the menu fits to the right of the pointer.
+    final at = Offset(tester.getTopLeft(row).dx + 24, tester.getCenter(row).dy);
+    await tester.tapAt(
+      at,
+      buttons: kSecondaryButton,
+      kind: PointerDeviceKind.mouse,
+    );
+    await settle(tester);
+    return at;
+  }
+
+  Future<void> choose(WidgetTester tester, String action) async {
+    await tester.tap(item(action));
+    await settle(tester);
+  }
+
+  /// Closes an open sheet or popup menu.
+  Future<void> dismiss(WidgetTester tester) async {
+    await tester.tapAt(const Offset(5, 5));
+    await settle(tester);
+  }
+
+  /// The sheet opened by long-press and the popup at the pointer opened by
+  /// right-click, both holding the same menu.
+  Future<void> expectBothWays(WidgetTester tester, Finder row) async {
+    await longPress(tester, row);
+    expect(sheet, findsOneWidget);
+    expect(item('playNext'), findsOneWidget);
+    expect(item('addToPlaylist'), findsOneWidget);
+    await dismiss(tester);
+    expect(sheet, findsNothing);
+
+    final at = await rightClick(tester, row);
+    expect(sheet, findsNothing);
+    expect(popup, findsWidgets);
+    expect(item('playNext'), findsOneWidget);
+    expect(item('addToPlaylist'), findsOneWidget);
+    // It opens at the pointer.
+    final top = tester.getTopLeft(item('playNext'));
+    expect((top.dy - at.dy).abs(), lessThan(60));
+    expect((top.dx - at.dx).abs(), lessThan(60));
+    await dismiss(tester);
+    expect(popup, findsNothing);
+  }
+
+  List<String> queueIds() => [for (final t in h.player.state.queue) t.id];
+
+  Future<void> addYtTrack(String id, {bool unavailable = false}) => h.db
+      .into(h.db.tracks)
+      .insert(
+        trackRow(
+          id: id,
+          source: 'yt',
+          ytVideoId: 'v$id',
+          title: 'Song $id',
+        ).copyWith(unavailable: Value(unavailable)),
+      );
+
+  // --- pages ----------------------------------------------------------------
+
+  Future<void> pumpPlaylist(WidgetTester tester, String id) async {
+    phone(tester, const Size(800, 900));
+    await tester.pumpWidget(
+      h.app(
+        initialLocation: '/playlist/$id',
+        routes: [
+          GoRoute(
+            path: '/playlist/:id',
+            builder: (_, s) =>
+                Scaffold(body: PlaylistPage(id: s.pathParameters['id']!)),
+          ),
+        ],
+      ),
+    );
+    await settle(tester);
+  }
+
+  Future<void> pumpHome(WidgetTester tester) async {
+    phone(tester, const Size(400, 1600));
+    await tester.pumpWidget(
+      h.app(
+        initialLocation: '/home',
+        routes: [
+          GoRoute(
+            path: '/home',
+            builder: (_, _) => const Scaffold(body: HomePage()),
+          ),
+          GoRoute(
+            path: '/home/playlist/:id',
+            builder: (_, s) =>
+                Scaffold(body: Text('Playlist ${s.pathParameters['id']}')),
+          ),
+        ],
+      ),
+    );
+    await settle(tester);
+  }
+
+  Future<void> pumpSearch(WidgetTester tester, String query) async {
+    phone(tester);
+    await tester.pumpWidget(
+      h.app(
+        initialLocation: '/search',
+        routes: [
+          GoRoute(
+            path: '/search',
+            builder: (_, _) => const Scaffold(body: SearchPage()),
+          ),
+        ],
+      ),
+    );
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('search.field')), query);
+    await tester.pump(searchDebounce + const Duration(milliseconds: 20));
+    await settle(tester);
+  }
+
+  /// With [still], under reduced motion: the playing row's bars stand still.
+  Future<void> pumpNowPlaying(WidgetTester tester, {bool still = false}) async {
+    phone(tester, const Size(400, 800));
+    await tester.pumpWidget(
+      h.app(
+        disableAnimations: still,
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => const Scaffold(body: Text('Shell stub')),
+          ),
+          GoRoute(path: '/now-playing', pageBuilder: nowPlayingPage),
+        ],
+      ),
+    );
+    GoRouter.of(tester.element(find.text('Shell stub'))).push('/now-playing');
+    await settle(tester);
+  }
+
+  /// Song t1 played, then t2 (the newest first in Recents).
+  Future<void> recents(WidgetTester tester) => real(tester, () async {
+    await h.addTrack('t1', title: 'First');
+    await h.addTrack('t2', title: 'Second');
+    await h.history.record('t1', null);
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    await h.history.record('t2', null);
+  });
+
+  final recentRow = find.byKey(const Key('home.recent.t1'));
+
+  // --- opening --------------------------------------------------------------
+
+  group('opens', () {
+    uiTest('on a library row (Recents) by long-press and right-click', (
+      tester,
+    ) async {
+      await recents(tester);
+      h.ytm.homeAnswer = const Ok(YtmHome([], null));
+      await pumpHome(tester);
+      await expectBothWays(tester, recentRow);
+    });
+
+    uiTest('on a playlist row by long-press and right-click', (tester) async {
+      final pid = await real(tester, () async {
+        await h.addTrack('t1');
+        await h.addTrack('t2');
+        return h.addPlaylist('Road trip', ['t1', 't2']);
+      });
+      await pumpPlaylist(tester, pid);
+      await expectBothWays(tester, find.text('Song t2'));
+    });
+
+    uiTest('on a search library row by long-press and right-click', (
+      tester,
+    ) async {
+      await real(tester, () async {
+        await h.addTrack('t1', title: 'One More Time', artist: 'Daft Punk');
+        await h.addPlaylist('Dance', ['t1']);
+      });
+      await pumpSearch(tester, 'daft');
+      await expectBothWays(tester, find.byKey(const Key('search.song.t1')));
+    });
+
+    uiTest('on a YouTube Music search row by long-press and right-click', (
+      tester,
+    ) async {
+      h.ytm.answer('lucky', YtmSearchKind.songs, [_lucky]);
+      await pumpSearch(tester, 'lucky');
+      await expectBothWays(tester, find.byKey(const Key('ytm.song.v1')));
+    });
+
+    uiTest('on a queue row by long-press', (tester) async {
+      await real(tester, () async {
+        await h.addTrack('t1');
+        await h.addTrack('t2');
+      });
+      await pumpNowPlaying(tester, still: true);
+      final tracks = await real(tester, () => h.db.select(h.db.tracks).get());
+      await real(tester, () => h.player.playQueue(tracks));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('nowPlaying.tab.queue')));
+      await settle(tester);
+
+      await longPress(tester, find.byKey(const Key('queue.row.1')));
+      expect(sheet, findsOneWidget);
+      expect(
+        find.descendant(of: sheet, matching: find.text('Song t2')),
+        findsOneWidget,
+      );
+    });
+
+    uiTest("from Now Playing's ⋯ for the current song", (tester) async {
+      await real(tester, () async {
+        await h.addTrack('t1', title: 'Song one');
+        await h.addPlaylist('Gym', const []);
+      });
+      await pumpNowPlaying(tester);
+      final tracks = await real(tester, () => h.db.select(h.db.tracks).get());
+      await real(tester, () => h.player.playQueue(tracks));
+      await settle(tester);
+
+      await tester.tap(find.byKey(const Key('nowPlaying.more')));
+      await settle(tester);
+      expect(sheet, findsOneWidget);
+      expect(
+        find.descendant(of: sheet, matching: find.text('Song one')),
+        findsOneWidget,
+      );
+
+      await choose(tester, 'addToPlaylist');
+      await tester.tap(find.text('Gym'));
+      await settle(tester);
+      expect(find.text('Added to Gym'), findsOneWidget);
+    });
+
+    uiTest('on a Home feed song card by long-press and right-click', (
+      tester,
+    ) async {
+      h.ytm.homeAnswer = const Ok(
+        YtmHome([
+          YtmShelf('Quick picks', [_lucky]),
+        ], null),
+      );
+      await pumpHome(tester);
+      await expectBothWays(tester, find.byKey(const Key('ytm.card.song.v1')));
+    });
+
+    uiTest('at once under reduced motion', (tester) async {
+      await real(tester, () async {
+        await h.addTrack('t1', title: 'First');
+        await h.history.record('t1', null);
+      });
+      phone(tester, const Size(400, 1600));
+      await tester.pumpWidget(
+        h.app(
+          disableAnimations: true,
+          initialLocation: '/home',
+          routes: [
+            GoRoute(
+              path: '/home',
+              builder: (_, _) => const Scaffold(body: HomePage()),
+            ),
+          ],
+        ),
+      );
+      await settle(tester);
+      await tester.longPress(recentRow);
+      await flush(tester);
+      expect(sheet, findsOneWidget);
+      // Fully up after a few 1 ms frames: the sheet's bottom sits on the screen's bottom.
+      expect(tester.getBottomLeft(sheet).dy, closeTo(1600, 1));
+    });
+
+    uiTest('Now Playing has no ⋯ while nothing plays', (tester) async {
+      await pumpNowPlaying(tester);
+      expect(find.byKey(const Key('nowPlaying.more')), findsNothing);
+    });
+  });
+
+  // --- a tap is unchanged ---------------------------------------------------
+
+  group('a tap still plays', () {
+    uiTest('a Recents row plays through the list from it', (tester) async {
+      await recents(tester);
+      h.ytm.homeAnswer = const Ok(YtmHome([], null));
+      await pumpHome(tester);
+      await tester.tap(recentRow);
+      await settle(tester);
+      expect(sheet, findsNothing);
+      expect(queueIds(), ['t2', 't1']);
+      expect(h.player.state.current?.id, 't1');
+    });
+
+    uiTest('a playlist row plays the playlist from it', (tester) async {
+      final pid = await real(tester, () async {
+        await h.addTrack('t1');
+        await h.addTrack('t2');
+        return h.addPlaylist('Road trip', ['t1', 't2']);
+      });
+      await pumpPlaylist(tester, pid);
+      await tester.tap(find.text('Song t2'));
+      // The playing row's equalizer moves: no settling.
+      await flush(tester);
+      expect(sheet, findsNothing);
+      expect(queueIds(), ['t1', 't2']);
+      expect(h.player.state.current?.id, 't2');
+      expect(h.player.state.sourcePlaylistId, pid);
+    });
+
+    uiTest('a search row plays the song', (tester) async {
+      await real(tester, () async {
+        await h.addTrack('t1', title: 'One More Time', artist: 'Daft Punk');
+      });
+      await pumpSearch(tester, 'daft');
+      await tester.tap(find.byKey(const Key('search.song.t1')));
+      await settle(tester);
+      expect(sheet, findsNothing);
+      expect(queueIds(), ['t1']);
+    });
+  });
+
+  // --- actions --------------------------------------------------------------
+
+  group('Add to playlist', () {
+    uiTest('adds the song to the chosen playlist', (tester) async {
+      late String gym;
+      await recents(tester);
+      await real(tester, () async => gym = await h.addPlaylist('Gym', []));
+      await pumpHome(tester);
+
+      await longPress(tester, recentRow);
+      await choose(tester, 'addToPlaylist');
+      await tester.tap(find.byKey(Key('addToPlaylist.$gym')));
+      await settle(tester);
+
+      expect(find.text('Added to Gym'), findsOneWidget);
+      expect(await real(tester, () => h.orderOf(gym)), ['t1']);
+    });
+
+    uiTest('a song already in the playlist is not added twice', (tester) async {
+      late String gym;
+      await recents(tester);
+      await real(tester, () async => gym = await h.addPlaylist('Gym', ['t1']));
+      await pumpHome(tester);
+
+      await longPress(tester, recentRow);
+      await choose(tester, 'addToPlaylist');
+      await tester.tap(find.byKey(Key('addToPlaylist.$gym')));
+      await settle(tester);
+
+      expect(find.text('Already in Gym'), findsOneWidget);
+      expect(find.text('Added to Gym'), findsNothing);
+      expect(await real(tester, () => h.orderOf(gym)), ['t1']);
+    });
+  });
+
+  group('Remove from this playlist', () {
+    uiTest('shows inside a playlist and removes with Undo', (tester) async {
+      final pid = await real(tester, () async {
+        await h.addTrack('t1');
+        await h.addTrack('t2');
+        return h.addPlaylist('Road trip', ['t1', 't2']);
+      });
+      await pumpPlaylist(tester, pid);
+
+      await longPress(tester, find.text('Song t1'));
+      await choose(tester, 'removeFromPlaylist');
+      expect(await real(tester, () => h.orderOf(pid)), ['t2']);
+      expect(find.text('Removed Song t1'), findsOneWidget);
+
+      await tester.tap(find.text('Undo'));
+      await settle(tester);
+      expect(await real(tester, () => h.orderOf(pid)), ['t1', 't2']);
+    });
+
+    uiTest('does not show outside a playlist', (tester) async {
+      await recents(tester);
+      await pumpHome(tester);
+      await longPress(tester, recentRow);
+      expect(item('playNext'), findsOneWidget);
+      expect(item('removeFromPlaylist'), findsNothing);
+    });
+  });
+
+  group('Download', () {
+    uiTest('is offered for a YouTube song in a playlist', (tester) async {
+      final pid = await real(tester, () async {
+        await h.addTrack('t1');
+        await addYtTrack('y1');
+        return h.addPlaylist('Mix', ['t1', 'y1']);
+      });
+      await pumpPlaylist(tester, pid);
+
+      await longPress(tester, find.text('Song y1'));
+      expect(item('download'), findsOneWidget);
+      expect(item('startRadio'), findsOneWidget);
+      await choose(tester, 'download');
+      expect(h.downloadRepo.calls, ['downloadTrack(y1)']);
+    });
+
+    uiTest('is not offered for a local song', (tester) async {
+      final pid = await real(tester, () async {
+        await h.addTrack('t1');
+        return h.addPlaylist('Mix', ['t1']);
+      });
+      await pumpPlaylist(tester, pid);
+
+      await longPress(tester, find.text('Song t1'));
+      expect(item('playNext'), findsOneWidget);
+      expect(item('download'), findsNothing);
+      expect(item('removeDownload'), findsNothing);
+      expect(item('startRadio'), findsNothing);
+    });
+
+    uiTest('is offered for a YouTube Music result, storing it first', (
+      tester,
+    ) async {
+      h.ytm.answer('lucky', YtmSearchKind.songs, [_lucky]);
+      await pumpSearch(tester, 'lucky');
+      await longPress(tester, find.byKey(const Key('ytm.song.v1')));
+      await choose(tester, 'download');
+      expect(h.ytStore.upserted, ['v1']);
+      expect(h.downloadRepo.calls, hasLength(1));
+      expect(h.downloadRepo.calls.single, startsWith('downloadTrack('));
+    });
+  });
+
+  group('Go to', () {
+    uiTest('artist and album hide for a library song (ids unknown)', (
+      tester,
+    ) async {
+      final pid = await real(tester, () async {
+        await addYtTrack('y1');
+        return h.addPlaylist('Mix', ['y1']);
+      });
+      await pumpPlaylist(tester, pid);
+      await longPress(tester, find.text('Song y1'));
+      expect(item('playNext'), findsOneWidget);
+      expect(item('goToArtist'), findsNothing);
+      expect(item('goToAlbum'), findsNothing);
+    });
+
+    uiTest('artist and album show for a YouTube Music song with ids', (
+      tester,
+    ) async {
+      h.ytm.answer('lucky', YtmSearchKind.songs, [_lucky]);
+      await pumpSearch(tester, 'lucky');
+      await longPress(tester, find.byKey(const Key('ytm.song.v1')));
+      expect(item('goToArtist'), findsOneWidget);
+      expect(item('goToAlbum'), findsOneWidget);
+    });
+  });
+
+  group('queue actions on a library song', () {
+    uiTest('Play next and Add to queue use the track as it is', (tester) async {
+      await recents(tester);
+      await pumpHome(tester);
+      await longPress(tester, recentRow);
+      await choose(tester, 'addToQueue');
+      expect(queueIds(), ['t1']);
+      await longPress(tester, find.byKey(const Key('home.recent.t2')));
+      await choose(tester, 'playNext');
+      expect(queueIds(), contains('t2'));
+      expect(h.ytStore.upserted, isEmpty);
+    });
+  });
+}

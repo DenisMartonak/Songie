@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
+import '../widgets/song_menu.dart';
 
 /// The page's top row: a close button (a chevron on a phone, an X on the
-/// desktop panel) and where the music is playing from.
+/// desktop panel), where the music is playing from, and a ⋯ button with the
+/// current song's menu (on the side away from the close button).
 class NowPlayingHeader extends ConsumerWidget {
   const NowPlayingHeader({
     required this.wide,
@@ -38,12 +40,22 @@ class NowPlayingHeader extends ConsumerWidget {
       ),
       onPressed: onClose,
     );
-    const spacer = SizedBox(width: 48);
+    final track = ref.watch(
+      playerStateProvider.select((s) => s.value?.current),
+    );
+    final Widget more = track == null
+        ? const SizedBox(width: 48)
+        : SongMenuButton(
+            key: const Key('nowPlaying.more'),
+            song: MenuSong.track(track),
+            color: colors.text,
+            size: 24,
+          );
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
       child: Row(
         children: [
-          wide ? spacer : close,
+          wide ? more : close,
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -70,7 +82,7 @@ class NowPlayingHeader extends ConsumerWidget {
               ],
             ),
           ),
-          wide ? close : spacer,
+          wide ? close : more,
         ],
       ),
     );

@@ -8,7 +8,6 @@ import 'package:path/path.dart' as p;
 
 import '../../core/log.dart';
 import '../../core/result.dart';
-import '../../downloads/download_repository.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
@@ -25,6 +24,7 @@ import '../motion/shimmer.dart';
 import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../widgets/page_snack_bar.dart';
+import '../widgets/song_menu.dart';
 import 'hero_backdrop.dart';
 import 'yt_playlist_actions.dart';
 
@@ -205,6 +205,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
                     playing: playing,
                     onTap: () => _playFrom(list, i),
                     onLocate: () => _locate(row),
+                    onRemove: () => _removeEntry(row.entryId),
                   ),
                 );
               },
@@ -305,6 +306,14 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
           onPressed: () => _undoRemove(repo, removed.track.id, previous, next),
         ),
       );
+  }
+
+  /// [_remove] for the menu's Remove from this playlist: the row is looked up
+  /// again, as the list may have changed while the menu was open.
+  void _removeEntry(String entryId) {
+    final rows = _pending ?? ref.read(playlistTracksProvider(_id)).value;
+    final index = rows?.indexWhere((r) => r.entryId == entryId) ?? -1;
+    if (rows != null && index >= 0) _remove(rows, index);
   }
 
   /// Puts a removed track back between its old neighbours. The track returns
@@ -920,7 +929,9 @@ class _SkeletonRows extends StatelessWidget {
   }
 }
 
-class _TrackRow extends StatelessWidget {
+/// A song in the playlist. Its ⋯, long-press and right-click open the song
+/// menu, with Remove from this playlist.
+class _TrackRow extends ConsumerWidget {
   const _TrackRow({
     required this.playlistId,
     required this.row,
@@ -929,6 +940,7 @@ class _TrackRow extends StatelessWidget {
     required this.playing,
     required this.onTap,
     required this.onLocate,
+    required this.onRemove,
     super.key,
   });
 
@@ -944,10 +956,20 @@ class _TrackRow extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLocate;
 
+  /// Removes the row (with Undo).
+  final VoidCallback onRemove;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final track = row.track;
+    final song = MenuSong.track(track);
+    final menu = songMenuOpeners(
+      context,
+      ref,
+      song,
+      onRemoveFromPlaylist: onRemove,
+    );
     final missing = row.fileMissing;
     final removed = row.status == 'removed_on_yt';
     final unavailable = track.unavailable;
@@ -956,6 +978,8 @@ class _TrackRow extends StatelessWidget {
       color: colors.background,
       child: Pressable(
         onTap: onTap,
+        onLongPress: menu.onLongPress,
+        onSecondaryTapUp: menu.onSecondaryTapUp,
         child: SizedBox(
           height: _rowHeight,
           child: Padding(
@@ -1051,12 +1075,11 @@ class _TrackRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (track.source == 'yt' && !unavailable)
-                  _TrackMenu(
-                    key: Key('track.menu.${row.entryId}'),
-                    playlistId: playlistId,
-                    trackId: track.id,
-                  ),
+                SongMenuButton(
+                  key: Key('track.menu.${row.entryId}'),
+                  song: song,
+                  onRemoveFromPlaylist: onRemove,
+                ),
                 ReorderableDragStartListener(
                   index: index,
                   child: Padding(
@@ -1074,74 +1097,6 @@ class _TrackRow extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-enum _TrackAction { download, removeDownload }
-
-/// A YouTube track's ⋯ menu: Download, or Remove download once it has one.
-class _TrackMenu extends ConsumerWidget {
-  const _TrackMenu({
-    required this.playlistId,
-    required this.trackId,
-    super.key,
-  });
-
-  final String playlistId;
-  final String trackId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = Theme.of(context).extension<SongiesColors>()!;
-    return PopupMenuButton<_TrackAction>(
-      tooltip: 'More',
-      icon: Icon(Icons.more_vert, size: 20, color: colors.mutedText),
-      onSelected: (action) => _run(context, ref, action),
-      // Read when the menu opens, so the row doesn't rebuild on changes.
-      itemBuilder: (_) {
-        final state = ref
-            .read(trackDownloadStatesProvider(playlistId))
-            .value?[trackId];
-        return [
-          if (state == null)
-            const PopupMenuItem(
-              value: _TrackAction.download,
-              child: Text('Download'),
-            )
-          else
-            const PopupMenuItem(
-              value: _TrackAction.removeDownload,
-              child: Text('Remove download'),
-            ),
-        ];
-      },
-    );
-  }
-
-  Future<void> _run(
-    BuildContext context,
-    WidgetRef ref,
-    _TrackAction action,
-  ) async {
-    final snacks = PageSnackBars.of(context);
-    final repo = ref.read(downloadRepositoryProvider);
-    try {
-      switch (action) {
-        case _TrackAction.download:
-          unawaited(ref.read(notificationPermissionProvider)());
-          if (!await repo.downloadTrack(trackId)) {
-            snacks.show(content: const Text("Couldn't download that song"));
-          }
-        case _TrackAction.removeDownload:
-          await repo.removeTrackDownload(
-            trackId,
-            ref.read(appPathsProvider).libraryYt,
-          );
-      }
-    } on DownloadDbException catch (e, s) {
-      AppLog.w('Changing a song download failed', e, s);
-      snacks.show(content: const Text("Couldn't change that download"));
-    }
   }
 }
 

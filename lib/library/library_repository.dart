@@ -471,6 +471,20 @@ class LibraryRepository {
     });
   }
 
+  /// The ids of the tracks [playlistId] holds now (removed entries left out).
+  Future<Set<String>> trackIdsIn(String playlistId) async {
+    final rows =
+        await (_db.selectOnly(_db.playlistEntries)
+              ..addColumns([_db.playlistEntries.trackId])
+              ..where(
+                _db.playlistEntries.playlistId.equals(playlistId) &
+                    _db.playlistEntries.deleted.equals(false),
+              ))
+            .map((r) => r.read(_db.playlistEntries.trackId)!)
+            .get();
+    return rows.toSet();
+  }
+
   Future<Track?> trackById(String id) {
     return (_db.select(_db.tracks)
           ..where((t) => t.id.equals(id) & t.deleted.equals(false)))

@@ -75,6 +75,8 @@ class YtmTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.onLongPress,
+    this.onSecondaryTapUp,
     this.trailing,
     super.key,
   });
@@ -85,6 +87,10 @@ class YtmTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback? onTap;
+
+  /// Long-press and right-click (a song's menu).
+  final VoidCallback? onLongPress;
+  final GestureTapUpCallback? onSecondaryTapUp;
   final Widget? trailing;
 
   @override
@@ -93,6 +99,8 @@ class YtmTile extends StatelessWidget {
     return Pressable(
       key: rowKey,
       onTap: onTap,
+      onLongPress: onLongPress,
+      onSecondaryTapUp: onSecondaryTapUp,
       child: Padding(
         padding: EdgeInsets.fromLTRB(16, 6, trailing == null ? 16 : 4, 6),
         child: Row(

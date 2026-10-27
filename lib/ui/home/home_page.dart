@@ -18,6 +18,7 @@ import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
 import '../shell/adaptive_shell.dart';
 import '../widgets/artwork.dart';
+import '../widgets/song_menu.dart';
 import '../ytm/consent_sheet.dart';
 import '../ytm/ytm_result_tiles.dart';
 import '../ytm/ytm_shelf_row.dart';
@@ -530,7 +531,7 @@ class _PlaylistCard extends StatelessWidget {
 }
 
 /// One "Recently played" row; tapping plays from it through the rest of the
-/// list.
+/// list, long-press or right-click opens the song menu.
 class _RecentRow extends ConsumerWidget {
   const _RecentRow({required this.tracks, required this.index});
 
@@ -541,10 +542,13 @@ class _RecentRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final track = tracks[index];
+    final menu = songMenuOpeners(context, ref, MenuSong.track(track));
     return Pressable(
       key: Key('home.recent.${track.id}'),
       onTap: () =>
           ref.read(playerServiceProvider).playQueue(tracks, startIndex: index),
+      onLongPress: menu.onLongPress,
+      onSecondaryTapUp: menu.onSecondaryTapUp,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Row(

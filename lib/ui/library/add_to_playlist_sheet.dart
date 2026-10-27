@@ -11,7 +11,9 @@ import '../widgets/name_dialog.dart';
 import '../widgets/page_snack_bar.dart';
 
 /// Lets the user pick a playlist (or make a new one) and appends [trackIds]
-/// to it, saying so in a snack bar on the page [context] belongs to.
+/// to it, saying so in a snack bar on the page [context] belongs to. Songs the
+/// playlist already holds are left out; when that is all of them it says
+/// "Already in" the playlist and adds nothing.
 Future<void> showAddToPlaylistSheet(
   BuildContext context,
   WidgetRef ref,
@@ -45,15 +47,26 @@ Future<void> showAddToPlaylistSheet(
         return;
     }
   }
-  final added = await repo.addTracks(id!, trackIds);
+  // Songs the playlist already holds are not added again.
+  final present = choice.isNew ? const <String>{} : await repo.trackIdsIn(id!);
+  final fresh = [
+    for (final t in trackIds)
+      if (!present.contains(t)) t,
+  ];
+  if (fresh.isEmpty) {
+    snacks.show(content: _oneLine('Already in $name'));
+    return;
+  }
+  final added = await repo.addTracks(id!, fresh);
   snacks.show(
-    content: Text(
+    content: _oneLine(
       added is Ok<void> ? 'Added to $name' : "Couldn't add to $name",
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
     ),
   );
 }
+
+Widget _oneLine(String text) =>
+    Text(text, maxLines: 1, overflow: TextOverflow.ellipsis);
 
 class _Choice {
   const _Choice.playlist(PlaylistSummary this.playlist) : isNew = false;

@@ -234,14 +234,28 @@ void main() {
       expect(find.byIcon(Icons.download_done), findsNothing);
     });
 
-    uiTest('local songs have no menu', (tester) async {
+    uiTest("a local song's menu has no Download", (tester) async {
       final pid = await real(tester, () async {
         await h.addTrack('t1');
         return h.addPlaylist('Local', ['t1']);
       });
       final e1 = await entryId(tester, 't1');
       await pumpPage(tester, pid);
-      expect(find.byKey(Key('track.menu.$e1')), findsNothing);
+      await tester.tap(find.byKey(Key('track.menu.$e1')));
+      await settle(tester);
+      expect(find.text('Play next'), findsOneWidget);
+      expect(find.text('Download'), findsNothing);
+      expect(find.text('Remove download'), findsNothing);
+    });
+
+    uiTest('an unavailable song offers no Download', (tester) async {
+      final pid = await ytPlaylist(tester);
+      final e3 = await entryId(tester, 'y3');
+      await pumpPage(tester, pid);
+      await tester.tap(find.byKey(Key('track.menu.$e3')));
+      await settle(tester);
+      expect(find.text('Play next'), findsOneWidget);
+      expect(find.text('Download'), findsNothing);
     });
   });
 }
