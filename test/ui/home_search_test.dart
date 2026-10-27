@@ -430,7 +430,7 @@ void main() {
       expect(find.text('Songs'), findsNothing);
     });
 
-    uiTest('"bey" lists Halo under Songs and the playlist under Playlists', (
+    uiTest('"bey" lists Halo and the playlist under "In your library"', (
       tester,
     ) async {
       await seed(tester);
@@ -439,8 +439,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await settle(tester);
 
-      expect(find.text('Songs'), findsOneWidget);
-      expect(find.text('Playlists'), findsOneWidget);
+      // Plan 5: one library section above the YouTube Music tabs.
+      expect(find.text('In your library'), findsOneWidget);
       expect(find.text('Halo'), findsOneWidget);
       expect(find.text('Yellow'), findsNothing);
       expect(find.text('Beyoncé hits'), findsOneWidget);

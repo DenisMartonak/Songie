@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:flutter/material.dart' show ThemeData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/connectivity.dart';
 import 'core/paths.dart';
+import 'core/result.dart';
 import 'data/database.dart';
 import 'data/settings_repository.dart';
 import 'data/sync_stamp.dart';
@@ -13,6 +15,7 @@ import 'downloads/download_notifier.dart';
 import 'downloads/download_repository.dart';
 import 'downloads/download_service.dart';
 import 'innertube/innertube_client.dart';
+import 'innertube/ytm_models.dart';
 import 'innertube/ytm_service.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
@@ -336,6 +339,61 @@ final radioControllerProvider = Provider<RadioController>((ref) {
   ref.onDispose(c.dispose);
   return c;
 });
+
+/// The device's network (one instance, shared with the player and the
+/// download queue).
+final networkStatusProvider = Provider<NetworkStatus>(
+  (ref) => _unwired('networkStatusProvider'),
+);
+
+/// YouTube Music could not be searched because the device is offline.
+class YtmOffline implements Exception {
+  const YtmOffline();
+
+  @override
+  String toString() => 'YtmOffline';
+}
+
+/// A YouTube Music request failed for any other reason.
+class YtmLoadFailed implements Exception {
+  const YtmLoadFailed(this.failure);
+
+  final Failure failure;
+
+  @override
+  String toString() => 'YtmLoadFailed($failure)';
+}
+
+/// One tab of YouTube Music search results for a (trimmed) query: fetched
+/// when first watched, by a user's search, and never retried on its own
+/// (Retry invalidates it). Each query is its own instance, so a late answer
+/// for an older query lands in an instance nothing shows any more.
+///
+/// Fails with [YtmOffline] when offline (without a request) or when a network
+/// failure turns out to be the device going offline, else [YtmLoadFailed].
+final ytmSearchProvider = FutureProvider.autoDispose
+    .family<YtmSearchPage, (String, YtmSearchKind)>(
+      (ref, arg) async {
+        final (query, kind) = arg;
+        final network = ref.watch(networkStatusProvider);
+        final ytm = ref.watch(ytmServiceProvider);
+        if (await network.current() == NetworkKind.offline) {
+          throw const YtmOffline();
+        }
+        switch (await ytm.search(query, kind)) {
+          case Ok(:final value):
+            return value;
+          case Err(:final failure):
+            if (failure.kind == FailureKind.network &&
+                await network.current() == NetworkKind.offline) {
+              throw const YtmOffline();
+            }
+            throw YtmLoadFailed(failure);
+        }
+      },
+      // A failed search waits for the user's Retry: no idle requests.
+      retry: (_, _) => null,
+    );
 
 /// Platform flags for the YouTube settings; tests override them.
 final isAndroidProvider = Provider<bool>((ref) => Platform.isAndroid);

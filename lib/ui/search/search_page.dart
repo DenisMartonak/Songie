@@ -5,19 +5,41 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/database.dart';
+import '../../innertube/ytm_models.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/contrast.dart';
 import '../motion/fade_slide_in.dart';
+import '../motion/motion.dart';
 import '../motion/pressable.dart';
 import '../shell/adaptive_shell.dart';
 import '../widgets/artwork.dart';
+import '../ytm/ytm_result_tiles.dart';
+import '../ytm/ytm_song_row.dart';
 
-/// How long the query must stay unchanged before the library is searched.
+/// How long the query must stay unchanged before the library and YouTube
+/// Music are searched.
 const Duration searchDebounce = Duration(milliseconds: 150);
 
-/// Songs and playlists matching `searchQueryProvider`. On a phone the page has
-/// its own field; on desktop the title-bar field writes the query.
+/// The YouTube Music result tabs, in order, with their labels.
+const Map<YtmSearchKind, String> ytmSearchTabs = {
+  YtmSearchKind.songs: 'Songs',
+  YtmSearchKind.videos: 'Videos',
+  YtmSearchKind.albums: 'Albums',
+  YtmSearchKind.artists: 'Artists',
+  YtmSearchKind.playlists: 'Playlists',
+};
+
+/// Songs and playlists matching `searchQueryProvider`: matches in the library
+/// first ("In your library"), then YouTube Music results in tabs. On a phone
+/// the page has its own field; on desktop the title-bar field writes the
+/// query.
+///
+/// Only the selected tab is fetched, once per query: tabs already opened for
+/// the query keep their results, and a new query starts over on the selected
+/// tab. Results are only ever shown for the latest query, so a slow answer
+/// for an older one is never seen.
 class SearchPage extends ConsumerStatefulWidget {
   const SearchPage({super.key});
 
@@ -32,6 +54,22 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   /// The query the results are for; trails `searchQueryProvider` by
   /// [searchDebounce].
   late String _searched;
+
+  /// The selected YouTube Music tab (kept across queries).
+  YtmSearchKind _kind = YtmSearchKind.songs;
+
+  /// The tabs opened for [_searched], whose results are kept.
+  Set<YtmSearchKind> _opened = {YtmSearchKind.songs};
+
+  void _search(String query) {
+    if (query.trim() != _searched.trim()) _opened = {_kind};
+    _searched = query;
+  }
+
+  void _select(YtmSearchKind kind) => setState(() {
+    _kind = kind;
+    _opened = {..._opened, kind};
+  });
 
   @override
   void initState() {
@@ -53,11 +91,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _debounce?.cancel();
     if (query.trim().isEmpty) {
       // Clearing is immediate: there is nothing to wait for.
-      setState(() => _searched = query);
+      setState(() => _search(query));
       return;
     }
     _debounce = Timer(searchDebounce, () {
-      if (mounted) setState(() => _searched = query);
+      if (mounted) setState(() => _search(query));
     });
   }
 
@@ -92,7 +130,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               ),
             ),
           ],
-          Expanded(child: _Results(query: _searched)),
+          Expanded(
+            child: _Results(
+              query: _searched,
+              kind: _kind,
+              opened: _opened,
+              onSelect: _select,
+            ),
+          ),
         ],
       ),
     );
@@ -133,14 +178,23 @@ class _SearchField extends StatelessWidget {
 }
 
 class _Results extends ConsumerWidget {
-  const _Results({required this.query});
+  const _Results({
+    required this.query,
+    required this.kind,
+    required this.opened,
+    required this.onSelect,
+  });
 
   final String query;
+  final YtmSearchKind kind;
+  final Set<YtmSearchKind> opened;
+  final ValueChanged<YtmSearchKind> onSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    if (query.trim().isEmpty) {
+    final q = query.trim();
+    if (q.isEmpty) {
       return _Message(
         'Search your library',
         color: colors.mutedText,
@@ -152,41 +206,173 @@ class _Results extends ConsumerWidget {
         ),
       );
     }
-    final tracks = ref.watch(searchTracksProvider(query));
-    final playlists = ref.watch(searchPlaylistsProvider(query));
-    final songs = tracks.value;
-    final lists = playlists.value;
-    if (songs == null || lists == null) return const SizedBox.shrink();
-    if (songs.isEmpty && lists.isEmpty) {
-      return _Message(
-        "Nothing matches '${query.trim()}'",
-        color: colors.mutedText,
-      );
+    final songs = ref.watch(searchTracksProvider(query)).value ?? const [];
+    final lists = ref.watch(searchPlaylistsProvider(query)).value ?? const [];
+    // Tabs opened for this query stay subscribed, so switching back shows
+    // their results without asking again.
+    for (final k in opened) {
+      if (k != kind) ref.watch(ytmSearchProvider((q, k)));
     }
+    final remote = ref.watch(ytmSearchProvider((q, kind)));
+
     final bottom = MediaQuery.paddingOf(context).bottom;
-    final children = [
-      if (songs.isNotEmpty) ...[
-        const _SectionTitle('Songs', key: ValueKey('songs')),
+    final children = <Widget>[
+      if (songs.isNotEmpty || lists.isNotEmpty) ...[
+        const _SectionTitle('In your library', key: ValueKey('library')),
         for (final track in songs)
           _SongRow(track: track, key: ValueKey('song.${track.id}')),
-      ],
-      if (lists.isNotEmpty) ...[
-        const _SectionTitle('Playlists', key: ValueKey('playlists')),
         for (final playlist in lists)
           _PlaylistRow(
             playlist: playlist,
             key: ValueKey('playlist.${playlist.id}'),
           ),
       ],
+      _Tabs(selected: kind, onSelect: onSelect, key: const ValueKey('tabs')),
+      ..._remote(context, ref, q, remote, colors),
     ];
     // A new query is a new list, so its results fade in again.
     return ListView(
-      key: ValueKey(query),
+      key: ValueKey(q),
       padding: EdgeInsets.only(bottom: bottom + 16),
       children: [
         for (final (i, child) in children.indexed)
           FadeSlideIn(index: i, id: child.key, child: child),
       ],
+    );
+  }
+
+  /// The selected tab's rows, or its loading, empty or failed state. Keys are
+  /// unique per tab, so rows of a tab seen before appear without fading in.
+  List<Widget> _remote(
+    BuildContext context,
+    WidgetRef ref,
+    String q,
+    AsyncValue<YtmSearchPage> remote,
+    SongiesColors colors,
+  ) {
+    final tab = kind.name;
+    if (remote.isLoading) {
+      return [YtmSkeletonRows(key: ValueKey('ytm.$tab.loading'))];
+    }
+    if (remote.hasError) {
+      return [
+        YtmLoadProblem(
+          key: ValueKey('ytm.$tab.problem'),
+          offline: remote.error is YtmOffline,
+          onRetry: () => ref.invalidate(ytmSearchProvider((q, kind))),
+        ),
+      ];
+    }
+    final items = remote.value?.items ?? const [];
+    if (items.isEmpty) {
+      return [
+        Padding(
+          key: ValueKey('ytm.$tab.empty'),
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: _Message("Nothing matches '$q'", color: colors.mutedText),
+        ),
+      ];
+    }
+    return [
+      for (final (i, item) in items.indexed)
+        ?switch (item) {
+          YtmSong s => YtmSongRow(
+            song: s,
+            key: ValueKey('ytm.$tab.$i.${s.videoId}'),
+          ),
+          YtmAlbum a => YtmAlbumTile(
+            album: a,
+            key: ValueKey('ytm.$tab.$i.${a.browseId}'),
+          ),
+          YtmArtist a => YtmArtistTile(
+            artist: a,
+            key: ValueKey('ytm.$tab.$i.${a.browseId}'),
+          ),
+          YtmPlaylist p => YtmPlaylistTile(
+            playlist: p,
+            key: ValueKey('ytm.$tab.$i.${p.browseId}'),
+          ),
+          _ => null,
+        },
+    ];
+  }
+}
+
+/// The YouTube Music result tabs: Songs · Videos · Albums · Artists ·
+/// Playlists.
+class _Tabs extends StatelessWidget {
+  const _Tabs({required this.selected, required this.onSelect, super.key});
+
+  final YtmSearchKind selected;
+  final ValueChanged<YtmSearchKind> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      key: const Key('search.tabs'),
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
+      child: Row(
+        children: [
+          for (final MapEntry(key: kind, value: label) in ytmSearchTabs.entries)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: _Tab(
+                label: label,
+                selected: kind == selected,
+                onTap: () => onSelect(kind),
+                key: Key('search.tab.${kind.name}'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Tab extends StatelessWidget {
+  const _Tab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final background = selected ? colors.accent : colors.surface;
+    final foreground = readableOn(
+      background,
+      preferred: selected ? Colors.white : colors.text,
+    );
+    final radius = BorderRadius.circular(999);
+    return Semantics(
+      container: true,
+      selected: selected,
+      button: true,
+      child: Pressable(
+        onTap: selected ? null : onTap,
+        borderRadius: radius,
+        child: AnimatedContainer(
+          duration: Motion.of(context).quick,
+          curve: Motion.standardCurve,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: background, borderRadius: radius),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: foreground,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

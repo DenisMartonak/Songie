@@ -29,6 +29,7 @@ import 'package:songies/youtube/ytdlp_client.dart';
 import 'fake_audio_backend.dart';
 import 'fake_import_service.dart';
 import 'fake_network_status.dart';
+import 'fake_ytm.dart';
 import 'fake_ytdlp_runner.dart';
 import 'test_db.dart';
 
@@ -183,6 +184,14 @@ class UiHarness {
   late final RecordingDownloadRepository downloadRepo =
       RecordingDownloadRepository(db);
 
+  /// YouTube Music: search answers, radio and track rows, all faked.
+  final FakeYtmService ytm = FakeYtmService();
+  final RecordingRadioController radio = RecordingRadioController();
+  late final RecordingYtTrackStore ytStore = RecordingYtTrackStore(db, stamp);
+
+  /// The network the app thinks it is on.
+  final FakeNetworkStatus network = FakeNetworkStatus();
+
   /// How often the UI asked for the notification permission.
   int permissionAsks = 0;
 
@@ -246,6 +255,10 @@ class UiHarness {
     ),
     isAndroidProvider.overrideWithValue(isAndroid),
     isLinuxProvider.overrideWithValue(isLinux),
+    ytmServiceProvider.overrideWithValue(ytm),
+    radioControllerProvider.overrideWithValue(radio),
+    ytTrackStoreProvider.overrideWithValue(ytStore),
+    networkStatusProvider.overrideWithValue(network),
   ];
 
   /// An app showing [routes], starting at [initialLocation]; with

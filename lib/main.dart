@@ -197,6 +197,7 @@ Future<void> main() async {
         ytImportServiceProvider.overrideWithValue(ytImport),
         ytTrackStoreProvider.overrideWithValue(ytTracks),
         innertubeClientProvider.overrideWithValue(innertube),
+        networkStatusProvider.overrideWithValue(network),
         downloadRepositoryProvider.overrideWithValue(downloadRepo),
         downloadNotifierProvider.overrideWithValue(downloadNotifier),
         downloadServiceProvider.overrideWithValue(downloads),
