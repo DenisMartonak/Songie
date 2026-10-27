@@ -1,6 +1,49 @@
 # Songies — Progress
 
-_Last updated: 2026-10-25_
+_Last updated: 2026-10-27_
+
+## Plan 5 (YouTube Music) — done, reviewed task by task
+
+- **Branch:** `plan-5-youtube-music`. Plan: [Plan 5](superpowers/plans/2026-10-25-songies-plan-5-youtube-music.md). Spec: [YouTube Music design](superpowers/specs/2026-10-25-songies-youtube-music-design.md). Session log: [plan-5-session-log.md](plan-5-session-log.md). Only Task 1 is pushed; nothing is merged.
+- **Status:** Tasks 1–11 are done; Tasks 1–10 were each reviewed by a separate reviewer, with their fixes applied. The final whole-branch review is still to run. Tests: 1,270 passing, `flutter analyze` clean, `flutter build apk --release` succeeds (80.2 MB), and `flutter build linux --release` succeeds (bundle 34 MB). The Linux release bundle was launched for 12 s with no errors (`media_kit_libs_linux registered`); audio was not listened to. The first APK attempt died when the Gradle daemon was OOM-killed on this 7 GB machine (`org.gradle.jvmargs=-Xmx8G`) while the NDK and SDK platform were first installed; the retry built cleanly. Windows is built on your PC.
+- **What it does now:**
+  - **Instant streams:** songs resolve through YouTube's Innertube `player` API (one client after another), then yt-dlp, then the Plan 3 skip-and-notice path. A failing Innertube route never shows an error by itself. Live on this host: Innertube 68–148 ms per song, yt-dlp 1972–2493 ms (stream lookup only; see [innertube-notes.md](innertube-notes.md), "Live check").
+  - **Search:** YouTube Music results under a short library section, with tabs (songs, albums, artists, playlists), song rows, a song menu and load-more. Only the last query's results are shown.
+  - **Radio:** tapping a searched song plays it and fills the queue from its radio, which extends itself; artist pages start an artist radio.
+  - **Home:** YouTube Music rows below your library, the EU consent sheet, and Settings → Reset YouTube recommendations.
+  - **Pages:** artist, album and YouTube Music playlist pages with a palette from the shown cover, Play/Shuffle and **Import as playlist**.
+  - **Library stays yours:** a played search, feed or radio song becomes a normal `tracks` row but shows in Library lists, local search and the add-songs picker only while a playlist holds it; Recents and history show everything played.
+  - **Settings:** "Wi-Fi only downloads" (the old key) and the new device-local "Wi-Fi only streaming" (off by default). Search, browse and covers ignore both.
+  - **Play reports:** a song heard for 30 s (or to its end if shorter) is reported to YouTube, so the feed learns; the same rule (`kPlayThreshold`) will drive Plan 7's statistics.
+  - **Dev only:** `--dart-define=SONGIES_FORCE_YTDLP=true` (ignored in release builds) skips Innertube; `flutter test tool/stream_timing.dart` times both routes and live-checks continuations.
+- **Live checks (2026-10-27, all pass):** a search continuation returns 20 new songs (ruling R6); a radio continuation returns 49 new songs; artist radio (`RDEM…` with the seed videoId) returns 49 songs; consent was not asked from this host.
+- **Linux / libmpv:** `mpv-libs-devel` is **not** installed on this host and is not needed: the Linux release build links and runs against the runtime `mpv-libs` (0.41), which is installed. If a future Linux build fails on a missing libmpv, install the headers with `sudo dnf install mpv-libs-devel`.
+- **Rulings** (each with its cost if wrong; the full text is in the session log):
+  - **R1, R11:** commits end with `Co-Authored-By` and `Claude-Session` trailers; R11 names the session that made the commit.
+  - **R2:** Innertube reports a song unavailable only when every client tried says so at video level (unplayable, an error that isn't "reload", or an age login); any other failure falls through to yt-dlp. Cost: a few truly unavailable songs take one slow yt-dlp try before the skip.
+  - **R2b:** a visitor id is fetched (one request) before the first `player` call when none is stored; a "not a bot" login is a client-level failure. Cost: one request on first play.
+  - **R3:** fixtures YouTube didn't serve here (per-kind search tabs, video-level unplayable) are hand-made from real rows (`*_handcrafted.json`). Cost: tab parsers rest on reshaped rows; the live run above covered search.
+  - **R4:** play reports use `playbackUrl` + `ver=2&cpn=…`, and watchtime adds `st=0&et=<heard s>&cmt=<pos s>`. Cost: YouTube may ignore them and the feed is less personal.
+  - **R5:** after **Accept**, Innertube requests carry `Cookie: SOCS=CAI`.
+  - **R6:** continuations go both as ytmusicapi-style query parameters and in the body. Verified live.
+  - **R7:** the playlist-reachability filter hides only `yt` tracks; scanned local files stay visible.
+  - **R8:** "artist is the channel name" is approximated: a `yt` row with no album takes the richer artist; rows with an album keep theirs. Cost: an imported row with a hand-fixed artist but no album is overwritten once.
+  - **R9:** **Not now** on the consent sheet lasts for the app session; **Accept** is permanent per device.
+  - **R10:** real-network timing uses the dev tool (stream lookup, not player start-up); the Linux build is recorded as blocked if libmpv is the only failure.
+  - Task 1: the fixture scrub also replaces the `fexp` and `initcwndbps` URL parameters (nothing parses them).
+- **Parked items (deferred minors that matter):** the full list is in the ledger and session log. The ones worth doing first:
+  - Radio: `_continuation` is set before `addToQueue` completes (possible early fetch) and `_start` has no try/catch; `_becomeQueue` doesn't clear the source playlist or notice.
+  - Now Playing title/artist stay stale after a metadata upgrade (branch-wide).
+  - Song menu: Play next / Add to queue use `ref` after `await` without a `mounted` check.
+  - Consent: `ConsentListener` is mounted only on Home (move it to the shell); an in-flight request can re-store the old visitor id right after Reset.
+  - A revived deleted `yt` row keeps `unavailable` and can overwrite a known duration with 0.
+  - Album page: the header's playlist id isn't checked for the `OLAK5uy_` prefix (Import could pick an `RDAM` id); YTM playlist continuations need a seen-set guard against cycling tokens.
+  - Play reports: repeat-one doesn't re-report (decide for Plan 7); short forward seeks count as heard.
+  - Parser robustness: artist page `title.contains('ep')` sorts "Deep cuts" as singles; a missing home section list logs nothing.
+  - Tests: no test pins the `stream … via … in … ms` log line or a shared visitor bootstrap for concurrent first plays.
+- **Next:** the final whole-branch review and its fix round, your device checks (the Plan 5 section of the [manual checklist](manual-test-checklist.md)), then **Plan 6 (synced lyrics)**. The roadmap is now: **6 lyrics, 7 statistics, 8 device sync, 9 packaging.**
+- **To resume in a new Claude session:**
+  > Songies Plan 5 is implemented on branch `plan-5-youtube-music` (Tasks 1–11 done, 1,270 tests). Next: the final whole-branch review and fix round, the device checks, then write Plan 6 (synced lyrics). Read docs/plan-5-session-log.md. Don't merge.
 
 ## Plan 4 (a living UI and the theme engine) — done, reviewed, final review fixed
 

@@ -149,6 +149,22 @@ From the task reviews
 - [ ] Shell: swiping the mini player skips; the bottom-nav icon bounces; the desktop scrubber and volume thicken on hover; sidebar hover shows on a light theme.
 - [ ] Themes: make, edit, export and import a theme that uses an imported font; a light theme looks right in dialogs and switches.
 
+## Plan 5: YouTube Music
+
+Search, Home and pages
+- [ ] Searching a song and tapping it plays it within about a second, and radio fills the queue.
+- [ ] Home shows YouTube Music rows below your library.
+- [ ] Artist, album and playlist pages open and play. **Import as playlist** works.
+- [ ] A searched song doesn't appear in Library lists but appears in Recents.
+
+Network and settings
+- [ ] Wi-Fi only streaming is off after the update. With it on, mobile data blocks streaming but not browsing.
+- [ ] With Wi-Fi off and Innertube blocked (a firewall rule), songs still play through yt-dlp.
+
+Consent and recommendations
+- [ ] The EU consent sheet appears once.
+- [ ] Reset YouTube recommendations works.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.

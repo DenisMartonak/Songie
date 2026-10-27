@@ -77,3 +77,37 @@ Scrubbed (the repo is public):
 - The probe fails if any seen IP or visitor id is left in a fixture, or if any string value base64-decodes to visitor-shaped data (protobuf `0x0A 0x0B` + 11 chars). `test/innertube/fixtures_scrubbed_test.dart` runs the same check on every committed fixture.
 
 Trimmed (to keep the repo small): dropped `frameworkUpdates`, `responseContext.serviceTrackingParams` and other web response context, `storyboards`, `attestation`, `playerConfig`, ad fields, `annotations`, `endscreen`, `cards`, `captions`, `heartbeatParams`, `messages`, `description`, sign-in `modalEndpoint`s; menus keep only navigation entries (Go to artist/album, radio), not queue/library/feedback service entries; `musicCarouselShelfRenderer` lists are cut to 6 items; the radio queue to 25 songs. Search result shelves, album and playlist track lists are complete.
+
+## Live check (Plan 5 Task 11, 2026-10-27)
+Run from this Linux host with the dev-only tool `tool/stream_timing.dart` (`flutter test tool/stream_timing.dart`, output sent to a scratch file and read before copying). It takes the first 5 songs of a live "daft punk" song search and resolves each through the real `InnertubeStreamSource` and then through `YtDlpClient` (yt-dlp 2026.10.26, the app's binary in `~/.local/share/songies/bin`). This times the stream lookup only, not player start-up. Only video ids, routes, times, counts and statuses are recorded here.
+
+Timing, second run (the first run gave the same picture: Innertube 68–148 ms, yt-dlp 2196–2493 ms):
+
+| Video | Innertube | yt-dlp |
+|---|---|---|
+| `khnokW3Mw24` | 140 ms (includes the one-time visitor-id bootstrap) | 2266 ms |
+| `qe8Q7mjxjig` | 87 ms | 2288 ms |
+| `LxgnIhjQFuE` | 86 ms | 2105 ms |
+| `a7Wask21bew` | 108 ms | 2241 ms |
+| `ZFZM6jDTWd4` | 120 ms | 1972 ms |
+
+The log lines, as printed:
+```
+stream khnokW3Mw24 via innertube in 140 ms
+stream qe8Q7mjxjig via innertube in 87 ms
+stream LxgnIhjQFuE via innertube in 86 ms
+stream a7Wask21bew via innertube in 108 ms
+stream ZFZM6jDTWd4 via innertube in 120 ms
+stream khnokW3Mw24 via yt-dlp in 2266 ms
+stream qe8Q7mjxjig via yt-dlp in 2288 ms
+stream LxgnIhjQFuE via yt-dlp in 2105 ms
+stream a7Wask21bew via yt-dlp in 2241 ms
+stream ZFZM6jDTWd4 via yt-dlp in 1972 ms
+```
+Every Innertube resolve succeeded on the first client, so none fell through to yt-dlp. In the app, `--dart-define=SONGIES_FORCE_YTDLP=true` (debug and profile builds only) leaves Innertube out, to compare the two routes end to end.
+
+Live checks (all pass):
+- **(a) Search continuation (ruling R6):** the songs search's first page had 20 songs and a token. The continuation returned 20 more songs, all 20 new (none repeated from page one), and a next token.
+- **(b) Radio continuation:** radio from `khnokW3Mw24` gave 49 songs plus the seed as `current`, and a token. The continuation returned 49 more, all new, and a next token.
+- **(c) Artist radio:** the first "daft punk" artist result's page had 5 top songs and an `RDEM…` radio playlist id. `next` with that playlist and the first top song (`khnokW3Mw24`) as the seed returned 49 songs and the seed as `current`. The artist page's `musicDescriptionShelfRenderer` section was skipped and logged, as designed.
+- **(d) Consent:** not asked (0 consent events, consent not given). As in the probe above, the API isn't consent-gated from this host.
