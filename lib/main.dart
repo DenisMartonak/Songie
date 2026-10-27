@@ -51,6 +51,12 @@ import 'youtube/ytdlp_client.dart';
 import 'youtube/ytdlp_installer.dart';
 import 'youtube/ytdlp_runner.dart';
 
+/// Dev-only: `--dart-define=SONGIES_FORCE_YTDLP=true` plays every stream
+/// through yt-dlp (no Innertube), for timing the slow route. Ignored in
+/// release builds.
+const _forceYtDlp =
+    !kReleaseMode && bool.fromEnvironment('SONGIES_FORCE_YTDLP');
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -101,8 +107,15 @@ Future<void> main() async {
   final network = ConnectivityPlusStatus();
   // Instant streams from Innertube; yt-dlp when every client is refused.
   final innertubeStreams = InnertubeStreamSource(innertube);
+  if (_forceYtDlp) AppLog.i('SONGIES_FORCE_YTDLP: Innertube streams off');
   final streams = StreamResolver(
-    FallbackStreamSource([innertubeStreams, ytClient]),
+    FallbackStreamSource(
+      playbackSources(
+        innertube: innertubeStreams,
+        ytDlp: ytClient,
+        forceYtDlp: _forceYtDlp,
+      ),
+    ),
     network,
     settings,
   );

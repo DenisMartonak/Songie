@@ -98,4 +98,25 @@ void main() {
     final r = await FallbackStreamSource([it, yt]).resolveStream('v');
     expect(ytErrorKindOf((r as Err<YtStream>).failure), YtErrorKind.network);
   });
+
+  group('playbackSources', () {
+    final it = _FakeSource('innertube', _ok);
+    final yt = _FakeSource('yt-dlp', _ok);
+
+    test('Innertube first, then yt-dlp', () {
+      expect(playbackSources(innertube: it, ytDlp: yt), [it, yt]);
+    });
+
+    test('forceYtDlp leaves Innertube out', () async {
+      final sources = playbackSources(
+        innertube: it,
+        ytDlp: yt,
+        forceYtDlp: true,
+      );
+      expect(sources, [yt]);
+      await FallbackStreamSource(sources).resolveStream('v');
+      expect(it.calls, isEmpty);
+      expect(yt.calls, ['v']);
+    });
+  });
 }

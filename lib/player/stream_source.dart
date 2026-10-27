@@ -10,6 +10,15 @@ abstract class StreamSource {
   Future<Result<YtStream>> resolveStream(String videoId);
 }
 
+/// The playback routes in order: Innertube, then yt-dlp. With [forceYtDlp]
+/// (the dev-only `--dart-define=SONGIES_FORCE_YTDLP=true`, read in
+/// `main.dart`) Innertube is left out, to time or test the yt-dlp route.
+List<StreamSource> playbackSources({
+  required StreamSource innertube,
+  required StreamSource ytDlp,
+  bool forceYtDlp = false,
+}) => forceYtDlp ? [ytDlp] : [innertube, ytDlp];
+
 /// Tries [StreamSource]s in order. A video that is unavailable (`notFound`)
 /// ends the search at once; any other failure moves on to the next source,
 /// so a failing fast route only costs time, never an error by itself.
