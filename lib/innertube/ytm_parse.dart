@@ -351,6 +351,14 @@ String? parseContinuation(Object? continuations) {
   if (cont != null) {
     addShelf(cont);
   } else {
+    final tabs = _list(
+      dig(json, ['contents', 'tabbedSearchResultsRenderer', 'tabs']),
+    );
+    if (tabs.length > 1) {
+      AppLog.i(
+        'ytm parse: search has ${tabs.length} tabs, read only the first',
+      );
+    }
     final sections = dig(json, [
       'contents',
       'tabbedSearchResultsRenderer',
@@ -367,10 +375,21 @@ String? parseContinuation(Object? continuations) {
         addShelf(shelf);
         continue;
       }
+      final top = _map(s)?.keys.join(',');
+      if (top != 'itemSectionRenderer' && top != 'musicCardShelfRenderer') {
+        AppLog.i('ytm parse: skipped section $top in search');
+      }
       // The all tab: one row per itemSectionRenderer.
       for (final c in _list(dig(s, ['itemSectionRenderer', 'contents']))) {
         final row = dig(c, ['musicResponsiveListItemRenderer']);
-        if (row != null) rows.add(row);
+        if (row != null) {
+          rows.add(row);
+        } else {
+          final key = _map(c)?.keys.join(',');
+          if (key != 'messageRenderer') {
+            AppLog.i('ytm parse: skipped $key in an item section');
+          }
+        }
       }
     }
   }

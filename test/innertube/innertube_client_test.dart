@@ -58,6 +58,21 @@ void main() {
     expect(req.headers.containsKey('X-Goog-Visitor-Id'), isFalse);
   });
 
+  test('extra query params are merged after prettyPrint', () async {
+    transport.reply(fixture('search_songs'));
+    await client.call(
+      kWebRemix,
+      'search',
+      {'continuation': 'T'},
+      query: {'ctoken': 'T', 'type': 'next'},
+    );
+    expect(
+      transport.requests.single.url.toString(),
+      'https://music.youtube.com/youtubei/v1/search'
+      '?prettyPrint=false&ctoken=T&type=next',
+    );
+  });
+
   test('a player identity sends its extra client fields', () async {
     transport.reply(fixture('player_visionos_4D7u5KF7SP8'));
     await client.call(kPlayerClients.first, 'player', {

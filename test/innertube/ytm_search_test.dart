@@ -90,6 +90,11 @@ void main() {
       continuation: 'TOKEN',
     );
     expect(transport.requests.last.body['continuation'], 'TOKEN');
+    final q = transport.requests.last.url.queryParameters;
+    expect(q['ctoken'], 'TOKEN');
+    expect(q['continuation'], 'TOKEN');
+    expect(q['type'], 'next');
+    expect(q['prettyPrint'], 'false');
     expect(transport.requests.last.body.containsKey('query'), isFalse);
   });
 

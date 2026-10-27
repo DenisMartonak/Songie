@@ -56,6 +56,8 @@ User agents and extra `context.client` fields, verbatim from yt-dlp (all verifie
 - Playlist (`VLPL-hvaaoSDXQJpFhQYRkEjc_Zh4Sd65c-e`): `musicResponsiveHeaderRenderer`, the first page of tracks (about 40 rows) and a continuation.
 - `next` radio for `4D7u5KF7SP8`: body `videoId`, `playlistId: RDAMVM4D7u5KF7SP8`, `params: wAEB`, `isAudioOnly: true`, `enablePersistentPlaylistPanel: true`, `tunerSettingValue: AUTOMIX_SETTING_NORMAL`. The queue is in `...musicQueueRenderer.content.playlistPanelRenderer.contents` (`playlistPanelVideoRenderer`s, the first is the seed) with continuations.
 
+- Continuations (search, `next`) are sent ytmusicapi-style: URL params `ctoken=<token>&continuation=<token>&type=next` plus `continuation` in the body. **Unverified live until Task 11** (the fixtures only have FAKE_ tokens).
+
 ## Consent
 - `GET https://music.youtube.com/` with no cookies: **302 to `https://consent.youtube.com/m?...`** from here. With `Cookie: SOCS=CAI`: 200, no redirect.
 - The Innertube API itself was **not** redirected: every POST above returned 200 with normal content, without any cookie, and the WEB_REMIX responses carry no consent marker. So search, browse and playback work without consent from here.

@@ -1,3 +1,4 @@
+import '../core/log.dart';
 import '../core/result.dart';
 import 'clients.dart';
 import 'innertube_client.dart';
@@ -20,6 +21,14 @@ class YtmService {
     YtmSearchKind.playlists: 'EgeKAQQoAEABahIQBRAJEAMQBBAQEAoQDhAVEBE%3D',
   };
 
+  /// ytmusicapi-style continuation URL params (the token also stays in the
+  /// body). Unverified against the live API until Plan 5 Task 11.
+  static Map<String, String> _continuationQuery(String token) => {
+    'ctoken': token,
+    'continuation': token,
+    'type': 'next',
+  };
+
   Future<Result<YtmSearchPage>> search(
     String query,
     YtmSearchKind kind, {
@@ -31,6 +40,7 @@ class YtmService {
       continuation != null
           ? {'continuation': continuation}
           : {'query': query, 'params': searchParams[kind]},
+      query: continuation == null ? null : _continuationQuery(continuation),
     );
     switch (res) {
       case Err(:final failure):
@@ -38,9 +48,20 @@ class YtmService {
       case Ok(:final value):
         final page = searchRows(value);
         final items = <Object>[];
+        var otherKind = 0;
         for (final row in page.rows) {
           final item = parseListItem(row);
-          if (item != null && _matches(kind, item)) items.add(item);
+          if (item == null) continue;
+          if (_matches(kind, item)) {
+            items.add(item);
+          } else {
+            otherKind++;
+          }
+        }
+        if (otherKind > 0) {
+          AppLog.i(
+            'ytm search ${kind.name}: dropped $otherKind other-kind rows',
+          );
         }
         return Ok(YtmSearchPage(items, page.continuation));
     }
@@ -67,6 +88,7 @@ class YtmService {
               'enablePersistentPlaylistPanel': true,
               'tunerSettingValue': 'AUTOMIX_SETTING_NORMAL',
             },
+      query: continuation == null ? null : _continuationQuery(continuation),
     );
     switch (res) {
       case Err(:final failure):

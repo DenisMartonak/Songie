@@ -28,8 +28,11 @@ class ClientIdentity {
   /// Further `context.client` fields (device, OS).
   final Map<String, Object?> extraClient;
 
-  Uri endpoint(String name) =>
-      Uri.https(host, '/youtubei/v1/$name', const {'prettyPrint': 'false'});
+  Uri endpoint(String name, [Map<String, String>? query]) => Uri.https(
+    host,
+    '/youtubei/v1/$name',
+    {'prettyPrint': 'false', ...?query},
+  );
 }
 
 const _visionOs = ClientIdentity(

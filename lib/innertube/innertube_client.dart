@@ -41,12 +41,14 @@ class InnertubeClient {
     _visitorLoaded = true;
   }
 
-  /// POSTs [body] to [endpoint] as [c]. Never throws: every failure is `Err`.
+  /// POSTs [body] to [endpoint] as [c] (with extra URL [query] params).
+  /// Never throws: every failure is `Err`.
   Future<Result<Map<String, Object?>>> call(
     ClientIdentity c,
     String endpoint,
-    Map<String, Object?> body,
-  ) async {
+    Map<String, Object?> body, {
+    Map<String, String>? query,
+  }) async {
     try {
       final visitor = await visitorData();
       final request = <String, Object?>{
@@ -70,7 +72,7 @@ class InnertubeClient {
         'Origin': 'https://${c.host}',
         'X-Goog-Visitor-Id': ?visitor,
       };
-      final res = await _t.post(c.endpoint(endpoint), request, headers);
+      final res = await _t.post(c.endpoint(endpoint, query), request, headers);
       return await _handle(c, endpoint, res);
     } on FormatException catch (e) {
       return Err(

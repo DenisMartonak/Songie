@@ -88,6 +88,10 @@ void main() {
     final res = await ytm.radio('4D7u5KF7SP8', continuation: 'TOK');
     final radio = (res as Ok<YtmRadio>).value;
     expect(transport.requests.single.body['continuation'], 'TOK');
+    final q = transport.requests.single.url.queryParameters;
+    expect(q['ctoken'], 'TOK');
+    expect(q['continuation'], 'TOK');
+    expect(q['type'], 'next');
     expect(radio.songs, hasLength(3));
     expect(radio.current, isNull);
     expect(radio.continuation, 'NEXT');
