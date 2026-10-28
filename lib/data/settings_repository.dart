@@ -21,6 +21,10 @@ const kYtVisitorData = 'yt_visitor_data';
 /// then on Innertube requests carry the `SOCS=CAI` cookie. Device-local.
 const kYtConsentGiven = 'yt_consent_given';
 
+/// Cached display name of the signed-in YouTube account. Device-local, not
+/// secret; removed on sign out.
+const kYtAccountName = 'yt_account_name';
+
 /// Default of the Wi-Fi only downloads setting: on for Android (metered data), off on
 /// desktop. [isAndroid] exists so tests don't depend on the host.
 bool wifiOnlyDefault({bool? isAndroid}) => isAndroid ?? Platform.isAndroid;

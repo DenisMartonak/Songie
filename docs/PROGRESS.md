@@ -318,3 +318,8 @@ Each entry says what was decided and what it costs if it turns out wrong.
   - Log format.
   - Database rollback paths.
   - Some UI branches.
+
+## Plan 7 platform notes (flutter_secure_storage)
+- Linux: needs `libsecret-1-dev` (Fedora: `libsecret-devel`) at build time and a running Secret Service (GNOME Keyring or KWallet) at run time. No extra CMake edits; `flutter build linux --release` verified. No keyring means `YtAuthUnavailable`.
+- Android: minSdk 24 already meets the plugin's requirement; Keystore-backed.
+- Windows: Credential Manager, no setup; built on the user's PC (checklist item).

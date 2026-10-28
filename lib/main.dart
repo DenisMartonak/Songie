@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 import 'app.dart';
 import 'core/connectivity.dart';
 import 'core/log.dart';
+import 'innertube/yt_session_store.dart';
 import 'core/paths.dart';
 import 'data/database.dart';
 import 'data/settings_repository.dart';
@@ -193,8 +194,7 @@ Future<void> main() async {
     AppLog.e('System media controls unavailable', e, s);
   }
 
-  runApp(
-    ProviderScope(
+  final container = ProviderContainer(
       overrides: [
         appPathsProvider.overrideWithValue(paths),
         databaseProvider.overrideWithValue(db),
@@ -210,6 +210,7 @@ Future<void> main() async {
         ytImportServiceProvider.overrideWithValue(ytImport),
         ytTrackStoreProvider.overrideWithValue(ytTracks),
         innertubeClientProvider.overrideWithValue(innertube),
+        ytSessionStoreProvider.overrideWithValue(SecureYtSessionStore()),
         networkStatusProvider.overrideWithValue(network),
         downloadRepositoryProvider.overrideWithValue(downloadRepo),
         downloadNotifierProvider.overrideWithValue(downloadNotifier),
@@ -218,6 +219,12 @@ Future<void> main() async {
         themeRepositoryProvider.overrideWithValue(themes),
         initialThemeSpecProvider.overrideWithValue(initialTheme),
       ],
+  );
+  // Reads secure storage only: no network request, no timer.
+  unawaited(container.read(ytAuthProvider.notifier).load());
+  runApp(
+    UncontrolledProviderScope(
+      container: container,
       child: SongiesApp(router: router),
     ),
   );

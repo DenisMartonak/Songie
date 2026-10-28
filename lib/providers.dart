@@ -6,6 +6,7 @@ import 'package:flutter/material.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/connectivity.dart';
+import 'innertube/yt_session_store.dart';
 import 'core/paths.dart';
 import 'core/result.dart';
 import 'data/database.dart';
@@ -317,6 +318,12 @@ final ytImportServiceProvider = Provider<YtImportService>(
 );
 
 /// YouTube's Innertube API (YouTube Music browse/search, instant streaming).
+final ytSessionStoreProvider = Provider<YtSessionStore>(
+  (ref) => _unwired('ytSessionStoreProvider'),
+);
+
+final ytAuthProvider = NotifierProvider<YtAuth, YtAuthState>(YtAuth.new);
+
 final innertubeClientProvider = Provider<InnertubeClient>(
   (ref) => _unwired('innertubeClientProvider'),
 );
