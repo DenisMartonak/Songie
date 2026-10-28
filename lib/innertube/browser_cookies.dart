@@ -232,8 +232,6 @@ Future<List<BrowserProfile>> findBrowserProfiles({String? home}) async {
   return found;
 }
 
-const _sapisidNames = ['SAPISID', '__Secure-3PAPISID'];
-
 /// Thrown inside the reader; turned into an [Err] with [message] only.
 class _ReadFailure implements Exception {
   _ReadFailure(this.message);
@@ -241,6 +239,38 @@ class _ReadFailure implements Exception {
 }
 
 String _readMessage(BrowserProfile p) => "Couldn't read ${p.name}'s cookies";
+
+const _copyPrefix = 'songies_cookies_';
+
+/// This process's copies being read right now; never swept.
+final _activeCopies = <String>{};
+
+/// Deletes copies an earlier run left in [root] (a crash mid-read leaves a
+/// plaintext copy): directories named `songies_cookies_*` owned by this
+/// user. Links are never followed. Best effort.
+Future<void> _sweepStaleCopies(Directory root) async {
+  try {
+    final stale = <String>[
+      await for (final e in root.list(followLinks: false))
+        if (e is Directory &&
+            p.basename(e.path).startsWith(_copyPrefix) &&
+            !_activeCopies.contains(e.path))
+          e.path,
+    ];
+    if (stale.isEmpty) return;
+    final uid = (await Process.run('id', ['-u'])).stdout.toString().trim();
+    final owners = await Process.run('stat', ['-c', '%u', ...stale]);
+    final lines = owners.stdout.toString().trim().split('\n');
+    for (final (i, path) in stale.indexed) {
+      if (uid.isEmpty || i >= lines.length || lines[i].trim() != uid) continue;
+      try {
+        await Directory(path).delete(recursive: true);
+      } catch (_) {}
+    }
+  } catch (e) {
+    AppLog.w('browser cookies: could not sweep old copies (${e.runtimeType})');
+  }
+}
 
 /// Copies [profile]'s cookie database (with `-wal`/`-shm`) into a fresh
 /// private directory under [tempRoot], opens the copy read-only, runs
@@ -251,9 +281,10 @@ Future<T> _withCopy<T>(
   void Function(Directory dir)? onCopied,
   Future<T> Function(Database db) body,
 ) async {
-  final dir = await (tempRoot ?? Directory.systemTemp).createTemp(
-    'songies_cookies_',
-  );
+  final root = tempRoot ?? Directory.systemTemp;
+  await _sweepStaleCopies(root);
+  final dir = await root.createTemp(_copyPrefix);
+  _activeCopies.add(dir.path);
   try {
     // createTemp follows the umask (usually 0755): close it to the user
     // before anything is copied in, and refuse it if that didn't work.
@@ -263,16 +294,28 @@ Future<T> _withCopy<T>(
     }
     onCopied?.call(dir);
     final copy = p.join(dir.path, 'cookies.db');
-    // The main file first: frames the -wal adds later are newer, and SQLite
-    // ignores -wal frames that do not match the copy.
-    await File(profile.cookiesPath).copy(copy);
-    for (final suffix in ['-wal', '-shm']) {
-      final f = File('${profile.cookiesPath}$suffix');
-      try {
-        if (await f.exists()) await f.copy('$copy$suffix');
-      } on FileSystemException {
-        // Gone between the check and the copy (the browser checkpointed):
-        // the main file then holds everything.
+    // A running browser may write while the files are copied. SQLite
+    // checks each -wal frame against the -wal header's salt and checksums
+    // and ignores frames that don't match (a torn copy just loses the
+    // newest writes). If the main file changed during the copy, copy once
+    // more.
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final before = await File(profile.cookiesPath).stat();
+      await File(profile.cookiesPath).copy(copy);
+      for (final suffix in ['-wal', '-shm']) {
+        final target = File('$copy$suffix');
+        if (await target.exists()) await target.delete();
+        final f = File('${profile.cookiesPath}$suffix');
+        try {
+          if (await f.exists()) await f.copy(target.path);
+        } on FileSystemException {
+          // Gone between the check and the copy (the browser checkpointed
+          // and closed): the main file then holds everything.
+        }
+      }
+      final after = await File(profile.cookiesPath).stat();
+      if (after.size == before.size && after.modified == before.modified) {
+        break;
       }
     }
     final db = sqlite3.open(copy, mode: OpenMode.readOnly);
@@ -282,6 +325,7 @@ Future<T> _withCopy<T>(
       db.close();
     }
   } finally {
+    _activeCopies.remove(dir.path);
     try {
       await dir.delete(recursive: true);
     } catch (e) {
@@ -292,46 +336,6 @@ Future<T> _withCopy<T>(
 
 bool _hasColumn(Database db, String table, String column) =>
     db.select('PRAGMA table_info($table)').any((r) => r['name'] == column);
-
-/// Whether [profile] holds a YouTube sign-in (a `.youtube.com` SAPISID).
-/// Looks at cookie names and hosts only, which are stored in plain text:
-/// nothing is decrypted and the keyring is not touched. False when the
-/// database can't be read.
-Future<bool> hasYouTubeSession(
-  BrowserProfile profile, {
-  Directory? tempRoot,
-}) async {
-  try {
-    return await _withCopy(profile, tempRoot, null, (db) async {
-      final String table, host;
-      var where = '';
-      if (profile.isFirefox) {
-        table = 'moz_cookies';
-        host = 'host';
-        if (_hasColumn(db, table, 'originAttributes')) {
-          where = " AND originAttributes = ''";
-        }
-      } else {
-        table = 'cookies';
-        host = 'host_key';
-      }
-      final rows = db.select(
-        'SELECT $host AS host FROM $table WHERE name IN (?, ?)$where',
-        _sapisidNames,
-      );
-      return rows.any(
-        (r) => YtSessionFromCookies.isYouTube(
-          Cookie(name: '', domain: r['host'] as String?),
-        ),
-      );
-    });
-  } catch (e) {
-    AppLog.w(
-      'browser cookies: ${profile.browser} unreadable (${e.runtimeType})',
-    );
-    return false;
-  }
-}
 
 bool _kept(String? host) {
   final c = Cookie(name: '', domain: host);

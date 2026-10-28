@@ -27,6 +27,9 @@ import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/youtube/ytdlp_client.dart';
 
 import 'fake_audio_backend.dart';
+
+import 'package:songies/innertube/yt_sign_in.dart';
+
 import 'fake_import_service.dart';
 import 'fake_network_status.dart';
 import 'fake_ytm.dart';
@@ -210,6 +213,11 @@ class UiHarness {
   bool isAndroid = false;
   bool isLinux = false;
 
+  /// The YouTube sign-in routes. Empty by default: the real routes scan the
+  /// home folder for browser profiles and (WebKit) delete web data folders
+  /// on Sign out.
+  List<YtSignInRoute> ytSignInRoutes = const [];
+
   /// The app's clock; tests move it to exercise time-dependent text.
   DateTime Function() now = DateTime.now;
 
@@ -269,6 +277,7 @@ class UiHarness {
     isLinuxProvider.overrideWithValue(isLinux),
     innertubeClientProvider.overrideWithValue(innertube),
     ytSessionStoreProvider.overrideWithValue(ytSessions),
+    ytSignInRoutesProvider.overrideWithValue(ytSignInRoutes),
     ytmServiceProvider.overrideWithValue(ytm),
     radioControllerProvider.overrideWithValue(radio),
     ytTrackStoreProvider.overrideWithValue(ytStore),

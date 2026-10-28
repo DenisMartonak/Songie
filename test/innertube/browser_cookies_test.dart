@@ -224,7 +224,6 @@ void main() {
         '.youtube.com|SAPISID': _sap,
         '.google.com|SID': 'g-sid',
       });
-      expect(await hasYouTubeSession(profile, tempRoot: temp), isTrue);
     });
 
     test('Firefox: container cookies are left out', () async {
@@ -395,7 +394,6 @@ void main() {
         expect(_byName((r as Ok<List<Cookie>>).value), {
           '.youtube.com|SAPISID': _sap,
         });
-        expect(await hasYouTubeSession(profile, tempRoot: temp), isTrue);
         expect(temp.listSync(), isEmpty);
       },
     );
@@ -440,20 +438,31 @@ void main() {
         final f = (r as Err).failure;
         expect(f.message, "Couldn't read Firefox's cookies");
         expect(f.toString(), isNot(contains(_sap)));
-        expect(await hasYouTubeSession(profile, tempRoot: temp), isFalse);
       } finally {
         await Process.run('chmod', ['600', path]);
       }
       expect(temp.listSync(), isEmpty);
     });
 
-    test('hasYouTubeSession is false without a YouTube SAPISID', () async {
-      final db = _chromeDb(at('.config/chromium/Default/Cookies'));
-      _chAdd(db, 'SID', '.youtube.com', encrypted: _chromeEncrypt('x'));
-      _chAdd(db, 'SAPISID', '.example.com', encrypted: _chromeEncrypt('x'));
+    test('stale copies from an earlier crash are deleted first', () async {
+      final db = _firefoxDb(at('.mozilla/firefox/a.default/cookies.sqlite'));
+      _ffAdd(db, 'SAPISID', _sap, '.youtube.com');
       db.close();
+      final stale = Directory(p.join(temp.path, 'songies_cookies_crash'))
+        ..createSync();
+      File(p.join(stale.path, 'cookies.db')).writeAsStringSync('old copy');
+      final other = Directory(p.join(temp.path, 'unrelated'))..createSync();
+      // A link named like a copy is never followed into.
+      final outside = Directory(p.join(home.path, 'outside'))..createSync();
+      File(p.join(outside.path, 'keep')).writeAsStringSync('keep');
+      Link(p.join(temp.path, 'songies_cookies_link')).createSync(outside.path);
+
       final profile = (await findBrowserProfiles(home: home.path)).single;
-      expect(await hasYouTubeSession(profile, tempRoot: temp), isFalse);
+      final r = await readBrowserCookies(profile, tempRoot: temp);
+      expect(r, isA<Ok<List<Cookie>>>());
+      expect(stale.existsSync(), isFalse);
+      expect(other.existsSync(), isTrue);
+      expect(File(p.join(outside.path, 'keep')).existsSync(), isTrue);
     });
   });
 
@@ -512,15 +521,19 @@ void main() {
       return result;
     }
 
-    testWidgets('lists only signed-in profiles; pick and confirm build the '
-        'session', (tester) async {
+    Future<void> tapKey(WidgetTester tester, String key) async {
+      await tester.tap(find.byKey(Key(key)));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('asks first, then lists every found profile; nothing is read '
+        'before the pick', (tester) async {
       final a = fake('Firefox', 'a.default');
       final b = fake('LibreWolf', 'b.default');
       final c = fake('Waterfox', 'c.default');
       final read = <BrowserProfile>[];
       final route = BrowserSignIn(
         findProfiles: () async => [a, b, c],
-        hasSession: (p) async => p != c,
         readCookies: (p) async {
           read.add(p);
           return Ok([
@@ -529,24 +542,67 @@ void main() {
         },
       );
       final result = await run(tester, route, () async {
+        expect(
+          find.text("Use your browser's YouTube sign-in?"),
+          findsOneWidget,
+        );
+        expect(find.text('Firefox (Flatpak)'), findsNothing);
+        expect(read, isEmpty);
+        await tapKey(tester, 'browserSignIn.confirm');
+        // Found by path only: all three, signed in or not.
         expect(find.text('Firefox (Flatpak)'), findsOneWidget);
         expect(find.text('LibreWolf (Flatpak)'), findsOneWidget);
-        expect(find.text('Waterfox (Flatpak)'), findsNothing);
-        expect(read, isEmpty, reason: 'nothing is read before confirming');
-        await tester.tap(find.byKey(const Key('browserSignIn.profile.1')));
-        await tester.pumpAndSettle();
-        expect(read, isEmpty, reason: 'nothing is read before confirming');
-        await tester.tap(find.byKey(const Key('browserSignIn.confirm')));
+        expect(find.text('Waterfox (Flatpak)'), findsOneWidget);
+        expect(read, isEmpty);
+        await tapKey(tester, 'browserSignIn.profile.1');
       });
       expect(read, [b]);
       expect(result!.session.sapisid, _sap);
     });
 
-    testWidgets('cancelling the confirm reads nothing', (tester) async {
-      var reads = 0;
+    testWidgets('no DB is copied or read before the pick (real files)', (
+      tester,
+    ) async {
+      final path = at('.mozilla/firefox/a.default/cookies.sqlite');
+      final db = _firefoxDb(path);
+      _ffAdd(db, 'SAPISID', _sap, '.youtube.com');
+      db.close();
+      final before = (File(path).readAsBytesSync(), File(path).statSync());
+      // The real path-only lookup (real I/O runs outside the fake clock).
+      final found = await tester.runAsync(
+        () => findBrowserProfiles(home: home.path),
+      );
+      final reads = <BrowserProfile>[];
       final route = BrowserSignIn(
-        findProfiles: () async => [fake('Firefox', 'a')],
-        hasSession: (_) async => true,
+        findProfiles: () async => found!,
+        readCookies: (p) async {
+          reads.add(p);
+          return const Ok([]);
+        },
+      );
+      await run(tester, route, () async {
+        await tapKey(tester, 'browserSignIn.confirm');
+        expect(find.text('Firefox'), findsOneWidget);
+        expect(reads, isEmpty);
+        // Cancel the pick: nothing was ever read.
+        await tester.tapAt(const Offset(5, 5));
+      });
+      expect(reads, isEmpty);
+      expect(temp.listSync(), isEmpty);
+      expect(File(path).readAsBytesSync(), before.$1);
+      expect(File(path).statSync().modified, before.$2.modified);
+    });
+
+    testWidgets('cancelling the question reads nothing and lists nothing', (
+      tester,
+    ) async {
+      var reads = 0;
+      var finds = 0;
+      final route = BrowserSignIn(
+        findProfiles: () async {
+          finds++;
+          return [fake('Firefox', 'a')];
+        },
         readCookies: (_) async {
           reads++;
           return const Ok([]);
@@ -557,6 +613,35 @@ void main() {
       });
       expect(result, isNull);
       expect(reads, 0);
+      expect(find.text('Firefox (Flatpak)'), findsNothing);
+      expect(finds, lessThanOrEqualTo(1));
+    });
+
+    testWidgets('a profile without a session says so; the user picks another', (
+      tester,
+    ) async {
+      final a = fake('Firefox', 'a.default');
+      final b = fake('LibreWolf', 'b.default');
+      final route = BrowserSignIn(
+        findProfiles: () async => [a, b],
+        readCookies: (p) async => Ok([
+          if (p == b)
+            Cookie(name: 'SAPISID', value: _sap, domain: '.youtube.com')
+          else
+            Cookie(name: 'YSC', value: 'y', domain: '.youtube.com'),
+        ]),
+      );
+      final result = await run(tester, route, () async {
+        await tapKey(tester, 'browserSignIn.confirm');
+        await tapKey(tester, 'browserSignIn.profile.0');
+        expect(
+          find.text("Firefox (Flatpak) (a.default) isn't signed in to YouTube"),
+          findsOneWidget,
+        );
+        // The list is back.
+        await tapKey(tester, 'browserSignIn.profile.1');
+      });
+      expect(result!.session.sapisid, _sap);
     });
 
     testWidgets('a read error is shown plainly and gives no session', (
@@ -564,30 +649,16 @@ void main() {
     ) async {
       final route = BrowserSignIn(
         findProfiles: () async => [fake('Firefox', 'a')],
-        hasSession: (_) async => true,
         readCookies: (_) async => const Err(
           Failure(FailureKind.io, "Couldn't read Firefox's cookies"),
         ),
       );
       final result = await run(tester, route, () async {
-        await tester.tap(find.byKey(const Key('browserSignIn.confirm')));
+        await tapKey(tester, 'browserSignIn.confirm');
+        await tapKey(tester, 'browserSignIn.profile.0');
       });
       expect(result, isNull);
       expect(find.text("Couldn't read Firefox's cookies"), findsOneWidget);
-    });
-
-    testWidgets('no signed-in profile: says so, no dialog', (tester) async {
-      final route = BrowserSignIn(
-        findProfiles: () async => [fake('Firefox', 'a')],
-        hasSession: (_) async => false,
-      );
-      final result = await run(tester, route, () async {});
-      expect(result, isNull);
-      expect(find.byType(Dialog), findsNothing);
-      expect(
-        find.textContaining('No browser here is signed in'),
-        findsOneWidget,
-      );
     });
 
     test('forget() is a no-op', () async {

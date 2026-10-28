@@ -187,13 +187,8 @@ void main() {
       List<Override> extra = const [],
     }) async {
       final route = _FakeRoute(result);
-      await pumpSection(
-        tester,
-        extraOverrides: [
-          ytSignInRoutesProvider.overrideWithValue([route]),
-          ...extra,
-        ],
-      );
+      h.ytSignInRoutes = [route];
+      await pumpSection(tester, extraOverrides: extra);
       return route;
     }
 
@@ -450,10 +445,8 @@ void main() {
     });
 
     uiTest('no sign-in routes (Linux for now): no sign-in row', (tester) async {
-      await pumpSection(
-        tester,
-        extraOverrides: [ytSignInRoutesProvider.overrideWithValue([])],
-      );
+      h.ytSignInRoutes = const [];
+      await pumpSection(tester);
       expect(find.text('Sign in to YouTube'), findsNothing);
     });
   });

@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:songies/innertube/webkit_sign_in.dart';
 import 'package:songies/innertube/yt_session.dart';
 
@@ -35,6 +38,77 @@ void main() {
         isNull,
       );
     });
+  });
+
+  group('WebKitSignIn.webDataDirs', () {
+    test('fixed child names under the default XDG homes', () {
+      expect(WebKitSignIn.webDataDirs({'HOME': '/home/u'}), [
+        '/home/u/.local/share/com.songies.songies',
+        '/home/u/.cache/com.songies.songies',
+      ]);
+    });
+
+    test('absolute XDG_DATA_HOME / XDG_CACHE_HOME win', () {
+      expect(
+        WebKitSignIn.webDataDirs({
+          'HOME': '/home/u',
+          'XDG_DATA_HOME': '/x/data',
+          'XDG_CACHE_HOME': '/x/cache/',
+        }),
+        ['/x/data/com.songies.songies', '/x/cache/com.songies.songies'],
+      );
+    });
+
+    test('relative or empty XDG values are ignored', () {
+      expect(
+        WebKitSignIn.webDataDirs({
+          'HOME': '/home/u',
+          'XDG_DATA_HOME': 'rel/data',
+          'XDG_CACHE_HOME': '',
+        }),
+        [
+          '/home/u/.local/share/com.songies.songies',
+          '/home/u/.cache/com.songies.songies',
+        ],
+      );
+    });
+
+    test('no usable home gives nothing (never a bare parent)', () {
+      expect(WebKitSignIn.webDataDirs({}), isEmpty);
+      expect(WebKitSignIn.webDataDirs({'HOME': ''}), isEmpty);
+      expect(WebKitSignIn.webDataDirs({'HOME': 'relative'}), isEmpty);
+      expect(WebKitSignIn.webDataDirs({'HOME': '/'}), [
+        '/.local/share/com.songies.songies',
+        '/.cache/com.songies.songies',
+      ]);
+    });
+
+    test('every path ends in the app id', () {
+      for (final d in WebKitSignIn.webDataDirs({
+        'HOME': '/home/u',
+        'XDG_DATA_HOME': '/x/data/..',
+      })) {
+        expect(p.basename(d), 'com.songies.songies');
+      }
+    });
+  });
+
+  test('forget deletes the WebKit data dirs, leaving their parents', () async {
+    final root = Directory.systemTemp.createTempSync('songies_wk_');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final dirs = WebKitSignIn.webDataDirs({'HOME': root.path});
+    for (final d in dirs) {
+      Directory(d).createSync(recursive: true);
+      File(p.join(d, 'salt')).writeAsStringSync('x');
+    }
+    final sibling = Directory(p.join(root.path, '.cache', 'other'))
+      ..createSync(recursive: true);
+    await WebKitSignIn(clear: () async {}, dataDirs: () => dirs).forget();
+    for (final d in dirs) {
+      expect(Directory(d).existsSync(), isFalse);
+      expect(Directory(p.dirname(d)).existsSync(), isTrue);
+    }
+    expect(sibling.existsSync(), isTrue);
   });
 
   group('WebKitSignIn', () {
@@ -103,6 +177,8 @@ void main() {
           clears++;
           throw StateError('x');
         },
+        // Never the real folders in a test.
+        dataDirs: () => throw StateError('y'),
       ).forget();
       expect(clears, 1);
     });

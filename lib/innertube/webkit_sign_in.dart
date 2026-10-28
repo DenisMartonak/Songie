@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, Platform;
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter_inappwebview_platform_interface/flutter_inappwebview_platform_interface.dart'
     show Cookie;
 
@@ -18,7 +19,9 @@ import 'yt_sign_in.dart';
 ///
 /// The web data (cookies, storage, cache) is cleared before the window
 /// opens, after it closes and by [forget] (Sign out), so the session lives
-/// only in secure storage. Watching the window's navigation is event-driven:
+/// only in secure storage. [forget] also deletes WebKit's own folders
+/// ([webDataDirs]). `clearAll` doesn't wait for WebKit to finish clearing
+/// on Linux; cookies are kept in memory there, so nothing is left on disk. Watching the window's navigation is event-driven:
 /// nothing polls.
 ///
 /// The constructor's hooks replace the native window in tests.
@@ -26,11 +29,47 @@ class WebKitSignIn implements YtSignInRoute {
   WebKitSignIn({
     Future<YtSession?> Function()? openWindow,
     Future<void> Function()? clear,
+    List<String> Function()? dataDirs,
   }) : _openWindow = openWindow ?? _open,
-       _clear = clear ?? WebviewWindow.clearAll;
+       _clear = clear ?? WebviewWindow.clearAll,
+       _dataDirs = dataDirs ?? (() => webDataDirs(Platform.environment));
 
   final Future<YtSession?> Function() _openWindow;
   final Future<void> Function() _clear;
+  final List<String> Function() _dataDirs;
+
+  /// The Linux application id (linux/CMakeLists.txt); WebKit names its
+  /// data and cache folders after it.
+  static const appId = 'com.songies.songies';
+
+  static String? _absolute(String? path) =>
+      path != null && path.isNotEmpty && p.isAbsolute(path) ? path : null;
+
+  /// WebKit's folders for Songies: `<XDG data home>/com.songies.songies`
+  /// and `<XDG cache home>/com.songies.songies`. Always that fixed child
+  /// name, never a parent; relative XDG values are ignored (XDG spec), and
+  /// without an absolute `HOME` the defaults are left out.
+  static List<String> webDataDirs(Map<String, String> env) {
+    final home = _absolute(env['HOME']);
+    final data =
+        _absolute(env['XDG_DATA_HOME']) ??
+        (home == null ? null : p.join(home, '.local', 'share'));
+    final cache =
+        _absolute(env['XDG_CACHE_HOME']) ??
+        (home == null ? null : p.join(home, '.cache'));
+    return [
+      for (final base in [data, cache])
+        if (base != null) p.join(base, appId),
+    ];
+  }
+
+  Future<void> _deleteDataDirs() async {
+    for (final path in _dataDirs()) {
+      if (p.basename(path) != appId) continue;
+      final dir = Directory(path);
+      if (await dir.exists()) await dir.delete(recursive: true);
+    }
+  }
 
   @override
   String get label => 'Sign in to YouTube';
@@ -47,7 +86,10 @@ class WebKitSignIn implements YtSignInRoute {
   }
 
   @override
-  Future<void> forget() => _safe('forget', _clear);
+  Future<void> forget() async {
+    await _safe('forget', _clear);
+    await _safe('delete web data', _deleteDataDirs);
+  }
 
   @override
   Future<YtSignInResult?> signIn(BuildContext context) async {
