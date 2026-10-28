@@ -1,13 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../innertube/yt_session_store.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../widgets/page_snack_bar.dart';
+
+/// The notice shown once when YouTube no longer accepts the sign-in.
+const ytSignInExpiredNotice =
+    'YouTube sign-in expired — showing the regular feed';
 
 /// Shows [ConsentSheet] the first time YouTube asks for consent (common in
 /// the EU), at most once per session and never once accepted on this device.
 /// Not now changes nothing: search and playback keep working, and the feed
-/// stays generic.
+/// stays generic. Signed in to YouTube, the account's own choice applies, so
+/// no sheet opens.
+///
+/// Also tells the user, once, when the YouTube sign-in expires (the feed
+/// fell back to the regular one).
 class ConsentListener extends ConsumerStatefulWidget {
   const ConsentListener({required this.child, super.key});
 
@@ -19,6 +29,7 @@ class ConsentListener extends ConsumerStatefulWidget {
 
 class _ConsentListenerState extends ConsumerState<ConsentListener> {
   Future<void> _ask() async {
+    if (ref.read(ytAuthProvider) is YtSignedIn) return;
     // Marked first, so a burst of asking responses shows one sheet.
     if (ref.read(consentAskedProvider)) return;
     ref.read(consentAskedProvider.notifier).markAsked();
@@ -41,6 +52,12 @@ class _ConsentListenerState extends ConsumerState<ConsentListener> {
   Widget build(BuildContext context) {
     ref.listen(ytConsentRequiredProvider, (_, next) {
       if (next.value ?? false) _ask();
+    });
+    ref.listen(ytAuthProvider, (prev, next) {
+      // Only the signed-in -> expired step, so it shows once per expiry.
+      if (prev is YtSignedIn && next is YtExpired) {
+        showPageSnackBar(context, content: const Text(ytSignInExpiredNotice));
+      }
     });
     return widget.child;
   }

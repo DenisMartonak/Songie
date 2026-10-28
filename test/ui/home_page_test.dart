@@ -3,11 +3,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/connectivity.dart';
 import 'package:songies/core/result.dart';
+import 'package:songies/innertube/yt_session.dart';
+import 'package:songies/innertube/yt_session_store.dart';
 import 'package:songies/innertube/ytm_models.dart';
+import 'package:songies/providers.dart';
 import 'package:songies/ui/home/home_page.dart';
 import 'package:songies/ui/motion/shimmer.dart';
 import 'package:songies/ui/ytm/consent_sheet.dart';
@@ -236,5 +240,75 @@ void main() {
     expect(tester.binding.transientCallbackCount, 0);
     await tester.pump(const Duration(seconds: 10));
     expect(tester.binding.hasScheduledFrame, isFalse);
+  });
+
+  group('signed in to YouTube', () {
+    final session = YtSession({'SAPISID': 'SAPISECRET'});
+    const notice = 'YouTube sign-in expired — showing the regular feed';
+
+    ProviderContainer container(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(HomePage)));
+
+    Future<void> signIn(WidgetTester tester) async {
+      await real(
+        tester,
+        () =>
+            container(tester)
+                .read(ytAuthProvider.notifier)
+                .signIn(session, name: 'N'),
+      );
+      await settle(tester);
+    }
+
+    final signedInFeed = Ok(YtmHome(_feed.shelves, null, signedIn: true));
+
+    uiTest('signing in reloads Home with the session', (tester) async {
+      h.ytm
+        ..homeAnswer = const Ok(_feed)
+        ..signedInHomeAnswer = signedInFeed;
+      await pumpHome(tester);
+      expect(h.ytm.homeSessions, [null]);
+      await signIn(tester);
+      expect(h.ytm.homeSessions, [null, session]);
+      expect(find.text(notice), findsNothing);
+    });
+
+    uiTest('an expired session: the regular feed, the notice once', (
+      tester,
+    ) async {
+      h.ytm
+        ..homeAnswer = const Ok(_feed)
+        ..signedInHomeAnswer = const Ok(YtmHome([], null));
+      await pumpHome(tester);
+      await signIn(tester);
+      // Signed in, refused, then one anonymous retry.
+      expect(h.ytm.homeSessions, [null, session, null]);
+      expect(find.text(notice), findsOneWidget);
+      expect(find.text('Quick picks'), findsOneWidget);
+      expect(container(tester).read(ytAuthProvider), isA<YtExpired>());
+
+      // Opening Home again: signed out, no second notice.
+      await tester.pump(const Duration(seconds: 10));
+      await settle(tester);
+      expect(find.text(notice), findsNothing);
+      container(tester).invalidate(ytmHomeProvider);
+      await settle(tester);
+      expect(h.ytm.homeSessions, [null, session, null, null]);
+      expect(find.text(notice), findsNothing);
+    });
+
+    uiTest('YouTube asking for consent opens no sheet while signed in', (
+      tester,
+    ) async {
+      h.ytm
+        ..homeAnswer = const Ok(_feed)
+        ..signedInHomeAnswer = signedInFeed;
+      await pumpHome(tester);
+      await signIn(tester);
+      expect(container(tester).read(ytAuthProvider), isA<YtSignedIn>());
+      h.innertube.askForConsent();
+      await settle(tester);
+      expect(find.text('YouTube needs you to accept its terms'), findsNothing);
+    });
   });
 }

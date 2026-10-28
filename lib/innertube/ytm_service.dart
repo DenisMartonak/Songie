@@ -2,6 +2,7 @@ import '../core/log.dart';
 import '../core/result.dart';
 import 'clients.dart';
 import 'innertube_client.dart';
+import 'yt_session.dart';
 import 'ytm_models.dart';
 import 'ytm_parse.dart';
 
@@ -120,8 +121,18 @@ class YtmService {
   /// A first page with no sections at all means YouTube changed the home
   /// shape: an unexpected-shape Err (Home shows Retry), not a silent empty
   /// feed. An empty continuation page is just the end of the feed.
-  Future<Result<YtmHome>> home({String? continuation}) async {
-    final res = await _browse('FEmusic_home', continuation: continuation);
+  ///
+  /// With a [session] the request (and its continuations) goes out signed in;
+  /// the answer's [YtmHome.signedIn] says whether YouTube took it as such.
+  Future<Result<YtmHome>> home({
+    String? continuation,
+    YtSession? session,
+  }) async {
+    final res = await _browse(
+      'FEmusic_home',
+      continuation: continuation,
+      session: session,
+    );
     switch (res) {
       case Err(:final failure):
         return Err(failure);
@@ -130,7 +141,15 @@ class YtmService {
           AppLog.w('ytm parse: home first page has no sections');
           return _unexpected('home');
         }
-        return Ok(parseHome(value));
+        final home = parseHome(value);
+        if (session == null) return Ok(home);
+        return Ok(
+          YtmHome(
+            home.shelves,
+            home.continuation,
+            signedIn: isSignedInResponse(value),
+          ),
+        );
     }
   }
 
@@ -187,16 +206,43 @@ class YtmService {
     }
   }
 
-  Future<Result<Json>> _browse(String browseId, {String? continuation}) =>
-      _c.call(
-        kWebRemix,
-        'browse',
-        continuation != null
-            ? {'continuation': continuation}
-            : {'browseId': browseId},
-        query: continuation == null ? null : _continuationQuery(continuation),
-      );
+  Future<Result<Json>> _browse(
+    String browseId, {
+    String? continuation,
+    YtSession? session,
+  }) => _c.call(
+    kWebRemix,
+    'browse',
+    continuation != null
+        ? {'continuation': continuation}
+        : {'browseId': browseId},
+    query: continuation == null ? null : _continuationQuery(continuation),
+    session: session,
+  );
 
   static Result<T> _unexpected<T>(String what) =>
       Err(Failure(FailureKind.unknown, 'ytm $what: unexpected response shape'));
+}
+
+/// Whether a response says it was answered signed in: the GFEEDBACK
+/// `logged_in` param (`"1"`), else `mainAppWebResponseContext.loggedOut`
+/// (`false`). See docs/innertube-notes.md, Signed-in marker. False when
+/// neither is there.
+bool isSignedInResponse(Map<String, Object?> json) {
+  final ctx = json['responseContext'];
+  if (ctx is! Map) return false;
+  final services = ctx['serviceTrackingParams'];
+  if (services is List) {
+    for (final s in services) {
+      if (s is! Map || s['service'] != 'GFEEDBACK') continue;
+      final params = s['params'];
+      if (params is! List) continue;
+      for (final p in params) {
+        if (p is Map && p['key'] == 'logged_in') return p['value'] == '1';
+      }
+    }
+  }
+  final web = ctx['mainAppWebResponseContext'];
+  if (web is Map && web['loggedOut'] is bool) return web['loggedOut'] == false;
+  return false;
 }

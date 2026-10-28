@@ -6,6 +6,7 @@ import 'package:flutter/material.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/connectivity.dart';
+import 'core/log.dart';
 import 'innertube/yt_session_store.dart';
 import 'core/paths.dart';
 import 'core/result.dart';
@@ -394,10 +395,46 @@ final ytmSearchProvider = FutureProvider.autoDispose
 ///
 /// Fails with [YtmOffline] when offline (without a request) or when a network
 /// failure turns out to be the device going offline, else [YtmLoadFailed].
-final ytmHomeProvider = FutureProvider<YtmHome>(
-  (ref) => _ytmLoad(ref, (ytm) => ytm.home()),
-  retry: (_, _) => null,
-);
+///
+/// Signed in to YouTube ([YtSignedIn]), the first request goes out with the
+/// session (read from the keyring on first need, R5). When YouTube refuses
+/// it (HTTP 401/403) or answers signed out, the sign-in is marked expired
+/// ([YtExpired]) and the regular feed is fetched once instead: no loop, and
+/// later loads stay signed out until the user signs in again. Signing in
+/// reloads Home; signing out reloads it when it shows (or is fetching) the
+/// signed-in feed, so a late signed-in answer is never shown.
+final ytmHomeProvider = FutureProvider<YtmHome>((ref) {
+  // Whether this load went out signed in and its feed is the account's.
+  var signedInFeed = false;
+  ref.listen(ytAuthProvider, (prev, next) {
+    final signedIn = next is YtSignedIn && prev is! YtSignedIn;
+    final signedOut = next is YtSignedOut && signedInFeed;
+    if (signedIn || signedOut) ref.invalidateSelf();
+  });
+  return _ytmLoad(ref, (ytm) async {
+    final auth = ref.read(ytAuthProvider.notifier);
+    final session = await auth.ensureSession();
+    if (!ref.mounted) return const Err(Failure(FailureKind.unknown, 'stale'));
+    if (session == null) return ytm.home();
+    signedInFeed = true;
+    final res = await ytm.home(session: session);
+    if (!ref.mounted) return res;
+    final bool refused;
+    switch (res) {
+      case Ok(:final value):
+        refused = !value.signedIn;
+      case Err(:final failure):
+        AppLog.w('ytm home (signed in) failed: ${failure.message}');
+        final status = httpStatusOf(failure);
+        refused = status == 401 || status == 403;
+    }
+    if (!refused) return res;
+    signedInFeed = false;
+    AppLog.w('ytm home: YouTube sign-in expired; showing the regular feed');
+    auth.markExpired();
+    return ytm.home();
+  });
+}, retry: (_, _) => null);
 
 /// Loads one YouTube Music page for a user's action: fails with [YtmOffline]
 /// when offline (without a request) or when a network failure turns out to

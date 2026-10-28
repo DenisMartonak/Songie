@@ -194,6 +194,7 @@ class UiHarness {
   final RecordingRadioController radio = RecordingRadioController();
   late final RecordingYtTrackStore ytStore = RecordingYtTrackStore(db, stamp);
   final FakeInnertubeClient innertube = FakeInnertubeClient();
+  final FakeYtSessionStore ytSessions = FakeYtSessionStore();
 
   /// The images YouTube Music covers show, by thumbnail URL and decode width;
   /// when null, Flutter's test HTTP client answers (every image fails).
@@ -267,6 +268,7 @@ class UiHarness {
     isAndroidProvider.overrideWithValue(isAndroid),
     isLinuxProvider.overrideWithValue(isLinux),
     innertubeClientProvider.overrideWithValue(innertube),
+    ytSessionStoreProvider.overrideWithValue(ytSessions),
     ytmServiceProvider.overrideWithValue(ytm),
     radioControllerProvider.overrideWithValue(radio),
     ytTrackStoreProvider.overrideWithValue(ytStore),

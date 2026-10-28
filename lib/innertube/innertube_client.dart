@@ -5,7 +5,24 @@ import '../core/result.dart';
 import '../data/settings_repository.dart';
 import '../youtube/yt_models.dart';
 import 'clients.dart';
+import 'sapisid_hash.dart';
 import 'transport.dart';
+import 'yt_session.dart';
+
+/// The cause of an HTTP status failure (anything but 2xx and 429).
+class InnertubeHttpError implements Exception {
+  const InnertubeHttpError(this.status);
+
+  final int status;
+
+  @override
+  String toString() => 'HTTP $status';
+}
+
+/// The HTTP status a failed [InnertubeClient.call] got, if it got one.
+int? httpStatusOf(Failure f) => f.cause is InnertubeHttpError
+    ? (f.cause! as InnertubeHttpError).status
+    : null;
 
 /// Calls Innertube endpoints as a [ClientIdentity], carrying YouTube's
 /// anonymous visitor id and watching for a consent request.
@@ -58,14 +75,64 @@ class InnertubeClient {
     _visitorLoaded = true;
   }
 
+  /// The origin a signed-in request is made for (the hash covers it).
+  static const signedInOrigin = 'https://music.youtube.com';
+
   /// POSTs [body] to [endpoint] as [c] (with extra URL [query] params).
   /// Never throws: every failure is `Err`.
+  ///
+  /// With a [session] the request goes out signed in: its cookies (plus the
+  /// [consentCookie] once consented) and a SAPISIDHASH `Authorization`
+  /// (docs/innertube-notes.md, Signed in). Only Home is sent this way. A
+  /// failure then never carries a cookie value or the hash in its message.
   Future<Result<Map<String, Object?>>> call(
     ClientIdentity c,
     String endpoint,
     Map<String, Object?> body, {
     Map<String, String>? query,
+    YtSession? session,
   }) async {
+    if (session == null) return _call(c, endpoint, body, query, null, null);
+    final sapisid = session.sapisid;
+    final auth = sapisid == null
+        ? null
+        : sapisidHash(sapisid, signedInOrigin, _now());
+    final res = await _call(c, endpoint, body, query, session, auth);
+    if (res is! Err<Map<String, Object?>>) return res;
+    final secrets = [
+      ?auth,
+      for (final v in session.cookies.values)
+        if (v.length >= 4) v,
+    ];
+    String scrub(String text) {
+      var out = text.replaceAll(_hashPattern, '<redacted>');
+      for (final secret in secrets) {
+        out = out.replaceAll(secret, '<redacted>');
+      }
+      return out;
+    }
+
+    final f = res.failure;
+    final cause = f.cause;
+    final cleanCause =
+        cause == null ||
+            cause is InnertubeHttpError ||
+            scrub('$cause') == '$cause'
+        ? cause
+        : null;
+    return Err(Failure(f.kind, scrub(f.message), cause: cleanCause));
+  }
+
+  static final _hashPattern = RegExp(r'SAPISID\w*HASH\s+\S+');
+
+  Future<Result<Map<String, Object?>>> _call(
+    ClientIdentity c,
+    String endpoint,
+    Map<String, Object?> body,
+    Map<String, String>? query,
+    YtSession? session,
+    String? auth,
+  ) async {
     try {
       final visitor = await visitorData();
       final consented = await consentGiven();
@@ -89,7 +156,17 @@ class InnertubeClient {
         'X-YouTube-Client-Version': c.version,
         'Origin': 'https://${c.host}',
         'X-Goog-Visitor-Id': ?visitor,
-        if (consented) 'Cookie': consentCookie,
+        if (session != null) ...{
+          'Cookie': [
+            session.cookieHeader(),
+            if (consented && !session.cookies.containsKey('SOCS'))
+              consentCookie,
+          ].join('; '),
+          'Authorization': ?auth,
+          'X-Goog-AuthUser': '0',
+          'X-Origin': signedInOrigin,
+        } else if (consented)
+          'Cookie': consentCookie,
       };
       final res = await _t.post(c.endpoint(endpoint, query), request, headers);
       return await _handle(c, endpoint, res);
@@ -136,7 +213,11 @@ class InnertubeClient {
     }
     if (res.status < 200 || res.status >= 300) {
       return Err(
-        Failure(FailureKind.network, _msg(c, endpoint, 'HTTP ${res.status}')),
+        Failure(
+          FailureKind.network,
+          _msg(c, endpoint, 'HTTP ${res.status}'),
+          cause: InnertubeHttpError(res.status),
+        ),
       );
     }
     final json = res.json;

@@ -5,6 +5,8 @@ import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/data/sync_stamp.dart';
 import 'package:songies/innertube/innertube_client.dart';
+import 'package:songies/innertube/yt_session.dart';
+import 'package:songies/innertube/yt_session_store.dart';
 import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/innertube/ytm_service.dart';
 import 'package:songies/library/art_cache.dart';
@@ -35,17 +37,25 @@ class FakeYtmService implements YtmService {
     return answers[(query, kind)] ?? const Ok(YtmSearchPage([], null));
   }
 
-  /// Home feed requests (their continuation), answered with [homeAnswer]
-  /// after [homeGate] (when set) completes.
+  /// Home feed requests (their continuation, and the session each went
+  /// out with), answered with [homeAnswer] (or [signedInHomeAnswer] for a
+  /// signed-in request, when set) after [homeGate] (when set) completes.
   final homeCalls = <String?>[];
+  final homeSessions = <YtSession?>[];
   Result<YtmHome> homeAnswer = const Ok(YtmHome([], null));
+  Result<YtmHome>? signedInHomeAnswer;
   Completer<void>? homeGate;
 
   @override
-  Future<Result<YtmHome>> home({String? continuation}) async {
+  Future<Result<YtmHome>> home({
+    String? continuation,
+    YtSession? session,
+  }) async {
     homeCalls.add(continuation);
+    homeSessions.add(session);
     final gate = homeGate;
     if (gate != null) await gate.future;
+    if (session != null) return signedInHomeAnswer ?? homeAnswer;
     return homeAnswer;
   }
 
@@ -169,4 +179,25 @@ class FakeInnertubeClient implements InnertubeClient {
 
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+/// An in-memory secure store (always available).
+class FakeYtSessionStore implements YtSessionStore {
+  YtSession? stored;
+  int reads = 0;
+
+  @override
+  Future<bool> available() async => true;
+
+  @override
+  Future<YtSession?> read() async {
+    reads++;
+    return stored;
+  }
+
+  @override
+  Future<void> write(YtSession s) async => stored = s;
+
+  @override
+  Future<void> clear() async => stored = null;
 }

@@ -108,10 +108,13 @@ class YtmShelf {
 }
 
 class YtmHome {
-  const YtmHome(this.shelves, this.continuation);
+  const YtmHome(this.shelves, this.continuation, {this.signedIn = false});
 
   final List<YtmShelf> shelves;
   final String? continuation;
+
+  /// Asked with a session and answered signed in (the account's own feed).
+  final bool signedIn;
 }
 
 class YtmArtistPage {
