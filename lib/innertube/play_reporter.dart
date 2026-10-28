@@ -6,8 +6,10 @@ import '../data/database.dart';
 import '../player/play_rules.dart';
 import '../player/player_service.dart';
 import 'clients.dart';
+import 'innertube_client.dart';
 import 'player_stream_source.dart';
 import 'transport.dart';
+import 'yt_session.dart';
 
 /// Tells YouTube a song was played, like the web app does, so the signed-out
 /// feed becomes personal. Only reacts to player state, so it does nothing
@@ -21,11 +23,16 @@ class PlayReporter {
     Stream<PlayerState> states,
     this._src,
     this._transport, {
-    // Kept for the plan's signature; reports carry no wall-clock value.
-    // ignore: avoid_unused_constructor_parameters
-    DateTime Function()? now,
+    Future<YtSession?> Function()? session,
+    Future<PlaybackTracking?> Function(String videoId, YtSession s)?
+    accountTracking,
     Random? random,
-  }) : _random = random ?? Random.secure() {
+    // Named parameters can't be private initializing formals.
+    // ignore: prefer_initializing_formals
+  }) : _session = session,
+       // ignore: prefer_initializing_formals
+       _accountTracking = accountTracking,
+       _random = random ?? Random.secure() {
     _sub = states.listen(_onState);
   }
 
@@ -37,6 +44,11 @@ class PlayReporter {
   final InnertubeStreamSource _src;
   final InnertubeTransport _transport;
   final Random _random;
+  // Async because the keyring is read on demand (ensureSession); null unless
+  // signed in.
+  final Future<YtSession?> Function()? _session;
+  final Future<PlaybackTracking?> Function(String videoId, YtSession s)?
+  _accountTracking;
   late final StreamSubscription<PlayerState> _sub;
 
   String? _trackId;
@@ -107,10 +119,39 @@ class PlayReporter {
     final t = _track;
     final videoId = t != null && t.source == 'yt' ? t.ytVideoId : null;
     if (videoId == null) return;
-    final tracking = _src.trackingFor(videoId);
-    if (tracking == null) return;
+    final anonymous = _src.trackingFor(videoId);
+    // Signed out, the stream's own tracking is all there is.
+    if (anonymous == null && _session == null) return;
     _reported = true;
-    unawaited(_send(videoId, tracking, _heard, _lastPos ?? _heard));
+    unawaited(_run(videoId, anonymous, _heard, _lastPos ?? _heard));
+  }
+
+  /// A qualified play: signed in, one account-attributed `player` call gives
+  /// the tracking URLs; anything failing falls back to the anonymous ones.
+  Future<void> _run(
+    String videoId,
+    PlaybackTracking? anonymous,
+    Duration heard,
+    Duration position,
+  ) async {
+    YtSession? session;
+    PlaybackTracking? tracking;
+    try {
+      session = await _session?.call();
+      final account = _accountTracking;
+      if (session != null && account != null) {
+        tracking = await account(videoId, session);
+      }
+    } catch (_) {
+      // No error text: it could be about the session.
+      AppLog.w('Play report $videoId: account tracking failed');
+    }
+    if (tracking == null) {
+      session = null;
+      tracking = anonymous;
+    }
+    if (tracking == null) return;
+    await _send(videoId, tracking, heard, position, session);
   }
 
   Future<void> _send(
@@ -118,6 +159,7 @@ class PlayReporter {
     PlaybackTracking tracking,
     Duration heard,
     Duration position,
+    YtSession? session,
   ) async {
     final cpn = String.fromCharCodes(
       List.generate(
@@ -136,6 +178,14 @@ class PlayReporter {
     // The user agent of the VISIONOS client, the first of kPlayerClients;
     // which client served the stream isn't exposed.
     final headers = {'User-Agent': kPlayerClients.first.userAgent};
+    if (session != null) {
+      try {
+        headers.addAll(InnertubeClient.signedInHeaders(session));
+      } on FormatException {
+        // Unusable cookie: report anonymously rather than not at all.
+        AppLog.w('Play report $videoId: unusable session, sent signed out');
+      }
+    }
     for (final url in [playback, watchtime]) {
       try {
         final r = await _transport.get(url, headers);

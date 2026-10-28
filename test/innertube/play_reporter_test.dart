@@ -1,11 +1,15 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/innertube/play_reporter.dart';
 import 'package:songies/innertube/player_stream_source.dart';
+import 'package:songies/innertube/yt_session.dart';
 import 'package:songies/player/play_rules.dart';
 import 'package:songies/player/player_service.dart';
+
+import 'package:songies/innertube/transport.dart';
 
 import '../helpers/fake_innertube_transport.dart';
 
@@ -42,7 +46,7 @@ void main() {
   late PlayReporter reporter;
 
   setUp(() {
-    states = StreamController<PlayerState>(sync: true);
+    states = StreamController<PlayerState>.broadcast(sync: true);
     src = _FakeSrc()
       ..tracking['vid_a'] = PlaybackTracking(
         playbackUrl: Uri.parse(
@@ -227,5 +231,120 @@ void main() {
     }
     await _settle();
     expect(transport.gets, isEmpty);
+  });
+
+  group('signed in', () {
+    final session = YtSession({
+      'SAPISID': 'SAPISECRET1234',
+      'SID': 'SIDSECRET5678',
+    });
+    final accountUrls = PlaybackTracking(
+      playbackUrl: Uri.parse(
+        'https://s.youtube.com/api/stats/playback?docid=vid_a&ns=yt&acct=1',
+      ),
+      watchtimeUrl: Uri.parse(
+        'https://s.youtube.com/api/stats/watchtime?docid=vid_a&ns=yt&acct=1',
+      ),
+    );
+    late int accountCalls;
+    late PlayReporter signed;
+    PlaybackTracking? accountResult;
+
+    PlayReporter build({YtSession? Function()? s, bool withAccount = true}) =>
+        PlayReporter(
+          states.stream,
+          src,
+          transport,
+          session: () async => (s ?? () => session)(),
+          accountTracking: withAccount
+              ? (id, sess) async {
+                  accountCalls++;
+                  return accountResult;
+                }
+              : null,
+        );
+
+    setUp(() {
+      accountCalls = 0;
+      accountResult = accountUrls;
+      reporter.dispose();
+      signed = build();
+    });
+    tearDown(() => signed.dispose());
+
+    test('reports carry Cookie and Authorization and keep ver and cpn',
+        () async {
+      play(_track('a'), 0, 31);
+      await _settle();
+      await _settle();
+      expect(transport.gets, hasLength(2));
+      for (final g in transport.gets) {
+        expect(g.headers['Cookie'], contains('SAPISID=SAPISECRET1234'));
+        expect(g.headers['Authorization'], startsWith('SAPISIDHASH '));
+        expect(g.headers['X-Goog-AuthUser'], '0');
+        expect(g.headers['X-Origin'], 'https://music.youtube.com');
+        expect(g.url.queryParameters['ver'], '2');
+        expect(g.url.queryParameters['cpn'], hasLength(16));
+      }
+      expect(transport.gets[0].url.queryParameters['acct'], '1');
+    });
+
+    test('exactly one accountTracking call per qualifying play', () async {
+      play(_track('a'), 0, 31);
+      play(_track('a'), 32, 40);
+      await _settle();
+      expect(accountCalls, 1);
+    });
+
+    test('a play under 30 s makes no accountTracking call', () async {
+      play(_track('a'), 0, 20);
+      await _settle();
+      expect(accountCalls, 0);
+      expect(transport.gets, isEmpty);
+    });
+
+    test('accountTracking failing falls back to anonymous, no session',
+        () async {
+      accountResult = null;
+      play(_track('a'), 0, 31);
+      await _settle();
+      await _settle();
+      expect(accountCalls, 1);
+      expect(transport.gets, hasLength(2));
+      for (final g in transport.gets) {
+        expect(g.headers.containsKey('Cookie'), isFalse);
+        expect(g.headers.containsKey('Authorization'), isFalse);
+      }
+    });
+
+    test('signed out (no session) sends no account call and no headers',
+        () async {
+      signed.dispose();
+      signed = build(s: () => null);
+      play(_track('a'), 0, 31);
+      await _settle();
+      await _settle();
+      expect(accountCalls, 0);
+      expect(transport.gets, hasLength(2));
+      expect(transport.gets[0].headers.containsKey('Cookie'), isFalse);
+      expect(transport.gets[0].headers.containsKey('Authorization'), isFalse);
+    });
+
+    test('a failing signed-in report logs no cookie or hash value', () async {
+      final lines = <String>[];
+      final old = debugPrint;
+      debugPrint = (String? m, {int? wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = old);
+      transport.reply(Exception('boom'));
+      transport.reply(const InnertubeResponse(403, null));
+      play(_track('a'), 0, 31);
+      await _settle();
+      await _settle();
+      expect(lines, isNotEmpty);
+      final all = lines.join('\n');
+      expect(all, isNot(contains('SAPISECRET1234')));
+      expect(all, isNot(contains('SIDSECRET5678')));
+      expect(all, isNot(contains('SAPISIDHASH')));
+    });
   });
 }

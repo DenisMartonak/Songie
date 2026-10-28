@@ -23,6 +23,7 @@ import 'innertube/innertube_client.dart';
 import 'innertube/play_reporter.dart';
 import 'innertube/player_stream_source.dart';
 import 'innertube/transport.dart';
+import 'innertube/ytm_service.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
 import 'library/library_scanner.dart';
@@ -177,8 +178,6 @@ Future<void> main() async {
     onUnavailable: library.markUnavailable,
     network: network,
   );
-  // Reports songs heard for 30 s to YouTube; reacts to player state only.
-  PlayReporter(player.states, innertubeStreams, HttpInnertubeTransport());
   bindAudioSession(
     becomingNoisy: backend.becomingNoisy,
     interruptions: backend.interruptions,
@@ -222,6 +221,16 @@ Future<void> main() async {
   );
   // Reads two device-local settings only: no keyring, no network, no timer.
   unawaited(container.read(ytAuthProvider.notifier).load());
+  // Reports songs heard for 30 s to YouTube (to the account's history when
+  // signed in); reacts to player state only.
+  final ytm = YtmService(innertube);
+  PlayReporter(
+    player.states,
+    innertubeStreams,
+    HttpInnertubeTransport(),
+    session: container.read(ytAuthProvider.notifier).ensureSession,
+    accountTracking: ytm.accountTracking,
+  );
   runApp(
     UncontrolledProviderScope(
       container: container,

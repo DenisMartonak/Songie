@@ -3,6 +3,7 @@ import '../core/result.dart';
 import 'clients.dart';
 import 'innertube_client.dart';
 import 'yt_session.dart';
+import 'player_stream_source.dart';
 import 'ytm_models.dart';
 import 'ytm_parse.dart';
 
@@ -206,6 +207,33 @@ class YtmService {
             ? _unexpected('playlist')
             : Ok(YtmPlaylistPage(header, tracks, page.continuation));
     }
+  }
+
+  /// The `playbackTracking` URLs of a signed-in WEB_REMIX `player` call, so
+  /// a play counts in the account's history. Called only after a play
+  /// qualified; its streams are never used. Null on any failure.
+  Future<PlaybackTracking?> accountTracking(
+    String videoId,
+    YtSession s,
+  ) async {
+    final res = await _c.call(kWebRemix, 'player', {
+      'videoId': videoId,
+      'contentCheckOk': true,
+      'racyCheckOk': true,
+    }, session: s);
+    if (res is! Ok<Json>) return null;
+    final t = res.value['playbackTracking'];
+    if (t is! Map) return null;
+    Uri? base(String key) {
+      final v = t[key];
+      final u = v is Map ? v['baseUrl'] : null;
+      return u is String ? Uri.tryParse(u) : null;
+    }
+
+    final playback = base('videostatsPlaybackUrl');
+    final watchtime = base('videostatsWatchtimeUrl');
+    if (playback == null || watchtime == null) return null;
+    return PlaybackTracking(playbackUrl: playback, watchtimeUrl: watchtime);
   }
 
   Future<Result<Json>> _browse(

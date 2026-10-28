@@ -155,6 +155,25 @@ class InnertubeClient {
         u != 0x5C,
   );
 
+  /// The `Cookie`, `Authorization`, `X-Goog-AuthUser` and `X-Origin` headers
+  /// of a signed-in request, for plain GETs such as play reports. Throws
+  /// [FormatException] (without values) for an unusable cookie.
+  static Map<String, String> signedInHeaders(
+    YtSession session, {
+    bool consented = false,
+    DateTime? now,
+  }) {
+    final sapisid = session.sapisid;
+    return {
+      'Cookie': _cookieHeader(session, consented),
+      'Authorization': ?(sapisid == null
+          ? null
+          : sapisidHash(sapisid, signedInOrigin, now ?? DateTime.now())),
+      'X-Goog-AuthUser': '0',
+      'X-Origin': signedInOrigin,
+    };
+  }
+
   Future<Result<Map<String, Object?>>> _call(
     ClientIdentity c,
     String endpoint,
