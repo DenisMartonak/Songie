@@ -89,49 +89,112 @@ class YtAuthUnavailable extends YtAuthState {
 
 class YtAuth extends Notifier<YtAuthState> {
   YtSession? _session;
+  bool _sessionLoaded = false;
+  int _gen = 0;
 
   @override
   YtAuthState build() => const YtSignedOut();
 
-  /// The in-memory session; null unless signed in.
+  /// The cached session; null until [ensureSession] has run, and null unless
+  /// signed in. Callers that need the session should use [ensureSession].
   YtSession? get session => state is YtSignedIn ? _session : null;
 
-  /// Reads storage only; never touches the network.
+  /// Startup: reads only device-local settings (never the keyring, never the
+  /// network).
   Future<void> load() async {
-    final store = ref.read(ytSessionStoreProvider);
+    final gen = ++_gen;
+    final settings = ref.read(settingsRepositoryProvider);
     try {
-      if (!await store.available()) {
-        state = const YtAuthUnavailable();
-        return;
-      }
-      final s = await store.read();
-      if (s == null) {
-        _session = null;
-        state = const YtSignedOut();
-        return;
-      }
-      _session = s;
-      final name = await ref
-          .read(settingsRepositoryProvider)
-          .getString(kYtAccountName);
-      state = YtSignedIn(name);
+      final marked = await settings.getBool(kYtSignedIn, fallback: false);
+      final name = await settings.getString(kYtAccountName);
+      if (gen != _gen) return;
+      _sessionLoaded = false;
+      _session = null;
+      state = marked ? YtSignedIn(name) : const YtSignedOut();
     } catch (_) {
+      if (gen != _gen) return;
+      state = const YtSignedOut();
+    }
+  }
+
+  /// Reads secure storage on first use and caches the result. Empty store
+  /// while marked signed in means signed out (marker cleared); a failing
+  /// store means [YtAuthUnavailable].
+  Future<YtSession?> ensureSession() async {
+    if (state is! YtSignedIn) return null;
+    if (_sessionLoaded) return _session;
+    final gen = _gen;
+    final name = (state as YtSignedIn).name;
+    YtSession? s;
+    try {
+      s = await ref.read(ytSessionStoreProvider).read();
+    } catch (_) {
+      if (gen == _gen) state = const YtAuthUnavailable();
+      return null;
+    }
+    if (gen != _gen) return null;
+    if (s == null) {
+      // Distinguish "store unreadable" from "store empty".
+      final ok = await ref.read(ytSessionStoreProvider).available();
+      if (gen != _gen) return null;
+      if (!ok) {
+        state = const YtAuthUnavailable();
+        return null;
+      }
+      await ref.read(settingsRepositoryProvider).setBool(kYtSignedIn, false);
+      await ref.read(settingsRepositoryProvider).setString(kYtAccountName, null);
+      if (gen != _gen) return null;
+      state = const YtSignedOut();
+      return null;
+    }
+    _session = s;
+    _sessionLoaded = true;
+    state = YtSignedIn(name);
+    return s;
+  }
+
+  /// Lazy keyring probe, for the Settings row and the sign-in start.
+  Future<void> checkAvailable() async {
+    final gen = _gen;
+    bool ok;
+    try {
+      ok = await ref.read(ytSessionStoreProvider).available();
+    } catch (_) {
+      ok = false;
+    }
+    if (gen != _gen) return;
+    if (!ok) {
       state = const YtAuthUnavailable();
+    } else if (state is YtAuthUnavailable) {
+      state = const YtSignedOut();
     }
   }
 
   Future<void> signIn(YtSession s, {String? name}) async {
+    final gen = ++_gen;
     await ref.read(ytSessionStoreProvider).write(s);
-    await ref.read(settingsRepositoryProvider).setString(kYtAccountName, name);
+    final settings = ref.read(settingsRepositoryProvider);
+    await settings.setString(kYtAccountName, name);
+    await settings.setBool(kYtSignedIn, true);
+    if (gen != _gen) return;
     _session = s;
+    _sessionLoaded = true;
     state = YtSignedIn(name);
   }
 
   Future<void> signOut() async {
+    final gen = ++_gen;
     _session = null;
+    _sessionLoaded = false;
     state = const YtSignedOut();
-    await ref.read(ytSessionStoreProvider).clear();
-    await ref.read(settingsRepositoryProvider).setString(kYtAccountName, null);
+    final settings = ref.read(settingsRepositoryProvider);
+    try {
+      await ref.read(ytSessionStoreProvider).clear();
+    } finally {
+      await settings.setString(kYtAccountName, null);
+      await settings.setBool(kYtSignedIn, false);
+      if (gen == _gen) state = const YtSignedOut();
+    }
   }
 
   void markExpired() {

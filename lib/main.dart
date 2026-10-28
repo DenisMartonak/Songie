@@ -220,7 +220,7 @@ Future<void> main() async {
         initialThemeSpecProvider.overrideWithValue(initialTheme),
       ],
   );
-  // Reads secure storage only: no network request, no timer.
+  // Reads two device-local settings only: no keyring, no network, no timer.
   unawaited(container.read(ytAuthProvider.notifier).load());
   runApp(
     UncontrolledProviderScope(

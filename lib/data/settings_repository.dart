@@ -25,6 +25,10 @@ const kYtConsentGiven = 'yt_consent_given';
 /// secret; removed on sign out.
 const kYtAccountName = 'yt_account_name';
 
+/// Non-secret marker: a YouTube session is stored. Lets startup skip the
+/// keyring entirely. Device-local.
+const kYtSignedIn = 'yt_signed_in';
+
 /// Default of the Wi-Fi only downloads setting: on for Android (metered data), off on
 /// desktop. [isAndroid] exists so tests don't depend on the host.
 bool wifiOnlyDefault({bool? isAndroid}) => isAndroid ?? Platform.isAndroid;
