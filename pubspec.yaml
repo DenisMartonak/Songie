@@ -69,6 +69,15 @@ dependencies:
   flutter_inappwebview_platform_interface: 1.4.0-beta.3
   flutter_inappwebview_android: 1.2.0-beta.3
   flutter_inappwebview_windows: 0.7.0-beta.3
+  # Linux sign-in. pointycastle: Chromium cookie decryption (AES-CBC,
+  # PBKDF2). dbus: the Chromium keyring password from the Secret Service or
+  # KWallet, in Dart (no native build step). desktop_webview_window:
+  # Google's sign-in page in a WebKitGTK window (it also registers a
+  # WebView2 plugin on Windows, unused there). Exact version: 0.4.0 is the
+  # one probed on Linux (docs/innertube-notes.md).
+  pointycastle: ^4.0.0
+  dbus: ^0.7.15
+  desktop_webview_window: 0.4.0
 
 dev_dependencies:
   flutter_test:

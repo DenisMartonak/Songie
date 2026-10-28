@@ -10,6 +10,8 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/log.dart';
 import '../ui/settings/yt_sign_in_page.dart';
+import 'browser_sign_in.dart';
+import 'webkit_sign_in.dart';
 import 'yt_session.dart';
 
 /// What a sign-in route hands back: the session (cookies) and, when known,
@@ -306,10 +308,12 @@ class WebViewSignIn implements YtSignInRoute {
   }
 }
 
-/// The sign-in routes this platform offers, in order. Linux has none yet.
+/// The sign-in routes this platform offers, in order. Linux: Google's page
+/// in a WebKitGTK window, then the browser's own sign-in.
 List<YtSignInRoute> ytSignInRoutes() {
   if (kIsWeb) return const [];
   if (Platform.isAndroid || Platform.isWindows) return [WebViewSignIn()];
+  if (Platform.isLinux) return [WebKitSignIn(), BrowserSignIn()];
   return const [];
 }
 
