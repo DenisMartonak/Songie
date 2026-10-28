@@ -97,6 +97,18 @@ void main() {
       expect(req.body['browseId'], 'FEmusic_home');
     });
 
+    for (final name in ['home_signed_in', 'home_signed_out_marker']) {
+      test('the Plan 7 fixture $name parses like the Plan 5 Home', () async {
+        transport.reply(fixture(name));
+        final home = ((await ytm.home()) as Ok<YtmHome>).value;
+        expect(home.shelves.length, greaterThanOrEqualTo(3));
+        for (final s in home.shelves) {
+          expect(s.title, isNotEmpty);
+          expect(s.items, isNotEmpty);
+        }
+      });
+    }
+
     test('two-row items carry ids, titles and 544 px art', () async {
       transport.reply(fixture('browse_home'));
       final home = ((await ytm.home()) as Ok<YtmHome>).value;

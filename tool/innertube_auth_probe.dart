@@ -8,12 +8,11 @@
 //
 // The cookies file is exported by the user from a signed-in browser, lives
 // outside the repo and is deleted after the run. Raw responses go to
-// <OUT>/raw (never committed: they hold account data). Scrubbed fixtures go
-// to test/fixtures/innertube/home_signed_in.json and
-// home_signed_out_marker.json.
-//
-//   --dart-define=SCRUB_ONLY=true  re-scrubs the raw files in <OUT>/raw into
-//                                  the fixtures without any network request.
+// <OUT>/raw only; OUT must be outside the repo (the probe fails otherwise).
+// Ruling R4: real signed-in responses are never saved as fixtures, scrubbed
+// or not, because they reveal the account's listening taste. The committed
+// signed-in fixtures are hand-crafted; a shape change found here is
+// reproduced in them by hand.
 //
 // It runs under the Flutter test runner like tool/stream_timing.dart: plain
 // `test()`, never `testWidgets()`, so real HTTP works.
@@ -44,7 +43,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _cookiesPath = String.fromEnvironment('COOKIES');
 const _outPath = String.fromEnvironment('OUT');
-const _scrubOnly = bool.fromEnvironment('SCRUB_ONLY');
 
 /// Public videos from the Plan 5 probe. A gets the anonymous report, B the
 /// signed-in one.
@@ -72,16 +70,27 @@ const _visionOs = <String, Object?>{
   'osVersion': '26.5.23O471',
 };
 
-/// The account's public stand-in in fixtures (Plan 5's public artist).
-const _publicChannel = 'UCRr1xG_2WIDs18a6cIiCxeA';
-
 void main() {
   test('signed-in Innertube probe (real network)', () async {
     if (_outPath.isEmpty) fail('pass --dart-define=OUT=<scratch dir>');
-    final raw = Directory('$_outPath/raw')..createSync(recursive: true);
-    if (!_scrubOnly) await _probe(raw);
-    _writeFixtures(raw);
+    final out = Directory(_outPath).absolute.path;
+    final repo = Directory.current.absolute.path;
+    if (_inside(out, repo) ||
+        _inside(out, Directory.current.resolveSymbolicLinksSync())) {
+      fail('OUT must be outside the repo: raw responses hold account data');
+    }
+    final raw = Directory('$out/raw')..createSync(recursive: true);
+    await _probe(raw);
   }, timeout: const Timeout(Duration(minutes: 3)));
+}
+
+/// Whether [path] is [dir] or inside it (both absolute, normalised).
+bool _inside(String path, String dir) {
+  String norm(String p) =>
+      File(p).uri.normalizePath().path.replaceAll(RegExp(r'/+$'), '');
+  final p = norm(path);
+  final d = norm(dir);
+  return p == d || p.startsWith('$d/');
 }
 
 // --- Cookies ----------------------------------------------------------------
@@ -571,279 +580,7 @@ void _summariseHistory(_Resp r) {
   }
 }
 
-// --- Fixtures ---------------------------------------------------------------
-
-void _writeFixtures(Directory raw) {
-  Map<String, Object?>? load(String name) {
-    final f = File('${raw.path}/$name.json');
-    if (!f.existsSync()) return null;
-    return (jsonDecode(f.readAsStringSync()) as Map).cast<String, Object?>();
-  }
-
-  final signedIn = load('home_signed_in');
-  final expired = load('home_expired');
-  final signedOut = load('home_signed_out');
-  if (signedIn == null) fail('no raw home_signed_in');
-
-  // The expired-session response is the marker fixture when it is a normal
-  // 200 page; a refusal is recorded in the notes and the plain signed-out
-  // page stands in.
-  final marker = (expired != null && expired['status'] == 200)
-      ? expired
-      : signedOut;
-  if (marker == null) fail('no raw signed-out home');
-
-  final personal = _personalStrings(signedIn['json']);
-  print('personal strings found in signed-in home: ${personal.length}');
-  final dir = Directory('test/fixtures/innertube');
-  for (final (name, doc) in [
-    ('home_signed_in', signedIn),
-    ('home_signed_out_marker', marker),
-  ]) {
-    final scrubbed = _scrub(_trim(doc['json']), null, personal);
-    final text = jsonEncode({'status': doc['status'], 'json': scrubbed});
-    _check(name, text, personal);
-    File('${dir.path}/$name.json').writeAsStringSync('$text\n');
-    print('wrote $name.json (${text.length} bytes), ${_markers(scrubbed)}');
-  }
-}
-
-/// Strings that name the account: shelf straplines (the "Listen again"
-/// header shows the account name), and any account* keys.
-Set<String> _personalStrings(Object? json) {
-  final out = <String>{};
-  _walk(json, (m) {
-    final strap = m['strapline'];
-    if (strap != null) {
-      _strings(strap, 'strapline', (k, v) {
-        if (k == 'text' && v.trim().isNotEmpty) out.add(v);
-      });
-    }
-    for (final e in m.entries) {
-      final k = '${e.key}'.toLowerCase();
-      if ((k.contains('account') ||
-              k.contains('email') ||
-              k == 'channelhandle') &&
-          e.value is String) {
-        out.add(e.value as String);
-      }
-    }
-  });
-  _strings(json, '', (k, v) {
-    final m = RegExp(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
-        .firstMatch(v);
-    if (m != null) out.add(m[0]!);
-  });
-  out.removeWhere((s) => s.length < 2);
-  return out;
-}
-
-void _check(String name, String text, Set<String> personal) {
-  for (final s in personal) {
-    if (text.contains(s)) {
-      throw StateError('$name still holds a personal string');
-    }
-  }
-  if (_cookiesPath.isNotEmpty && File(_cookiesPath).existsSync()) {
-    for (final c in _readCookies(_cookiesPath)) {
-      if (c.value.length >= 8 && text.contains(c.value)) {
-        throw StateError('$name holds a cookie value');
-      }
-    }
-  }
-  for (final bad in [
-    'SAPISID',
-    '__Secure-',
-    'LOGIN_INFO',
-    'datasyncId',
-    'lh3.googleusercontent.com/a/',
-  ]) {
-    if (text.contains(bad)) throw StateError('$name holds $bad');
-  }
-  if (RegExp(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
-      .hasMatch(text)) {
-    throw StateError('$name holds an email');
-  }
-  for (final m in RegExp(r'UC[A-Za-z0-9_-]{22}').allMatches(text)) {
-    if (m[0] != _publicChannel) throw StateError('$name holds a channel id');
-  }
-  _strings(jsonDecode(text), '', (k, v) {
-    if (_visitorShaped(v)) throw StateError('$name has visitor-shaped $k');
-  });
-}
-
-const _dropKeys = {
-  'frameworkUpdates',
-  'webResponseContextExtensionData',
-  'storyboards',
-  'attestation',
-  'playerConfig',
-  'adPlacements',
-  'playerAds',
-  'adSlots',
-  'messages',
-  'description',
-  'modalEndpoint',
-  'consistencyTokenJar',
-};
-
-const _maxCarouselItems = 4;
-
-bool _keepMenuItem(Object? item) {
-  final nav = _at(item, ['menuNavigationItemRenderer', 'navigationEndpoint']);
-  return nav is Map &&
-      (nav.containsKey('browseEndpoint') ||
-          nav.containsKey('watchEndpoint') ||
-          nav.containsKey('watchPlaylistEndpoint'));
-}
-
-Object? _trim(Object? v, [String? parent]) {
-  if (v is Map) {
-    final out = <String, Object?>{};
-    for (final e in v.entries) {
-      final k = e.key as String;
-      if (_dropKeys.contains(k) || k.toLowerCase().contains('datasync')) {
-        continue;
-      }
-      var child = e.value;
-      if (parent == 'responseContext' && k == 'serviceTrackingParams') {
-        // Only the signed-in marker survives.
-        out[k] = _markerParams(child);
-        continue;
-      }
-      if (parent == 'responseContext' && k == 'mainAppWebResponseContext') {
-        final lo = _at(child, ['loggedOut']);
-        if (lo is bool) out[k] = {'loggedOut': lo};
-        continue;
-      }
-      if (parent == 'responseContext' &&
-          k != 'visitorData' &&
-          k != 'serviceTrackingParams' &&
-          k != 'mainAppWebResponseContext') {
-        continue;
-      }
-      if (child is List &&
-          parent == 'musicCarouselShelfRenderer' &&
-          k == 'contents' &&
-          child.length > _maxCarouselItems) {
-        child = child.sublist(0, _maxCarouselItems);
-      }
-      if (child is List && parent == 'menuRenderer' && k == 'items') {
-        child = child.where(_keepMenuItem).toList();
-      }
-      out[k] = _trim(child, k);
-    }
-    return out;
-  }
-  if (v is List) return v.map((x) => _trim(x, parent)).toList();
-  return v;
-}
-
-List<Object?> _markerParams(Object? stp) => [
-  if (stp is List)
-    for (final s in stp)
-      if (_at(s, ['params']) case final List params)
-        if (params.any((p) => p is Map && p['key'] == 'logged_in'))
-          {
-            'service': _at(s, ['service']),
-            'params': [
-              for (final p in params)
-                if (p is Map && p['key'] == 'logged_in')
-                  {'key': 'logged_in', 'value': p['value']},
-            ],
-          },
-];
-
-const _tokenKeys = {
-  'visitorData': 'FAKE_VISITOR_DATA',
-  'trackingParams': 'FAKE_TRACKING_PARAMS',
-  'clickTrackingParams': 'FAKE_TRACKING_PARAMS',
-  'serializedShareEntity': 'FAKE_SHARE_ENTITY',
-  'continuation': 'FAKE_CONTINUATION',
-  'token': 'FAKE_TOKEN',
-  'eventId': 'FAKE_EVENT_ID',
-  'serializedContextData': 'FAKE_CONTEXT_DATA',
-  'responseId': 'FAKE_RESPONSE_ID',
-  'rolloutToken': 'FAKE_ROLLOUT_TOKEN',
-  'queueContextParams': 'FAKE_QUEUE_CONTEXT_PARAMS',
-  'feedbackToken': 'FAKE_FEEDBACK_TOKEN',
-  'params': 'FAKE_PARAMS',
-};
-
-const _fakeName = 'Test User';
-const _fakePhoto = 'https://example.invalid/fake_photo.jpg';
-
-Object? _scrub(Object? v, String? key, Set<String> personal) {
-  if (v is Map) {
-    final out = <String, Object?>{};
-    for (final e in v.entries) {
-      final k = e.key as String;
-      if (k == 'strapline') {
-        out[k] = {
-          'runs': [
-            {'text': _fakeName},
-          ],
-        };
-        continue;
-      }
-      // The avatar beside a strapline.
-      if (k == 'thumbnail' && v.containsKey('strapline')) {
-        out[k] = _scrubPhotos(e.value);
-        continue;
-      }
-      out[k] = _scrub(e.value, k, personal);
-    }
-    return out;
-  }
-  if (v is List) return v.map((x) => _scrub(x, key, personal)).toList();
-  if (v is String) {
-    if (key != null && key.toLowerCase().contains('visitordata')) {
-      return 'FAKE_VISITOR_DATA';
-    }
-    final fake = _tokenKeys[key];
-    if (fake != null) return fake;
-    var s = v;
-    for (final p in personal) {
-      s = s.replaceAll(p, _fakeName);
-    }
-    if (s.contains('lh3.googleusercontent.com/a/')) return _fakePhoto;
-    s = s.replaceAll(RegExp(r'UC[A-Za-z0-9_-]{22}'), _publicChannel);
-    s = s.replaceAll(
-      RegExp(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'),
-      'user@example.invalid',
-    );
-    return s;
-  }
-  return v;
-}
-
-Object? _scrubPhotos(Object? v) {
-  if (v is Map) {
-    return {for (final e in v.entries) e.key: _scrubPhotos(e.value)};
-  }
-  if (v is List) return v.map(_scrubPhotos).toList();
-  if (v is String && v.startsWith('http')) return _fakePhoto;
-  return v;
-}
-
 // --- JSON helpers -----------------------------------------------------------
-
-List<int>? _decodeB64(String s) {
-  if (s.length < 8 || !RegExp(r'^[A-Za-z0-9_\-+/]+={0,2}$').hasMatch(s)) {
-    return null;
-  }
-  final n = s.replaceAll('-', '+').replaceAll('_', '/').replaceAll('=', '');
-  try {
-    return base64.decode(base64.normalize(n));
-  } on FormatException {
-    return null;
-  }
-}
-
-bool _visitorShaped(String s) {
-  final b = _decodeB64(s);
-  return b != null && b.length >= 13 && b[0] == 0x0A && b[1] == 0x0B;
-}
 
 Object? _at(Object? v, List<String> path) {
   for (final k in path) {

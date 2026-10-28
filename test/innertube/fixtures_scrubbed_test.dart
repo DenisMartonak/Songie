@@ -50,12 +50,18 @@ String? accountLeak(String text, {required bool signedIn}) {
     return 'email';
   }
   if (signedIn) {
-    for (final m in RegExp(r'UC[A-Za-z0-9_-]{22}').allMatches(text)) {
+    for (final m in channelId.allMatches(text)) {
       if (m[0] != publicChannel) return 'channel id';
     }
   }
   return null;
 }
+
+/// A channel id as a whole token: not part of a longer word such as
+/// `STYLE_LARGE_TRANSLUCENT_AND_SELECTED_WHITE`.
+final channelId = RegExp(
+  r'(?<![A-Za-z0-9_-])UC[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])',
+);
 
 /// Plan 5's public artist (Daft Punk), the only channel allowed in
 /// signed-in fixtures.
@@ -84,6 +90,10 @@ void main() {
     );
     expect(accountLeak('UCabcdefghijklmnopqrstuv', signedIn: false), isNull);
     expect(accountLeak(publicChannel, signedIn: true), isNull);
+    expect(
+      accountLeak('STYLE_LARGE_TRANSLUCENT_AND_SELECTED_WHITE', signedIn: true),
+      isNull,
+    );
     expect(accountLeak('@DaftPunk', signedIn: true), isNull);
     expect(
       accountLeak('https://lh3.googleusercontent.com/abc=w60', signedIn: true),
