@@ -113,3 +113,35 @@ Live checks (all pass):
 - **(b) Radio continuation:** radio from `khnokW3Mw24` gave 49 songs plus the seed as `current`, and a token. The continuation returned 49 more, all new, and a next token.
 - **(c) Artist radio:** the first "daft punk" artist result's page had 5 top songs and an `RDEM…` radio playlist id. `next` with that playlist and the first top song (`khnokW3Mw24`) as the seed returned 49 songs and the seed as `current`. The artist page's `musicDescriptionShelfRenderer` section was skipped and logged, as designed.
 - **(d) Consent:** not asked (0 consent events, consent not given). As in the probe above, the API isn't consent-gated from this host.
+
+## Signed in (Plan 7 probe)
+
+**UNVERIFIED — manual check pending.** The probe (`tool/innertube_auth_probe.dart`) is written but has not been run. No exported cookies file was available while Task 1 ran (2026-10-28, about 10 minutes of waiting). Everything below comes from how ytmusicapi and yt-dlp document signed-in requests. The two fixtures are hand-crafted from the Plan 5 `browse_home.json`. Personal feed, history attribution and expiry detection stay unverified until the manual check below passes.
+
+### Running the probe (the manual check)
+1. Export a Netscape `cookies.txt` from a browser signed in to music.youtube.com, to a path **outside the repo**.
+2. `flutter test tool/innertube_auth_probe.dart --dart-define=COOKIES=<path> --dart-define=OUT=<scratch dir> > <scratch dir>/probe.log`. This runs under the Flutter test runner for the same reason as `stream_timing.dart`: plain `test()`, so real HTTP works.
+3. Read `probe.log`, update this section, and remove the UNVERIFIED line. Then **delete the cookies file**. Raw responses stay in `<scratch dir>/raw` and are never committed. The probe rewrites the two fixtures, scrubbed, and fails if a cookie value, account name, email, account photo, datasync id or non-public channel id is left in them. `--dart-define=SCRUB_ONLY=true` re-scrubs from `raw/` without any request.
+
+What it sends: about 11 requests, 2 s apart, no loops. It sends Home four ways (signed out; cookies + Authorization; cookies only; the same cookie names with fake values, which stands in for an expired session). It sends an anonymous VISIONOS `player` for video A and a signed-in WEB_REMIX `player` for video B. Then it sends one play report each way (playback + watchtime, `et=35`, with nothing played), all with the session. Last, it reads `FEmusic_history` once. Public videos: **A = `fOT0BUpITw8`** gets the anonymous tracking URLs and **B = `4D7u5KF7SP8`** gets the signed-in ones (both from the Plan 5 probe). It prints only statuses, counts, marker values, URL parameter *names*, the positions of A and B in history, and shelf titles from a fixed list of generic ones (`<other>` otherwise).
+
+### Headers for a signed-in WEB_REMIX Home (expected, to verify)
+- The usual WEB_REMIX request (Request shape above), plus:
+  - `Cookie:` the browser's cookies for `.youtube.com`. The ones that matter are `SID`, `HSID`, `SSID`, `APISID`, `SAPISID`, the `__Secure-1P*`/`__Secure-3P*` pairs and `LOGIN_INFO`.
+  - `Authorization: SAPISIDHASH <ts>_<sha1("<ts> <SAPISID> https://music.youtube.com")>`, where `<ts>` is Unix seconds (ytmusicapi). yt-dlp also appends `SAPISID1PHASH …` and `SAPISID3PHASH …`, built the same way from `__Secure-1PAPISID` and `__Secure-3PAPISID`. When `SAPISID` is missing, yt-dlp uses `__Secure-3PAPISID` in its place.
+  - `X-Goog-AuthUser: 0`, `X-Origin: https://music.youtube.com` (and `Origin`).
+- Unknown until the probe runs: whether cookies without `Authorization` already give a personal Home (variant 3), and whether `X-Goog-Visitor-Id` matters when signed in. The probe sends no visitor id signed in. Brand accounts (`onBehalfOfUser`/datasync id) are out of scope.
+
+### Signed-in marker (expected, to verify)
+- **Signed in:** `responseContext.serviceTrackingParams[]` has an entry (`service: "GFEEDBACK"`) whose `params` holds `{"key": "logged_in", "value": "1"}`. `responseContext.mainAppWebResponseContext.loggedOut` is `false`.
+- **Signed out:** the same param with `"value": "0"`, and `loggedOut: true`.
+- Plan 5's fixtures dropped `serviceTrackingParams`. The Plan 7 fixtures keep that list, reduced to the `logged_in` param, and keep `mainAppWebResponseContext` reduced to `loggedOut`.
+- **Expired session:** unknown whether Google answers a stale session with HTTP 200 and `logged_in=0` (the case the marker fixture models) or refuses it with 401/403. Task 3 treats both as "expired" (constraints: "a refused or signed-out Home response"). The probe's variant 4 records which one happens.
+
+### Anonymous tracking attributes: unknown
+Unknown whether Plan 5's anonymous `playbackTracking` URLs (VISIONOS `player`) count in the account's history when sent with the session cookies. Until the probe answers it, Task 4 takes the safe route (ruling R1): when a play qualifies, one signed-in WEB_REMIX `player` call fetches account tracking URLs, used for the report only, never for streaming. If the probe finds A in history, that extra call can be dropped.
+
+### Plan 7 fixtures (hand-crafted)
+- `home_signed_in.json`: `browse_home.json` with `logged_in=1` and `loggedOut: false`. Its second and third shelves are retitled "Listen again" and "Mixed for you". "Listen again" carries a `strapline` (`Test User`) and a fake avatar (`https://example.invalid/fake_photo.jpg`), the way YouTube Music labels that shelf with the account.
+- `home_signed_out_marker.json`: `browse_home.json` with `logged_in=0` and `loggedOut: true`.
+- In both, every channel id is mapped to the public `UCRr1xG_2WIDs18a6cIiCxeA`. `fixtures_scrubbed_test.dart` fails on `SAPISID`, `__Secure-`, `LOGIN_INFO`, `datasyncId`, an email shape or a `lh3.googleusercontent.com/a/` account photo in any fixture, and on any channel id other than that one in the `home_signed_*` fixtures. (The Plan 5 fixtures hold public artist channels.)

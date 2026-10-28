@@ -36,7 +36,61 @@ void strings(Object? v, String key, void Function(String, String) f) {
   }
 }
 
+/// Plan 7: signed-in fixtures must hold no session cookie, account id,
+/// email, account photo or datasync id. Returns what was found, if anything.
+/// Channel ids are checked only in [signedIn] fixtures: the Plan 5 ones hold
+/// public artist channels.
+String? accountLeak(String text, {required bool signedIn}) {
+  for (final bad in ['SAPISID', '__Secure-', 'LOGIN_INFO', 'datasyncId']) {
+    if (text.contains(bad)) return bad;
+  }
+  if (text.contains('lh3.googleusercontent.com/a/')) return 'account photo';
+  if (RegExp(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}')
+      .hasMatch(text)) {
+    return 'email';
+  }
+  if (signedIn) {
+    for (final m in RegExp(r'UC[A-Za-z0-9_-]{22}').allMatches(text)) {
+      if (m[0] != publicChannel) return 'channel id';
+    }
+  }
+  return null;
+}
+
+/// Plan 5's public artist (Daft Punk), the only channel allowed in
+/// signed-in fixtures.
+const publicChannel = 'UCRr1xG_2WIDs18a6cIiCxeA';
+
+/// The Plan 7 fixtures recorded with (or for) a signed-in request.
+bool isSignedInFixture(String name) =>
+    name.startsWith('home_signed_') || name.contains('signed_in');
+
 void main() {
+  test('the account-leak check flags secrets (self-check)', () {
+    for (final bad in [
+      'Cookie: SAPISID=abc',
+      '__Secure-3PSID=x',
+      'LOGIN_INFO',
+      '"datasyncId":"x||y"',
+      'https://lh3.googleusercontent.com/a/ACg8ocK=s48',
+      'someone@gmail.com',
+      'a.b-c@mail.example.co.uk',
+    ]) {
+      expect(accountLeak(bad, signedIn: false), isNotNull, reason: bad);
+    }
+    expect(
+      accountLeak('UCabcdefghijklmnopqrstuv', signedIn: true),
+      'channel id',
+    );
+    expect(accountLeak('UCabcdefghijklmnopqrstuv', signedIn: false), isNull);
+    expect(accountLeak(publicChannel, signedIn: true), isNull);
+    expect(accountLeak('@DaftPunk', signedIn: true), isNull);
+    expect(
+      accountLeak('https://lh3.googleusercontent.com/abc=w60', signedIn: true),
+      isNull,
+    );
+  });
+
   test('the detector flags visitor-shaped values (self-check)', () {
     final real = base64Url.encode([0x0A, 0x0B, ...utf8.encode('abcdefghijk')]);
     expect(visitorShaped(real), isTrue);
@@ -56,10 +110,23 @@ void main() {
       .toList();
 
   test('there are fixtures to check', () => expect(files, isNotEmpty));
+  test('the Plan 7 signed-in fixtures exist', () {
+    final names = files.map((f) => f.uri.pathSegments.last).toSet();
+    expect(
+      names,
+      containsAll(['home_signed_in.json', 'home_signed_out_marker.json']),
+    );
+  });
 
   for (final f in files) {
-    test('${f.uri.pathSegments.last} is scrubbed', () {
+    final name = f.uri.pathSegments.last;
+    test('$name is scrubbed', () {
       final text = f.readAsStringSync();
+      expect(
+        accountLeak(text, signedIn: isSignedInFixture(name)),
+        isNull,
+        reason: 'account data left in $name',
+      );
       strings(jsonDecode(text), '', (key, v) {
         expect(visitorShaped(v), isFalse, reason: 'visitor-shaped at $key');
         if (key == 'rolloutToken' || key == 'queueContextParams') {
