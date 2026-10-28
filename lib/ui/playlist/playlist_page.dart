@@ -311,6 +311,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
   /// [_remove] for the menu's Remove from this playlist: the row is looked up
   /// again, as the list may have changed while the menu was open.
   void _removeEntry(String entryId) {
+    if (!mounted) return;
     final rows = _pending ?? ref.read(playlistTracksProvider(_id)).value;
     final index = rows?.indexWhere((r) => r.entryId == entryId) ?? -1;
     if (rows != null && index >= 0) _remove(rows, index);

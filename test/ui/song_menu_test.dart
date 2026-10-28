@@ -458,6 +458,49 @@ void main() {
       expect(await real(tester, () => h.orderOf(pid)), ['t2', 't3', 't4']);
     });
 
+    uiTest('does nothing when the page is gone before Remove is chosen', (
+      tester,
+    ) async {
+      final pid = await real(tester, () async {
+        await h.addTrack('t1');
+        return h.addPlaylist('Road trip', ['t1']);
+      });
+      phone(tester, const Size(800, 900));
+      // The page can be taken out of the tree while its menu stays open.
+      final shown = ValueNotifier(true);
+      addTearDown(shown.dispose);
+      await tester.pumpWidget(
+        h.app(
+          initialLocation: '/playlist/$pid',
+          routes: [
+            GoRoute(
+              path: '/playlist/:id',
+              builder: (_, s) => Scaffold(
+                body: ValueListenableBuilder<bool>(
+                  valueListenable: shown,
+                  builder: (_, on, _) => on
+                      ? PlaylistPage(id: s.pathParameters['id']!)
+                      : const SizedBox(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      await settle(tester);
+
+      await longPress(tester, find.text('Song t1'));
+      expect(item('removeFromPlaylist'), findsOneWidget);
+      shown.value = false;
+      await settle(tester);
+      expect(find.byType(PlaylistPage), findsNothing);
+      expect(item('removeFromPlaylist'), findsOneWidget);
+
+      await choose(tester, 'removeFromPlaylist');
+      expect(tester.takeException(), isNull);
+      expect(await real(tester, () => h.orderOf(pid)), ['t1']);
+    });
+
     uiTest('does not show outside a playlist', (tester) async {
       await recents(tester);
       await pumpHome(tester);
