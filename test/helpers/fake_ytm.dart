@@ -186,8 +186,11 @@ class FakeYtSessionStore implements YtSessionStore {
   YtSession? stored;
   int reads = 0;
 
+  /// Whether the keyring answers; false stands in for a missing or locked one.
+  bool isAvailable = true;
+
   @override
-  Future<bool> available() async => true;
+  Future<bool> available() async => isAvailable;
 
   @override
   Future<YtSession?> read() async {

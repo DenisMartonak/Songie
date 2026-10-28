@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/result.dart';
+import '../../core/log.dart';
 import '../../data/settings_repository.dart';
+import '../../innertube/yt_session_store.dart';
+import '../../innertube/yt_sign_in.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../../youtube/yt_models.dart';
+import '../motion/motion.dart';
 import '../widgets/page_snack_bar.dart';
 import 'settings_page.dart';
 
@@ -34,8 +38,9 @@ Future<bool> updateYtDlp(
   }
 }
 
-/// Settings → YouTube: the yt-dlp version with Install / Update, (Linux)
-/// the system yt-dlp switch, and Reset YouTube recommendations.
+/// Settings → YouTube: the YouTube sign-in, the yt-dlp version with
+/// Install / Update, (Linux) the system yt-dlp switch, and Reset YouTube
+/// recommendations.
 class YouTubeSettingsSection extends ConsumerStatefulWidget {
   const YouTubeSettingsSection({super.key});
 
@@ -47,6 +52,182 @@ class YouTubeSettingsSection extends ConsumerStatefulWidget {
 class _YouTubeSettingsSectionState
     extends ConsumerState<YouTubeSettingsSection> {
   bool _updating = false;
+  bool _signingIn = false;
+
+  /// The sign-in routes this device can use; null while finding out.
+  List<YtSignInRoute>? _routes;
+
+  @override
+  void initState() {
+    super.initState();
+    // R5: the keyring is probed here, when the row is built, never at
+    // startup. After this frame: a store that fails at once would otherwise
+    // change the auth state while the tree builds.
+    Future.microtask(() {
+      if (mounted) ref.read(ytAuthProvider.notifier).checkAvailable();
+    });
+    _findRoutes();
+  }
+
+  Future<void> _findRoutes() async {
+    final usable = <YtSignInRoute>[];
+    for (final r in ref.read(ytSignInRoutesProvider)) {
+      try {
+        if (await r.supported()) usable.add(r);
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _routes = usable);
+  }
+
+  /// Runs [route] and keeps what it brings back. Closing Google's page is
+  /// not an error: nothing changes.
+  Future<void> _signIn(YtSignInRoute route) async {
+    if (_signingIn) return;
+    final snacks = PageSnackBars.of(context);
+    final auth = ref.read(ytAuthProvider.notifier);
+    setState(() => _signingIn = true);
+    try {
+      await auth.checkAvailable();
+      if (!mounted || ref.read(ytAuthProvider) is YtAuthUnavailable) return;
+      final result = await route.signIn(context);
+      if (result == null || !mounted) return;
+      try {
+        await auth.signIn(result.session, name: result.name);
+      } catch (e) {
+        // Never the error text: it is not ours to show and must not carry
+        // the session.
+        AppLog.w('yt sign-in: could not store the session (${e.runtimeType})');
+        await auth.checkAvailable();
+        snacks.show(content: const Text("Couldn't save the YouTube sign-in"));
+      }
+    } finally {
+      if (mounted) setState(() => _signingIn = false);
+    }
+  }
+
+  /// Forgets the YouTube sign-in on this device (after asking); Home
+  /// reloads with the regular feed.
+  Future<void> _signOut() async {
+    final snacks = PageSnackBars.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign out of YouTube?'),
+        content: const Text(
+          'Songies forgets the YouTube sign-in on this device and Home shows '
+          'the regular feed. Your library and history stay.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('settings.ytSignOut.confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+    if (!(confirmed ?? false) || !mounted) return;
+    try {
+      await ref.read(ytAuthProvider.notifier).signOut();
+    } catch (e) {
+      AppLog.w('yt sign-out: could not clear the keyring (${e.runtimeType})');
+      snacks.show(
+        content: const Text("Signed out, but the keyring couldn't be cleared"),
+      );
+    }
+    if (!mounted) return;
+    ref.invalidate(ytmHomeProvider);
+  }
+
+  Widget _signInRows(SongiesColors colors) {
+    final auth = ref.watch(ytAuthProvider);
+    final routes = _routes ?? const <YtSignInRoute>[];
+    Widget line(String text, {Key? key}) => Padding(
+      key: key,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Text(text, style: TextStyle(color: colors.text)),
+    );
+    Widget button({
+      required Key key,
+      required IconData icon,
+      required String label,
+      required VoidCallback? onPressed,
+    }) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: TextButton.icon(
+        key: key,
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label),
+      ),
+    );
+    final signOut = button(
+      key: const Key('settings.ytSignOut'),
+      icon: Icons.logout_rounded,
+      label: 'Sign out',
+      onPressed: _signOut,
+    );
+
+    final List<Widget> rows;
+    final String key;
+    switch (auth) {
+      case YtAuthUnavailable():
+        key = 'unavailable';
+        rows = [
+          line(
+            'Sign-in needs a keyring (KWallet or GNOME Keyring), '
+            "which isn't available",
+          ),
+        ];
+      case YtSignedIn(:final name):
+        key = 'in';
+        rows = [
+          line(name == null ? 'Signed in' : 'Signed in as $name'),
+          signOut,
+        ];
+      case YtExpired(:final name):
+        key = 'expired';
+        rows = [
+          if (name != null) line('Signed in as $name'),
+          for (final r in routes.take(1))
+            button(
+              key: const Key('settings.ytSignInAgain'),
+              icon: Icons.login_rounded,
+              label: 'Sign in again',
+              onPressed: _signingIn ? null : () => _signIn(r),
+            ),
+          signOut,
+        ];
+      case YtSignedOut():
+        key = 'out';
+        rows = [
+          for (final (i, r) in routes.indexed)
+            button(
+              key: Key('settings.ytSignIn.$i'),
+              icon: Icons.login_rounded,
+              label: r.label,
+              onPressed: _signingIn ? null : () => _signIn(r),
+            ),
+        ];
+    }
+    return AnimatedSize(
+      duration: Motion.of(context).standard,
+      curve: Motion.standardCurve,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: Motion.of(context).quick,
+        child: Column(
+          key: ValueKey(key),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: rows,
+        ),
+      ),
+    );
+  }
 
   Future<void> _update() async {
     if (_updating) return;
@@ -106,6 +287,7 @@ class _YouTubeSettingsSectionState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SettingsSectionTitle('YouTube'),
+        _signInRows(colors),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Text(

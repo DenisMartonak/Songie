@@ -58,6 +58,16 @@ dependencies:
   collection: ^1.19.1
   animations: ^3.0.0
   flutter_secure_storage: ^11.2.0
+  # YouTube sign-in web view (Android WebView, Windows WebView2). The
+  # platform packages are used directly, without the flutter_inappwebview
+  # facade: the stable 6.1.5's Android plugin uses
+  # getDefaultProguardFile('proguard-android.txt'), which AGP 9 rejects, and
+  # the 6.2.0 facade that fixes it also pulls in a Linux (WPE WebKit) plugin
+  # the Linux build has no libraries for. Exact versions: the 6.2.0 line is
+  # still published as betas.
+  flutter_inappwebview_platform_interface: 1.4.0-beta.3
+  flutter_inappwebview_android: 1.2.0-beta.3
+  flutter_inappwebview_windows: 0.7.0-beta.3
 
 dev_dependencies:
   flutter_test:

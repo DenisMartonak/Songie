@@ -2,6 +2,13 @@
 cmake_minimum_required(VERSION 3.14)
 project(songies LANGUAGES CXX)
 
+# YouTube sign-in (flutter_inappwebview_windows) needs:
+# - at build time, nuget.exe on PATH: the plugin fetches the WebView2 SDK,
+#   WIL and nlohmann.json with it (https://inappwebview.dev/docs/intro#setup-windows);
+# - at run time, the Microsoft Edge WebView2 Runtime (preinstalled on
+#   Windows 11; on Windows 10 install the Evergreen runtime). Without it
+#   Settings offers no "Sign in to YouTube" and everything else works.
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "songies")
