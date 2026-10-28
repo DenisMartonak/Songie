@@ -116,7 +116,7 @@ Live checks (all pass):
 
 ## Signed in (Plan 7 probe)
 
-**UNVERIFIED — manual check pending.** The probe (`tool/innertube_auth_probe.dart`) is written but has not been run. No exported cookies file was available while Task 1 ran (2026-10-28, about 10 minutes of waiting). Everything below comes from how ytmusicapi and yt-dlp document signed-in requests. The two fixtures are hand-crafted from the Plan 5 `browse_home.json`, and they stay hand-crafted (R4). Personal feed, history attribution and expiry detection stay unverified until the manual check below passes.
+**UNVERIFIED — manual check pending.** Status after Plan 7 Task 7 (2026-10-28): the live sign-in check was not run. The personal feed, history attribution and expiry detection are all "manual check pending", and so is the Task 1 probe. The probe (`tool/innertube_auth_probe.dart`) is written but has not been run. No exported cookies file was available while Task 1 ran (2026-10-28, about 10 minutes of waiting). Everything below comes from how ytmusicapi and yt-dlp document signed-in requests. The two fixtures are hand-crafted from the Plan 5 `browse_home.json`, and they stay hand-crafted (R4). Personal feed, history attribution and expiry detection stay unverified until the manual check below passes.
 
 ### Running the probe (the manual check)
 1. Export a Netscape `cookies.txt` from a browser signed in to music.youtube.com, to a path **outside the repo**.

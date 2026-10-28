@@ -166,6 +166,21 @@ Consent and recommendations
 - [ ] The EU consent sheet appears once.
 - [ ] Reset YouTube recommendations works.
 
+## Plan 7: YouTube sign-in
+
+Per platform (Android, Windows, Linux): sign in, check the feed, play a song past 30 s and check the history.
+- [ ] Android: Settings → Sign in to YouTube opens Google's page; after signing in, Home shows your rows, and a song played past 30 s appears in your YouTube Music history.
+- [ ] Windows: same check through the WebView2 page.
+- [ ] Windows: the build succeeds with `desktop_webview_window` registered (it fetches its own WebView2 SDK at configure time, x64/ARM64 only, Flutter 3.44 or later), and Settings sign-in on Windows still opens the WebView2 page (flutter_inappwebview_windows).
+- [ ] Windows build needs `nuget.exe` on PATH and the WebView2 runtime.
+- [ ] Linux, in-app page: Sign in to YouTube opens the WebKitGTK window; after signing in, Home shows your rows and a played song appears in history.
+- [ ] Linux, browser route with Firefox: "Use the YouTube sign-in from my browser" asks first, lists the profile, and signs in.
+- [ ] Linux, browser route with a Chromium-family browser (Chrome, Chromium, Brave): same check, including the keyring unlock prompt.
+- [ ] If Google says "This browser or app may not be secure", close the page; nothing changes (still signed out, no error, regular feed).
+- [ ] Expiry: sign out of Google in a browser, then open Home. Expect the regular feed and one notice ("YouTube sign-in expired — showing the regular feed"), and the Settings row says "Sign in again".
+- [ ] Sign out: Home returns to the regular feed; the Settings row goes back to "Sign in to YouTube".
+- [ ] A locked keyring on Linux shows the explanation ("Sign-in needs a keyring (KWallet or GNOME Keyring), which isn't available"), and the rest of Settings and the app work.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.

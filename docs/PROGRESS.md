@@ -1,6 +1,40 @@
 # Songies — Progress
 
-_Last updated: 2026-10-27_
+_Last updated: 2026-10-28_
+
+## Plan 7 (YouTube sign-in for a personal feed) — done, reviewed; live check pending
+
+- **Branch:** `plan-7-youtube-login` (from `plan-6-song-menu`). Plan: [Plan 7](superpowers/plans/2026-10-28-songies-plan-7-youtube-login.md). Spec: [YouTube login design](superpowers/specs/2026-10-27-songies-youtube-login-design.md). **Neither `plan-6-song-menu` nor `plan-7-youtube-login` is pushed yet**, and nothing is merged.
+- **Status:** Tasks 1–7 are done and each was reviewed. Tests: 1,430 passing, `flutter analyze` clean, `flutter build apk --release` succeeds (81.2 MB), `flutter build linux --release` succeeds (bundle 34 MB). Windows is built on your PC. **No live sign-in has been run**: the Task 1 probe never ran, so the personal feed, history attribution and expiry detection are marked "manual check pending" in [innertube-notes.md](innertube-notes.md).
+- **What it does now:**
+  - **Sign in:** Settings → YouTube. Android and Windows open Google's page in an in-app web view; Linux opens it in a WebKitGTK window, or reads the sign-in from your browser ("Use the YouTube sign-in from my browser", Firefox family and Chromium family, Flatpaks included, only after you pick and confirm).
+  - **Personal feed:** only the Home `browse` request and play reports go out signed in. Qualifying plays are reported with account tracking URLs so they count in YouTube Music history.
+  - **Expiry:** a signed-out Home answer or HTTP 401/403 shows the regular feed once, marks "Sign in again" and shows one notice. No retry loop.
+  - **Storage:** the session lives only in secure storage (`yt_session`: Keystore, Credential Manager, libsecret). Never in drift, logs, exports or sync. No keyring means sign-in isn't offered, with an explanation. Sign out clears the session and the web view data.
+- **Linux packages needed to build:** `libsecret-devel` and `webkit2gtk4.1-devel` (installed on this machine). `libwebkit2gtk-4.1` becomes a runtime dependency. Windows builds need `nuget.exe` on PATH (see the checklist).
+- **Pinned beta packages:** `flutter_inappwebview` 6.1.5 breaks the Android release build under AGP 9, so `pubspec.yaml` pins `flutter_inappwebview_platform_interface` 1.4.0-beta.3, `flutter_inappwebview_android` 1.2.0-beta.3 and `flutter_inappwebview_windows` 0.7.0-beta.3. TODO: replace with stable 6.2.x once published.
+- **Rulings:**
+  - **R1:** a signed-in WEB_REMIX `player` call after a play qualifies (tracking URLs only, never streaming). Cost: one extra request per qualifying play.
+  - **R2:** the Linux dev packages need sudo; the user installed them.
+  - **R3:** browser cookie discovery includes Flatpak profiles under `~/.var/app/`.
+  - **R4:** real signed-in responses are never committed as fixtures; signed-in fixtures stay hand-crafted.
+  - **R5:** startup reads no secure storage; a non-secret marker (`yt_signed_in`) plus the cached name give the startup state, and the keyring is read on demand. Cost: the first signed-in Home load waits for the keyring once.
+  - **R6:** expiry means an explicit signed-out marker or HTTP 401/403 only. Cost: a stale session answering 200 with no marker shows the regular feed without a notice.
+  - **R7:** the browser route asks first and lists browsers by path only; no cookie database is touched until you confirm.
+- **Parked items (deferred minors, summarised):**
+  - Sign-in state: `ensureSession` has no in-flight dedup; no retry after a keyring failure until restart or sign-in; the generation guards are untested; `forget()` isn't awaited at sign-out; a completion re-check can be dropped while one is in flight.
+  - Tracking: `accountTracking` has no unit test of its own; the `playbackTracking` parse is duplicated; the first signed-out play with no anonymous tracking marks itself reported.
+  - Browser route: WebKit's native `clearAll` isn't awaited; the cancel test is weak; quoted cookie values are rejected (fails safe).
+  - Fixtures and probe: the scrub test picks signed-in fixtures by filename and misses `SID=`/`HSID=`-style names; the probe's `OUT` isn't resolved through symlinks.
+- **Incident (resolved):** during Task 6, a test run deleted two leftover WebKit probe folders (`~/.local/share/com.songies.songies` and `~/.cache/com.songies.songies`). They held only probe leftovers; the real data folder was untouched. The test now injects its own directories.
+- **Stash:** `stash@{0}` holds unrelated `dart format` changes from Task 6; left alone.
+- **Next:** your device checks (the Plan 6 and Plan 7 sections of the [manual checklist](manual-test-checklist.md)), then **Plan 8 (synced lyrics)**, **Plan 9 (listening statistics)**, then device sync and packaging.
+- **To resume in a new Claude session:**
+  > Songies Plan 7 is implemented on branch `plan-7-youtube-login` (Tasks 1–7 done and reviewed, 1,430 tests; Plan 6 is on `plan-6-song-menu`; neither is pushed). The live sign-in check is still pending. Next: the device checks, then write Plan 8 (synced lyrics). Read docs/PROGRESS.md. Don't push or merge.
+
+## Plan 6 (the one song menu) — done, reviewed
+
+- **Branch:** `plan-6-song-menu` (commits `60ba176` and `80d415f`), not pushed. One song menu now opens from every song row (library, playlist, search, YouTube Music results, Home), by long-press or right-click, with Play next, Add to queue, Add to playlist, Download, Start radio and, inside a playlist, Remove from this playlist. (The roadmap numbers shifted: lyrics are now Plan 8 and statistics Plan 9.)
 
 ## Plan 5 (YouTube Music) — done, reviewed, final review fixed
 
