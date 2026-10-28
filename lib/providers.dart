@@ -398,7 +398,8 @@ final ytmSearchProvider = FutureProvider.autoDispose
 ///
 /// Signed in to YouTube ([YtSignedIn]), the first request goes out with the
 /// session (read from the keyring on first need, R5). When YouTube refuses
-/// it (HTTP 401/403) or answers signed out, the sign-in is marked expired
+/// it (HTTP 401/403) or answers explicitly signed out (R6: a missing marker
+/// counts as signed in), the sign-in is marked expired
 /// ([YtExpired]) and the regular feed is fetched once instead: no loop, and
 /// later loads stay signed out until the user signs in again. Signing in
 /// reloads Home; signing out reloads it when it shows (or is fetching) the
@@ -422,6 +423,9 @@ final ytmHomeProvider = FutureProvider<YtmHome>((ref) {
     final bool refused;
     switch (res) {
       case Ok(:final value):
+        if (value.markerMissing) {
+          AppLog.i('ytm home: no signed-in marker; assuming signed in');
+        }
         refused = !value.signedIn;
       case Err(:final failure):
         AppLog.w('ytm home (signed in) failed: ${failure.message}');

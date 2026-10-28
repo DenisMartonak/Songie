@@ -134,6 +134,25 @@ void main() {
     });
   });
 
+  test(
+    'an invalid cookie character is "invalid session cookie", no value',
+    () async {
+      final bad = YtSession({
+        'SID': 'BAD\nVALUESECRET',
+        'SAPISID': 'SAPISECRET',
+      });
+      final r = await client.call(kWebRemix, 'browse', {
+        'browseId': 'FEmusic_home',
+      }, session: bad);
+      final msg = (r as Err).failure.message;
+      expect(msg, contains('invalid session cookie'));
+      expect(msg, isNot(contains('bad JSON')));
+      expect(msg, isNot(contains('VALUESECRET')));
+      expect((r as Err).failure.cause, isNull);
+      expect(transport.requests, isEmpty);
+    },
+  );
+
   group('no secrets in failures', () {
     void clean(Result<Object?> r) {
       final msg = (r as Err).failure.message;

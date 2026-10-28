@@ -108,13 +108,22 @@ class YtmShelf {
 }
 
 class YtmHome {
-  const YtmHome(this.shelves, this.continuation, {this.signedIn = false});
+  const YtmHome(
+    this.shelves,
+    this.continuation, {
+    this.signedIn = false,
+    this.markerMissing = false,
+  });
 
   final List<YtmShelf> shelves;
   final String? continuation;
 
-  /// Asked with a session and answered signed in (the account's own feed).
+  /// Asked with a session and not answered explicitly signed out (ruling R6:
+  /// a missing marker counts as signed in).
   final bool signedIn;
+
+  /// Asked with a session, and the answer carried no signed-in marker.
+  final bool markerMissing;
 }
 
 class YtmArtistPage {

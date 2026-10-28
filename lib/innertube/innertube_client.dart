@@ -101,6 +101,8 @@ class InnertubeClient {
     if (res is! Err<Map<String, Object?>>) return res;
     final secrets = [
       ?auth,
+      // Shorter values (flags like "1") would mangle ordinary text such as
+      // "HTTP 403"; real session secrets are far longer.
       for (final v in session.cookies.values)
         if (v.length >= 4) v,
     ];
@@ -124,6 +126,34 @@ class InnertubeClient {
   }
 
   static final _hashPattern = RegExp(r'SAPISID\w*HASH\s+\S+');
+
+  /// The session's cookies (plus the [consentCookie] once consented) as one
+  /// `Cookie` value. Throws [FormatException] for a name or value that
+  /// can't go in a header (RFC 6265 cookie-octets), naming neither.
+  static String _cookieHeader(YtSession session, bool consented) {
+    for (final e in session.cookies.entries) {
+      if (e.key.isEmpty ||
+          !_isCookieOctets(e.key) ||
+          e.key.contains('=') ||
+          !_isCookieOctets(e.value)) {
+        throw const FormatException('invalid session cookie');
+      }
+    }
+    return [
+      session.cookieHeader(),
+      if (consented && !session.cookies.containsKey('SOCS')) consentCookie,
+    ].join('; ');
+  }
+
+  static bool _isCookieOctets(String s) => s.codeUnits.every(
+    (u) =>
+        u >= 0x21 &&
+        u <= 0x7E &&
+        u != 0x22 &&
+        u != 0x2C &&
+        u != 0x3B &&
+        u != 0x5C,
+  );
 
   Future<Result<Map<String, Object?>>> _call(
     ClientIdentity c,
@@ -150,23 +180,32 @@ class InnertubeClient {
           },
         },
       };
+      final String? cookie;
+      try {
+        cookie = session == null
+            ? (consented ? consentCookie : null)
+            : _cookieHeader(session, consented);
+      } on FormatException {
+        // Without the value: it is a secret.
+        return Err(
+          Failure(
+            FailureKind.invalidInput,
+            _msg(c, endpoint, 'invalid session cookie'),
+          ),
+        );
+      }
       final headers = {
         'User-Agent': c.userAgent,
         'X-YouTube-Client-Name': '${c.nameId}',
         'X-YouTube-Client-Version': c.version,
         'Origin': 'https://${c.host}',
         'X-Goog-Visitor-Id': ?visitor,
+        'Cookie': ?cookie,
         if (session != null) ...{
-          'Cookie': [
-            session.cookieHeader(),
-            if (consented && !session.cookies.containsKey('SOCS'))
-              consentCookie,
-          ].join('; '),
           'Authorization': ?auth,
           'X-Goog-AuthUser': '0',
           'X-Origin': signedInOrigin,
-        } else if (consented)
-          'Cookie': consentCookie,
+        },
       };
       final res = await _t.post(c.endpoint(endpoint, query), request, headers);
       return await _handle(c, endpoint, res);

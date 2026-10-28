@@ -104,13 +104,39 @@ void main() {
       expect(home.shelves, isNotEmpty);
     });
 
-    test('isSignedInResponse reads the GFEEDBACK marker', () {
-      expect(isSignedInResponse(fixture('home_signed_in').json!), isTrue);
+    test('signedInMarker is three-way: the marker, loggedOut, or null', () {
+      expect(signedInMarker(fixture('home_signed_in').json!), isTrue);
+      expect(signedInMarker(fixture('home_signed_out_marker').json!), isFalse);
+      expect(signedInMarker(fixture('browse_home').json!), isNull);
+      expect(signedInMarker(const {}), isNull);
       expect(
-        isSignedInResponse(fixture('home_signed_out_marker').json!),
+        signedInMarker(const {
+          'responseContext': {
+            'mainAppWebResponseContext': {'loggedOut': true},
+          },
+        }),
         isFalse,
       );
+      expect(
+        signedInMarker(const {
+          'responseContext': {
+            'mainAppWebResponseContext': {'loggedOut': false},
+          },
+        }),
+        isTrue,
+      );
     });
+
+    test(
+      'a signed-in Home without a marker counts as signed in (R6)',
+      () async {
+        transport.reply(fixture('browse_home'));
+        final ytm = YtmService(client);
+        final home = ((await ytm.home(session: session)) as Ok<YtmHome>).value;
+        expect(home.signedIn, isTrue);
+        expect(home.markerMissing, isTrue);
+      },
+    );
 
     test('a Home without a session is never signed in', () async {
       transport.reply(fixture('home_signed_in'));
@@ -176,6 +202,25 @@ void main() {
         expect(c.read(ytAuthProvider), isA<YtExpired>());
       });
     }
+
+    test(
+      'no marker: signed in, one log line, no expiry and no retry (R6)',
+      () async {
+        await signIn();
+        transport.reply(fixture('browse_home'));
+        final home = await c.read(ytmHomeProvider.future);
+        expect(home.signedIn, isTrue);
+        expect(transport.requests.map(authed), [true]);
+        expect(c.read(ytAuthProvider), isA<YtSignedIn>());
+        expect(
+          logs.where(
+            (l) =>
+                l.contains('ytm home: no signed-in marker; assuming signed in'),
+          ),
+          hasLength(1),
+        );
+      },
+    );
 
     test('a signed-in network failure is an error, not an expiry', () async {
       await signIn();

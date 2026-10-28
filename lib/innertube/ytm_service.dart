@@ -143,11 +143,13 @@ class YtmService {
         }
         final home = parseHome(value);
         if (session == null) return Ok(home);
+        final marker = signedInMarker(value);
         return Ok(
           YtmHome(
             home.shelves,
             home.continuation,
-            signedIn: isSignedInResponse(value),
+            signedIn: marker != false,
+            markerMissing: marker == null,
           ),
         );
     }
@@ -224,13 +226,13 @@ class YtmService {
       Err(Failure(FailureKind.unknown, 'ytm $what: unexpected response shape'));
 }
 
-/// Whether a response says it was answered signed in: the GFEEDBACK
-/// `logged_in` param (`"1"`), else `mainAppWebResponseContext.loggedOut`
-/// (`false`). See docs/innertube-notes.md, Signed-in marker. False when
-/// neither is there.
-bool isSignedInResponse(Map<String, Object?> json) {
+/// What a response says about being signed in (docs/innertube-notes.md,
+/// Signed-in marker): the GFEEDBACK `logged_in` param (`"1"` true, `"0"`
+/// false), else `mainAppWebResponseContext.loggedOut` (`false` true, `true`
+/// false); null when neither is there.
+bool? signedInMarker(Map<String, Object?> json) {
   final ctx = json['responseContext'];
-  if (ctx is! Map) return false;
+  if (ctx is! Map) return null;
   final services = ctx['serviceTrackingParams'];
   if (services is List) {
     for (final s in services) {
@@ -238,11 +240,13 @@ bool isSignedInResponse(Map<String, Object?> json) {
       final params = s['params'];
       if (params is! List) continue;
       for (final p in params) {
-        if (p is Map && p['key'] == 'logged_in') return p['value'] == '1';
+        if (p is! Map || p['key'] != 'logged_in') continue;
+        if (p['value'] == '1') return true;
+        if (p['value'] == '0') return false;
       }
     }
   }
   final web = ctx['mainAppWebResponseContext'];
-  if (web is Map && web['loggedOut'] is bool) return web['loggedOut'] == false;
-  return false;
+  final loggedOut = web is Map ? web['loggedOut'] : null;
+  return loggedOut is bool ? !loggedOut : null;
 }
