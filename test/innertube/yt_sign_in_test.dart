@@ -1,6 +1,8 @@
 import 'package:flutter_inappwebview_platform_interface/flutter_inappwebview_platform_interface.dart'
     show Cookie;
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:songies/innertube/yt_session.dart';
 import 'package:songies/innertube/yt_sign_in.dart';
 
 Cookie _c(String name, String value, String? domain) =>
@@ -114,5 +116,65 @@ void main() {
       isFalse,
     );
     expect(WebViewSignIn.isDoneUrl(null), isFalse);
+  });
+
+  group('WebViewSignIn clears the web data', () {
+    late List<String> calls;
+    YtSession? answer;
+    var forgetThrows = false;
+
+    WebViewSignIn make() => WebViewSignIn(
+      forgetStored: () async {
+        calls.add('forget');
+        if (forgetThrows) throw StateError('locked');
+      },
+      createEnvironment: () async {
+        calls.add('env');
+        return null;
+      },
+      openPage: (_, _) async {
+        calls.add('open');
+        return answer;
+      },
+      clearAfter: (_) async => calls.add('clearAfter'),
+    );
+
+    setUp(() {
+      calls = [];
+      answer = null;
+      forgetThrows = false;
+    });
+
+    Future<YtSignInResult?> run(WidgetTester tester, WebViewSignIn r) async {
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      final context = tester.element(find.byType(SizedBox));
+      return r.signIn(context);
+    }
+
+    testWidgets('before the page opens and after it closes', (tester) async {
+      answer = YtSession({'SAPISID': 'v'});
+      final res = await run(tester, make());
+      expect(calls, ['forget', 'env', 'open', 'clearAfter']);
+      expect(res?.session.sapisid, 'v');
+    });
+
+    testWidgets('also when the user closes the page', (tester) async {
+      expect(await run(tester, make()), isNull);
+      expect(calls, ['forget', 'env', 'open', 'clearAfter']);
+    });
+
+    testWidgets('a failed clear does not stop the sign-in', (tester) async {
+      forgetThrows = true;
+      answer = YtSession({'SAPISID': 'v'});
+      expect(await run(tester, make()), isNotNull);
+      expect(calls.first, 'forget');
+      expect(calls, contains('open'));
+    });
+
+    test('forget clears the stored web data, never throwing', () async {
+      forgetThrows = true;
+      await make().forget();
+      expect(calls, ['forget']);
+    });
   });
 }

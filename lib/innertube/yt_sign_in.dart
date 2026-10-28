@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +29,11 @@ abstract class YtSignInRoute {
   String get label;
   Future<bool> supported();
   Future<YtSignInResult?> signIn(BuildContext context);
+
+  /// Forgets anything this route keeps outside secure storage (a web view's
+  /// cookies and data). Sign out calls it; a no-op for routes that keep
+  /// nothing.
+  Future<void> forget();
 }
 
 /// Turns a web view's cookies into a [YtSession]: keeps only the YouTube
@@ -106,8 +111,30 @@ abstract final class YtSessionFromCookies {
 /// music.youtube.com signed in; its cookies are then read and the web
 /// view's cookies and data cleared, so the session lives only in secure
 /// storage.
+///
+/// The web view's data is also cleared before the page opens (a run that
+/// died with the page open leaves it behind) and by [forget] (Sign out).
+/// On Windows each sign-in gets its own WebView2 environment, disposed when
+/// the page closes, and its user-data folder is then deleted.
+///
+/// The constructor's hooks replace the platform work in tests.
 class WebViewSignIn implements YtSignInRoute {
-  WebViewSignIn();
+  WebViewSignIn({
+    Future<void> Function()? forgetStored,
+    Future<PlatformWebViewEnvironment?> Function()? createEnvironment,
+    Future<YtSession?> Function(BuildContext, PlatformWebViewEnvironment?)?
+    openPage,
+    Future<void> Function(PlatformWebViewEnvironment?)? clearAfter,
+  }) : _forgetStored = forgetStored ?? forgetStoredData,
+       _createEnvironment = createEnvironment ?? createWindowsEnvironment,
+       _openPage = openPage ?? _push,
+       _clearAfter = clearAfter ?? clearAfterSignIn;
+
+  final Future<void> Function() _forgetStored;
+  final Future<PlatformWebViewEnvironment?> Function() _createEnvironment;
+  final Future<YtSession?> Function(BuildContext, PlatformWebViewEnvironment?)
+  _openPage;
+  final Future<void> Function(PlatformWebViewEnvironment?) _clearAfter;
 
   static const startUrl =
       'https://accounts.google.com/ServiceLogin?service=youtube'
@@ -117,23 +144,76 @@ class WebViewSignIn implements YtSignInRoute {
   static const youtubeUrl = 'https://music.youtube.com/';
   static const googleUrl = 'https://www.google.com/';
 
+  static const _windowsDataFolder = 'yt_sign_in_webview2';
+
   static bool isDoneUrl(Uri? url) => url?.host == 'music.youtube.com';
 
-  static Future<PlatformWebViewEnvironment?>? _env;
+  static Future<Directory> _windowsDataDir() async => Directory(
+    p.join((await getApplicationSupportDirectory()).path, _windowsDataFolder),
+  );
 
-  /// Windows: WebView2 with its data in Songies' own app-data folder (next
-  /// to the executable is often read-only). Null elsewhere.
-  static Future<PlatformWebViewEnvironment?> environment() =>
-      _env ??= _createEnvironment();
-
-  static Future<PlatformWebViewEnvironment?> _createEnvironment() async {
+  /// Windows: a WebView2 environment with its data in Songies' own app-data
+  /// folder (next to the executable is often read-only). Null elsewhere.
+  static Future<PlatformWebViewEnvironment?> createWindowsEnvironment() async {
     if (kIsWeb || !Platform.isWindows) return null;
-    final support = await getApplicationSupportDirectory();
     return PlatformWebViewEnvironment.static().create(
       settings: WebViewEnvironmentSettings(
-        userDataFolder: p.join(support.path, 'yt_sign_in_webview2'),
+        userDataFolder: (await _windowsDataDir()).path,
       ),
     );
+  }
+
+  /// What a sign-in may have left on disk: Android's web view cookies and
+  /// storage; Windows' WebView2 user-data folder.
+  static Future<void> forgetStoredData() async {
+    if (kIsWeb) return;
+    if (Platform.isAndroid) await clearWebData(null);
+    if (Platform.isWindows) await _deleteWindowsData();
+  }
+
+  static Future<void> _deleteWindowsData() async {
+    try {
+      final dir = await _windowsDataDir();
+      if (await dir.exists()) await dir.delete(recursive: true);
+    } catch (e) {
+      AppLog.w('yt sign-in: could not delete web data (${e.runtimeType})');
+    }
+  }
+
+  /// After the page closed: clear the web view, dispose the environment and
+  /// (Windows) delete its folder.
+  static Future<void> clearAfterSignIn(PlatformWebViewEnvironment? env) async {
+    await clearWebData(env);
+    if (env != null) {
+      try {
+        await env.dispose();
+      } catch (e) {
+        AppLog.w('yt sign-in: could not close web view (${e.runtimeType})');
+      }
+    }
+    if (!kIsWeb && Platform.isWindows) await _deleteWindowsData();
+  }
+
+  static Future<YtSession?> _push(
+    BuildContext context,
+    PlatformWebViewEnvironment? env,
+  ) => Navigator.of(context).push<YtSession>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => YtSignInPage(
+        startUrl: startUrl,
+        environment: env,
+        readSession: () => readSession(env),
+      ),
+    ),
+  );
+
+  static Future<void> _safe(String what, Future<void> Function() f) async {
+    try {
+      await f();
+    } catch (e) {
+      AppLog.w('yt sign-in: $what failed (${e.runtimeType})');
+    }
   }
 
   @override
@@ -156,30 +236,26 @@ class WebViewSignIn implements YtSignInRoute {
   }
 
   @override
+  Future<void> forget() => _safe('forget', _forgetStored);
+
+  @override
   Future<YtSignInResult?> signIn(BuildContext context) async {
+    // A stale account must not sign the page in at once.
+    await _safe('clear before', _forgetStored);
     final PlatformWebViewEnvironment? env;
     try {
-      env = await environment();
+      env = await _createEnvironment();
     } catch (e) {
       AppLog.w('yt sign-in: web view unavailable (${e.runtimeType})');
       return null;
     }
-    if (!context.mounted) return null;
     try {
-      final session = await Navigator.of(context).push<YtSession>(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => YtSignInPage(
-            startUrl: startUrl,
-            environment: env,
-            readSession: () => readSession(env),
-          ),
-        ),
-      );
+      if (!context.mounted) return null;
+      final session = await _openPage(context, env);
       AppLog.i('yt sign-in: page closed, signed in: ${session != null}');
       return session == null ? null : YtSignInResult(session: session);
     } finally {
-      await clearWebData(env);
+      await _safe('clear after', () => _clearAfter(env));
     }
   }
 
@@ -198,13 +274,13 @@ class WebViewSignIn implements YtSignInRoute {
     return YtSessionFromCookies.build([...google, ...yt]);
   }
 
-  /// Forgets everything the sign-in page stored: cookies, web storage and
-  /// cache. Each step is best effort.
   static PlatformCookieManager _cookies(PlatformWebViewEnvironment? env) =>
       PlatformCookieManager(
         PlatformCookieManagerCreationParams(webViewEnvironment: env),
       );
 
+  /// Forgets everything the sign-in page stored: cookies, web storage and
+  /// cache. Each step is best effort.
   static Future<void> clearWebData(PlatformWebViewEnvironment? env) async {
     Future<void> step(String what, Future<void> Function() f) async {
       try {

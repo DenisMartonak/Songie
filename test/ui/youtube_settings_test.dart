@@ -33,6 +33,15 @@ class _FakeRoute implements YtSignInRoute {
     runs++;
     return result;
   }
+
+  int forgets = 0;
+  bool forgetThrows = false;
+
+  @override
+  Future<void> forget() async {
+    forgets++;
+    if (forgetThrows) throw StateError('web data locked');
+  }
 }
 
 void main() {
@@ -270,6 +279,137 @@ void main() {
       expect(find.text('Sign in to YouTube'), findsOneWidget);
       expect(find.text('Signed in as Name'), findsNothing);
       expect(homeBuilds, greaterThan(before));
+    });
+
+    Future<void> confirmSignOut(WidgetTester tester) async {
+      await tester.tap(find.text('Sign out'));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('settings.ytSignOut.confirm')));
+      await settle(tester);
+    }
+
+    uiTest('Sign out asks every route to forget its web data', (tester) async {
+      final route = await pumpWithRoute(
+        tester,
+        YtSignInResult(session: session, name: 'Name'),
+      );
+      await tester.tap(find.text('Sign in to YouTube'));
+      await settle(tester);
+      expect(route.forgets, 0);
+
+      await confirmSignOut(tester);
+      expect(route.forgets, 1);
+    });
+
+    uiTest('a route that fails to forget does not break Sign out', (
+      tester,
+    ) async {
+      final route = await pumpWithRoute(
+        tester,
+        YtSignInResult(session: session, name: 'Name'),
+      );
+      route.forgetThrows = true;
+      await tester.tap(find.text('Sign in to YouTube'));
+      await settle(tester);
+
+      await confirmSignOut(tester);
+      expect(route.forgets, 1);
+      expect(h.ytSessions.stored, isNull);
+      expect(containerOf(tester).read(ytAuthProvider), isA<YtSignedOut>());
+      expect(find.text('Sign in to YouTube'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    uiTest('a keyring that fails to clear still signs out', (tester) async {
+      var homeBuilds = 0;
+      await pumpWithRoute(
+        tester,
+        YtSignInResult(session: session, name: 'Name'),
+        extra: [
+          ytmHomeProvider.overrideWith((ref) async {
+            homeBuilds++;
+            return const YtmHome([], null);
+          }),
+        ],
+      );
+      final c = containerOf(tester);
+      final sub = c.listen(ytmHomeProvider, (_, _) {});
+      addTearDown(sub.close);
+      await tester.tap(find.text('Sign in to YouTube'));
+      await settle(tester);
+      final before = homeBuilds;
+      h.ytSessions.clearThrows = true;
+
+      await confirmSignOut(tester);
+
+      expect(
+        find.text("Signed out, but the keyring couldn't be cleared"),
+        findsOneWidget,
+      );
+      expect(c.read(ytAuthProvider), isA<YtSignedOut>());
+      expect(
+        await real(
+          tester,
+          () => SettingsRepository(h.db).getBool(kYtSignedIn, fallback: true),
+        ),
+        isFalse,
+      );
+      expect(homeBuilds, greaterThan(before));
+    });
+
+    uiTest('a keyring that fails to save says so and stays signed out', (
+      tester,
+    ) async {
+      h.ytSessions.writeThrows = true;
+      await pumpWithRoute(
+        tester,
+        YtSignInResult(session: session, name: 'Name'),
+      );
+      await tester.tap(find.text('Sign in to YouTube'));
+      await settle(tester);
+
+      expect(find.text("Couldn't save the YouTube sign-in"), findsOneWidget);
+      expect(find.textContaining('keyring write failed'), findsNothing);
+      expect(
+        containerOf(tester).read(ytAuthProvider),
+        isNot(isA<YtSignedIn>()),
+      );
+      expect(find.text('Signed in as Name'), findsNothing);
+    });
+
+    uiTest('no keyring but still marked signed in: Sign out stays', (
+      tester,
+    ) async {
+      await real(
+        tester,
+        () => SettingsRepository(h.db).setBool(kYtSignedIn, true),
+      );
+      h.ytSessions.isAvailable = false;
+      final route = await pumpWithRoute(tester, null);
+      expect(
+        find.text(
+          'Sign-in needs a keyring (KWallet or GNOME Keyring), '
+          "which isn't available",
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Sign in to YouTube'), findsNothing);
+      expect(find.text('Sign out'), findsOneWidget);
+
+      await confirmSignOut(tester);
+      expect(route.forgets, 1);
+      expect(
+        await real(
+          tester,
+          () => SettingsRepository(h.db).getBool(kYtSignedIn, fallback: true),
+        ),
+        isFalse,
+      );
+      expect(find.text('Sign out'), findsNothing);
+      expect(
+        containerOf(tester).read(ytAuthProvider),
+        isA<YtAuthUnavailable>(),
+      );
     });
 
     uiTest('an expired sign-in offers Sign in again', (tester) async {

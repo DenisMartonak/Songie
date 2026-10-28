@@ -142,6 +142,11 @@ What it sends: about 11 requests, 2 s apart, no loops. It sends Home four ways (
 ### Anonymous tracking attributes: unknown
 Unknown whether Plan 5's anonymous `playbackTracking` URLs (VISIONOS `player`) count in the account's history when sent with the session cookies. Until the probe answers it, Task 4 takes the safe route (ruling R1): when a play qualifies, one signed-in WEB_REMIX `player` call fetches account tracking URLs, used for the report only, never for streaming. If the probe finds A in history, that extra call can be dropped.
 
+### Known risks: signing in inside an embedded web view
+- Google may refuse to sign in inside an embedded web view, on both Android (WebView) and Windows (WebView2). It then shows "This browser or app may not be secure" instead of the password step. The page loads Google's own `ServiceLogin?service=youtube&continue=https://music.youtube.com/` with the web view's default user agent.
+- What the user sees if that happens: they close the page, and nothing changes. They stay signed out, with no error, and the regular feed keeps working.
+- Other YouTube Music clients sign in successfully with this same web view flow on Android. Whether Google accepts it from WebView2 on Windows is unverified (Windows checklist item).
+
 ### Plan 7 fixtures (hand-crafted, permanent)
 These are the permanent signed-in fixtures, not placeholders for a recording (ruling R4). A live probe run changes them only by hand, to match a shape it found.
 - `home_signed_in.json`: `browse_home.json` with `logged_in=1` and `loggedOut: false`. Its second and third shelves are retitled "Listen again" and "Mixed for you". "Listen again" carries a `strapline` (`Test User`) and a fake avatar (`https://example.invalid/fake_photo.jpg`), the way YouTube Music labels that shelf with the account.

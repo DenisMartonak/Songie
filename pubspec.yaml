@@ -65,6 +65,7 @@ dependencies:
   # the 6.2.0 facade that fixes it also pulls in a Linux (WPE WebKit) plugin
   # the Linux build has no libraries for. Exact versions: the 6.2.0 line is
   # still published as betas.
+  # TODO: replace with stable flutter_inappwebview 6.2.x once published.
   flutter_inappwebview_platform_interface: 1.4.0-beta.3
   flutter_inappwebview_android: 1.2.0-beta.3
   flutter_inappwebview_windows: 0.7.0-beta.3

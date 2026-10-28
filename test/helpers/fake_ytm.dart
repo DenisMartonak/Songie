@@ -198,9 +198,19 @@ class FakeYtSessionStore implements YtSessionStore {
     return stored;
   }
 
-  @override
-  Future<void> write(YtSession s) async => stored = s;
+  /// Make the keyring fail to write or to clear.
+  bool writeThrows = false;
+  bool clearThrows = false;
 
   @override
-  Future<void> clear() async => stored = null;
+  Future<void> write(YtSession s) async {
+    if (writeThrows) throw StateError('keyring write failed');
+    stored = s;
+  }
+
+  @override
+  Future<void> clear() async {
+    if (clearThrows) throw StateError('keyring clear failed');
+    stored = null;
+  }
 }

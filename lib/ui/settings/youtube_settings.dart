@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -57,6 +59,10 @@ class _YouTubeSettingsSectionState
   /// The sign-in routes this device can use; null while finding out.
   List<YtSignInRoute>? _routes;
 
+  /// The device-local "signed in" marker, so Sign out stays reachable when
+  /// the keyring is not.
+  bool _marked = false;
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +73,33 @@ class _YouTubeSettingsSectionState
       if (mounted) ref.read(ytAuthProvider.notifier).checkAvailable();
     });
     _findRoutes();
+    _readMarker();
+  }
+
+  Future<void> _readMarker() async {
+    bool marked;
+    try {
+      marked = await ref
+          .read(settingsRepositoryProvider)
+          .getBool(kYtSignedIn, fallback: false);
+    } catch (_) {
+      marked = false;
+    }
+    if (mounted) setState(() => _marked = marked);
+  }
+
+  /// Asks every route to forget its web data; best effort, never blocks or
+  /// fails the sign-out.
+  void _forgetRouteData() {
+    for (final r in ref.read(ytSignInRoutesProvider)) {
+      unawaited(() async {
+        try {
+          await r.forget();
+        } catch (e) {
+          AppLog.w('yt sign-out: route could not forget (${e.runtimeType})');
+        }
+      }());
+    }
   }
 
   Future<void> _findRoutes() async {
@@ -93,6 +126,7 @@ class _YouTubeSettingsSectionState
       if (result == null || !mounted) return;
       try {
         await auth.signIn(result.session, name: result.name);
+        if (mounted) setState(() => _marked = true);
       } catch (e) {
         // Never the error text: it is not ours to show and must not carry
         // the session.
@@ -131,8 +165,11 @@ class _YouTubeSettingsSectionState
       ),
     );
     if (!(confirmed ?? false) || !mounted) return;
+    final auth = ref.read(ytAuthProvider.notifier);
+    final wasUnavailable = ref.read(ytAuthProvider) is YtAuthUnavailable;
+    _forgetRouteData();
     try {
-      await ref.read(ytAuthProvider.notifier).signOut();
+      await auth.signOut();
     } catch (e) {
       AppLog.w('yt sign-out: could not clear the keyring (${e.runtimeType})');
       snacks.show(
@@ -141,6 +178,9 @@ class _YouTubeSettingsSectionState
     }
     if (!mounted) return;
     ref.invalidate(ytmHomeProvider);
+    setState(() => _marked = false);
+    // Signing out cleared the auth state; the keyring is still missing.
+    if (wasUnavailable) unawaited(auth.checkAvailable());
   }
 
   Widget _signInRows(SongiesColors colors) {
@@ -182,6 +222,9 @@ class _YouTubeSettingsSectionState
             'Sign-in needs a keyring (KWallet or GNOME Keyring), '
             "which isn't available",
           ),
+          // Still marked signed in: let the user clear the markers and the
+          // web data.
+          if (_marked) signOut,
         ];
       case YtSignedIn(:final name):
         key = 'in';
