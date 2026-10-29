@@ -1,0 +1,46 @@
+[
+  {
+    "id": 1000011,
+    "name": "Invented Song",
+    "trackName": "Invented Song",
+    "artistName": "Invented Artist",
+    "albumName": "Invented Album",
+    "duration": 231.0,
+    "instrumental": false,
+    "plainLyrics": "First invented line\nSecond invented line\nThird invented line, a little longer\nFourth invented line",
+    "syncedLyrics": "[00:12.40] First invented line\n[00:17.85] Second invented line\n[00:23.10] Third invented line, a little longer\n[00:29.62] Fourth invented line\n[00:35.07]"
+  },
+  {
+    "id": 1000012,
+    "name": "Invented Song",
+    "trackName": "Invented Song",
+    "artistName": "Invented Artist",
+    "albumName": "Invented Album",
+    "duration": 213.0,
+    "instrumental": false,
+    "plainLyrics": "First invented line\nSecond invented line\nThird invented line, a little longer\nFourth invented line",
+    "syncedLyrics": null
+  },
+  {
+    "id": 1000013,
+    "name": "Invented Song",
+    "trackName": "Invented Song",
+    "artistName": "Invented Artist",
+    "albumName": "Invented Album",
+    "duration": 214.0,
+    "instrumental": false,
+    "plainLyrics": "First invented line\nSecond invented line\nThird invented line, a little longer\nFourth invented line",
+    "syncedLyrics": "[00:12.40] First invented line\n[00:17.85] Second invented line\n[00:23.10] Third invented line, a little longer\n[00:29.62] Fourth invented line\n[00:35.07]"
+  },
+  {
+    "id": 1000014,
+    "name": "Invented Song",
+    "trackName": "Invented Song",
+    "artistName": "Invented Artist",
+    "albumName": "Invented Album",
+    "duration": 213.0,
+    "instrumental": true,
+    "plainLyrics": null,
+    "syncedLyrics": null
+  }
+]
