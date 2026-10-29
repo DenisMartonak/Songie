@@ -746,6 +746,12 @@ final periodStatsProvider = StreamProvider.autoDispose
       (ref, period) => ref.watch(statsRepositoryProvider).watch(period),
     );
 
+/// A track still in the library (not deleted) by id, or null: for rows that
+/// show a recorded song, such as the stats page's top songs.
+final libraryTrackProvider = FutureProvider.autoDispose.family<Track?, String>(
+  (ref, id) => ref.watch(libraryRepositoryProvider).trackById(id),
+);
+
 /// The stats page's chosen period. Session-only: it starts at 7 days on
 /// every launch.
 class SelectedStatsPeriod extends Notifier<StatsPeriod> {

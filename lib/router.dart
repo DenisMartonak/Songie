@@ -13,6 +13,7 @@ import 'ui/settings/themes/theme_editor_page.dart';
 import 'ui/settings/themes/themes_page.dart';
 import 'ui/shell/adaptive_shell.dart';
 import 'ui/shell/fade_through_branches.dart';
+import 'ui/stats/stats_page.dart';
 import 'ui/widgets/page_surface.dart';
 import 'ui/ytm/album_page.dart';
 import 'ui/ytm/artist_page.dart';
@@ -49,7 +50,20 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
                 state,
                 const PageSurface(child: HomePage()),
               ),
-              routes: [_playlistRoute(), ..._ytmRoutes()],
+              routes: [
+                _playlistRoute(),
+                ..._ytmRoutes(),
+                // Listening stats, opened from Home's card; the shell (and
+                // the player) stay around it.
+                GoRoute(
+                  path: 'stats',
+                  pageBuilder: (context, state) => sharedAxisPage(
+                    context,
+                    state,
+                    const PageSurface(child: StatsPage()),
+                  ),
+                ),
+              ],
             ),
             // Inside the shell so desktop keeps its title bar, sidebar and
             // player bar; Settings is not a tab, so it shares Home's branch.
