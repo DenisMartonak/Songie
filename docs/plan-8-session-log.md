@@ -3,13 +3,13 @@
 _Last updated: 2026-10-29. **Plan 8 is implemented on branch `plan-8-lyrics`; Tasks 1–9 are done and reviewed. The final whole-branch review is pending.** Nothing is pushed or merged._
 
 **To resume (next plan):**
-> Songies Plan 8 is implemented on branch `plan-8-lyrics` (Tasks 1–9 done and reviewed; final review pending). Next: the device checks, then write Plan 9 (listening statistics). Read docs/PROGRESS.md. Don't merge.
+> Songies Plan 8 is implemented on branch `plan-8-lyrics` (Tasks 1–9 done and reviewed; final review done and its fixes reviewed). Next: the device checks, then write Plan 9 (listening statistics). Read docs/PROGRESS.md. Don't merge.
 
 ## Where things are
 - **Plan 8, synced lyrics:** branch `plan-8-lyrics`, made from `plan-7-youtube-login`.
   - Spec: [Lyrics design](superpowers/specs/2026-10-29-songies-lyrics-design.md). Plan: [Plan 8](superpowers/plans/2026-10-29-songies-plan-8-lyrics.md).
   - Tasks 1–9 are done and each was reviewed.
-  - 1,621 tests pass and `flutter analyze` is clean. The APK and Linux release builds succeed (sizes in PROGRESS.md).
+  - 1,636 tests pass and `flutter analyze` is clean. The APK and Linux release builds succeed (sizes in PROGRESS.md).
 - **What it does:** a Lyrics tab on Now Playing (phone), a right-side lyrics panel on desktop (toggled from the player bar), and a Lyrics tab in the desktop Now Playing dialog. Lookup order: the song's own `.lrc` file, then LRCLIB, then YouTube Music (YouTube songs only). Timed lyrics beat plain ones. Results are cached on the device (new `lyrics` table, schema 6) and shown offline. Lookups happen only while a Lyrics view is open.
 - **Ledger:** `.superpowers/sdd/2026-10-29-songies-plan-8-lyrics/progress.md` (git-ignored). It holds the conflict scan, all rulings and every deferred minor.
 
@@ -29,6 +29,8 @@ _Last updated: 2026-10-29. **Plan 8 is implemented on branch `plan-8-lyrics`; Ta
 - **R8:** the player bar volume slider is now flexible (up to 104 px) so the Lyrics button fits at the 720 px breakpoint. *If wrong:* a narrower volume slider on narrow windows.
 - **R9:** when the device is online but every online source fails (LRCLIB down or rate limited), the view says "No lyrics found" with Search again, and nothing is cached. "Lyrics need a connection" is only for offline. *If wrong:* during an LRCLIB outage you see "No lyrics found" instead of a connection message.
 - **R10:** on a desktop window narrower than 1000 px, the open lyrics panel holds the sidebar collapsed (your own choice comes back when the panel closes or the window widens). If the main pane would still be narrower than 360 px, the panel lies over the right side of the content instead of taking width. *If wrong:* on narrow windows and Android tablets the sidebar shrinks to icons, or the panel covers part of the page.
+- **R11:** when every online source fails, Songies checks the connection again: offline shows "Lyrics need a connection" (and retries when you're back online), online shows "No lyrics found" with Search again. *If wrong:* one extra connection check per failed lookup.
+- **R12:** the dimmed lyric lines use one brightness everywhere, picked so they stay readable on the hardest background (the blurred cover). *If wrong:* the desktop panel's dimmed lines are a little brighter than they need to be.
 - **P1:** the YouTube lyrics source lives in `lib/lyrics/ytm_lyrics.dart`, so the YouTube code doesn't depend on lyrics types. *If wrong:* a file move.
 - **P2:** "Search again" bumps a retry counter, and the next lookup skips the cache. *If wrong:* a small rework of one provider.
 - **P3:** precedence is: timed from any source (your file first), then your file's plain lyrics, then online plain lyrics. A cached result is reused only if your file has no timed answer. *If wrong:* a plain online lyric shows instead of your own plain file, or the other way round.

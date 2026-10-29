@@ -2,10 +2,10 @@
 
 _Last updated: 2026-10-29_
 
-## Plan 8 (synced lyrics) — done, reviewed; final review pending
+## Plan 8 (synced lyrics) — done, reviewed, final review fixed
 
 - **Branch:** `plan-8-lyrics` (from `plan-7-youtube-login`). Plan: [Plan 8](superpowers/plans/2026-10-29-songies-plan-8-lyrics.md). Spec: [Lyrics design](superpowers/specs/2026-10-29-songies-lyrics-design.md). Session log: [plan-8-session-log.md](plan-8-session-log.md). Nothing is pushed or merged.
-- **Status:** Tasks 1–9 are done and each was reviewed. The final whole-branch review is pending. Tests: 1,621 passing, `flutter analyze` clean, `flutter build apk --release` succeeds (81.3 MB), `flutter build linux --release` succeeds (bundle 35 MB). Windows is built on your PC. The secret scan of the branch history found only doc text, and the lyric fixtures hold invented lines only. **Nothing has been run on a device yet.**
+- **Status:** Tasks 1–9 are done and each was reviewed. The final whole-branch review ran; its fixes (lyrics contrast over the blurred cover, the lyrics panel on narrow windows and Android tablets, and three small items) landed and were reviewed. Tests: 1,636 passing, `flutter analyze` clean, `flutter build apk --release` succeeds (81.3 MB), `flutter build linux --release` succeeds (bundle 35 MB). Windows is built on your PC. The secret scan of the branch history found only doc text, and the lyric fixtures hold invented lines only. **Nothing has been run on a device yet.**
 - **What it does now:**
   - **Where:** a Lyrics tab next to Queue on Now Playing (phone), a right-side panel on desktop toggled from the player bar (it stays open across tabs), and a Lyrics tab in the desktop Now Playing dialog.
   - **Lookup:** your own `.lrc` file next to the song, then LRCLIB, then YouTube Music (YouTube songs only). Timed lyrics beat plain ones. Lookups happen only while a Lyrics view is open; there is no background fetching.
@@ -23,10 +23,12 @@ _Last updated: 2026-10-29_
   - **R8:** the player bar volume slider is flexible (up to 104 px). Cost: a narrower slider on narrow windows.
   - **R9:** online but every source failing shows "No lyrics found" (with Search again), not cached; the connection message is only for offline. Cost: an LRCLIB outage reads as "No lyrics found".
   - **R10:** under 1000 px the open lyrics panel holds the sidebar collapsed; if the main pane would still be under 360 px, the panel lies over the content. Cost: icon-only sidebar, or a covered strip of the page, on narrow windows.
+  - **R11:** when every online source fails, the connection is checked again: offline shows the connection message, online shows "No lyrics found". Cost: one extra connection check per failed lookup.
+  - **R12:** one dim-line brightness everywhere, readable on the blurred cover. Cost: desktop panel dim lines slightly brighter than needed.
   - **P1–P3:** the YouTube lyrics source lives in `lib/lyrics/ytm_lyrics.dart`; Search again bumps a retry counter that skips the cache; precedence is timed first, then your file's plain lyrics, then online plain.
 - **Next:** your device checks (the Plans 7 and 8 sections of the [manual checklist](manual-test-checklist.md), plus the still-pending live sign-in check from Plan 7), then **Plan 9 (listening statistics)**, then device sync and packaging.
 - **To resume in a new Claude session:**
-  > Songies Plan 8 is implemented on branch `plan-8-lyrics` (Tasks 1–9 done and reviewed; final review pending). Next: the device checks, then write Plan 9 (listening statistics). Read docs/PROGRESS.md. Don't merge.
+  > Songies Plan 8 is implemented on branch `plan-8-lyrics` (Tasks 1–9 done and reviewed; final review fixed). Next: the device checks, then write Plan 9 (listening statistics). Read docs/PROGRESS.md. Don't merge.
 
 ## Plan 7 (YouTube sign-in for a personal feed) — done, reviewed; live check pending
 
