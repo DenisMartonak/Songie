@@ -26,7 +26,7 @@
   - it uses `SyncColumns`, and every write (insert and each update) is stamped with `SyncStamp.next()`;
   - `started_at` is stored in UTC;
   - the schema goes from 6 to 7;
-  - rows older than **400 days** are pruned at app start.
+  - rows older than **730 days** are pruned (ruling S3) at app start.
 - **Periods:** the last 7 / 30 / 182 / 365 calendar days including today, in local time. The comparison period is the same length immediately before.
 - **Main artist:**
   - for YouTube songs (`source == 'yt'`), the text before the first `", "`;
