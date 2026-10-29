@@ -68,7 +68,7 @@ _Last updated: 2026-10-28_
   - Task 1: the fixture scrub also replaces the `fexp` and `initcwndbps` URL parameters (nothing parses them).
 - **Parked items (deferred minors that matter):** the full list is in the ledger and session log. The ones worth doing first:
   - Radio: `_start` has no try/catch; `_becomeQueue` doesn't clear the source playlist or notice. (The early continuation fetch is fixed: `_continuation` is set after `addToQueue` returns.)
-  - Now Playing title/artist stay stale after a metadata upgrade (branch-wide).
+  - ~~Now Playing title/artist stay stale after a metadata upgrade (branch-wide).~~ Fixed: the queue now picks up covers and details that arrive after a song was queued (`PlayerService.updateTrack`, fed by `YtTrackStore.changes`).
   - Song menu: Play next / Add to queue use `ref` after `await` without a `mounted` check.
   - Consent: `ConsentListener` is mounted only on Home (move it to the shell); an in-flight request can re-store the old visitor id right after Reset.
   - A revived deleted `yt` row keeps `unavailable` and can overwrite a known duration with 0.

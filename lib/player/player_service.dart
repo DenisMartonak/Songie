@@ -112,7 +112,9 @@ class PlayerState {
 /// twice.
 class _Entry {
   _Entry(this.track);
-  final Track track;
+
+  /// Replaced by [PlayerService.updateTrack] when the row changes.
+  Track track;
 
   /// Whether the engine-error retry (fresh stream URL) was already used.
   bool engineRetried = false;
@@ -456,6 +458,19 @@ class PlayerService {
   });
 
   // --- synchronous state edits ---------------------------------------------
+
+  /// Swaps in a newer copy of [t]'s row (a cover or details that arrived
+  /// after it was queued) wherever it is queued. Playback is not touched.
+  void updateTrack(Track t) {
+    var changed = false;
+    for (final e in {..._queue, ..._original}) {
+      if (e.track.id == t.id && e.track != t) {
+        e.track = t;
+        changed = true;
+      }
+    }
+    if (changed) _emit(_state.copyWith(queue: _queueTracks()));
+  }
 
   /// Moves the track at [from] so it ends up at [to]. The current track keeps
   /// playing; only [PlayerState.index] follows it.

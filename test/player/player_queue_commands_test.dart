@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/result.dart';
@@ -54,6 +55,33 @@ void main() {
   });
 
   tearDown(() => player.dispose());
+
+  group('updateTrack', () {
+    test('swaps in the newer row everywhere it is queued', () async {
+      await player.playQueue([ten[0], ten[1], ten[0]]);
+      player.setShuffle(true);
+      final newer = ten[0].copyWith(artworkRef: const Value('yt2-a.jpg'));
+      player.updateTrack(newer);
+
+      expect(player.state.current?.artworkRef, 'yt2-a.jpg');
+      expect(
+        [
+          for (final t in player.state.queue)
+            if (t.id == 't0') t.artworkRef,
+        ],
+        ['yt2-a.jpg', 'yt2-a.jpg'],
+      );
+      player.setShuffle(false);
+      expect(player.state.queue.first.artworkRef, 'yt2-a.jpg');
+    });
+
+    test('leaves the state alone for a track that is not queued', () async {
+      await player.playQueue(ten);
+      final before = player.state;
+      player.updateTrack(x);
+      expect(identical(player.state, before), isTrue);
+    });
+  });
 
   group('playNext', () {
     test('inserts right after the current song', () async {

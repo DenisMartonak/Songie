@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 
 import '../core/log.dart';
@@ -22,6 +24,12 @@ class YtTrackStore {
   final ThumbnailFetcher _thumbs;
 
   Future<void> _coversPass = Future.value();
+
+  final _changes = StreamController<Track>.broadcast();
+
+  /// A row after a cover or an upgrade was written to it, so a copy held
+  /// elsewhere (the play queue) can catch up.
+  Stream<Track> get changes => _changes.stream;
 
   /// Completes when the most recently queued cover fetch has finished.
   Future<void> get coversSettled => _coversPass;
@@ -120,7 +128,10 @@ class YtTrackStore {
         AppLog.w('YtTrackStore.upgradeFrom failed: ${failure.message}');
       }
       final cur = await _byIdOrNull(t.id);
-      if (cur != null) _queueCover(cur, rich);
+      if (cur != null) {
+        if (cur != t) _changes.add(cur);
+        _queueCover(cur, rich);
+      }
     } catch (e, st) {
       AppLog.w('YtTrackStore.upgradeFrom failed', e, st);
     }
@@ -200,6 +211,8 @@ class YtTrackStore {
           );
           return const Ok(null);
         });
+        final cur = await _byIdOrNull(t.id);
+        if (cur != null) _changes.add(cur);
       } catch (e, st) {
         AppLog.w('Cover for ${s.videoId} failed', e, st);
       }

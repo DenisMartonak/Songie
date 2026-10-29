@@ -178,6 +178,8 @@ Future<void> main() async {
     onUnavailable: library.markUnavailable,
     network: network,
   );
+  // A cover or details that land after a song was queued reach the player.
+  ytTracks.changes.listen(player.updateTrack);
   bindAudioSession(
     becomingNoisy: backend.becomingNoisy,
     interruptions: backend.interruptions,
@@ -194,30 +196,30 @@ Future<void> main() async {
   }
 
   final container = ProviderContainer(
-      overrides: [
-        appPathsProvider.overrideWithValue(paths),
-        databaseProvider.overrideWithValue(db),
-        syncStampProvider.overrideWithValue(stamp),
-        libraryRepositoryProvider.overrideWithValue(library),
-        searchRepositoryProvider.overrideWithValue(search),
-        playHistoryRepositoryProvider.overrideWithValue(history),
-        libraryScannerProvider.overrideWithValue(scanner),
-        artCacheProvider.overrideWithValue(artCache),
-        playerServiceProvider.overrideWithValue(player),
-        settingsRepositoryProvider.overrideWithValue(settings),
-        ytDlpRunnerProvider.overrideWithValue(runner),
-        ytImportServiceProvider.overrideWithValue(ytImport),
-        ytTrackStoreProvider.overrideWithValue(ytTracks),
-        innertubeClientProvider.overrideWithValue(innertube),
-        ytSessionStoreProvider.overrideWithValue(SecureYtSessionStore()),
-        networkStatusProvider.overrideWithValue(network),
-        downloadRepositoryProvider.overrideWithValue(downloadRepo),
-        downloadNotifierProvider.overrideWithValue(downloadNotifier),
-        downloadServiceProvider.overrideWithValue(downloads),
-        fontServiceProvider.overrideWithValue(fonts),
-        themeRepositoryProvider.overrideWithValue(themes),
-        initialThemeSpecProvider.overrideWithValue(initialTheme),
-      ],
+    overrides: [
+      appPathsProvider.overrideWithValue(paths),
+      databaseProvider.overrideWithValue(db),
+      syncStampProvider.overrideWithValue(stamp),
+      libraryRepositoryProvider.overrideWithValue(library),
+      searchRepositoryProvider.overrideWithValue(search),
+      playHistoryRepositoryProvider.overrideWithValue(history),
+      libraryScannerProvider.overrideWithValue(scanner),
+      artCacheProvider.overrideWithValue(artCache),
+      playerServiceProvider.overrideWithValue(player),
+      settingsRepositoryProvider.overrideWithValue(settings),
+      ytDlpRunnerProvider.overrideWithValue(runner),
+      ytImportServiceProvider.overrideWithValue(ytImport),
+      ytTrackStoreProvider.overrideWithValue(ytTracks),
+      innertubeClientProvider.overrideWithValue(innertube),
+      ytSessionStoreProvider.overrideWithValue(SecureYtSessionStore()),
+      networkStatusProvider.overrideWithValue(network),
+      downloadRepositoryProvider.overrideWithValue(downloadRepo),
+      downloadNotifierProvider.overrideWithValue(downloadNotifier),
+      downloadServiceProvider.overrideWithValue(downloads),
+      fontServiceProvider.overrideWithValue(fonts),
+      themeRepositoryProvider.overrideWithValue(themes),
+      initialThemeSpecProvider.overrideWithValue(initialTheme),
+    ],
   );
   // Reads two device-local settings only: no keyring, no network, no timer.
   // Awaited, so the first Home load already knows whether to go signed in.

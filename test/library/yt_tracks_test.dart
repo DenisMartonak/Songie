@@ -88,6 +88,39 @@ void main() {
     expect((await rows()).single.artworkRef, 'yt2-abc.jpg');
   });
 
+  test('changes announces the row once its cover is stored', () async {
+    final seen = <Track>[];
+    final sub = store.changes.listen(seen.add);
+    addTearDown(sub.cancel);
+    final a = (await store.upsert(song())) as Ok<Track>;
+    expect(a.value.artworkRef, null);
+    await store.coversSettled;
+    await pumpEventQueue();
+    expect(seen.last.id, a.value.id);
+    expect(seen.last.artworkRef, 'yt2-abc.jpg');
+  });
+
+  test('changes announces an upgraded row', () async {
+    final seen = <Track>[];
+    final sub = store.changes.listen(seen.add);
+    addTearDown(sub.cancel);
+    await db
+        .into(db.tracks)
+        .insert(
+          trackRow(
+            id: 't1',
+            source: 'yt',
+            ytVideoId: 'v1',
+            title: 'Halo',
+            artist: 'BeyonceVEVO',
+          ),
+        );
+    final t = (await rows()).single;
+    await store.upgradeFrom(t, song());
+    await pumpEventQueue();
+    expect(seen.first.artist, 'Beyonce');
+  });
+
   test('find returns the live row for a video, without writing', () async {
     expect(await store.find('v1'), equals(null));
     expect(await rows(), isEmpty);
