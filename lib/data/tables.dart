@@ -151,3 +151,17 @@ class PlayHistory extends Table {
   TextColumn get playlistId => text().nullable()();
   DateTimeColumn get playedAt => dateTime()();
 }
+
+/// Synced lyrics for a track; the row id is the track id (one row per track).
+@DataClassName('LyricsRow')
+class Lyrics extends Table with SyncColumns {
+  /// 'synced' | 'plain' | 'none'
+  TextColumn get kind => text()();
+
+  /// LRC text for synced, plain text for plain, empty for none.
+  TextColumn get body => text()();
+
+  /// 'lrclib' | 'youtube'; null for none.
+  TextColumn get source => text().nullable()();
+  DateTimeColumn get fetchedAt => dateTime()();
+}

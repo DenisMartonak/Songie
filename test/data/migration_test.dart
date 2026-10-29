@@ -58,7 +58,7 @@ void main() {
     expect(await db.select(db.playHistory).get(), hasLength(1));
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 5);
+    expect(version.data.values.single, 6);
   });
 
   test('a v2 database opened with v3 code gains yt_seen and keeps data', () async {
@@ -118,7 +118,7 @@ void main() {
       throwsA(anything),
     );
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 5);
+    expect(version.data.values.single, 6);
   });
 
   test(
@@ -162,7 +162,7 @@ void main() {
       expect(pref.downloadEnabled, isFalse);
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 5);
+      expect(version.data.values.single, 6);
     },
   );
 
@@ -209,6 +209,27 @@ void main() {
     expect(await db.select(db.themes).get(), hasLength(1));
     expect((await db.select(db.fonts).getSingle()).family, 'Fira');
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 5);
+    expect(version.data.values.single, 6);
   });
+
+  test(
+    'a v5 database opened with v6 code gains an empty lyrics table',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('songies_migration');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File('${dir.path}/songies.db');
+
+      final first = AppDatabase.open(file);
+      await first.customSelect('select 1').get();
+      await first.customStatement('DROP TABLE lyrics');
+      await first.customStatement('PRAGMA user_version = 5');
+      await first.close();
+
+      final db = AppDatabase.open(file);
+      addTearDown(db.close);
+      expect(await db.select(db.lyrics).get(), isEmpty);
+      final version = await db.customSelect('PRAGMA user_version').getSingle();
+      expect(version.data.values.single, 6);
+    },
+  );
 }

@@ -5077,6 +5077,570 @@ class FontsCompanion extends UpdateCompanion<FontRow> {
   }
 }
 
+class $LyricsTable extends Lyrics with TableInfo<$LyricsTable, LyricsRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LyricsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clockMeta = const VerificationMeta('clock');
+  @override
+  late final GeneratedColumn<String> clock = GeneratedColumn<String>(
+    'clock',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _originDeviceMeta = const VerificationMeta(
+    'originDevice',
+  );
+  @override
+  late final GeneratedColumn<String> originDevice = GeneratedColumn<String>(
+    'origin_device',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedMeta = const VerificationMeta(
+    'deleted',
+  );
+  @override
+  late final GeneratedColumn<bool> deleted = GeneratedColumn<bool>(
+    'deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _localSeqMeta = const VerificationMeta(
+    'localSeq',
+  );
+  @override
+  late final GeneratedColumn<int> localSeq = GeneratedColumn<int>(
+    'local_seq',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bodyMeta = const VerificationMeta('body');
+  @override
+  late final GeneratedColumn<String> body = GeneratedColumn<String>(
+    'body',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fetchedAtMeta = const VerificationMeta(
+    'fetchedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> fetchedAt = GeneratedColumn<DateTime>(
+    'fetched_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    clock,
+    originDevice,
+    deleted,
+    localSeq,
+    kind,
+    body,
+    source,
+    fetchedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'lyrics';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LyricsRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('clock')) {
+      context.handle(
+        _clockMeta,
+        clock.isAcceptableOrUnknown(data['clock']!, _clockMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_clockMeta);
+    }
+    if (data.containsKey('origin_device')) {
+      context.handle(
+        _originDeviceMeta,
+        originDevice.isAcceptableOrUnknown(
+          data['origin_device']!,
+          _originDeviceMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_originDeviceMeta);
+    }
+    if (data.containsKey('deleted')) {
+      context.handle(
+        _deletedMeta,
+        deleted.isAcceptableOrUnknown(data['deleted']!, _deletedMeta),
+      );
+    }
+    if (data.containsKey('local_seq')) {
+      context.handle(
+        _localSeqMeta,
+        localSeq.isAcceptableOrUnknown(data['local_seq']!, _localSeqMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localSeqMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('body')) {
+      context.handle(
+        _bodyMeta,
+        body.isAcceptableOrUnknown(data['body']!, _bodyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bodyMeta);
+    }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    if (data.containsKey('fetched_at')) {
+      context.handle(
+        _fetchedAtMeta,
+        fetchedAt.isAcceptableOrUnknown(data['fetched_at']!, _fetchedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fetchedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LyricsRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LyricsRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      clock: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}clock'],
+      )!,
+      originDevice: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}origin_device'],
+      )!,
+      deleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}deleted'],
+      )!,
+      localSeq: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}local_seq'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      body: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body'],
+      )!,
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      ),
+      fetchedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fetched_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LyricsTable createAlias(String alias) {
+    return $LyricsTable(attachedDatabase, alias);
+  }
+}
+
+class LyricsRow extends DataClass implements Insertable<LyricsRow> {
+  final String id;
+  final String clock;
+  final String originDevice;
+  final bool deleted;
+  final int localSeq;
+
+  /// 'synced' | 'plain' | 'none'
+  final String kind;
+
+  /// LRC text for synced, plain text for plain, empty for none.
+  final String body;
+
+  /// 'lrclib' | 'youtube'; null for none.
+  final String? source;
+  final DateTime fetchedAt;
+  const LyricsRow({
+    required this.id,
+    required this.clock,
+    required this.originDevice,
+    required this.deleted,
+    required this.localSeq,
+    required this.kind,
+    required this.body,
+    this.source,
+    required this.fetchedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['clock'] = Variable<String>(clock);
+    map['origin_device'] = Variable<String>(originDevice);
+    map['deleted'] = Variable<bool>(deleted);
+    map['local_seq'] = Variable<int>(localSeq);
+    map['kind'] = Variable<String>(kind);
+    map['body'] = Variable<String>(body);
+    if (!nullToAbsent || source != null) {
+      map['source'] = Variable<String>(source);
+    }
+    map['fetched_at'] = Variable<DateTime>(fetchedAt);
+    return map;
+  }
+
+  LyricsCompanion toCompanion(bool nullToAbsent) {
+    return LyricsCompanion(
+      id: Value(id),
+      clock: Value(clock),
+      originDevice: Value(originDevice),
+      deleted: Value(deleted),
+      localSeq: Value(localSeq),
+      kind: Value(kind),
+      body: Value(body),
+      source: source == null && nullToAbsent
+          ? const Value.absent()
+          : Value(source),
+      fetchedAt: Value(fetchedAt),
+    );
+  }
+
+  factory LyricsRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LyricsRow(
+      id: serializer.fromJson<String>(json['id']),
+      clock: serializer.fromJson<String>(json['clock']),
+      originDevice: serializer.fromJson<String>(json['originDevice']),
+      deleted: serializer.fromJson<bool>(json['deleted']),
+      localSeq: serializer.fromJson<int>(json['localSeq']),
+      kind: serializer.fromJson<String>(json['kind']),
+      body: serializer.fromJson<String>(json['body']),
+      source: serializer.fromJson<String?>(json['source']),
+      fetchedAt: serializer.fromJson<DateTime>(json['fetchedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'clock': serializer.toJson<String>(clock),
+      'originDevice': serializer.toJson<String>(originDevice),
+      'deleted': serializer.toJson<bool>(deleted),
+      'localSeq': serializer.toJson<int>(localSeq),
+      'kind': serializer.toJson<String>(kind),
+      'body': serializer.toJson<String>(body),
+      'source': serializer.toJson<String?>(source),
+      'fetchedAt': serializer.toJson<DateTime>(fetchedAt),
+    };
+  }
+
+  LyricsRow copyWith({
+    String? id,
+    String? clock,
+    String? originDevice,
+    bool? deleted,
+    int? localSeq,
+    String? kind,
+    String? body,
+    Value<String?> source = const Value.absent(),
+    DateTime? fetchedAt,
+  }) => LyricsRow(
+    id: id ?? this.id,
+    clock: clock ?? this.clock,
+    originDevice: originDevice ?? this.originDevice,
+    deleted: deleted ?? this.deleted,
+    localSeq: localSeq ?? this.localSeq,
+    kind: kind ?? this.kind,
+    body: body ?? this.body,
+    source: source.present ? source.value : this.source,
+    fetchedAt: fetchedAt ?? this.fetchedAt,
+  );
+  LyricsRow copyWithCompanion(LyricsCompanion data) {
+    return LyricsRow(
+      id: data.id.present ? data.id.value : this.id,
+      clock: data.clock.present ? data.clock.value : this.clock,
+      originDevice: data.originDevice.present
+          ? data.originDevice.value
+          : this.originDevice,
+      deleted: data.deleted.present ? data.deleted.value : this.deleted,
+      localSeq: data.localSeq.present ? data.localSeq.value : this.localSeq,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      body: data.body.present ? data.body.value : this.body,
+      source: data.source.present ? data.source.value : this.source,
+      fetchedAt: data.fetchedAt.present ? data.fetchedAt.value : this.fetchedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LyricsRow(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('kind: $kind, ')
+          ..write('body: $body, ')
+          ..write('source: $source, ')
+          ..write('fetchedAt: $fetchedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    clock,
+    originDevice,
+    deleted,
+    localSeq,
+    kind,
+    body,
+    source,
+    fetchedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LyricsRow &&
+          other.id == this.id &&
+          other.clock == this.clock &&
+          other.originDevice == this.originDevice &&
+          other.deleted == this.deleted &&
+          other.localSeq == this.localSeq &&
+          other.kind == this.kind &&
+          other.body == this.body &&
+          other.source == this.source &&
+          other.fetchedAt == this.fetchedAt);
+}
+
+class LyricsCompanion extends UpdateCompanion<LyricsRow> {
+  final Value<String> id;
+  final Value<String> clock;
+  final Value<String> originDevice;
+  final Value<bool> deleted;
+  final Value<int> localSeq;
+  final Value<String> kind;
+  final Value<String> body;
+  final Value<String?> source;
+  final Value<DateTime> fetchedAt;
+  final Value<int> rowid;
+  const LyricsCompanion({
+    this.id = const Value.absent(),
+    this.clock = const Value.absent(),
+    this.originDevice = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.localSeq = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.body = const Value.absent(),
+    this.source = const Value.absent(),
+    this.fetchedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LyricsCompanion.insert({
+    required String id,
+    required String clock,
+    required String originDevice,
+    this.deleted = const Value.absent(),
+    required int localSeq,
+    required String kind,
+    required String body,
+    this.source = const Value.absent(),
+    required DateTime fetchedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       clock = Value(clock),
+       originDevice = Value(originDevice),
+       localSeq = Value(localSeq),
+       kind = Value(kind),
+       body = Value(body),
+       fetchedAt = Value(fetchedAt);
+  static Insertable<LyricsRow> custom({
+    Expression<String>? id,
+    Expression<String>? clock,
+    Expression<String>? originDevice,
+    Expression<bool>? deleted,
+    Expression<int>? localSeq,
+    Expression<String>? kind,
+    Expression<String>? body,
+    Expression<String>? source,
+    Expression<DateTime>? fetchedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (clock != null) 'clock': clock,
+      if (originDevice != null) 'origin_device': originDevice,
+      if (deleted != null) 'deleted': deleted,
+      if (localSeq != null) 'local_seq': localSeq,
+      if (kind != null) 'kind': kind,
+      if (body != null) 'body': body,
+      if (source != null) 'source': source,
+      if (fetchedAt != null) 'fetched_at': fetchedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LyricsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? clock,
+    Value<String>? originDevice,
+    Value<bool>? deleted,
+    Value<int>? localSeq,
+    Value<String>? kind,
+    Value<String>? body,
+    Value<String?>? source,
+    Value<DateTime>? fetchedAt,
+    Value<int>? rowid,
+  }) {
+    return LyricsCompanion(
+      id: id ?? this.id,
+      clock: clock ?? this.clock,
+      originDevice: originDevice ?? this.originDevice,
+      deleted: deleted ?? this.deleted,
+      localSeq: localSeq ?? this.localSeq,
+      kind: kind ?? this.kind,
+      body: body ?? this.body,
+      source: source ?? this.source,
+      fetchedAt: fetchedAt ?? this.fetchedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (clock.present) {
+      map['clock'] = Variable<String>(clock.value);
+    }
+    if (originDevice.present) {
+      map['origin_device'] = Variable<String>(originDevice.value);
+    }
+    if (deleted.present) {
+      map['deleted'] = Variable<bool>(deleted.value);
+    }
+    if (localSeq.present) {
+      map['local_seq'] = Variable<int>(localSeq.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (body.present) {
+      map['body'] = Variable<String>(body.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (fetchedAt.present) {
+      map['fetched_at'] = Variable<DateTime>(fetchedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LyricsCompanion(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('kind: $kind, ')
+          ..write('body: $body, ')
+          ..write('source: $source, ')
+          ..write('fetchedAt: $fetchedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5094,6 +5658,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $PlayHistoryTable playHistory = $PlayHistoryTable(this);
   late final $ThemesTable themes = $ThemesTable(this);
   late final $FontsTable fonts = $FontsTable(this);
+  late final $LyricsTable lyrics = $LyricsTable(this);
   late final Index playlistEntriesPlaylistPosition = Index(
     'playlist_entries_playlist_position',
     'CREATE INDEX playlist_entries_playlist_position ON playlist_entries (playlist_id, position)',
@@ -5114,6 +5679,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     playHistory,
     themes,
     fonts,
+    lyrics,
     playlistEntriesPlaylistPosition,
   ];
 }
@@ -7806,6 +8372,285 @@ typedef $$FontsTableProcessedTableManager =
       FontRow,
       PrefetchHooks Function()
     >;
+typedef $$LyricsTableCreateCompanionBuilder = LyricsCompanion Function({
+  required String id,
+  required String clock,
+  required String originDevice,
+  Value<bool> deleted,
+  required int localSeq,
+  required String kind,
+  required String body,
+  Value<String?> source,
+  required DateTime fetchedAt,
+  Value<int> rowid,
+});
+typedef $$LyricsTableUpdateCompanionBuilder = LyricsCompanion Function({
+  Value<String> id,
+  Value<String> clock,
+  Value<String> originDevice,
+  Value<bool> deleted,
+  Value<int> localSeq,
+  Value<String> kind,
+  Value<String> body,
+  Value<String?> source,
+  Value<DateTime> fetchedAt,
+  Value<int> rowid,
+});
+
+class $$LyricsTableFilterComposer
+    extends Composer<_$AppDatabase, $LyricsTable> {
+  $$LyricsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LyricsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LyricsTable> {
+  $$LyricsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LyricsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LyricsTable> {
+  $$LyricsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get clock =>
+      $composableBuilder(column: $table.clock, builder: (column) => column);
+
+  GeneratedColumn<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get deleted =>
+      $composableBuilder(column: $table.deleted, builder: (column) => column);
+
+  GeneratedColumn<int> get localSeq =>
+      $composableBuilder(column: $table.localSeq, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get body =>
+      $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get fetchedAt =>
+      $composableBuilder(column: $table.fetchedAt, builder: (column) => column);
+}
+
+class $$LyricsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LyricsTable,
+          LyricsRow,
+          $$LyricsTableFilterComposer,
+          $$LyricsTableOrderingComposer,
+          $$LyricsTableAnnotationComposer,
+          $$LyricsTableCreateCompanionBuilder,
+          $$LyricsTableUpdateCompanionBuilder,
+          (LyricsRow, BaseReferences<_$AppDatabase, $LyricsTable, LyricsRow>),
+          LyricsRow,
+          PrefetchHooks Function()
+        > {
+  $$LyricsTableTableManager(_$AppDatabase db, $LyricsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LyricsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LyricsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LyricsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> clock = const Value.absent(),
+                Value<String> originDevice = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<int> localSeq = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> body = const Value.absent(),
+                Value<String?> source = const Value.absent(),
+                Value<DateTime> fetchedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LyricsCompanion(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                kind: kind,
+                body: body,
+                source: source,
+                fetchedAt: fetchedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String clock,
+                required String originDevice,
+                Value<bool> deleted = const Value.absent(),
+                required int localSeq,
+                required String kind,
+                required String body,
+                Value<String?> source = const Value.absent(),
+                required DateTime fetchedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => LyricsCompanion.insert(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                kind: kind,
+                body: body,
+                source: source,
+                fetchedAt: fetchedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$LyricsTable, LyricsRow>(table),
+                  BaseReferences<_$AppDatabase, $LyricsTable, LyricsRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LyricsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LyricsTable,
+      LyricsRow,
+      $$LyricsTableFilterComposer,
+      $$LyricsTableOrderingComposer,
+      $$LyricsTableAnnotationComposer,
+      $$LyricsTableCreateCompanionBuilder,
+      $$LyricsTableUpdateCompanionBuilder,
+      (LyricsRow, BaseReferences<_$AppDatabase, $LyricsTable, LyricsRow>),
+      LyricsRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -7832,4 +8677,6 @@ class $AppDatabaseManager {
       $$ThemesTableTableManager(_db, _db.themes);
   $$FontsTableTableManager get fonts =>
       $$FontsTableTableManager(_db, _db.fonts);
+  $$LyricsTableTableManager get lyrics =>
+      $$LyricsTableTableManager(_db, _db.lyrics);
 }
