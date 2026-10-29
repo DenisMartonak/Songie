@@ -34,7 +34,7 @@ _Last updated: 2026-10-28_
 
 ## Plan 6 (the one song menu) — done, reviewed
 
-- **Branch:** `plan-6-song-menu` (commits `60ba176` and `80d415f`), not pushed. One song menu now opens from every song row (library, playlist, search, YouTube Music results, Home), by long-press or right-click, with Play next, Add to queue, Add to playlist, Download, Start radio and, inside a playlist, Remove from this playlist. (The roadmap numbers shifted: lyrics are now Plan 8 and statistics Plan 9.)
+- **Branch:** `plan-6-song-menu` (commits `60ba176` and `80d415f`), not pushed. One song menu now opens from every song row (library, playlist, search, YouTube Music results, Home), by long-press or right-click, with Play next, Add to queue, Add to playlist, Download, Start radio, Go to artist and Go to album and, inside a playlist, Remove from this playlist. It also opens from the queue, the YouTube Music album, artist and playlist pages, and the Now Playing ⋯ button. (The roadmap numbers shifted: lyrics are now Plan 8 and statistics Plan 9.)
 
 ## Plan 5 (YouTube Music) — done, reviewed, final review fixed
 

@@ -337,12 +337,26 @@ Future<T> _withCopy<T>(
 bool _hasColumn(Database db, String table, String column) =>
     db.select('PRAGMA table_info($table)').any((r) => r['name'] == column);
 
-bool _kept(String? host) {
-  final c = Cookie(name: '', domain: host);
-  return YtSessionFromCookies.isYouTube(c) || YtSessionFromCookies.isGoogle(c);
+/// Only what a browser sends to music.youtube.com (R8).
+bool _kept(String? host) => YtSessionFromCookies.sentToMusicHost(host);
+
+/// Firefox's `expiry`: seconds, or milliseconds in newer versions (a value
+/// in seconds that large would be thousands of years away).
+int? _firefoxExpiryMs(Object? v) {
+  if (v is! int || v <= 0) return null;
+  return v > 100000000000 ? v : v * 1000;
 }
 
-/// Reads the `.youtube.com` and `.google.com` cookies of [profile].
+/// Chromium's `expires_utc`: microseconds since 1601-01-01; 0 is a session
+/// cookie.
+int? _chromiumExpiryMs(Object? v) {
+  if (v is! int || v <= 0) return null;
+  return v ~/ 1000 - 11644473600000;
+}
+
+/// Reads the unexpired cookies of [profile] that a browser sends to
+/// music.youtube.com (`youtube.com`, `.youtube.com`, `music.youtube.com`;
+/// R8). No google.com cookie is read.
 ///
 /// Chromium's `v11` cookies need the browser's password from the keyring:
 /// [keyringSecret] (default [secretServicePassword]) is asked for it, by
@@ -356,9 +370,10 @@ Future<Result<List<Cookie>>> readBrowserCookies(
   Future<String?> Function(String app)? keyringSecret,
   Directory? tempRoot,
   void Function(Directory dir)? onCopied,
+  DateTime? now,
 }) async {
   try {
-    final cookies = await _withCopy(
+    final read = await _withCopy(
       profile,
       tempRoot,
       onCopied,
@@ -366,7 +381,11 @@ Future<Result<List<Cookie>>> readBrowserCookies(
           ? Future.value(_readFirefox(db))
           : _readChromium(db, profile, keyringSecret ?? secretServicePassword),
     );
-    return Ok(cookies);
+    final at = now ?? DateTime.now();
+    return Ok([
+      for (final c in read)
+        if (!YtSessionFromCookies.expired(c, at)) c,
+    ]);
   } on _ReadFailure catch (e) {
     AppLog.w('browser cookies: ${profile.browser}: ${e.message}');
     return Err(Failure(FailureKind.permission, e.message));
@@ -383,8 +402,8 @@ List<Cookie> _readFirefox(Database db) {
       ? " AND originAttributes = ''"
       : '';
   final rows = db.select(
-    'SELECT name, value, host, path, isSecure, isHttpOnly FROM moz_cookies '
-    "WHERE (host LIKE '%youtube.com' OR host LIKE '%google.com')$container",
+    'SELECT name, value, host, path, expiry, isSecure, isHttpOnly '
+    "FROM moz_cookies WHERE host LIKE '%youtube.com'$container",
   );
   return [
     for (final r in rows)
@@ -394,6 +413,7 @@ List<Cookie> _readFirefox(Database db) {
           value: r['value'] as String? ?? '',
           domain: r['host'] as String?,
           path: r['path'] as String?,
+          expiresDate: _firefoxExpiryMs(r['expiry']),
           isSecure: r['isSecure'] == 1,
           isHttpOnly: r['isHttpOnly'] == 1,
         ),
@@ -415,9 +435,8 @@ Future<List<Cookie>> _readChromium(
   final hashPrefix = version >= 24;
 
   final rows = db.select(
-    'SELECT host_key, name, value, encrypted_value, path, is_secure, '
-    "is_httponly FROM cookies WHERE (host_key LIKE '%youtube.com' OR "
-    "host_key LIKE '%google.com')",
+    'SELECT host_key, name, value, encrypted_value, path, expires_utc, '
+    "is_secure, is_httponly FROM cookies WHERE host_key LIKE '%youtube.com'",
   );
   final kept = [
     for (final r in rows)
@@ -471,6 +490,7 @@ Future<List<Cookie>> _readChromium(
         value: value,
         domain: r['host_key'] as String?,
         path: r['path'] as String?,
+        expiresDate: _chromiumExpiryMs(r['expires_utc']),
         isSecure: r['is_secure'] == 1,
         isHttpOnly: r['is_httponly'] == 1,
       ),

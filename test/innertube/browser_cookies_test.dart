@@ -70,11 +70,12 @@ void _ffAdd(
   String value,
   String host, {
   String origin = '',
+  int expiry = 4102444800,
 }) {
   db.execute(
     'INSERT INTO moz_cookies (originAttributes, name, value, host, path, '
     'expiry, isSecure, isHttpOnly, sameSite) VALUES (?, ?, ?, ?, ?, ?, 1, 1, 0)',
-    [origin, name, value, host, '/', 4102444800],
+    [origin, name, value, host, '/', expiry],
   );
 }
 
@@ -100,12 +101,13 @@ void _chAdd(
   String host, {
   String value = '',
   Uint8List? encrypted,
+  int expiresUtc = 0,
 }) {
   db.execute(
     'INSERT INTO cookies (creation_utc, host_key, name, value, '
     'encrypted_value, path, expires_utc, is_secure, is_httponly, samesite) '
-    'VALUES (0, ?, ?, ?, ?, ?, 0, 1, 1, 0)',
-    [host, name, value, encrypted ?? Uint8List(0), '/'],
+    'VALUES (0, ?, ?, ?, ?, ?, ?, 1, 1, 0)',
+    [host, name, value, encrypted ?? Uint8List(0), '/', expiresUtc],
   );
 }
 
@@ -220,9 +222,66 @@ void main() {
 
       final r = await readBrowserCookies(profile, tempRoot: temp);
       final cookies = (r as Ok<List<Cookie>>).value;
-      expect(_byName(cookies), {
-        '.youtube.com|SAPISID': _sap,
-        '.google.com|SID': 'g-sid',
+      expect(_byName(cookies), {'.youtube.com|SAPISID': _sap});
+    });
+
+    test('Firefox: google.com (account ones too), other YouTube hosts and '
+        'expired cookies are dropped (R8)', () async {
+      final db = _firefoxDb(at('.mozilla/firefox/a.default/cookies.sqlite'));
+      _ffAdd(db, 'SAPISID', _sap, '.youtube.com');
+      _ffAdd(db, 'HSID', 'h', 'music.youtube.com');
+      _ffAdd(db, 'LSID', 'acct', 'accounts.google.com');
+      _ffAdd(db, '__Host-GAPS', 'acct', 'accounts.google.com');
+      _ffAdd(db, '__Host-1PLSID', 'acct', 'accounts.google.com');
+      _ffAdd(db, 'SID', 'g', '.google.com');
+      _ffAdd(db, 'OSID', 'm', 'mail.google.com');
+      _ffAdd(db, 'WWW', 'w', 'www.youtube.com');
+      // Seconds (older Firefox) and milliseconds (newer), both in the past.
+      _ffAdd(db, 'OLD', 'o', '.youtube.com', expiry: 946684800);
+      _ffAdd(db, 'OLDMS', 'o', '.youtube.com', expiry: 946684800000);
+      _ffAdd(db, 'LIVEMS', 'l', '.youtube.com', expiry: 4102444800000);
+      db.close();
+      final profile = (await findBrowserProfiles(home: home.path)).single;
+      final cookies =
+          (await readBrowserCookies(profile, tempRoot: temp) as Ok).value
+              as List<Cookie>;
+      expect(_byName(cookies).keys.toSet(), {
+        '.youtube.com|SAPISID',
+        'music.youtube.com|HSID',
+        '.youtube.com|LIVEMS',
+      });
+    });
+
+    test('Chromium: google.com and expired cookies are dropped (R8)', () async {
+      // Microseconds since 1601-01-01; 0 is a session cookie.
+      int chromeTime(DateTime t) =>
+          (t.millisecondsSinceEpoch + 11644473600000) * 1000;
+      final db = _chromeDb(at('.config/chromium/Default/Cookies'));
+      _chAdd(db, 'SAPISID', '.youtube.com', value: _sap);
+      _chAdd(db, 'LSID', 'accounts.google.com', value: 'acct');
+      _chAdd(db, 'SID', '.google.com', value: 'g');
+      _chAdd(
+        db,
+        'OLD',
+        '.youtube.com',
+        value: 'o',
+        expiresUtc: chromeTime(DateTime.utc(2000)),
+      );
+      _chAdd(
+        db,
+        'LIVE',
+        '.youtube.com',
+        value: 'l',
+        expiresUtc: chromeTime(DateTime.utc(2100)),
+      );
+      db.close();
+      final profile = (await findBrowserProfiles(home: home.path)).single;
+      final cookies =
+          (await readBrowserCookies(profile, tempRoot: temp) as Ok).value
+              as List<Cookie>;
+      expect(_byName(cookies).keys.toSet(), {
+        '.youtube.com|SAPISID',
+        '.youtube.com|LIVE',
       });
     });
 
@@ -272,7 +331,6 @@ void main() {
       );
       expect(_byName((r as Ok<List<Cookie>>).value), {
         '.youtube.com|SAPISID': _sap,
-        '.google.com|SID': 'g-sid',
         '.youtube.com|PREF': 'plain-pref',
       });
       expect(asked, 0, reason: 'v10 needs no keyring');

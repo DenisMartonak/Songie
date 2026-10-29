@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/data/settings_repository.dart';
@@ -40,6 +42,70 @@ class _Mem implements YtSessionStore {
     if (clearThrows) throw StateError('locked');
     stored = null;
   }
+}
+
+/// A platform keyring whose reads fail (locked, D-Bus hiccup); writes and
+/// deletes work. Never the real keyring.
+class _FlakyKeyring extends Fake implements FlutterSecureStorage {
+  final values = <String, String>{};
+  bool readThrows = false;
+  int reads = 0;
+
+  @override
+  Future<String?> read({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    reads++;
+    // A one-off hiccup on the session read; the availability probe that
+    // follows works.
+    if (readThrows && key == kYtSessionKey) {
+      throw PlatformException(code: 'locked');
+    }
+    return values[key];
+  }
+
+  @override
+  Future<void> write({
+    required String key,
+    required String? value,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    if (value == null) {
+      values.remove(key);
+    } else {
+      values[key] = value;
+    }
+  }
+
+  @override
+  Future<void> delete({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async => values.remove(key);
+}
+
+/// Settings whose writes fail (disk full) after the keyring write worked.
+class _FailingSettings extends SettingsRepository {
+  _FailingSettings(super.db);
+  @override
+  Future<void> setString(String key, String? v) async =>
+      throw StateError('disk full');
 }
 
 void main() {
@@ -174,5 +240,102 @@ void main() {
     expect(await pending, isNull);
     expect(c.read(ytAuthProvider), isA<YtSignedOut>());
     expect(n.session, isNull);
+  });
+
+  group('SecureYtSessionStore.read', () {
+    test('absent key is null; bad JSON is null', () async {
+      final k = _FlakyKeyring();
+      final store = SecureYtSessionStore(k);
+      expect(await store.read(), isNull);
+      k.values[kYtSessionKey] = '{not json';
+      expect(await store.read(), isNull);
+      k.values[kYtSessionKey] = '{"cookies": 3}';
+      expect(await store.read(), isNull);
+    });
+
+    test('a platform error is rethrown, not read as "signed out"', () async {
+      final k = _FlakyKeyring()..readThrows = true;
+      await expectLater(
+        SecureYtSessionStore(k).read(),
+        throwsA(isA<PlatformException>()),
+      );
+    });
+  });
+
+  test('a keyring read that throws gives YtAuthUnavailable and keeps the '
+      'markers', () async {
+    final k = _FlakyKeyring();
+    final store = SecureYtSessionStore(k);
+    await make(_Mem()).read(ytAuthProvider.notifier).signIn(sess, name: 'N');
+    await store.write(sess);
+    k.readThrows = true;
+    final c = ProviderContainer(
+      overrides: [
+        ytSessionStoreProvider.overrideWithValue(store),
+        settingsRepositoryProvider.overrideWithValue(settings),
+      ],
+    );
+    addTearDown(c.dispose);
+    final n = c.read(ytAuthProvider.notifier);
+    await n.load();
+    expect(await n.ensureSession(), isNull);
+    expect(c.read(ytAuthProvider), isA<YtAuthUnavailable>());
+    expect(await settings.getBool(kYtSignedIn, fallback: false), isTrue);
+    expect(await settings.getString(kYtAccountName), 'N');
+    expect(k.values.containsKey(kYtSessionKey), isTrue);
+  });
+
+  test('checkAvailable recovering from YtAuthUnavailable restores the '
+      'signed-in state and reads the keyring again', () async {
+    final store = _Mem();
+    await make(store).read(ytAuthProvider.notifier).signIn(sess, name: 'N');
+    store.readThrows = true;
+    final c = make(store);
+    final n = c.read(ytAuthProvider.notifier);
+    await n.load();
+    expect(await n.ensureSession(), isNull);
+    expect(c.read(ytAuthProvider), isA<YtAuthUnavailable>());
+
+    store.readThrows = false;
+    await n.checkAvailable();
+    final st = c.read(ytAuthProvider);
+    expect(st, isA<YtSignedIn>());
+    expect((st as YtSignedIn).name, 'N');
+    expect(await n.ensureSession(), sess);
+  });
+
+  test(
+    'the keyring probe runs once per process until sign-in or sign-out',
+    () async {
+      final store = _Mem();
+      final c = make(store);
+      final n = c.read(ytAuthProvider.notifier);
+      await n.checkAvailable();
+      await n.checkAvailable();
+      await n.checkAvailable();
+      expect(store.touched, 1);
+      await n.signIn(sess, name: 'N');
+      store.touched = 0;
+      await n.checkAvailable();
+      expect(store.touched, 1);
+    },
+  );
+
+  test('a failed marker write after the store write clears the store and '
+      'rethrows', () async {
+    final store = _Mem();
+    final c = ProviderContainer(
+      overrides: [
+        ytSessionStoreProvider.overrideWithValue(store),
+        settingsRepositoryProvider.overrideWithValue(_FailingSettings(db)),
+      ],
+    );
+    addTearDown(c.dispose);
+    await expectLater(
+      c.read(ytAuthProvider.notifier).signIn(sess, name: 'N'),
+      throwsStateError,
+    );
+    expect(store.stored, isNull);
+    expect(c.read(ytAuthProvider), isNot(isA<YtSignedIn>()));
   });
 }

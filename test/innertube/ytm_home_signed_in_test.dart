@@ -203,6 +203,25 @@ void main() {
       });
     }
 
+    test('an unusable stored cookie: expired once, the regular feed, no '
+        'error and no loop', () async {
+      await c
+          .read(ytAuthProvider.notifier)
+          .signIn(YtSession({'SAPISID': 'SAPISECRET', 'BAD': 'a b'}));
+      transport.reply(fixture('browse_home'));
+      final home = await c.read(ytmHomeProvider.future);
+      expect(home.shelves, isNotEmpty);
+      // The signed-in call never left: its cookie can't go in a header.
+      expect(transport.requests.map(authed), [false]);
+      expect(c.read(ytAuthProvider), isA<YtExpired>());
+
+      transport.reply(fixture('browse_home'));
+      c.invalidate(ytmHomeProvider);
+      await c.read(ytmHomeProvider.future);
+      expect(transport.requests.map(authed), [false, false]);
+      expect(c.read(ytAuthProvider), isA<YtExpired>());
+    });
+
     test(
       'no marker: signed in, one log line, no expiry and no retry (R6)',
       () async {

@@ -118,6 +118,7 @@ class WebKitSignIn implements YtSignInRoute {
             path: c.path,
             isSecure: c.secure,
             isHttpOnly: c.httpOnly,
+            expiresDate: c.expires?.millisecondsSinceEpoch,
           ),
       ]);
 

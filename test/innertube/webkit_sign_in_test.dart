@@ -7,12 +7,17 @@ import 'package:path/path.dart' as p;
 import 'package:songies/innertube/webkit_sign_in.dart';
 import 'package:songies/innertube/yt_session.dart';
 
-WebviewCookie _c(String name, String value, String domain) => WebviewCookie(
+WebviewCookie _c(
+  String name,
+  String value,
+  String domain, {
+  DateTime? expires,
+}) => WebviewCookie(
   name: name,
   value: value,
   domain: domain,
   path: '/',
-  expires: null,
+  expires: expires,
   secure: true,
   httpOnly: true,
   sessionOnly: false,
@@ -27,6 +32,16 @@ void main() {
         _c('other', 'x', '.example.com'),
       ]);
       expect(s!.cookies.keys.toSet(), {'SAPISID', 'YSC'});
+    });
+
+    test('google.com and expired cookies are dropped (R8)', () {
+      final s = WebKitSignIn.sessionFrom([
+        _c('SAPISID', 'sap', '.youtube.com'),
+        _c('LSID', 'l', 'accounts.google.com'),
+        _c('SID', 'g', '.google.com'),
+        _c('OLD', 'o', '.youtube.com', expires: DateTime.utc(2000)),
+      ]);
+      expect(s!.cookies.keys, ['SAPISID']);
     });
 
     test('signed-out cookies give no session', () {

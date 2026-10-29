@@ -220,7 +220,8 @@ Future<void> main() async {
       ],
   );
   // Reads two device-local settings only: no keyring, no network, no timer.
-  unawaited(container.read(ytAuthProvider.notifier).load());
+  // Awaited, so the first Home load already knows whether to go signed in.
+  await container.read(ytAuthProvider.notifier).load();
   // Reports songs heard for 30 s to YouTube (to the account's history when
   // signed in); reacts to player state only.
   final ytm = YtmService(innertube);

@@ -18,12 +18,12 @@ import '../helpers/ui_harness.dart';
 
 /// A sign-in route that answers what the test sets, without a web view.
 class _FakeRoute implements YtSignInRoute {
-  _FakeRoute(this.result);
+  _FakeRoute(this.result, {this.label = 'Sign in to YouTube'});
   YtSignInResult? result;
   int runs = 0;
 
   @override
-  String get label => 'Sign in to YouTube';
+  final String label;
 
   @override
   Future<bool> supported() async => true;
@@ -423,6 +423,30 @@ void main() {
       await tester.tap(find.text('Sign in again'));
       await settle(tester);
       expect(route.runs, 2);
+      expect(find.text('Signed in as Name'), findsOneWidget);
+    });
+
+    uiTest('an expired sign-in offers every route again', (tester) async {
+      final page = _FakeRoute(YtSignInResult(session: session, name: 'Name'));
+      final browser = _FakeRoute(
+        YtSignInResult(session: session, name: 'Name'),
+        label: 'Use the YouTube sign-in from my browser',
+      );
+      h.ytSignInRoutes = [page, browser];
+      await pumpSection(tester);
+      await tester.tap(find.text('Sign in to YouTube'));
+      await settle(tester);
+      containerOf(tester).read(ytAuthProvider.notifier).markExpired();
+      await settle(tester);
+
+      expect(find.text('Sign in again'), findsOneWidget);
+      expect(
+        find.text('Use the YouTube sign-in from my browser'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Use the YouTube sign-in from my browser'));
+      await settle(tester);
+      expect(browser.runs, 1);
       expect(find.text('Signed in as Name'), findsOneWidget);
     });
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../core/log.dart';
 import '../data/settings_repository.dart';
 import '../providers.dart';
 import 'yt_session.dart';
@@ -36,15 +37,18 @@ class SecureYtSessionStore implements YtSessionStore {
     }
   }
 
+  /// Null when nothing is stored or what is stored can't be parsed. A
+  /// platform error (a locked keyring, a D-Bus hiccup) is rethrown: it says
+  /// nothing about being signed in.
   @override
   Future<YtSession?> read() async {
+    final raw = await _s.read(key: kYtSessionKey);
+    if (raw == null) return null;
     try {
-      final raw = await _s.read(key: kYtSessionKey);
-      if (raw == null) return null;
-      return YtSession.fromJson(
-        (jsonDecode(raw) as Map).cast<String, Object?>(),
-      );
-    } catch (_) {
+      final json = jsonDecode(raw);
+      if (json is! Map) return null;
+      return YtSession.fromJson(json.cast<String, Object?>());
+    } on FormatException {
       return null;
     }
   }
@@ -91,6 +95,11 @@ class YtAuth extends Notifier<YtAuthState> {
   YtSession? _session;
   bool _sessionLoaded = false;
   int _gen = 0;
+
+  /// The keyring probe's answer, kept for the life of the app (one
+  /// container per process) so Settings visits don't prompt again. A
+  /// sign-in or sign-out forgets it.
+  bool? _available;
 
   @override
   YtAuthState build() => const YtSignedOut();
@@ -142,7 +151,9 @@ class YtAuth extends Notifier<YtAuthState> {
         return null;
       }
       await ref.read(settingsRepositoryProvider).setBool(kYtSignedIn, false);
-      await ref.read(settingsRepositoryProvider).setString(kYtAccountName, null);
+      await ref
+          .read(settingsRepositoryProvider)
+          .setString(kYtAccountName, null);
       if (gen != _gen) return null;
       state = const YtSignedOut();
       return null;
@@ -153,29 +164,49 @@ class YtAuth extends Notifier<YtAuthState> {
     return s;
   }
 
-  /// Lazy keyring probe, for the Settings row and the sign-in start.
+  /// Lazy keyring probe, for the Settings row and the sign-in start; asked
+  /// once per process (see [_available]). Recovering from
+  /// [YtAuthUnavailable] re-derives the state from the device-local markers,
+  /// as [load] does, and the next [ensureSession] reads the keyring again.
   Future<void> checkAvailable() async {
     final gen = _gen;
-    bool ok;
-    try {
-      ok = await ref.read(ytSessionStoreProvider).available();
-    } catch (_) {
-      ok = false;
+    var ok = _available;
+    if (ok == null) {
+      try {
+        ok = await ref.read(ytSessionStoreProvider).available();
+      } catch (_) {
+        ok = false;
+      }
+      if (gen != _gen) return;
+      _available = ok;
     }
-    if (gen != _gen) return;
     if (!ok) {
       state = const YtAuthUnavailable();
     } else if (state is YtAuthUnavailable) {
-      state = const YtSignedOut();
+      await load();
     }
   }
 
+  /// Stores [s], then the markers. If a marker write fails after the store
+  /// write worked, the store is cleared (best effort) and the error
+  /// rethrown, so no secret is left behind without its marker.
   Future<void> signIn(YtSession s, {String? name}) async {
     final gen = ++_gen;
-    await ref.read(ytSessionStoreProvider).write(s);
+    final store = ref.read(ytSessionStoreProvider);
+    _available = null;
+    await store.write(s);
     final settings = ref.read(settingsRepositoryProvider);
-    await settings.setString(kYtAccountName, name);
-    await settings.setBool(kYtSignedIn, true);
+    try {
+      await settings.setString(kYtAccountName, name);
+      await settings.setBool(kYtSignedIn, true);
+    } catch (_) {
+      try {
+        await store.clear();
+      } catch (e) {
+        AppLog.w('yt sign-in: could not undo the store (${e.runtimeType})');
+      }
+      rethrow;
+    }
     if (gen != _gen) return;
     _session = s;
     _sessionLoaded = true;
@@ -184,6 +215,7 @@ class YtAuth extends Notifier<YtAuthState> {
 
   Future<void> signOut() async {
     final gen = ++_gen;
+    _available = null;
     _session = null;
     _sessionLoaded = false;
     state = const YtSignedOut();

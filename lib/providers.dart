@@ -318,13 +318,13 @@ final ytImportServiceProvider = Provider<YtImportService>(
   (ref) => _unwired('ytImportServiceProvider'),
 );
 
-/// YouTube's Innertube API (YouTube Music browse/search, instant streaming).
 final ytSessionStoreProvider = Provider<YtSessionStore>(
   (ref) => _unwired('ytSessionStoreProvider'),
 );
 
 final ytAuthProvider = NotifierProvider<YtAuth, YtAuthState>(YtAuth.new);
 
+/// YouTube's Innertube API (YouTube Music browse/search, instant streaming).
 final innertubeClientProvider = Provider<InnertubeClient>(
   (ref) => _unwired('innertubeClientProvider'),
 );
@@ -399,7 +399,8 @@ final ytmSearchProvider = FutureProvider.autoDispose
 /// Signed in to YouTube ([YtSignedIn]), the first request goes out with the
 /// session (read from the keyring on first need, R5). When YouTube refuses
 /// it (HTTP 401/403) or answers explicitly signed out (R6: a missing marker
-/// counts as signed in), the sign-in is marked expired
+/// counts as signed in), or a stored cookie can't be sent (`invalidInput`),
+/// the sign-in is marked expired
 /// ([YtExpired]) and the regular feed is fetched once instead: no loop, and
 /// later loads stay signed out until the user signs in again. Signing in
 /// reloads Home; signing out reloads it when it shows (or is fetching) the
@@ -430,7 +431,12 @@ final ytmHomeProvider = FutureProvider<YtmHome>((ref) {
       case Err(:final failure):
         AppLog.w('ytm home (signed in) failed: ${failure.message}');
         final status = httpStatusOf(failure);
-        refused = status == 401 || status == 403;
+        // invalidInput: a stored cookie can't go in a header, so this
+        // session will never work; treated like a refusal, not an error.
+        refused =
+            status == 401 ||
+            status == 403 ||
+            failure.kind == FailureKind.invalidInput;
     }
     if (!refused) return res;
     signedInFeed = false;

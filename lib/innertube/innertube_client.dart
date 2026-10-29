@@ -129,13 +129,11 @@ class InnertubeClient {
 
   /// The session's cookies (plus the [consentCookie] once consented) as one
   /// `Cookie` value. Throws [FormatException] for a name or value that
-  /// can't go in a header (RFC 6265 cookie-octets), naming neither.
+  /// can't go in a header (RFC 6265 cookie-octets, a value optionally in
+  /// DQUOTEs), naming neither.
   static String _cookieHeader(YtSession session, bool consented) {
     for (final e in session.cookies.entries) {
-      if (e.key.isEmpty ||
-          !_isCookieOctets(e.key) ||
-          e.key.contains('=') ||
-          !_isCookieOctets(e.value)) {
+      if (!YtSession.validName(e.key) || !YtSession.validValue(e.value)) {
         throw const FormatException('invalid session cookie');
       }
     }
@@ -144,16 +142,6 @@ class InnertubeClient {
       if (consented && !session.cookies.containsKey('SOCS')) consentCookie,
     ].join('; ');
   }
-
-  static bool _isCookieOctets(String s) => s.codeUnits.every(
-    (u) =>
-        u >= 0x21 &&
-        u <= 0x7E &&
-        u != 0x22 &&
-        u != 0x2C &&
-        u != 0x3B &&
-        u != 0x5C,
-  );
 
   /// The `Cookie`, `Authorization`, `X-Goog-AuthUser` and `X-Origin` headers
   /// of a signed-in request, for plain GETs such as play reports. Throws

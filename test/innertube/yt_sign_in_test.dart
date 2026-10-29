@@ -10,10 +10,14 @@ Cookie _c(String name, String value, String? domain) =>
 
 void main() {
   group('YtSessionFromCookies.build', () {
-    test('keeps only .youtube.com and .google.com cookies', () {
+    test('keeps only cookies a browser sends to music.youtube.com (R8)', () {
       final s = YtSessionFromCookies.build([
         _c('SAPISID', 'yt-sap', '.youtube.com'),
         _c('HSID', 'h', 'music.youtube.com'),
+        _c('PREF', 'p', 'youtube.com'),
+        _c('VISITOR', 'v', '.music.youtube.com'),
+        _c('WWW', 'w', 'www.youtube.com'),
+        _c('ACC', 'a', 'accounts.youtube.com'),
         _c('SID', 'g-sid', '.google.com'),
         _c('NID', 'n', 'www.google.com'),
         _c('evil', 'x', '.notyoutube.com'),
@@ -22,8 +26,78 @@ void main() {
         _c('nodomain', 'x', null),
       ]);
       expect(s, isNotNull);
-      expect(s!.cookies.keys.toSet(), {'SAPISID', 'HSID', 'SID', 'NID'});
+      expect(s!.cookies.keys.toSet(), {'SAPISID', 'HSID', 'PREF', 'VISITOR'});
     });
+
+    test('google.com cookies, account ones included, are dropped', () {
+      final s = YtSessionFromCookies.build([
+        _c('SAPISID', 'yt-sap', '.youtube.com'),
+        _c('LSID', 'acct-lsid', 'accounts.google.com'),
+        _c('__Host-GAPS', 'acct-gaps', 'accounts.google.com'),
+        _c('__Host-1PLSID', 'acct-1plsid', 'accounts.google.com'),
+        _c('SID', 'g-sid', '.google.com'),
+        _c('OSID', 'mail', 'mail.google.com'),
+        _c('DOCS', 'docs', 'docs.google.com'),
+        _c('NID', 'n', 'www.google.com'),
+      ]);
+      expect(s!.cookies.keys, ['SAPISID']);
+      expect(s.cookieHeader(), isNot(contains('acct-')));
+    });
+
+    test('expired cookies are dropped', () {
+      final now = DateTime.utc(2026, 10, 29);
+      final s = YtSessionFromCookies.build([
+        _c('SAPISID', 'yt-sap', '.youtube.com'),
+        Cookie(
+          name: 'OLD',
+          value: 'o',
+          domain: '.youtube.com',
+          expiresDate: now
+              .subtract(const Duration(seconds: 1))
+              .millisecondsSinceEpoch,
+        ),
+        Cookie(
+          name: 'LIVE',
+          value: 'l',
+          domain: '.youtube.com',
+          expiresDate: now.add(const Duration(days: 1)).millisecondsSinceEpoch,
+        ),
+      ], now: now);
+      expect(s!.cookies.keys.toSet(), {'SAPISID', 'LIVE'});
+    });
+
+    test('an expired SAPISID is no session', () {
+      final now = DateTime.utc(2026, 10, 29);
+      expect(
+        YtSessionFromCookies.build([
+          Cookie(
+            name: 'SAPISID',
+            value: 'old',
+            domain: '.youtube.com',
+            expiresDate: now.millisecondsSinceEpoch - 1000,
+          ),
+        ], now: now),
+        isNull,
+      );
+    });
+
+    test(
+      'invalid names and values are dropped; DQUOTE-wrapped values kept',
+      () {
+        final s = YtSessionFromCookies.build([
+          _c('SAPISID', 'yt-sap', '.youtube.com'),
+          _c('QUOTED', '"abc"', '.youtube.com'),
+          _c('SPACE', 'a b', '.youtube.com'),
+          _c('SEMI', 'a;b', '.youtube.com'),
+          _c('HALFQUOTE', '"abc', '.youtube.com'),
+          _c('bad name', 'v', '.youtube.com'),
+          _c('eq=name', 'v', '.youtube.com'),
+          _c('UNI', 'caf\u00e9', '.youtube.com'),
+        ]);
+        expect(s!.cookies.keys.toSet(), {'SAPISID', 'QUOTED'});
+        expect(s.cookies['QUOTED'], '"abc"');
+      },
+    );
 
     test('accepts __Secure-3PAPISID in place of SAPISID', () {
       final s = YtSessionFromCookies.build([
@@ -59,12 +133,17 @@ void main() {
       );
     });
 
-    test('the .youtube.com value wins over a .google.com one', () {
+    test('a .google.com cookie never replaces a .youtube.com one', () {
       final s = YtSessionFromCookies.build([
         _c('SAPISID', 'yt', '.youtube.com'),
         _c('SAPISID', 'g', '.google.com'),
       ]);
       expect(s!.cookies['SAPISID'], 'yt');
+      final t = YtSessionFromCookies.build([
+        _c('SAPISID', 'g', '.google.com'),
+        _c('SAPISID', 'yt', '.youtube.com'),
+      ]);
+      expect(t!.cookies['SAPISID'], 'yt');
     });
 
     test('empty names and values are dropped', () {

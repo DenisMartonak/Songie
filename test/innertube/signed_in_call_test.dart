@@ -153,6 +153,76 @@ void main() {
     },
   );
 
+  test('a DQUOTE-wrapped cookie value goes out as is (RFC 6265)', () async {
+    transport.reply(InnertubeResponse(200, {'contents': {}}));
+    final quoted = YtSession({'SAPISID': 'SAPISECRET', 'Q': '"abc"'});
+    final r = await client.call(kWebRemix, 'browse', {
+      'browseId': 'FEmusic_home',
+    }, session: quoted);
+    expect(r, isA<Ok>());
+    expect(transport.requests.single.headers['Cookie'], contains('Q="abc"'));
+  });
+
+  group('accountTracking', () {
+    late YtmService ytm;
+    setUp(() => ytm = YtmService(client));
+
+    test('a signed-in WEB_REMIX player call; both URLs parsed', () async {
+      transport.reply(
+        InnertubeResponse(200, {
+          'playbackTracking': {
+            'videostatsPlaybackUrl': {
+              'baseUrl': 'https://s.youtube.com/api/stats/playback?docid=v1',
+            },
+            'videostatsWatchtimeUrl': {
+              'baseUrl': 'https://s.youtube.com/api/stats/watchtime?docid=v1',
+            },
+          },
+        }),
+      );
+      final t = await ytm.accountTracking('v1', session);
+      final req = transport.requests.single;
+      expect(req.url.path, endsWith('/player'));
+      expect(req.url.host, 'music.youtube.com');
+      expect(req.body['videoId'], 'v1');
+      expect(req.body['contentCheckOk'], true);
+      expect(req.body['racyCheckOk'], true);
+      final client_ = (req.body['context'] as Map)['client'] as Map;
+      expect(client_['clientName'], 'WEB_REMIX');
+      expect(req.headers['Cookie'], contains('SAPISID=SAPISECRET'));
+      expect(req.headers['Authorization'], hash);
+      expect(
+        t!.playbackUrl,
+        Uri.parse('https://s.youtube.com/api/stats/playback?docid=v1'),
+      );
+      expect(
+        t.watchtimeUrl,
+        Uri.parse('https://s.youtube.com/api/stats/watchtime?docid=v1'),
+      );
+    });
+
+    test('HTTP 401 gives null', () async {
+      transport.reply(const InnertubeResponse(401, null));
+      expect(await ytm.accountTracking('v1', session), isNull);
+    });
+
+    test('no playbackTracking gives null', () async {
+      transport.reply(InnertubeResponse(200, {'videoDetails': {}}));
+      expect(await ytm.accountTracking('v1', session), isNull);
+    });
+
+    test('a missing watchtime URL gives null', () async {
+      transport.reply(
+        InnertubeResponse(200, {
+          'playbackTracking': {
+            'videostatsPlaybackUrl': {'baseUrl': 'https://s.youtube.com/p'},
+          },
+        }),
+      );
+      expect(await ytm.accountTracking('v1', session), isNull);
+    });
+  });
+
   group('no secrets in failures', () {
     void clean(Result<Object?> r) {
       final msg = (r as Err).failure.message;

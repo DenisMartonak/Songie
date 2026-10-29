@@ -236,11 +236,15 @@ class _YouTubeSettingsSectionState
         key = 'expired';
         rows = [
           if (name != null) line('Signed in as $name'),
-          for (final r in routes.take(1))
+          // Every route: the first is "Sign in again", the others keep
+          // their own label (Linux: the browser's sign-in).
+          for (final (i, r) in routes.indexed)
             button(
-              key: const Key('settings.ytSignInAgain'),
+              key: Key(
+                i == 0 ? 'settings.ytSignInAgain' : 'settings.ytSignInAgain.$i',
+              ),
               icon: Icons.login_rounded,
-              label: 'Sign in again',
+              label: i == 0 ? 'Sign in again' : r.label,
               onPressed: _signingIn ? null : () => _signIn(r),
             ),
           signOut,

@@ -44,6 +44,11 @@ String? accountLeak(String text, {required bool signedIn}) {
   for (final bad in ['SAPISID', '__Secure-', 'LOGIN_INFO', 'datasyncId']) {
     if (text.contains(bad)) return bad;
   }
+  // Session cookies by name, as whole words (not `__Secure-3PSID`, caught
+  // above, or a longer word that merely ends in SID).
+  final cookie = RegExp(r'\b(SID|HSID|SSID|APISID)=|\bSIDCC\b')
+      .firstMatch(text);
+  if (cookie != null) return cookie[0];
   if (text.contains('lh3.googleusercontent.com/a/')) return 'account photo';
   if (RegExp(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}')
       .hasMatch(text)) {
@@ -81,6 +86,11 @@ void main() {
       'https://lh3.googleusercontent.com/a/ACg8ocK=s48',
       'someone@gmail.com',
       'a.b-c@mail.example.co.uk',
+      'SID=abc',
+      'Cookie: HSID=a; SSID=b',
+      'x APISID=y',
+      'SIDCC',
+      'Cookie: a=b; SIDCC=AKEy',
     ]) {
       expect(accountLeak(bad, signedIn: false), isNotNull, reason: bad);
     }
@@ -95,6 +105,16 @@ void main() {
       isNull,
     );
     expect(accountLeak('@DaftPunk', signedIn: true), isNull);
+    // Word boundaries: longer words containing the names are fine.
+    for (final ok in [
+      'INSIDE=1',
+      'XSID=1',
+      'PRESIDCC',
+      'SIDCCX',
+      'VISITOR_SID=1',
+    ]) {
+      expect(accountLeak(ok, signedIn: true), isNull, reason: ok);
+    }
     expect(
       accountLeak('https://lh3.googleusercontent.com/abc=w60', signedIn: true),
       isNull,

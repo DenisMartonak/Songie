@@ -38,14 +38,14 @@ abstract class YtSignInRoute {
   Future<void> forget();
 }
 
-/// Turns a web view's cookies into a [YtSession]: keeps only the YouTube
-/// (`.youtube.com`) and Google (`.google.com`) cookies, and needs `SAPISID`
-/// or `__Secure-3PAPISID` among the YouTube ones. Never logs a value.
+/// Turns a web view's (or browser's) cookies into a [YtSession]: keeps only
+/// the unexpired cookies a browser sends to `https://music.youtube.com`
+/// (domain `youtube.com`, `.youtube.com` or `music.youtube.com`; R8) whose
+/// name and value can go in a `Cookie` header, and needs `SAPISID` or
+/// `__Secure-3PAPISID` among them. No google.com cookie of any kind. Never
+/// logs a value.
 abstract final class YtSessionFromCookies {
   static const _sapisidNames = {'SAPISID', '__Secure-3PAPISID'};
-
-  static bool _under(String domain, String site) =>
-      domain == site || domain.endsWith('.$site');
 
   static String? _domainOf(Cookie c) {
     final d = c.domain?.trim().toLowerCase();
@@ -53,14 +53,22 @@ abstract final class YtSessionFromCookies {
     return d.startsWith('.') ? d.substring(1) : d;
   }
 
-  static bool isYouTube(Cookie c) {
-    final d = _domainOf(c);
-    return d != null && _under(d, 'youtube.com');
+  /// Whether a cookie set for [host] (a cookie's domain, with or without
+  /// the leading dot) is sent to music.youtube.com.
+  static bool sentToMusicHost(String? host) {
+    final h = host?.trim().toLowerCase();
+    if (h == null || h.isEmpty) return false;
+    final d = h.startsWith('.') ? h.substring(1) : h;
+    return d == 'youtube.com' || d == 'music.youtube.com';
   }
 
-  static bool isGoogle(Cookie c) {
-    final d = _domainOf(c);
-    return d != null && _under(d, 'google.com');
+  static bool isYouTube(Cookie c) => sentToMusicHost(_domainOf(c));
+
+  /// Whether [c] has expired by [now]; a cookie without a date is a
+  /// session cookie and has not.
+  static bool expired(Cookie c, DateTime now) {
+    final ms = c.expiresDate;
+    return ms != null && ms <= now.millisecondsSinceEpoch;
   }
 
   /// Android's cookie manager answers name and value only: those cookies
@@ -83,28 +91,35 @@ abstract final class YtSessionFromCookies {
         c,
   ];
 
-  /// Whether the YouTube cookies carry a signed-in session.
-  static bool signedIn(List<Cookie> cookies) => cookies.any(
-    (c) =>
-        isYouTube(c) &&
-        _sapisidNames.contains(c.name) &&
-        '${c.value ?? ''}'.isNotEmpty,
-  );
+  /// The cookies that go into a session: sent to music.youtube.com,
+  /// unexpired, and with a header-safe name and value.
+  static List<Cookie> usable(List<Cookie> cookies, {DateTime? now}) {
+    final at = now ?? DateTime.now();
+    return [
+      for (final c in cookies)
+        if (isYouTube(c) &&
+            !expired(c, at) &&
+            YtSession.validName(c.name) &&
+            '${c.value ?? ''}'.isNotEmpty &&
+            YtSession.validValue('${c.value}'))
+          c,
+    ];
+  }
 
-  static YtSession? build(List<Cookie> cookies) {
-    if (!signedIn(cookies)) return null;
-    final out = <String, String>{};
-    // Google first, so a YouTube cookie of the same name wins: the session
-    // is sent to music.youtube.com.
-    for (final keep in [isGoogle, isYouTube]) {
-      for (final c in cookies) {
-        if (!keep(c)) continue;
-        final value = '${c.value ?? ''}';
-        if (c.name.isEmpty || value.isEmpty) continue;
-        out[c.name] = value;
-      }
-    }
-    return YtSession(out);
+  /// Whether the cookies carry a signed-in YouTube session.
+  static bool signedIn(List<Cookie> cookies, {DateTime? now}) =>
+      usable(cookies, now: now).any((c) => _sapisidNames.contains(c.name));
+
+  static YtSession? build(List<Cookie> cookies, {DateTime? now}) {
+    final kept = usable(cookies, now: now);
+    if (!kept.any((c) => _sapisidNames.contains(c.name))) return null;
+    // `.youtube.com` first, so a music.youtube.com cookie of the same name
+    // (the more specific one) wins.
+    bool broad(Cookie c) => _domainOf(c) == 'youtube.com';
+    return YtSession({
+      for (final c in kept.where(broad)) c.name: '${c.value}',
+      for (final c in kept.where((c) => !broad(c))) c.name: '${c.value}',
+    });
   }
 }
 
@@ -142,9 +157,9 @@ class WebViewSignIn implements YtSignInRoute {
       'https://accounts.google.com/ServiceLogin?service=youtube'
       '&continue=https://music.youtube.com/';
 
-  /// Where the session cookies are read from.
+  /// Where the session cookies are read from: only what a browser sends
+  /// to YouTube Music (R8).
   static const youtubeUrl = 'https://music.youtube.com/';
-  static const googleUrl = 'https://www.google.com/';
 
   static const _windowsDataFolder = 'yt_sign_in_webview2';
 
@@ -261,19 +276,13 @@ class WebViewSignIn implements YtSignInRoute {
     }
   }
 
-  /// The session, once the YouTube cookies hold one; else null.
+  /// The session, once the YouTube Music cookies hold one; else null.
   static Future<YtSession?> readSession(PlatformWebViewEnvironment? env) async {
-    final cookies = _cookies(env);
     final yt = YtSessionFromCookies.withDomain(
-      await cookies.getCookies(url: WebUri(youtubeUrl)),
+      await _cookies(env).getCookies(url: WebUri(youtubeUrl)),
       'music.youtube.com',
     );
-    if (!YtSessionFromCookies.signedIn(yt)) return null;
-    final google = YtSessionFromCookies.withDomain(
-      await cookies.getCookies(url: WebUri(googleUrl)),
-      'www.google.com',
-    );
-    return YtSessionFromCookies.build([...google, ...yt]);
+    return YtSessionFromCookies.build(yt);
   }
 
   static PlatformCookieManager _cookies(PlatformWebViewEnvironment? env) =>

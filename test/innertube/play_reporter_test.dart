@@ -346,5 +346,59 @@ void main() {
       expect(all, isNot(contains('SIDSECRET5678')));
       expect(all, isNot(contains('SAPISIDHASH')));
     });
+    for (final (label, playbackUrl) in [
+      ('a non-YouTube host', 'https://tracker.example.com/api/stats/playback'),
+      ('a look-alike host', 'https://youtube.com.example.org/stats/playback'),
+      ('a google.com host', 'https://www.google.com/api/stats/playback'),
+      ('plain http', 'http://s.youtube.com/api/stats/playback'),
+    ]) {
+      test('$label gets no session headers (R8)', () async {
+        accountResult = PlaybackTracking(
+          playbackUrl: Uri.parse(playbackUrl),
+          watchtimeUrl: Uri.parse(
+            'https://s.youtube.com/api/stats/watchtime?docid=vid_a',
+          ),
+        );
+        play(_track('a'), 0, 31);
+        await _settle();
+        await _settle();
+        expect(transport.gets, hasLength(2));
+        final bad = transport.gets.firstWhere(
+          (g) => g.url.toString().startsWith(playbackUrl),
+        );
+        final good = transport.gets.firstWhere((g) => g != bad);
+        for (final h in ['Cookie', 'Authorization', 'X-Goog-AuthUser']) {
+          expect(bad.headers.containsKey(h), isFalse, reason: h);
+        }
+        expect(good.headers['Cookie'], contains('SAPISID='));
+      });
+    }
+
+    test('a youtube.com subdomain over https gets session headers', () async {
+      accountResult = PlaybackTracking(
+        playbackUrl: Uri.parse('https://www.youtube.com/api/stats/playback'),
+        watchtimeUrl: Uri.parse('https://youtube.com/api/stats/watchtime'),
+      );
+      play(_track('a'), 0, 31);
+      await _settle();
+      await _settle();
+      for (final g in transport.gets) {
+        expect(g.headers['Cookie'], contains('SAPISID='));
+      }
+    });
+
+    test('a failed signed-in report logs only the error type', () async {
+      final lines = <String>[];
+      final old = debugPrint;
+      debugPrint = (String? m, {int? wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = old);
+      transport.reply(Exception('detail-that-could-echo-a-header'));
+      play(_track('a'), 0, 31);
+      await _settle();
+      await _settle();
+      final all = lines.join('\n');
+      expect(all, contains('failed (_Exception)'));
+      expect(all, isNot(contains('detail-that-could-echo-a-header')));
+    });
   });
 }

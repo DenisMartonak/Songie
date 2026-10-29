@@ -177,25 +177,41 @@ class PlayReporter {
     });
     // The user agent of the VISIONOS client, the first of kPlayerClients;
     // which client served the stream isn't exposed.
-    final headers = {'User-Agent': kPlayerClients.first.userAgent};
+    final plain = {'User-Agent': kPlayerClients.first.userAgent};
+    Map<String, String>? signed;
     if (session != null) {
       try {
-        headers.addAll(InnertubeClient.signedInHeaders(session));
+        signed = {...plain, ...InnertubeClient.signedInHeaders(session)};
       } on FormatException {
         // Unusable cookie: report anonymously rather than not at all.
         AppLog.w('Play report $videoId: unusable session, sent signed out');
       }
     }
     for (final url in [playback, watchtime]) {
+      // R8: the session goes only to YouTube itself, over https.
+      final withSession = signed != null && sessionAllowed(url);
       try {
-        final r = await _transport.get(url, headers);
+        final r = await _transport.get(url, withSession ? signed : plain);
         if (r.status >= 400) {
           AppLog.w('Play report $videoId ${url.path}: HTTP ${r.status}');
         }
       } catch (e) {
-        AppLog.w('Play report $videoId ${url.path} failed: $e');
+        // Signed in, the error text could echo a header: its type only.
+        AppLog.w(
+          withSession
+              ? 'Play report $videoId ${url.path} failed (${e.runtimeType})'
+              : 'Play report $videoId ${url.path} failed: $e',
+        );
       }
     }
+  }
+
+  /// Whether signed-in headers may go to [url]: https, and the host is
+  /// `youtube.com` or a subdomain of it (R8).
+  static bool sessionAllowed(Uri url) {
+    final host = url.host.toLowerCase();
+    return url.scheme == 'https' &&
+        (host == 'youtube.com' || host.endsWith('.youtube.com'));
   }
 
   static Uri _with(Uri u, Map<String, String> extra) =>
