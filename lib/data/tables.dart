@@ -165,3 +165,26 @@ class Lyrics extends Table with SyncColumns {
   TextColumn get source => text().nullable()();
   DateTimeColumn get fetchedAt => dateTime()();
 }
+
+/// One listening session of a track (Plan 9). Written when a song starts and
+/// re-stamped as it is heard; pruned after 400 days.
+@DataClassName('ListenRow')
+@TableIndex(name: 'listens_started_at', columns: {#startedAt})
+class Listens extends Table with SyncColumns {
+  TextColumn get trackId => text()();
+
+  /// When the song started playing (UTC).
+  DateTimeColumn get startedAt => dateTime()();
+
+  /// How much of the song was actually heard.
+  IntColumn get heardMs => integer()();
+
+  /// Whether this listen is a play (see `reachedPlay`).
+  BoolColumn get counted => boolean()();
+
+  /// Main artist at the time (see `mainArtist`).
+  TextColumn get mainArtist => text()();
+  TextColumn get titleSnapshot => text()();
+  TextColumn get artistSnapshot => text()();
+  TextColumn get artworkRef => text().nullable()();
+}

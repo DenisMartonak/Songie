@@ -21,6 +21,7 @@ part 'database.g.dart';
     Themes,
     Fonts,
     Lyrics,
+    Listens,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -31,7 +32,7 @@ class AppDatabase extends _$AppDatabase {
       AppDatabase(NativeDatabase.createInBackground(f));
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -49,6 +50,10 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(fonts);
       }
       if (from < 6) await m.createTable(lyrics);
+      if (from < 7) {
+        await m.createTable(listens);
+        await m.createIndex(listensStartedAt);
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');

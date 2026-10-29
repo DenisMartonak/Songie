@@ -37,6 +37,7 @@ import 'lyrics/lrclib.dart';
 import 'lyrics/lyrics_service.dart';
 import 'lyrics/lyrics_store.dart';
 import 'lyrics/ytm_lyrics.dart';
+import 'stats/listen_store.dart';
 import 'player/audio_session_binding.dart';
 import 'player/composite_track_resolver.dart';
 import 'player/just_audio_backend.dart';
@@ -75,6 +76,7 @@ Future<void> main() async {
 
   final db = AppDatabase.open(paths.db);
   final stamp = await SyncStamp.load(db);
+  unawaited(ListenStore(db, stamp).prune());
 
   await initAudioPlatform();
   if (Platform.isWindows || Platform.isLinux) await _initDesktopWindow();

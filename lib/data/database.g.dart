@@ -5641,6 +5641,787 @@ class LyricsCompanion extends UpdateCompanion<LyricsRow> {
   }
 }
 
+class $ListensTable extends Listens with TableInfo<$ListensTable, ListenRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ListensTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clockMeta = const VerificationMeta('clock');
+  @override
+  late final GeneratedColumn<String> clock = GeneratedColumn<String>(
+    'clock',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _originDeviceMeta = const VerificationMeta(
+    'originDevice',
+  );
+  @override
+  late final GeneratedColumn<String> originDevice = GeneratedColumn<String>(
+    'origin_device',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedMeta = const VerificationMeta(
+    'deleted',
+  );
+  @override
+  late final GeneratedColumn<bool> deleted = GeneratedColumn<bool>(
+    'deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _localSeqMeta = const VerificationMeta(
+    'localSeq',
+  );
+  @override
+  late final GeneratedColumn<int> localSeq = GeneratedColumn<int>(
+    'local_seq',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _trackIdMeta = const VerificationMeta(
+    'trackId',
+  );
+  @override
+  late final GeneratedColumn<String> trackId = GeneratedColumn<String>(
+    'track_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startedAt = GeneratedColumn<DateTime>(
+    'started_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _heardMsMeta = const VerificationMeta(
+    'heardMs',
+  );
+  @override
+  late final GeneratedColumn<int> heardMs = GeneratedColumn<int>(
+    'heard_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _countedMeta = const VerificationMeta(
+    'counted',
+  );
+  @override
+  late final GeneratedColumn<bool> counted = GeneratedColumn<bool>(
+    'counted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("counted" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _mainArtistMeta = const VerificationMeta(
+    'mainArtist',
+  );
+  @override
+  late final GeneratedColumn<String> mainArtist = GeneratedColumn<String>(
+    'main_artist',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleSnapshotMeta = const VerificationMeta(
+    'titleSnapshot',
+  );
+  @override
+  late final GeneratedColumn<String> titleSnapshot = GeneratedColumn<String>(
+    'title_snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _artistSnapshotMeta = const VerificationMeta(
+    'artistSnapshot',
+  );
+  @override
+  late final GeneratedColumn<String> artistSnapshot = GeneratedColumn<String>(
+    'artist_snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _artworkRefMeta = const VerificationMeta(
+    'artworkRef',
+  );
+  @override
+  late final GeneratedColumn<String> artworkRef = GeneratedColumn<String>(
+    'artwork_ref',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    clock,
+    originDevice,
+    deleted,
+    localSeq,
+    trackId,
+    startedAt,
+    heardMs,
+    counted,
+    mainArtist,
+    titleSnapshot,
+    artistSnapshot,
+    artworkRef,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'listens';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ListenRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('clock')) {
+      context.handle(
+        _clockMeta,
+        clock.isAcceptableOrUnknown(data['clock']!, _clockMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_clockMeta);
+    }
+    if (data.containsKey('origin_device')) {
+      context.handle(
+        _originDeviceMeta,
+        originDevice.isAcceptableOrUnknown(
+          data['origin_device']!,
+          _originDeviceMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_originDeviceMeta);
+    }
+    if (data.containsKey('deleted')) {
+      context.handle(
+        _deletedMeta,
+        deleted.isAcceptableOrUnknown(data['deleted']!, _deletedMeta),
+      );
+    }
+    if (data.containsKey('local_seq')) {
+      context.handle(
+        _localSeqMeta,
+        localSeq.isAcceptableOrUnknown(data['local_seq']!, _localSeqMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localSeqMeta);
+    }
+    if (data.containsKey('track_id')) {
+      context.handle(
+        _trackIdMeta,
+        trackId.isAcceptableOrUnknown(data['track_id']!, _trackIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_trackIdMeta);
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startedAtMeta);
+    }
+    if (data.containsKey('heard_ms')) {
+      context.handle(
+        _heardMsMeta,
+        heardMs.isAcceptableOrUnknown(data['heard_ms']!, _heardMsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_heardMsMeta);
+    }
+    if (data.containsKey('counted')) {
+      context.handle(
+        _countedMeta,
+        counted.isAcceptableOrUnknown(data['counted']!, _countedMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_countedMeta);
+    }
+    if (data.containsKey('main_artist')) {
+      context.handle(
+        _mainArtistMeta,
+        mainArtist.isAcceptableOrUnknown(data['main_artist']!, _mainArtistMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_mainArtistMeta);
+    }
+    if (data.containsKey('title_snapshot')) {
+      context.handle(
+        _titleSnapshotMeta,
+        titleSnapshot.isAcceptableOrUnknown(
+          data['title_snapshot']!,
+          _titleSnapshotMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_titleSnapshotMeta);
+    }
+    if (data.containsKey('artist_snapshot')) {
+      context.handle(
+        _artistSnapshotMeta,
+        artistSnapshot.isAcceptableOrUnknown(
+          data['artist_snapshot']!,
+          _artistSnapshotMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_artistSnapshotMeta);
+    }
+    if (data.containsKey('artwork_ref')) {
+      context.handle(
+        _artworkRefMeta,
+        artworkRef.isAcceptableOrUnknown(data['artwork_ref']!, _artworkRefMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ListenRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ListenRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      clock: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}clock'],
+      )!,
+      originDevice: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}origin_device'],
+      )!,
+      deleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}deleted'],
+      )!,
+      localSeq: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}local_seq'],
+      )!,
+      trackId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}track_id'],
+      )!,
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}started_at'],
+      )!,
+      heardMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}heard_ms'],
+      )!,
+      counted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}counted'],
+      )!,
+      mainArtist: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}main_artist'],
+      )!,
+      titleSnapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title_snapshot'],
+      )!,
+      artistSnapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}artist_snapshot'],
+      )!,
+      artworkRef: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}artwork_ref'],
+      ),
+    );
+  }
+
+  @override
+  $ListensTable createAlias(String alias) {
+    return $ListensTable(attachedDatabase, alias);
+  }
+}
+
+class ListenRow extends DataClass implements Insertable<ListenRow> {
+  final String id;
+  final String clock;
+  final String originDevice;
+  final bool deleted;
+  final int localSeq;
+  final String trackId;
+
+  /// When the song started playing (UTC).
+  final DateTime startedAt;
+
+  /// How much of the song was actually heard.
+  final int heardMs;
+
+  /// Whether this listen is a play (see `reachedPlay`).
+  final bool counted;
+
+  /// Main artist at the time (see `mainArtist`).
+  final String mainArtist;
+  final String titleSnapshot;
+  final String artistSnapshot;
+  final String? artworkRef;
+  const ListenRow({
+    required this.id,
+    required this.clock,
+    required this.originDevice,
+    required this.deleted,
+    required this.localSeq,
+    required this.trackId,
+    required this.startedAt,
+    required this.heardMs,
+    required this.counted,
+    required this.mainArtist,
+    required this.titleSnapshot,
+    required this.artistSnapshot,
+    this.artworkRef,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['clock'] = Variable<String>(clock);
+    map['origin_device'] = Variable<String>(originDevice);
+    map['deleted'] = Variable<bool>(deleted);
+    map['local_seq'] = Variable<int>(localSeq);
+    map['track_id'] = Variable<String>(trackId);
+    map['started_at'] = Variable<DateTime>(startedAt);
+    map['heard_ms'] = Variable<int>(heardMs);
+    map['counted'] = Variable<bool>(counted);
+    map['main_artist'] = Variable<String>(mainArtist);
+    map['title_snapshot'] = Variable<String>(titleSnapshot);
+    map['artist_snapshot'] = Variable<String>(artistSnapshot);
+    if (!nullToAbsent || artworkRef != null) {
+      map['artwork_ref'] = Variable<String>(artworkRef);
+    }
+    return map;
+  }
+
+  ListensCompanion toCompanion(bool nullToAbsent) {
+    return ListensCompanion(
+      id: Value(id),
+      clock: Value(clock),
+      originDevice: Value(originDevice),
+      deleted: Value(deleted),
+      localSeq: Value(localSeq),
+      trackId: Value(trackId),
+      startedAt: Value(startedAt),
+      heardMs: Value(heardMs),
+      counted: Value(counted),
+      mainArtist: Value(mainArtist),
+      titleSnapshot: Value(titleSnapshot),
+      artistSnapshot: Value(artistSnapshot),
+      artworkRef: artworkRef == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artworkRef),
+    );
+  }
+
+  factory ListenRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ListenRow(
+      id: serializer.fromJson<String>(json['id']),
+      clock: serializer.fromJson<String>(json['clock']),
+      originDevice: serializer.fromJson<String>(json['originDevice']),
+      deleted: serializer.fromJson<bool>(json['deleted']),
+      localSeq: serializer.fromJson<int>(json['localSeq']),
+      trackId: serializer.fromJson<String>(json['trackId']),
+      startedAt: serializer.fromJson<DateTime>(json['startedAt']),
+      heardMs: serializer.fromJson<int>(json['heardMs']),
+      counted: serializer.fromJson<bool>(json['counted']),
+      mainArtist: serializer.fromJson<String>(json['mainArtist']),
+      titleSnapshot: serializer.fromJson<String>(json['titleSnapshot']),
+      artistSnapshot: serializer.fromJson<String>(json['artistSnapshot']),
+      artworkRef: serializer.fromJson<String?>(json['artworkRef']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'clock': serializer.toJson<String>(clock),
+      'originDevice': serializer.toJson<String>(originDevice),
+      'deleted': serializer.toJson<bool>(deleted),
+      'localSeq': serializer.toJson<int>(localSeq),
+      'trackId': serializer.toJson<String>(trackId),
+      'startedAt': serializer.toJson<DateTime>(startedAt),
+      'heardMs': serializer.toJson<int>(heardMs),
+      'counted': serializer.toJson<bool>(counted),
+      'mainArtist': serializer.toJson<String>(mainArtist),
+      'titleSnapshot': serializer.toJson<String>(titleSnapshot),
+      'artistSnapshot': serializer.toJson<String>(artistSnapshot),
+      'artworkRef': serializer.toJson<String?>(artworkRef),
+    };
+  }
+
+  ListenRow copyWith({
+    String? id,
+    String? clock,
+    String? originDevice,
+    bool? deleted,
+    int? localSeq,
+    String? trackId,
+    DateTime? startedAt,
+    int? heardMs,
+    bool? counted,
+    String? mainArtist,
+    String? titleSnapshot,
+    String? artistSnapshot,
+    Value<String?> artworkRef = const Value.absent(),
+  }) => ListenRow(
+    id: id ?? this.id,
+    clock: clock ?? this.clock,
+    originDevice: originDevice ?? this.originDevice,
+    deleted: deleted ?? this.deleted,
+    localSeq: localSeq ?? this.localSeq,
+    trackId: trackId ?? this.trackId,
+    startedAt: startedAt ?? this.startedAt,
+    heardMs: heardMs ?? this.heardMs,
+    counted: counted ?? this.counted,
+    mainArtist: mainArtist ?? this.mainArtist,
+    titleSnapshot: titleSnapshot ?? this.titleSnapshot,
+    artistSnapshot: artistSnapshot ?? this.artistSnapshot,
+    artworkRef: artworkRef.present ? artworkRef.value : this.artworkRef,
+  );
+  ListenRow copyWithCompanion(ListensCompanion data) {
+    return ListenRow(
+      id: data.id.present ? data.id.value : this.id,
+      clock: data.clock.present ? data.clock.value : this.clock,
+      originDevice: data.originDevice.present
+          ? data.originDevice.value
+          : this.originDevice,
+      deleted: data.deleted.present ? data.deleted.value : this.deleted,
+      localSeq: data.localSeq.present ? data.localSeq.value : this.localSeq,
+      trackId: data.trackId.present ? data.trackId.value : this.trackId,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      heardMs: data.heardMs.present ? data.heardMs.value : this.heardMs,
+      counted: data.counted.present ? data.counted.value : this.counted,
+      mainArtist: data.mainArtist.present
+          ? data.mainArtist.value
+          : this.mainArtist,
+      titleSnapshot: data.titleSnapshot.present
+          ? data.titleSnapshot.value
+          : this.titleSnapshot,
+      artistSnapshot: data.artistSnapshot.present
+          ? data.artistSnapshot.value
+          : this.artistSnapshot,
+      artworkRef: data.artworkRef.present
+          ? data.artworkRef.value
+          : this.artworkRef,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ListenRow(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('trackId: $trackId, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('heardMs: $heardMs, ')
+          ..write('counted: $counted, ')
+          ..write('mainArtist: $mainArtist, ')
+          ..write('titleSnapshot: $titleSnapshot, ')
+          ..write('artistSnapshot: $artistSnapshot, ')
+          ..write('artworkRef: $artworkRef')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    clock,
+    originDevice,
+    deleted,
+    localSeq,
+    trackId,
+    startedAt,
+    heardMs,
+    counted,
+    mainArtist,
+    titleSnapshot,
+    artistSnapshot,
+    artworkRef,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ListenRow &&
+          other.id == this.id &&
+          other.clock == this.clock &&
+          other.originDevice == this.originDevice &&
+          other.deleted == this.deleted &&
+          other.localSeq == this.localSeq &&
+          other.trackId == this.trackId &&
+          other.startedAt == this.startedAt &&
+          other.heardMs == this.heardMs &&
+          other.counted == this.counted &&
+          other.mainArtist == this.mainArtist &&
+          other.titleSnapshot == this.titleSnapshot &&
+          other.artistSnapshot == this.artistSnapshot &&
+          other.artworkRef == this.artworkRef);
+}
+
+class ListensCompanion extends UpdateCompanion<ListenRow> {
+  final Value<String> id;
+  final Value<String> clock;
+  final Value<String> originDevice;
+  final Value<bool> deleted;
+  final Value<int> localSeq;
+  final Value<String> trackId;
+  final Value<DateTime> startedAt;
+  final Value<int> heardMs;
+  final Value<bool> counted;
+  final Value<String> mainArtist;
+  final Value<String> titleSnapshot;
+  final Value<String> artistSnapshot;
+  final Value<String?> artworkRef;
+  final Value<int> rowid;
+  const ListensCompanion({
+    this.id = const Value.absent(),
+    this.clock = const Value.absent(),
+    this.originDevice = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.localSeq = const Value.absent(),
+    this.trackId = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.heardMs = const Value.absent(),
+    this.counted = const Value.absent(),
+    this.mainArtist = const Value.absent(),
+    this.titleSnapshot = const Value.absent(),
+    this.artistSnapshot = const Value.absent(),
+    this.artworkRef = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ListensCompanion.insert({
+    required String id,
+    required String clock,
+    required String originDevice,
+    this.deleted = const Value.absent(),
+    required int localSeq,
+    required String trackId,
+    required DateTime startedAt,
+    required int heardMs,
+    required bool counted,
+    required String mainArtist,
+    required String titleSnapshot,
+    required String artistSnapshot,
+    this.artworkRef = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       clock = Value(clock),
+       originDevice = Value(originDevice),
+       localSeq = Value(localSeq),
+       trackId = Value(trackId),
+       startedAt = Value(startedAt),
+       heardMs = Value(heardMs),
+       counted = Value(counted),
+       mainArtist = Value(mainArtist),
+       titleSnapshot = Value(titleSnapshot),
+       artistSnapshot = Value(artistSnapshot);
+  static Insertable<ListenRow> custom({
+    Expression<String>? id,
+    Expression<String>? clock,
+    Expression<String>? originDevice,
+    Expression<bool>? deleted,
+    Expression<int>? localSeq,
+    Expression<String>? trackId,
+    Expression<DateTime>? startedAt,
+    Expression<int>? heardMs,
+    Expression<bool>? counted,
+    Expression<String>? mainArtist,
+    Expression<String>? titleSnapshot,
+    Expression<String>? artistSnapshot,
+    Expression<String>? artworkRef,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (clock != null) 'clock': clock,
+      if (originDevice != null) 'origin_device': originDevice,
+      if (deleted != null) 'deleted': deleted,
+      if (localSeq != null) 'local_seq': localSeq,
+      if (trackId != null) 'track_id': trackId,
+      if (startedAt != null) 'started_at': startedAt,
+      if (heardMs != null) 'heard_ms': heardMs,
+      if (counted != null) 'counted': counted,
+      if (mainArtist != null) 'main_artist': mainArtist,
+      if (titleSnapshot != null) 'title_snapshot': titleSnapshot,
+      if (artistSnapshot != null) 'artist_snapshot': artistSnapshot,
+      if (artworkRef != null) 'artwork_ref': artworkRef,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ListensCompanion copyWith({
+    Value<String>? id,
+    Value<String>? clock,
+    Value<String>? originDevice,
+    Value<bool>? deleted,
+    Value<int>? localSeq,
+    Value<String>? trackId,
+    Value<DateTime>? startedAt,
+    Value<int>? heardMs,
+    Value<bool>? counted,
+    Value<String>? mainArtist,
+    Value<String>? titleSnapshot,
+    Value<String>? artistSnapshot,
+    Value<String?>? artworkRef,
+    Value<int>? rowid,
+  }) {
+    return ListensCompanion(
+      id: id ?? this.id,
+      clock: clock ?? this.clock,
+      originDevice: originDevice ?? this.originDevice,
+      deleted: deleted ?? this.deleted,
+      localSeq: localSeq ?? this.localSeq,
+      trackId: trackId ?? this.trackId,
+      startedAt: startedAt ?? this.startedAt,
+      heardMs: heardMs ?? this.heardMs,
+      counted: counted ?? this.counted,
+      mainArtist: mainArtist ?? this.mainArtist,
+      titleSnapshot: titleSnapshot ?? this.titleSnapshot,
+      artistSnapshot: artistSnapshot ?? this.artistSnapshot,
+      artworkRef: artworkRef ?? this.artworkRef,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (clock.present) {
+      map['clock'] = Variable<String>(clock.value);
+    }
+    if (originDevice.present) {
+      map['origin_device'] = Variable<String>(originDevice.value);
+    }
+    if (deleted.present) {
+      map['deleted'] = Variable<bool>(deleted.value);
+    }
+    if (localSeq.present) {
+      map['local_seq'] = Variable<int>(localSeq.value);
+    }
+    if (trackId.present) {
+      map['track_id'] = Variable<String>(trackId.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<DateTime>(startedAt.value);
+    }
+    if (heardMs.present) {
+      map['heard_ms'] = Variable<int>(heardMs.value);
+    }
+    if (counted.present) {
+      map['counted'] = Variable<bool>(counted.value);
+    }
+    if (mainArtist.present) {
+      map['main_artist'] = Variable<String>(mainArtist.value);
+    }
+    if (titleSnapshot.present) {
+      map['title_snapshot'] = Variable<String>(titleSnapshot.value);
+    }
+    if (artistSnapshot.present) {
+      map['artist_snapshot'] = Variable<String>(artistSnapshot.value);
+    }
+    if (artworkRef.present) {
+      map['artwork_ref'] = Variable<String>(artworkRef.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ListensCompanion(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('trackId: $trackId, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('heardMs: $heardMs, ')
+          ..write('counted: $counted, ')
+          ..write('mainArtist: $mainArtist, ')
+          ..write('titleSnapshot: $titleSnapshot, ')
+          ..write('artistSnapshot: $artistSnapshot, ')
+          ..write('artworkRef: $artworkRef, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5659,9 +6440,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ThemesTable themes = $ThemesTable(this);
   late final $FontsTable fonts = $FontsTable(this);
   late final $LyricsTable lyrics = $LyricsTable(this);
+  late final $ListensTable listens = $ListensTable(this);
   late final Index playlistEntriesPlaylistPosition = Index(
     'playlist_entries_playlist_position',
     'CREATE INDEX playlist_entries_playlist_position ON playlist_entries (playlist_id, position)',
+  );
+  late final Index listensStartedAt = Index(
+    'listens_started_at',
+    'CREATE INDEX listens_started_at ON listens (started_at)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -5680,7 +6466,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     themes,
     fonts,
     lyrics,
+    listens,
     playlistEntriesPlaylistPosition,
+    listensStartedAt,
   ];
 }
 
@@ -8651,6 +9439,369 @@ typedef $$LyricsTableProcessedTableManager =
       LyricsRow,
       PrefetchHooks Function()
     >;
+typedef $$ListensTableCreateCompanionBuilder = ListensCompanion Function({
+  required String id,
+  required String clock,
+  required String originDevice,
+  Value<bool> deleted,
+  required int localSeq,
+  required String trackId,
+  required DateTime startedAt,
+  required int heardMs,
+  required bool counted,
+  required String mainArtist,
+  required String titleSnapshot,
+  required String artistSnapshot,
+  Value<String?> artworkRef,
+  Value<int> rowid,
+});
+typedef $$ListensTableUpdateCompanionBuilder = ListensCompanion Function({
+  Value<String> id,
+  Value<String> clock,
+  Value<String> originDevice,
+  Value<bool> deleted,
+  Value<int> localSeq,
+  Value<String> trackId,
+  Value<DateTime> startedAt,
+  Value<int> heardMs,
+  Value<bool> counted,
+  Value<String> mainArtist,
+  Value<String> titleSnapshot,
+  Value<String> artistSnapshot,
+  Value<String?> artworkRef,
+  Value<int> rowid,
+});
+
+class $$ListensTableFilterComposer
+    extends Composer<_$AppDatabase, $ListensTable> {
+  $$ListensTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get trackId => $composableBuilder(
+    column: $table.trackId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get heardMs => $composableBuilder(
+    column: $table.heardMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get counted => $composableBuilder(
+    column: $table.counted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mainArtist => $composableBuilder(
+    column: $table.mainArtist,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get titleSnapshot => $composableBuilder(
+    column: $table.titleSnapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get artistSnapshot => $composableBuilder(
+    column: $table.artistSnapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get artworkRef => $composableBuilder(
+    column: $table.artworkRef,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ListensTableOrderingComposer
+    extends Composer<_$AppDatabase, $ListensTable> {
+  $$ListensTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get trackId => $composableBuilder(
+    column: $table.trackId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get heardMs => $composableBuilder(
+    column: $table.heardMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get counted => $composableBuilder(
+    column: $table.counted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mainArtist => $composableBuilder(
+    column: $table.mainArtist,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get titleSnapshot => $composableBuilder(
+    column: $table.titleSnapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get artistSnapshot => $composableBuilder(
+    column: $table.artistSnapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get artworkRef => $composableBuilder(
+    column: $table.artworkRef,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ListensTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ListensTable> {
+  $$ListensTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get clock =>
+      $composableBuilder(column: $table.clock, builder: (column) => column);
+
+  GeneratedColumn<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get deleted =>
+      $composableBuilder(column: $table.deleted, builder: (column) => column);
+
+  GeneratedColumn<int> get localSeq =>
+      $composableBuilder(column: $table.localSeq, builder: (column) => column);
+
+  GeneratedColumn<String> get trackId =>
+      $composableBuilder(column: $table.trackId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get heardMs =>
+      $composableBuilder(column: $table.heardMs, builder: (column) => column);
+
+  GeneratedColumn<bool> get counted =>
+      $composableBuilder(column: $table.counted, builder: (column) => column);
+
+  GeneratedColumn<String> get mainArtist => $composableBuilder(
+    column: $table.mainArtist,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get titleSnapshot => $composableBuilder(
+    column: $table.titleSnapshot,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get artistSnapshot => $composableBuilder(
+    column: $table.artistSnapshot,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get artworkRef => $composableBuilder(
+    column: $table.artworkRef,
+    builder: (column) => column,
+  );
+}
+
+class $$ListensTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ListensTable,
+          ListenRow,
+          $$ListensTableFilterComposer,
+          $$ListensTableOrderingComposer,
+          $$ListensTableAnnotationComposer,
+          $$ListensTableCreateCompanionBuilder,
+          $$ListensTableUpdateCompanionBuilder,
+          (ListenRow, BaseReferences<_$AppDatabase, $ListensTable, ListenRow>),
+          ListenRow,
+          PrefetchHooks Function()
+        > {
+  $$ListensTableTableManager(_$AppDatabase db, $ListensTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ListensTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ListensTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ListensTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> clock = const Value.absent(),
+                Value<String> originDevice = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<int> localSeq = const Value.absent(),
+                Value<String> trackId = const Value.absent(),
+                Value<DateTime> startedAt = const Value.absent(),
+                Value<int> heardMs = const Value.absent(),
+                Value<bool> counted = const Value.absent(),
+                Value<String> mainArtist = const Value.absent(),
+                Value<String> titleSnapshot = const Value.absent(),
+                Value<String> artistSnapshot = const Value.absent(),
+                Value<String?> artworkRef = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ListensCompanion(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                trackId: trackId,
+                startedAt: startedAt,
+                heardMs: heardMs,
+                counted: counted,
+                mainArtist: mainArtist,
+                titleSnapshot: titleSnapshot,
+                artistSnapshot: artistSnapshot,
+                artworkRef: artworkRef,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String clock,
+                required String originDevice,
+                Value<bool> deleted = const Value.absent(),
+                required int localSeq,
+                required String trackId,
+                required DateTime startedAt,
+                required int heardMs,
+                required bool counted,
+                required String mainArtist,
+                required String titleSnapshot,
+                required String artistSnapshot,
+                Value<String?> artworkRef = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ListensCompanion.insert(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                trackId: trackId,
+                startedAt: startedAt,
+                heardMs: heardMs,
+                counted: counted,
+                mainArtist: mainArtist,
+                titleSnapshot: titleSnapshot,
+                artistSnapshot: artistSnapshot,
+                artworkRef: artworkRef,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ListensTable, ListenRow>(table),
+                  BaseReferences<_$AppDatabase, $ListensTable, ListenRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ListensTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ListensTable,
+      ListenRow,
+      $$ListensTableFilterComposer,
+      $$ListensTableOrderingComposer,
+      $$ListensTableAnnotationComposer,
+      $$ListensTableCreateCompanionBuilder,
+      $$ListensTableUpdateCompanionBuilder,
+      (ListenRow, BaseReferences<_$AppDatabase, $ListensTable, ListenRow>),
+      ListenRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -8679,4 +9830,6 @@ class $AppDatabaseManager {
       $$FontsTableTableManager(_db, _db.fonts);
   $$LyricsTableTableManager get lyrics =>
       $$LyricsTableTableManager(_db, _db.lyrics);
+  $$ListensTableTableManager get listens =>
+      $$ListensTableTableManager(_db, _db.listens);
 }
