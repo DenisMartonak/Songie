@@ -252,6 +252,17 @@ class DownloadRepository {
     });
   }
 
+  /// Queues the songs of enabled playlists that have no download row yet:
+  /// ones added after downloading was turned on, from any screen or another
+  /// device. Failed rows are left for Retry. Returns how many were queued.
+  Future<int> queueNewInEnabled() {
+    return _tx(() async {
+      final ids = await _activeTrackIds(await _enabledPlaylistIds());
+      final have = {for (final f in await _rows(ids)) f.trackId};
+      return _queue(ids.difference(have));
+    });
+  }
+
   /// Done files of [playlistId] that no other enabled playlist and no manual
   /// request needs.
   Future<List<String>> exclusiveFiles(String playlistId) async {
@@ -515,6 +526,13 @@ class DownloadRepository {
 
   Stream<Set<String>> watchEnabledPlaylists() =>
       _watch([_db.playlistDevicePrefs, _db.playlists], _enabledPlaylistIds);
+
+  /// The songs of enabled playlists.
+  Stream<Set<String>> watchEnabledSongs() => _watch([
+    _db.playlistDevicePrefs,
+    _db.playlists,
+    _db.playlistEntries,
+  ], () async => _activeTrackIds(await _enabledPlaylistIds()));
 
   /// Every download row that belongs to a YouTube track.
   Stream<List<LocalFile>> watchYtRows() => _watch([

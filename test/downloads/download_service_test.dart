@@ -314,6 +314,27 @@ void main() {
     expect(e.notifier.updates, isNotEmpty);
   });
 
+  run('a song added to an enabled playlist downloads', (e) {
+    e.queued(['y1']);
+    e.wait(e.service.start());
+    e.succeed('y1');
+    e.inPlaylist(['y2']);
+    e.settle();
+    expect(e.runner.started, ['dl-y1', 'dl-y2']);
+    e.succeed('y2');
+    expect(e.row('y2')!.state, 'done');
+  });
+
+  run('a song added to a playlist that is not downloading stays put', (e) {
+    e.queued(['y1']);
+    e.wait(e.service.start());
+    e.succeed('y1');
+    e.inPlaylist(['y2'], playlist: 'B');
+    e.settle();
+    expect(e.runner.started, ['dl-y1']);
+    expect(e.row('y2'), null);
+  });
+
   run('Android runs 2 at once', concurrency: 2, (e) {
     e.queued(['y1', 'y2', 'y3']);
     e.wait(e.service.start());
@@ -617,12 +638,10 @@ void main() {
     e.wait(e.service.start());
     e.succeed('y1');
     e.inPlaylist(['y2', 'y3']);
-    e.runner.started.clear();
-    // What the sync hook does.
-    expect(e.wait(e.repo.queueAdded('A', ['y2', 'y3'])), 2);
-    e.service.kick();
     e.settle();
-    expect(e.runner.started, ['dl-y2', 'dl-y3']);
+    // The sync hook's own call then finds them already queued.
+    expect(e.wait(e.repo.queueAdded('A', ['y2', 'y3'])), 0);
+    expect(e.runner.started, ['dl-y1', 'dl-y2', 'dl-y3']);
   });
 
   run('dispose cancels running downloads and leaves rows for next start', (e) {

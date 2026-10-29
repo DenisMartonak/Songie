@@ -171,9 +171,14 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
             onMenu: (action) => _onMenu(action, summary),
           ),
         ),
-        if (summary.source == 'yt')
+        if (summary.source == 'yt' || list.any((r) => r.track.source == 'yt'))
           _sideSafe(
-            SliverToBoxAdapter(child: _YtActions(playlistId: summary.id)),
+            SliverToBoxAdapter(
+              child: _YtActions(
+                playlistId: summary.id,
+                imported: summary.source == 'yt',
+              ),
+            ),
           ),
         if (failed)
           _sideSafe(const SliverToBoxAdapter(child: _LoadFailed()))
@@ -857,10 +862,13 @@ class _PlayButton extends StatelessWidget {
 }
 
 /// A YouTube playlist's Sync and Download, and how its downloads are going.
+/// Download (any playlist with YouTube songs) and, for an imported playlist,
+/// Sync.
 class _YtActions extends StatelessWidget {
-  const _YtActions({required this.playlistId});
+  const _YtActions({required this.playlistId, required this.imported});
 
   final String playlistId;
+  final bool imported;
 
   @override
   Widget build(BuildContext context) {
@@ -873,7 +881,7 @@ class _YtActions extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              YtSyncButton(playlistId: playlistId),
+              if (imported) YtSyncButton(playlistId: playlistId),
               DownloadToggle(playlistId: playlistId),
             ],
           ),

@@ -305,6 +305,15 @@ class DownloadService {
           kick();
         }, onError: _logError),
       )
+      ..add(
+        _repo.watchEnabledSongs().skip(1).listen((_) async {
+          try {
+            if (await _repo.queueNewInEnabled() > 0) kick();
+          } catch (e, s) {
+            _logError(e, s);
+          }
+        }, onError: _logError),
+      )
       ..add(_repo.watchYtRows().listen(_onRows, onError: _logError));
     _update();
     kick();

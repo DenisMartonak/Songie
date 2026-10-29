@@ -228,6 +228,28 @@ void main() {
     expect(await repo.queueAdded('A', ['y1']), 1);
   });
 
+  test(
+    'queueNewInEnabled queues only enabled-playlist songs with no row',
+    () async {
+      await track('y1');
+      await track('y2');
+      await track('y3');
+      await track('l1', source: 'local');
+      await entry('A', 'y1');
+      await entry('B', 'y3');
+      expect(await repo.queueNewInEnabled(), 0);
+      await repo.setPlaylistDownload('A', true);
+      await setRow('y1', 'failed');
+      await entry('A', 'y2');
+      await entry('A', 'l1');
+      expect(await repo.queueNewInEnabled(), 1);
+      expect((await row('y2'))!.state, 'queued');
+      expect((await row('y1'))!.state, 'failed', reason: 'left for Retry');
+      expect(await row('y3'), null);
+      expect(await row('l1'), null);
+    },
+  );
+
   test('downloadTrack: manual queue, false for local or unavailable', () async {
     await track('y1');
     await track('y2', unavailable: true);

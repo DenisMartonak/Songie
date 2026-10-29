@@ -719,6 +719,30 @@ void main() {
     });
   });
 
+  group('download switch', () {
+    uiTest('a Songies playlist with YouTube songs offers Download, not '
+        'Sync', (tester) async {
+      final id = await real(tester, () async {
+        await h.db
+            .into(h.db.tracks)
+            .insert(trackRow(id: 'y1', source: 'yt', ytVideoId: 'vy1'));
+        return h.addPlaylist('Mine', ['y1']);
+      });
+      await pumpPage(tester, id);
+      expect(find.byType(DownloadToggle), findsOneWidget);
+      expect(find.text('Sync with YouTube'), findsNothing);
+    });
+
+    uiTest('a playlist of only local files has no Download', (tester) async {
+      final id = await real(tester, () async {
+        await h.db.into(h.db.tracks).insert(trackRow(id: 'l1'));
+        return h.addPlaylist('Files', ['l1']);
+      });
+      await pumpPage(tester, id);
+      expect(find.byType(DownloadToggle), findsNothing);
+    });
+  });
+
   group('skeleton rows', () {
     uiTest('a failing entries stream shows a message, not a shimmer', (
       tester,
