@@ -67,23 +67,32 @@ class ListenRecorder {
     // start event) belong to no open listen.
     if (l == null || l.track.id != t.id) return;
     if (s.duration != null) l.length = s.duration;
-    l.heard.onState(playing: s.playing && !s.buffering, position: s.position);
+    final playing = s.playing && !s.buffering;
+    final stopped = l.wasPlaying && !playing;
+    l.wasPlaying = playing;
+    l.heard.onState(playing: playing, position: s.position);
     final heard = l.heard.heard;
     if (heard == Duration.zero) return;
     if (!l.started) {
       l.started = true;
       final startedAt = _now().toUtc().subtract(heard);
       final counted = l.counted;
+      l.savedHeard = heard;
+      l.savedCounted = counted;
       _enqueue(() async {
         l.id = await _store.start(l.track, startedAt, heard, counted);
       });
     }
-    if (heard >= l.nextCheckpoint) {
+    final checkpointDue = heard >= l.nextCheckpoint;
+    if (checkpointDue) {
       // The next multiple of [checkpoint] above what was heard.
       l.nextCheckpoint =
           checkpoint * (heard.inMicroseconds ~/ checkpoint.inMicroseconds + 1);
-      _save(l);
     }
+    // Pausing, stopping or the queue ending may be the last event this
+    // listen gets (the app may quit without a dispose), and a play is saved
+    // the moment it counts.
+    if (checkpointDue || stopped || (l.counted && !l.savedCounted)) _save(l);
   }
 
   /// Ends the open listen with a final save, if anything was heard.
@@ -93,9 +102,13 @@ class ListenRecorder {
     if (l != null && l.started) _save(l);
   }
 
+  /// Queues an update of [l]'s row, unless nothing changed since the last.
   void _save(_Listen l) {
     final heard = l.heard.heard;
     final counted = l.counted;
+    if (heard == l.savedHeard && counted == l.savedCounted) return;
+    l.savedHeard = heard;
+    l.savedCounted = counted;
     _enqueue(() async {
       final id = l.id;
       // The row could not be written: nothing to update.
@@ -129,6 +142,13 @@ class _Listen {
   bool started = false;
   String? id;
   Duration nextCheckpoint = ListenRecorder.checkpoint;
+
+  /// Effectively playing (not paused, stopped or buffering) at the last state.
+  bool wasPlaying = false;
+
+  /// What the last write asked to store.
+  Duration savedHeard = Duration.zero;
+  bool savedCounted = false;
 
   bool get counted => reachedPlay(heard.heard, length);
 }

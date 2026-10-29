@@ -304,7 +304,6 @@ void main() {
       starts.add(a);
       play(a, 0, 75);
       final row = await finish('L1');
-      expect(row.$1, greaterThanOrEqualTo(const Duration(seconds: 60)));
       expect(row.$1, const Duration(seconds: 75));
     });
 
@@ -354,6 +353,78 @@ void main() {
       play(b, 0, 40);
       await _settle();
       expect(store.calls, hasLength(n));
+    });
+
+    test('queue end then a later start: one row with the heard time', () async {
+      starts.add(a);
+      play(a, 0, 40);
+      tick(a, 0, playing: false); // queue end: still current, at 0:00
+      await _settle();
+      expect(store.rows['L1'], (const Duration(seconds: 40), true));
+      final n = store.calls.length;
+      starts.add(b);
+      await _settle();
+      expect(store.calls, hasLength(n));
+      expect(store.rows.keys, ['L1']);
+    });
+
+    test('a 20 s song heard to the queue end is saved counted', () async {
+      final short = _track('s', durationMs: 20000);
+      const length = Duration(seconds: 20);
+      starts.add(short);
+      play(short, 0, 20, duration: length);
+      tick(short, 0, playing: false, duration: length);
+      await _settle();
+      expect(store.rows['L1'], (const Duration(seconds: 20), true));
+    });
+
+    test('a pause after 45 s saves 45 s at the pause', () async {
+      starts.add(a);
+      play(a, 0, 45);
+      await _settle();
+      expect(store.updates['L1'], const [Duration(seconds: 30)]);
+      tick(a, 45000, playing: false);
+      await _settle();
+      expect(store.updates['L1'], const [
+        Duration(seconds: 30),
+        Duration(seconds: 45),
+      ]);
+    });
+
+    test('buffering saves like a pause', () async {
+      starts.add(a);
+      play(a, 0, 40);
+      tick(a, 40000, buffering: true);
+      await _settle();
+      expect(store.updates['L1']!.last, const Duration(seconds: 40));
+    });
+
+    test('a play is saved the moment it counts', () async {
+      final short = _track('s', durationMs: 20000);
+      starts.add(short);
+      play(short, 0, 20, duration: const Duration(seconds: 20));
+      await _settle();
+      expect(store.updates['L1'], const [Duration(seconds: 20)]);
+    });
+
+    test('counting and the checkpoint together write once', () async {
+      starts.add(a);
+      play(a, 0, 30);
+      await _settle();
+      expect(store.updates['L1'], const [Duration(seconds: 30)]);
+      expect(store.rows['L1'], (const Duration(seconds: 30), true));
+    });
+
+    test('an unchanged listen is not written again', () async {
+      starts.add(a);
+      play(a, 0, 10);
+      tick(a, 10000, playing: false);
+      tick(a, 10000, playing: false);
+      play(a, 10, 10); // resume tick, nothing heard yet
+      tick(a, 10000, playing: false);
+      recorder.dispose();
+      await _settle();
+      expect(store.updates['L1'], const [Duration(seconds: 10)]);
     });
   });
 }
