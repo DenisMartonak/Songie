@@ -6,6 +6,7 @@ import '../../providers.dart';
 import '../../stats/stats_models.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/contrast.dart';
+import '../shell/go_tab.dart';
 import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
 import '../ytm/ytm_nav.dart';
@@ -15,6 +16,9 @@ import 'stats_chart.dart';
 
 /// Rows shown before Show top 10.
 const int _shownTop = 5;
+
+/// The Search tab's branch index (see `router.dart`).
+const int _searchTab = 1;
 
 /// The YouTube Music artist page for a top artist, from its most-played
 /// song's id: that song (if still in the library) by the song menu's Go to
@@ -31,18 +35,34 @@ final statsArtistPageProvider =
 
 /// Listening stats: the period picker, total minutes and the change from
 /// the period before, a chart of minutes, then top artists and top songs.
-/// An empty period says so instead.
-class StatsPage extends ConsumerWidget {
+/// An empty period says so instead. While another period loads, the stats
+/// shown last stay on screen, dimmed.
+class StatsPage extends ConsumerStatefulWidget {
   const StatsPage({super.key});
 
+  @override
+  ConsumerState<StatsPage> createState() => _StatsPageState();
+}
+
+class _StatsPageState extends ConsumerState<StatsPage> {
   static const double _maxContentWidth = 720;
 
+  /// The stats last shown, kept until the selected period's arrive.
+  PeriodStats? _shown;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final period = ref.watch(statsPeriodProvider);
     final value = ref.watch(periodStatsProvider(period));
     final bottom = MediaQuery.paddingOf(context).bottom;
-    final stats = value.value;
+    final fresh = value.value;
+    if (fresh != null && fresh.period == period) {
+      _shown = fresh;
+    } else if (value.hasError) {
+      _shown = null;
+    }
+    final stats = _shown;
+    final stale = stats != null && stats.period != period;
 
     return SafeArea(
       bottom: false,
@@ -62,8 +82,15 @@ class StatsPage extends ConsumerWidget {
                   selected: period,
                   onSelected: ref.read(statsPeriodProvider.notifier).select,
                 ),
-                if (stats != null && stats.period == period)
-                  ..._content(stats)
+                if (stats != null)
+                  // A static dim while the new period loads.
+                  Opacity(
+                    opacity: stale ? 0.5 : 1,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: _content(stats),
+                    ),
+                  )
                 else if (value.hasError)
                   const _Message("Couldn't load your listening stats"),
               ],
@@ -389,7 +416,7 @@ class _PlayCount extends StatelessWidget {
 }
 
 /// A top artist: opens their YouTube Music page when one is known
-/// ([statsArtistPageProvider]); otherwise a tap does nothing.
+/// ([statsArtistPageProvider]), otherwise Search with their name.
 class _ArtistRow extends ConsumerWidget {
   const _ArtistRow({required this.rank, required this.artist});
 
@@ -419,11 +446,26 @@ class _ArtistRow extends ConsumerWidget {
     );
   }
 
+  /// Opens the artist's YouTube Music page when one is known, otherwise
+  /// Search for their name.
   Future<void> _open(BuildContext context, WidgetRef ref) async {
+    final shell = StatefulNavigationShell.maybeOf(context);
+    final router = GoRouter.of(context);
+    final query = ref.read(searchQueryProvider.notifier);
+    final pageFor = ref.read(statsArtistPageProvider);
     final trackId = artist.sampleTrackId;
-    if (trackId == null) return;
-    final page = await ref.read(statsArtistPageProvider)(trackId);
-    if (page != null && context.mounted) context.goYtmArtist(page);
+    final page = trackId == null ? null : await pageFor(trackId);
+    if (!context.mounted) return;
+    if (page != null) {
+      context.goYtmArtist(page);
+      return;
+    }
+    query.set(artist.name);
+    if (shell != null) {
+      goTab(shell.widget, _searchTab);
+    } else {
+      router.go('/search');
+    }
   }
 }
 

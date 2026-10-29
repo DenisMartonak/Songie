@@ -204,4 +204,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining(' · '), findsNothing);
   });
+
+  testWidgets('without a bounded height it takes a default one', (
+    tester,
+  ) async {
+    for (final (compact, height) in [
+      (false, StatsChart.defaultHeight),
+      (true, StatsChart.compactHeight),
+    ]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildThemeData(ThemeSpec.builtInDefault),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: [StatsChart(buckets: _week, compact: compact)],
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(StatsChart)).height, height);
+    }
+  });
 }

@@ -85,7 +85,8 @@ String statsBucketLabel(StatsBucket b, StatsBucketKind kind) {
 /// Bars use the theme's accent, kept at 3:1 on the background.
 ///
 /// Hovering or tapping a bar shows its date range and minutes; [compact]
-/// (the Home card) draws the bars only. Each bar is one semantics node
+/// (the Home card) draws the bars only. Given no bounded height it is
+/// [defaultHeight] tall ([compactHeight] when compact). Each bar is one semantics node
 /// labelled "`range`: N min" whose rect is the bar's.
 class StatsChart extends StatelessWidget {
   const StatsChart({required this.buckets, this.compact = false, super.key});
@@ -98,6 +99,10 @@ class StatsChart extends StatelessWidget {
 
   static const double _baseline = 2;
 
+  /// The height without a bounded one from the parent.
+  static const double defaultHeight = 160;
+  static const double compactHeight = 32;
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
@@ -109,35 +114,44 @@ class StatsChart extends StatelessWidget {
     final motion = Motion.of(context);
 
     return LayoutBuilder(
-      builder: (context, box) => Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < buckets.length; i++)
-            Expanded(
-              child: _bar(
-                context,
-                index: i,
-                bucket: buckets[i],
-                label: statsBucketLabel(buckets[i], kind),
-                height: largest == 0 || buckets[i].heard.inSeconds == 0
-                    ? _baseline
-                    : math.max(
-                        _baseline,
-                        box.maxHeight * buckets[i].heard.inSeconds / largest,
-                      ),
-                gap: gap,
-                fill: buckets[i].heard.inSeconds == 0 ? faint : accent,
-                filled: buckets[i].heard.inSeconds > 0,
-                tooltipStyle: AnimationStyle(
-                  curve: Motion.standardCurve,
-                  duration: motion.quick,
-                  reverseDuration: motion.quick,
+      builder: (context, box) {
+        // In a scroll view or an unsized column it takes a default height.
+        final chartHeight = box.hasBoundedHeight
+            ? box.maxHeight
+            : (compact ? compactHeight : defaultHeight);
+        return SizedBox(
+          height: chartHeight,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < buckets.length; i++)
+                Expanded(
+                  child: _bar(
+                    context,
+                    index: i,
+                    bucket: buckets[i],
+                    label: statsBucketLabel(buckets[i], kind),
+                    height: largest == 0 || buckets[i].heard.inSeconds == 0
+                        ? _baseline
+                        : math.max(
+                            _baseline,
+                            chartHeight * buckets[i].heard.inSeconds / largest,
+                          ),
+                    gap: gap,
+                    fill: buckets[i].heard.inSeconds == 0 ? faint : accent,
+                    filled: buckets[i].heard.inSeconds > 0,
+                    tooltipStyle: AnimationStyle(
+                      curve: Motion.standardCurve,
+                      duration: motion.quick,
+                      reverseDuration: motion.quick,
+                    ),
+                    colors: colors,
+                  ),
                 ),
-                colors: colors,
-              ),
-            ),
-        ],
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 

@@ -1,8 +1,13 @@
 // The stats page: period picker, total and comparison, chart, top artists
 // and top songs, and the empty state.
+import 'dart:async';
+
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:songies/data/database.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/stats/stats_models.dart';
 import 'package:songies/stats/stats_repository.dart';
@@ -18,9 +23,13 @@ class _FakeStats implements StatsRepository {
   final Map<StatsPeriod, PeriodStats> byPeriod;
   final List<StatsPeriod> watched = [];
 
+  /// Periods whose stats arrive only when the test adds them.
+  final Map<StatsPeriod, StreamController<PeriodStats>> held = {};
+
   @override
   Stream<PeriodStats> watch(StatsPeriod p) {
     watched.add(p);
+    if (held[p] case final c?) return c.stream;
     return Stream.value(byPeriod[p]!);
   }
 
@@ -130,6 +139,13 @@ void main() {
                 builder: (_, s) => Text('artist ${s.pathParameters['id']}'),
               ),
             ],
+          ),
+          GoRoute(
+            path: '/search',
+            builder: (_, _) => Consumer(
+              builder: (_, ref, _) =>
+                  Text('search: ${ref.watch(searchQueryProvider)}'),
+            ),
           ),
         ],
         extraOverrides: [
@@ -295,26 +311,68 @@ void main() {
     expect(find.text('artist UCone'), findsOneWidget);
   });
 
-  uiTest('an artist without a known page does nothing', (tester) async {
+  uiTest('an artist without a known page opens Search for their name', (
+    tester,
+  ) async {
     size(tester, const Size(400, 800));
     await pumpPage(tester, knownArtistPage: 'UCone');
     await tester.tap(find.byKey(const Key('stats.artist.1')));
     await settle(tester);
-    expect(find.byType(StatsPage), findsOneWidget);
-    expect(find.textContaining('artist '), findsNothing);
+    expect(find.byType(StatsPage), findsNothing);
+    expect(find.text('search: Artist 2'), findsOneWidget);
   });
 
-  uiTest('a library song gives no artist page (the song menu rule)', (
+  uiTest('a library song gives no artist page, so Search opens', (
     tester,
   ) async {
     size(tester, const Size(400, 800));
-    // Library tracks keep no YouTube Music artist page.
+    // Library tracks keep no YouTube Music artist page (the song menu's
+    // Go to artist rule).
     await real(tester, () => h.addTrack('s1'));
     await pumpPage(tester);
     await tester.tap(find.byKey(const Key('stats.artist.0')));
     await settle(tester);
-    expect(find.byType(StatsPage), findsOneWidget);
-    expect(find.textContaining('artist '), findsNothing);
+    expect(find.text('search: Artist 1'), findsOneWidget);
+    expect(find.textContaining('artist U'), findsNothing);
+  });
+
+  uiTest('a soft-deleted top song has no menu and its tap does nothing', (
+    tester,
+  ) async {
+    size(tester, const Size(400, 800));
+    await real(tester, () async {
+      await h.addTrack('s1');
+      await (h.db.update(h.db.tracks)..where((t) => t.id.equals('s1'))).write(
+        const TracksCompanion(deleted: Value(true)),
+      );
+    });
+    await pumpPage(tester);
+    expect(find.text('Snapshot 1'), findsOneWidget);
+    expect(find.byKey(const Key('stats.song.menu.0')), findsNothing);
+    await tester.tap(find.byKey(const Key('stats.song.0')));
+    await settle(tester);
+    expect(h.player.state.queue, isEmpty);
+  });
+
+  uiTest('the old stats stay until the new period arrives', (tester) async {
+    size(tester, const Size(400, 800));
+    final month = StreamController<PeriodStats>();
+    addTearDown(month.close);
+    stats.held[StatsPeriod.month] = month;
+    await pumpPage(tester);
+    expect(text(tester, 'stats.total'), '1,234 min');
+
+    await tester.tap(find.byKey(const Key('stats.period.month')));
+    await settle(tester);
+    expect(stats.watched.last, StatsPeriod.month);
+    // Still the week's, dimmed, with nothing animating.
+    expect(text(tester, 'stats.total'), '1,234 min');
+    expect(tester.binding.hasScheduledFrame, isFalse);
+
+    month.add(stats.byPeriod[StatsPeriod.month]!);
+    await settle(tester);
+    expect(text(tester, 'stats.total'), '46 min');
+    expect(text(tester, 'stats.change'), '\u22128% vs the previous month');
   });
 
   uiTest('an empty period shows only the message', (tester) async {
