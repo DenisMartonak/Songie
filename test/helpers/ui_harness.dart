@@ -21,6 +21,7 @@ import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
 import 'package:songies/providers.dart';
+import 'package:songies/stats/stats_repository.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/library/pickers.dart';
@@ -174,6 +175,9 @@ class UiHarness {
   /// Replaceable before the app is pumped (a test's failing subclass).
   late LibraryRepository repo = LibraryRepository(db, stamp);
   late final SearchRepository search = SearchRepository(db);
+
+  /// Listening stats; tests swap in a scripted one before pumping.
+  late StatsRepository stats = StatsRepository(db);
   final PlayHistoryRepository history;
   final FakeAudioBackend backend;
   // Created eagerly: its command queue must start on the real clock, or
@@ -257,6 +261,7 @@ class UiHarness {
     syncStampProvider.overrideWithValue(stamp),
     if (paths case final paths?) appPathsProvider.overrideWithValue(paths),
     libraryRepositoryProvider.overrideWithValue(repo),
+    statsRepositoryProvider.overrideWithValue(stats),
     searchRepositoryProvider.overrideWithValue(search),
     playHistoryRepositoryProvider.overrideWithValue(history),
     nowProvider.overrideWithValue(() => now()),

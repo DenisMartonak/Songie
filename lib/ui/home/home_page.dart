@@ -17,6 +17,7 @@ import '../motion/motion.dart';
 import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
 import '../shell/adaptive_shell.dart';
+import '../stats/listening_card.dart';
 import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
 import '../ytm/consent_sheet.dart';
@@ -169,6 +170,7 @@ class HomePage extends ConsumerWidget {
                             ),
                           ),
                         ),
+                        const SliverToBoxAdapter(child: ListeningCard()),
                         const SliverToBoxAdapter(
                           child: _SectionTitle('Your playlists'),
                         ),
@@ -192,6 +194,8 @@ class HomePage extends ConsumerWidget {
                           ),
                         ),
                       ],
+                      if (!loading && playlists.isEmpty)
+                        const SliverToBoxAdapter(child: ListeningCard()),
                       if (recentTracks.isNotEmpty) ...[
                         const SliverToBoxAdapter(
                           child: _SectionTitle('Recently played'),

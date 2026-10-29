@@ -107,6 +107,7 @@ void main() {
       StatsPeriod.halfYear: _stats(StatsPeriod.halfYear, total: 300, bars: 26),
       StatsPeriod.year: _empty,
     });
+    h.stats = stats;
   });
   tearDown(() => h.dispose());
 
@@ -149,7 +150,6 @@ void main() {
           ),
         ],
         extraOverrides: [
-          statsRepositoryProvider.overrideWithValue(stats),
           if (knownArtistPage != null)
             statsArtistPageProvider.overrideWithValue(
               (trackId) async => trackId == 's1' ? knownArtistPage : null,
