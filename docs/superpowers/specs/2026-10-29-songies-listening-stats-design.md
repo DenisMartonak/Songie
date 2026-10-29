@@ -116,7 +116,7 @@ From top to bottom:
   - a listen's row is written when it starts having heard time, then updated in place at each checkpoint and at the end;
   - every write is stamped, like other synced rows (my call);
   - "only ever added" means the user never edits or deletes listens; pruning is a device-local cleanup.
-- **Pruning:** rows older than 400 days are deleted when the app starts. This is one cheap indexed delete (my call; it keeps 12 months plus room for the comparison period).
+- **Pruning:** rows older than 730 days are deleted when the app starts. This is one cheap indexed delete (my call; it keeps 12 months plus the previous 12 months for the comparison).
 - **Unchanged:** the existing `play_history` (the last 200 starts, for "Recently played") stays as it is.
 - **Speed:** stats are computed by indexed queries on `started_at`, so a year of listens (tens of thousands of rows) still answers at once. Pre-computed summaries are not needed at this size; the builder adds one only if a test with a year of data shows the page is slow.
 

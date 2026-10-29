@@ -35,18 +35,37 @@ class StatsRepository {
     final start = _addDays(today, -(p.days - 1));
     final prevStart = _addDays(start, -p.days);
 
-    // One indexed range query over the few columns the totals need (a
-    // narrow raw select: mapping whole rows dominated the cost). The
-    // wall-clock bound is widened by a day so it is safe for any UTC offset;
-    // rows are then placed exactly by their local time below.
     final t = _db.listens;
-    final from = prevStart.subtract(const Duration(days: 1));
+
+    // The previous period only needs its total: one indexed SUM. COUNT keeps
+    // an empty previous period apart from a zero total.
+    final prev = await _db
+        .customSelect(
+          'SELECT COUNT(*) AS n, COALESCE(SUM(heard_ms), 0) AS ms '
+          'FROM listens '
+          'WHERE started_at >= ? AND started_at < ? AND deleted = 0',
+          variables: [
+            Variable<DateTime>(_utcOf(prevStart)),
+            Variable<DateTime>(_utcOf(start)),
+          ],
+          readsFrom: {t},
+        )
+        .getSingle();
+
+    // The current period's rows: one indexed range query over the few
+    // columns needed (a narrow raw select: mapping whole rows dominated the
+    // cost). The bound is a day early so it is safe for any UTC offset;
+    // rows are then placed exactly by their local time below. Ties on
+    // started_at are ordered by local_seq, then id, so "latest" is stable.
     final rows = await _db
         .customSelect(
           'SELECT id, track_id, started_at, heard_ms, counted, main_artist, '
           'title_snapshot FROM listens '
-          'WHERE started_at >= ? AND deleted = 0 ORDER BY started_at',
-          variables: [Variable<DateTime>(from)],
+          'WHERE started_at >= ? AND deleted = 0 '
+          'ORDER BY started_at, local_seq, id',
+          variables: [
+            Variable<DateTime>(start.subtract(const Duration(days: 1))),
+          ],
           readsFrom: {t},
         )
         .get();
@@ -54,20 +73,13 @@ class StatsRepository {
     final buckets = _bucketRanges(p, start, end);
     final bucketHeard = List<int>.filled(buckets.length, 0);
     var totalMs = 0;
-    var prevMs = 0;
-    var prevAny = false;
     final songs = <String, _SongAcc>{};
     final artists = <String, _ArtistAcc>{};
 
     for (final r in rows) {
       final local = _wall(r.read<DateTime>('started_at').toUtc());
-      if (local.isBefore(prevStart) || !local.isBefore(end)) continue;
+      if (local.isBefore(start) || !local.isBefore(end)) continue;
       final heardMs = r.read<int>('heard_ms');
-      if (local.isBefore(start)) {
-        prevMs += heardMs;
-        prevAny = true;
-        continue;
-      }
       totalMs += heardMs;
       bucketHeard[_bucketIndex(p, start, local)] += heardMs;
 
@@ -112,7 +124,9 @@ class StatsRepository {
     return PeriodStats(
       period: p,
       total: Duration(milliseconds: totalMs),
-      previousTotal: prevAny ? Duration(milliseconds: prevMs) : null,
+      previousTotal: prev.read<int>('n') > 0
+          ? Duration(milliseconds: prev.read<int>('ms'))
+          : null,
       buckets: [
         for (var i = 0; i < buckets.length; i++)
           StatsBucket(
@@ -204,6 +218,13 @@ class StatsRepository {
       l.second,
       l.millisecond,
     );
+  }
+
+  /// The UTC instant of wall-clock time [wall] (exact outside a DST gap):
+  /// subtract the offset, then re-check it at the guessed instant.
+  DateTime _utcOf(DateTime wall) {
+    final guess = wall.subtract(_wall(wall).difference(wall));
+    return wall.subtract(_wall(guess).difference(guess));
   }
 
   static DateTime _day(DateTime w) => DateTime.utc(w.year, w.month, w.day);

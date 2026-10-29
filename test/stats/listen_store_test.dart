@@ -85,16 +85,16 @@ void main() {
     expect(rows.single.localSeq, greaterThan(first.localSeq));
   });
 
-  test('prune keeps a 399-day-old row and deletes a 401-day-old one', () async {
+  test('prune keeps a 729-day-old row and deletes a 731-day-old one', () async {
     await store.start(
       _track(),
-      now.subtract(const Duration(days: 399)),
+      now.subtract(const Duration(days: 729)),
       const Duration(seconds: 1),
       false,
     );
     final old = await store.start(
       _track(),
-      now.subtract(const Duration(days: 401)),
+      now.subtract(const Duration(days: 731)),
       const Duration(seconds: 1),
       false,
     );

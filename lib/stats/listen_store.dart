@@ -17,8 +17,9 @@ class ListenStore {
   final SyncStamp _stamp;
   final DateTime Function() _now;
 
-  /// Rows older than this are deleted by [prune].
-  static const retention = Duration(days: 400);
+  /// Rows older than this are deleted by [prune]: 12 months plus the
+  /// previous 12 months for the comparison.
+  static const retention = Duration(days: 730);
 
   /// Inserts a listen of [t] that began at [startedAtUtc]; returns its id, or
   /// null if it could not be written.
