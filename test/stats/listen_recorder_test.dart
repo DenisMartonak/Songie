@@ -378,6 +378,31 @@ void main() {
       expect(store.rows['L1'], (const Duration(seconds: 20), true));
     });
 
+    test(
+      'a 20 s song whose last tick is 19.8 s counts at the queue end',
+      () async {
+        final short = _track('s', durationMs: 20000);
+        const length = Duration(seconds: 20);
+        starts.add(short);
+        for (var ms = 0; ms <= 19800; ms += 200) {
+          tick(short, ms, duration: length);
+        }
+        // Completed: the state keeps the last cached position.
+        tick(short, 19800, playing: false, duration: length);
+        await _settle();
+        expect(store.rows['L1'], (const Duration(milliseconds: 19800), true));
+      },
+    );
+
+    test('a 20 s song stopped at 15 s is not counted', () async {
+      final short = _track('s', durationMs: 20000);
+      const length = Duration(seconds: 20);
+      starts.add(short);
+      play(short, 0, 15, duration: length);
+      tick(short, 15000, playing: false, duration: length);
+      expect(await finish('L1'), (const Duration(seconds: 15), false));
+    });
+
     test('a pause after 45 s saves 45 s at the pause', () async {
       starts.add(a);
       play(a, 0, 45);
@@ -404,7 +429,8 @@ void main() {
       starts.add(short);
       play(short, 0, 20, duration: const Duration(seconds: 20));
       await _settle();
-      expect(store.updates['L1'], const [Duration(seconds: 20)]);
+      // Within the 1 s end tolerance.
+      expect(store.updates['L1'], const [Duration(seconds: 19)]);
     });
 
     test('counting and the checkpoint together write once', () async {

@@ -150,5 +150,7 @@ class _Listen {
   Duration savedHeard = Duration.zero;
   bool savedCounted = false;
 
-  bool get counted => reachedPlay(heard.heard, length);
+  /// Ticks are sparse and the end state keeps the last position, so a short
+  /// song heard to its end lands just under its length.
+  bool get counted => reachedPlayNearEnd(heard.heard, length);
 }

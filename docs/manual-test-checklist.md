@@ -210,6 +210,8 @@ Phone (Android), desktop Linux and Windows. Where a check says "desktop", do it 
 - [ ] Tapping a top song plays it.
 - [ ] Tapping a top artist opens Search with the artist's name (artist pages aren't linked yet).
 - [ ] A song with a featured artist (for example "Artist A, Artist B", or "Artist A feat. Artist B" on a local file) counts for the main artist only.
+- [ ] Play a song shorter than 30 s all the way to its end. It counts as 1 play.
+- [ ] Play a local file with no artist tag (it shows "Unknown artist"). It is left out of top artists, but its minutes count.
 - [ ] Force-quit the app in the middle of a song. At most about 30 s of that song is lost.
 - [ ] Phone: the card is compact, and your playlists stay visible on Home without scrolling far.
 

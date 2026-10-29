@@ -167,7 +167,7 @@ class Lyrics extends Table with SyncColumns {
 }
 
 /// One listening session of a track (Plan 9). Written when a song starts and
-/// re-stamped as it is heard; pruned after 400 days.
+/// re-stamped as it is heard; pruned after 730 days.
 @DataClassName('ListenRow')
 @TableIndex(name: 'listens_started_at', columns: {#startedAt})
 class Listens extends Table with SyncColumns {

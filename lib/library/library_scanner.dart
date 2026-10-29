@@ -15,7 +15,8 @@ import 'file_hasher.dart';
 import 'library_repository.dart';
 import 'tag_reader.dart';
 
-const _unknownArtist = 'Unknown artist';
+/// The artist stored for a file with no artist tag or filename hint.
+const kUnknownArtist = 'Unknown artist';
 const _progressEvery = 25;
 const _filesInFlight = 2;
 
@@ -505,7 +506,7 @@ class LibraryScanner {
     final artist =
         _clean(tags.artist) ??
         (tagTitle == null ? match?.group(1) : null) ??
-        _unknownArtist;
+        kUnknownArtist;
 
     final Uint8List? picture = tags.picture;
     return _Draft(

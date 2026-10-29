@@ -57,10 +57,6 @@ class PlayReporter {
 
   void dispose() => _sub.cancel();
 
-  /// A short song counts as heard when it got within this of its end:
-  /// ticks are sparse, so the last one rarely lands exactly on the duration.
-  static const _endTolerance = Duration(seconds: 1);
-
   Track? _track;
   Duration? _length;
 
@@ -95,9 +91,7 @@ class PlayReporter {
   /// end tolerance for songs shorter than the threshold.
   void _finish() {
     if (_reported || _track == null) return;
-    final length = _length;
-    final adjusted = length == null ? null : length - _endTolerance;
-    if (reachedPlay(_heard.heard, adjusted)) _report();
+    if (reachedPlayNearEnd(_heard.heard, _length)) _report();
   }
 
   void _report() {

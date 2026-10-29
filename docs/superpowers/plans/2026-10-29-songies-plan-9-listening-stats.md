@@ -79,7 +79,7 @@
   - `class ListenStore { ListenStore(AppDatabase db, SyncStamp stamp, {DateTime Function() now = DateTime.now}); Future<String?> start(Track t, DateTime startedAtUtc, Duration heard, bool counted); Future<void> update(String id, Duration heard, bool counted); Future<void> prune(); }`
     - `start` inserts a stamped row with the snapshots taken from `t` (`mainArtist(t.artist, youtube: t.source == 'yt')`, `t.title`, `t.artist`, `t.artworkRef`) and returns its id.
     - `update` re-stamps the row.
-    - `prune` deletes rows whose `started_at` is more than 400 days before `now()`.
+    - `prune` deletes rows whose `started_at` is more than 730 days before `now()`.
     - All three log failures with `AppLog.w` and never throw; `start` returns null on failure.
 
 - [ ] **Step 1: Write the failing tests:**
@@ -98,7 +98,7 @@
   - `ListenStore`:
     - `start` writes one stamped row with the snapshots;
     - `update` changes `heardMs` and `counted` with a newer clock;
-    - `prune` keeps a 399-day-old row and deletes a 401-day-old one;
+    - `prune` keeps a 729-day-old row and deletes a 731-day-old one;
     - `start` against a closed DB returns null without throwing.
   - Migration: a v6 database opens at v7 with an empty `listens` table and the index present.
 - [ ] **Step 2: Run** `flutter test test/stats test/data/migration_test.dart`. Expected: FAIL.

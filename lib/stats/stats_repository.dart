@@ -85,13 +85,14 @@ class StatsRepository {
 
       final counted = r.read<bool>('counted');
       final trackId = r.read<String>('track_id');
+      final name = r.read<String>('main_artist').trim();
       // Rows come oldest first, so the last write wins as "latest".
       final song = songs.putIfAbsent(trackId, () => _SongAcc(trackId))
         ..add(heardMs, counted)
         ..latestId = r.read<String>('id')
-        ..title = r.read<String>('title_snapshot');
+        ..title = r.read<String>('title_snapshot')
+        ..mainArtist = name;
 
-      final name = r.read<String>('main_artist').trim();
       if (name.isEmpty) continue;
       final artist = artists.putIfAbsent(name.toLowerCase(), _ArtistAcc.new)
         ..add(heardMs, counted)
@@ -151,6 +152,7 @@ class StatsRepository {
             trackId: s.trackId,
             title: s.title,
             artist: snapshots[s.latestId]?.artistSnapshot ?? '',
+            mainArtist: s.mainArtist,
             artworkRef: snapshots[s.latestId]?.artworkRef,
             plays: s.plays,
             heard: Duration(milliseconds: s.heardMs),
@@ -302,9 +304,10 @@ class _SongAcc extends _Acc {
 
   final String trackId;
 
-  /// Id and title of the most recent listen.
+  /// Id, title and main artist of the most recent listen.
   String latestId = '';
   String title = '';
+  String mainArtist = '';
 }
 
 class _ArtistAcc extends _Acc {

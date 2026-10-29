@@ -61,7 +61,9 @@ final _songs = [
     SongStat(
       trackId: 's$i',
       title: 'Snapshot $i',
-      artist: 'Artist $i',
+      artist: 'Artist $i feat. Guest',
+      // The last has no known main artist: its artist line shows.
+      mainArtist: i == 10 ? '' : 'Artist $i',
       plays: i == 1 ? 1 : 15 - i,
       heard: Duration(minutes: 40 - i),
     ),
@@ -266,6 +268,13 @@ void main() {
     await settle(tester);
     await tester.scrollUntilVisible(find.byKey(const Key('stats.song.9')), 200);
     expect(find.text('Snapshot 10'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('stats.song.9')),
+        matching: find.text('Artist 10 feat. Guest'),
+      ),
+      findsOneWidget,
+    );
     // One play reads "1 play".
     await tester.scrollUntilVisible(
       find.byKey(const Key('stats.song.0')),
@@ -278,6 +287,15 @@ void main() {
       ),
       findsOneWidget,
     );
+    // Top songs show the main artist, not the whole artist line.
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('stats.song.0')),
+        matching: find.text('Artist 1'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Artist 1 feat. Guest'), findsNothing);
   });
 
   uiTest('tapping a song plays it; a removed song has no menu or tap', (

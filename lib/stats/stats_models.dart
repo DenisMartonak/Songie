@@ -51,6 +51,7 @@ class SongStat {
     required this.trackId,
     required this.title,
     required this.artist,
+    required this.mainArtist,
     required this.plays,
     required this.heard,
     this.artworkRef,
@@ -58,12 +59,19 @@ class SongStat {
 
   final String trackId;
 
-  /// Title, artist and cover from the latest listen's snapshots.
+  /// Title, artist line and cover from the latest listen's snapshots.
   final String title;
   final String artist;
   final String? artworkRef;
+
+  /// The latest listen's main artist; empty when unknown.
+  final String mainArtist;
+
   final int plays;
   final Duration heard;
+
+  /// The artist to show: the main artist, else the artist line.
+  String get displayArtist => mainArtist.isEmpty ? artist : mainArtist;
 }
 
 class PeriodStats {

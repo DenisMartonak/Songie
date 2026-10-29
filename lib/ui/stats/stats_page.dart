@@ -491,7 +491,7 @@ class _SongRow extends ConsumerWidget {
         art: Artwork(song.artworkRef, size: 48, seed: song.trackId),
       ),
       title: song.title,
-      subtitle: song.artist,
+      subtitle: song.displayArtist,
       onTap: track == null
           ? null
           : () => ref.read(playerServiceProvider).playQueue([track]),

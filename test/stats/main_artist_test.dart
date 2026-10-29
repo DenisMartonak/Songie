@@ -11,6 +11,14 @@ void main() {
     expect(yt('Daft Punk feat. Pharrell'), 'Daft Punk feat. Pharrell');
   });
 
+  test("the scanner's unknown-artist placeholder is no artist", () {
+    expect(local('Unknown artist'), '');
+    expect(local(' unknown ARTIST '), '');
+    expect(yt('Unknown artist'), '');
+    expect(local('Unknown artist feat. B'), '');
+    expect(local('Unknown artists'), 'Unknown artists');
+  });
+
   test('local artists split on the listed separators', () {
     expect(local('Daft Punk feat. Pharrell'), 'Daft Punk');
     expect(local('A ft B'), 'A');

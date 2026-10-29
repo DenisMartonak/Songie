@@ -5,7 +5,10 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/data/database.dart';
+import 'package:songies/data/sync_stamp.dart';
+import 'package:songies/library/library_scanner.dart' show kUnknownArtist;
 import 'package:songies/providers.dart';
+import 'package:songies/stats/listen_store.dart';
 import 'package:songies/stats/stats_models.dart';
 import 'package:songies/stats/stats_repository.dart';
 
@@ -329,6 +332,48 @@ void main() {
       expect(c.heard, const Duration(minutes: 16));
     });
 
+    test('a song without a main artist shows its artist line', () async {
+      await insert([
+        _listen(
+          at: DateTime.utc(2026, 10, 28),
+          mainArtist: '',
+          artist: 'Unknown artist',
+        ),
+      ]);
+      final song = (await repo.period(StatsPeriod.week)).topSongs.single;
+      expect(song.mainArtist, '');
+      expect(song.displayArtist, 'Unknown artist');
+    });
+
+    test('an untagged local song counts in minutes and top songs, not top '
+        'artists', () async {
+      final store = ListenStore(db, await SyncStamp.load(db), now: () => now);
+      Track track(String id, String artist) => Track(
+        id: id,
+        clock: '0000000000001-00000-dev',
+        originDevice: 'dev',
+        deleted: false,
+        localSeq: 1,
+        source: 'local',
+        title: 'Song $id',
+        artist: artist,
+        durationMs: 200000,
+        unavailable: false,
+        searchText: id,
+      );
+      final at = DateTime.utc(2026, 10, 28);
+      const min3 = Duration(minutes: 3);
+      for (var i = 0; i < 3; i++) {
+        await store.start(track('u1', kUnknownArtist), at, min3, true);
+      }
+      await store.start(track('k1', 'Known'), at, min3, true);
+      final s = await repo.period(StatsPeriod.week);
+      expect(s.total, const Duration(minutes: 12));
+      expect(s.topArtists.map((a) => a.name), ['Known']);
+      expect(s.topSongs.map((x) => x.trackId), ['u1', 'k1']);
+      expect(s.topSongs.first.plays, 3);
+    });
+
     test('names merge case-insensitively with the latest spelling', () async {
       await insert([
         _listen(at: DateTime.utc(2026, 10, 27), mainArtist: 'Daft Punk'),
@@ -385,13 +430,15 @@ void main() {
           trackId: 's2',
           title: 'Old title',
           artist: 'Old artist',
+          mainArtist: 'Old',
           artworkRef: 'old',
         ),
         _listen(
           at: DateTime.utc(2026, 10, 28, 9),
           trackId: 's2',
           title: 'New title',
-          artist: 'New artist',
+          artist: 'New feat. Guest',
+          mainArtist: 'New',
           artworkRef: 'new',
         ),
         _listen(
@@ -410,7 +457,9 @@ void main() {
       expect(songs.map((s) => s.trackId), ['s2', 's3', 's1', 's4']);
       final s2 = songs.first;
       expect(s2.title, 'New title');
-      expect(s2.artist, 'New artist');
+      expect(s2.artist, 'New feat. Guest');
+      expect(s2.mainArtist, 'New');
+      expect(s2.displayArtist, 'New');
       expect(s2.artworkRef, 'new');
       expect(s2.plays, 2);
       expect(s2.heard, const Duration(minutes: 6));

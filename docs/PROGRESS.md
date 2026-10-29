@@ -2,10 +2,10 @@
 
 _Last updated: 2026-10-29_
 
-## Plan 9 (listening statistics) — implemented, reviewed task by task; final review pending
+## Plan 9 (listening statistics) — done, reviewed, final review fixed
 
 - **Branch:** `plan-9-stats` (from `plan-8-lyrics`). Plan: [Plan 9](superpowers/plans/2026-10-29-songies-plan-9-listening-stats.md). Spec: [Listening stats design](superpowers/specs/2026-10-29-songies-listening-stats-design.md). Session log: [plan-9-session-log.md](plan-9-session-log.md). Nothing is pushed or merged.
-- **Status:** Tasks 1–6 are done and Tasks 1–5 were each reviewed. The final whole-branch review is pending. Tests: 1,751 passing, `flutter analyze` clean, `flutter build apk --release` succeeds (81.3 MB), `flutter build linux --release` succeeds (bundle 35 MB). Windows is built on your PC. The secret scan of the branch history found only doc text. **Nothing has been run on a device yet.**
+- **Status:** Tasks 1–6 are done and each was reviewed. The final whole-branch review ran, and its fixes landed and were reviewed: untagged local files ("Unknown artist") are left out of top artists but still count in minutes and top songs; a full play of a song under 30 s now counts (the same 1 s end allowance as YouTube play reports); top songs show the main artist; a stale "400 days" comment is corrected. Tests: 1,756 passing, `flutter analyze` clean, `flutter build apk --release` succeeds (81.3 MB), `flutter build linux --release` succeeds (bundle 35 MB). Windows is built on your PC. The secret scan of the branch history found only doc text. **Nothing has been run on a device yet.**
 - **What it does now:**
   - **Recording:** every song you play is saved as a "listen" (new `listens` table, schema 7, synced like the other tables). Minutes count all the time you heard. A play counts after 30 s, or the whole song when it is shorter. Pausing doesn't end a listen and seeking doesn't start one. A force-quit loses at most about 30 s.
   - **Home:** a compact "Your listening" card with the last 7 days' minutes, a tiny chart and your top artist. Tapping it opens the stats page. Your playlists stay visible.
@@ -16,12 +16,12 @@ _Last updated: 2026-10-29_
   - **S1:** a comma inside a real band name (for example "Earth, Wind & Fire") is split like a featured artist, because tracks only keep YouTube's comma-joined artist line. Cost: such bands count under their first word.
   - **S2:** the last listen of a session is saved when playback stops and when it first counts as a play. Cost: one extra write per pause.
   - **S3:** listens are kept for **730 days**, not the brief's 400. The 12-month view compares with the 12 months before it, so it needs two years. The previous period is summed in SQL. Cost: about twice the table size (still small).
-  - **S4:** tapping a top artist opens Search with their name, because tracks store no artist id. Cost: one tap leads to search results instead of an artist page.
+  - **S4:** tapping a top artist opens Search with their name, because tracks store no artist id. If wrong: tapping an artist opens a search instead of doing nothing (the design said nothing happens when their page isn't known).
   - **S5:** a removed song's row has no menu. Cost: one menu missing on removed songs.
   - **S6:** year-view bar labels keep the year ("Oct 2026"). Cost: none.
 - **Next:** your device checks (the Plans 7, 8 and 9 sections of the [manual checklist](manual-test-checklist.md), plus the still-pending live sign-in check from Plan 7), then device sync and packaging.
 - **To resume in a new Claude session:**
-  > Songies Plan 9 is implemented on branch `plan-9-stats` (Tasks 1–6 done and reviewed; final review pending). Next: the device checks, then plan device sync. Read docs/PROGRESS.md. Don't merge.
+  > Songies Plan 9 is implemented on branch `plan-9-stats` (Tasks 1–6 done and reviewed; final review fixed). Next: the device checks, then plan device sync. Read docs/PROGRESS.md. Don't merge.
 
 ## Plan 8 (synced lyrics) — done, reviewed, final review fixed
 
