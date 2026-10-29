@@ -10,6 +10,8 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/contrast.dart';
 import '../motion/marquee.dart';
+import '../lyrics/lyrics_strip.dart';
+import '../lyrics/lyrics_view.dart';
 import '../motion/motion.dart';
 import '../shell/adaptive_shell.dart';
 import '../widgets/artwork.dart';
@@ -212,7 +214,7 @@ class NowPlayingRoute extends PageRoute<void> {
 const String nowPlayingArtHeroTag = 'np-art';
 
 /// What is playing: big art, title, scrubber and transport controls, with the
-/// queue on a second tab. Phone: full screen; desktop: a panel with a close
+/// lyrics and the queue on the other tabs. Phone: full screen; desktop: a panel with a close
 /// button. On both, dragging the page down moves it, and letting go past a
 /// quarter of its height (or flinging it) closes it; otherwise it springs
 /// back.
@@ -233,7 +235,7 @@ class NowPlayingPage extends ConsumerStatefulWidget {
 
 class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
     with SingleTickerProviderStateMixin {
-  bool _showQueue = false;
+  NowPlayingTab _tab = NowPlayingTab.player;
 
   /// How far (px) the desktop panel has been dragged down. (On a phone the
   /// drag drives the route's own transition instead.)
@@ -373,7 +375,8 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
     }
 
     // On desktop only the header and the player tab start the drag: the
-    // queue keeps the mouse for its own reordering and scrolling.
+    // lyrics and the queue keep the mouse for their own scrolling (and the
+    // queue's reordering).
     Widget handle(Widget child) =>
         wide ? _dragHandle(child, wide: true) : child;
 
@@ -388,16 +391,18 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
                   children: [
                     NowPlayingHeader(wide: wide, onClose: _close),
                     NowPlayingTabs(
-                      showQueue: _showQueue,
-                      onChanged: (queue) => setState(() => _showQueue = queue),
+                      selected: _tab,
+                      onChanged: (tab) => setState(() => _tab = tab),
                     ),
                   ],
                 ),
               ),
               Expanded(
-                child: _showQueue
-                    ? const NowPlayingQueue()
-                    : handle(const _PlayerTab()),
+                child: switch (_tab) {
+                  NowPlayingTab.player => handle(const _PlayerTab()),
+                  NowPlayingTab.lyrics => _LyricsTab(wide: wide),
+                  NowPlayingTab.queue => const NowPlayingQueue(),
+                },
               ),
             ],
           ),
@@ -709,6 +714,26 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
           const NowPlayingControls(),
         ],
       ),
+    );
+  }
+}
+
+/// The playing song's lyrics. On a phone a slim strip above keeps the song
+/// and play/pause in reach; the desktop panel has the player bar for that,
+/// and uses the desktop's quieter text.
+class _LyricsTab extends StatelessWidget {
+  const _LyricsTab({required this.wide});
+
+  final bool wide;
+
+  @override
+  Widget build(BuildContext context) {
+    if (wide) return const LyricsView(density: LyricsDensity.compact);
+    return const Column(
+      children: [
+        LyricsStrip(),
+        Expanded(child: LyricsView()),
+      ],
     );
   }
 }

@@ -13,27 +13,8 @@ import 'package:songies/providers.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/ui/lyrics/lyrics_view.dart';
 
+import '../helpers/fake_lyrics_service.dart';
 import '../helpers/ui_harness.dart';
-
-/// Answers lookups from [answers] (or a [gates] completer when one is set)
-/// and records every lookup and prefetch.
-class FakeLyricsService implements LyricsService {
-  final answers = <String, LyricsState>{};
-  final gates = <String, Completer<LyricsState>>{};
-  final lookups = <({String id, bool force})>[];
-  final prefetched = <String?>[];
-
-  @override
-  Future<LyricsState> lookup(Track t, {bool force = false}) {
-    lookups.add((id: t.id, force: force));
-    final gate = gates[t.id];
-    if (gate != null) return gate.future;
-    return Future.value(answers[t.id] ?? const LyricsNone());
-  }
-
-  @override
-  void prefetch(Track? t) => prefetched.add(t?.id);
-}
 
 /// Invented lines, one every 5 s from 5 s: line i is at (5 + 5i) s.
 List<LyricLine> invented(int n, {String Function(int i)? text}) => [

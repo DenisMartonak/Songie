@@ -89,16 +89,25 @@ class NowPlayingHeader extends ConsumerWidget {
   }
 }
 
-/// Switches between the player and the queue.
+/// The tabs of Now Playing.
+enum NowPlayingTab { player, lyrics, queue }
+
+/// Switches between the player, the lyrics and the queue.
 class NowPlayingTabs extends StatelessWidget {
   const NowPlayingTabs({
-    required this.showQueue,
+    required this.selected,
     required this.onChanged,
     super.key,
   });
 
-  final bool showQueue;
-  final ValueChanged<bool> onChanged;
+  final NowPlayingTab selected;
+  final ValueChanged<NowPlayingTab> onChanged;
+
+  static const _labels = {
+    NowPlayingTab.player: 'Now playing',
+    NowPlayingTab.lyrics: 'Lyrics',
+    NowPlayingTab.queue: 'Queue',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -106,20 +115,15 @@ class NowPlayingTabs extends StatelessWidget {
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
+        spacing: 24,
         children: [
-          _Tab(
-            key: const Key('nowPlaying.tab.player'),
-            label: 'Now playing',
-            selected: !showQueue,
-            onTap: () => onChanged(false),
-          ),
-          const SizedBox(width: 24),
-          _Tab(
-            key: const Key('nowPlaying.tab.queue'),
-            label: 'Queue',
-            selected: showQueue,
-            onTap: () => onChanged(true),
-          ),
+          for (final tab in NowPlayingTab.values)
+            _Tab(
+              key: Key('nowPlaying.tab.${tab.name}'),
+              label: _labels[tab]!,
+              selected: tab == selected,
+              onTap: () => onChanged(tab),
+            ),
         ],
       ),
     );

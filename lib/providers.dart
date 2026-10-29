@@ -152,6 +152,19 @@ final lyricsProvider = FutureProvider.autoDispose.family<LyricsState, String>((
   return service.lookup(track, force: force);
 }, retry: (_, _) => null);
 
+/// Whether the desktop lyrics panel is open. Session-only: it starts closed
+/// on every launch.
+class LyricsPanelOpen extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void toggle() => state = !state;
+}
+
+final lyricsPanelOpenProvider = NotifierProvider<LyricsPanelOpen, bool>(
+  LyricsPanelOpen.new,
+);
+
 /// Every live playlist, for the sidebar and the library.
 final playlistsProvider = StreamProvider<List<PlaylistSummary>>(
   (ref) => ref.watch(libraryRepositoryProvider).watchPlaylists(),

@@ -14,8 +14,8 @@ import '../widgets/artwork.dart';
 
 /// The desktop's bottom player bar, 72 px high: the current track on the left;
 /// shuffle, previous, play/pause, next, repeat and a scrubber in the middle;
-/// queue and volume on the right. The background is the surface blended with
-/// the theme's tint at 40 %.
+/// lyrics, queue and volume on the right. The background is the surface
+/// blended with the theme's tint at 40 %.
 class PlayerBar extends ConsumerWidget {
   const PlayerBar({super.key});
 
@@ -323,9 +323,20 @@ class _QueueAndVolume extends ConsumerWidget {
     final volume = ref.watch(
       playerStateProvider.select((s) => s.value?.volume ?? 1.0),
     );
+    final lyricsOpen = ref.watch(lyricsPanelOpenProvider);
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
+        IconButton(
+          key: const Key('playerBar.lyrics'),
+          tooltip: 'Lyrics',
+          iconSize: 20,
+          color: lyricsOpen ? colors.accent : colors.mutedText,
+          isSelected: lyricsOpen,
+          icon: const Icon(Icons.lyrics_outlined),
+          selectedIcon: const Icon(Icons.lyrics),
+          onPressed: () => ref.read(lyricsPanelOpenProvider.notifier).toggle(),
+        ),
         IconButton(
           key: const Key('playerBar.queue'),
           tooltip: 'Queue',
@@ -344,17 +355,20 @@ class _QueueAndVolume extends ConsumerWidget {
           size: 20,
           color: colors.mutedText,
         ),
-        SizedBox(
-          width: 104,
-          child: _HoverSlider(
-            sliderKey: const Key('playerBar.volume'),
-            theme: SliderTheme.of(context).copyWith(
-              activeTrackColor: colors.text,
-              inactiveTrackColor: colors.text.withAlpha(51),
-              thumbColor: colors.text,
+        // Gives way in the narrowest desktop windows.
+        Flexible(
+          child: SizedBox(
+            width: 104,
+            child: _HoverSlider(
+              sliderKey: const Key('playerBar.volume'),
+              theme: SliderTheme.of(context).copyWith(
+                activeTrackColor: colors.text,
+                inactiveTrackColor: colors.text.withAlpha(51),
+                thumbColor: colors.text,
+              ),
+              value: volume,
+              onChanged: (v) => ref.read(playerServiceProvider).setVolume(v),
             ),
-            value: volume,
-            onChanged: (v) => ref.read(playerServiceProvider).setVolume(v),
           ),
         ),
       ],

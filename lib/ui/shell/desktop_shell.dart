@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../downloads/downloads_banner.dart';
+import '../lyrics/lyrics_panel.dart';
 import 'go_tab.dart';
 import 'player_bar.dart';
 import 'player_error_snacks.dart';
@@ -55,8 +56,9 @@ bool _isTyping() {
       context.findAncestorWidgetOfExactType<EditableText>() != null;
 }
 
-/// Desktop layout: title bar on top, sidebar and the current page in the
-/// middle, the player bar below. Hosts the global keyboard shortcuts.
+/// Desktop layout: title bar on top, sidebar, the current page and (when
+/// open) the lyrics panel in the middle, the player bar below. Hosts the
+/// global keyboard shortcuts.
 class DesktopShell extends ConsumerStatefulWidget {
   const DesktopShell(this.shell, {super.key});
 
@@ -197,6 +199,8 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                           ),
                         ),
                       ),
+                      // Beside the main pane, which gives it room as it opens.
+                      const LyricsPanel(),
                     ],
                   ),
                 ),
