@@ -1,5 +1,6 @@
 import '../core/log.dart';
 import 'ytm_models.dart';
+import '../lyrics/lyrics.dart';
 
 /// Defensive parsers for YouTube Music responses. Every parser returns `null`
 /// (or an empty list) when a piece it needs is missing and never throws: a
@@ -913,3 +914,47 @@ YtmPlaylist? parsePlaylistHeader(Json json, String browseId) => _guard(
 
 List<YtmSong> parsePlaylistTracks(List<Object?> rows) =>
     _songs(rows, 'playlist');
+
+/// The browse id of the Lyrics tab in a `next` response: the tab titled
+/// "Lyrics", else (localized titles) the first tab whose id starts with
+/// `MPLY`. A tab without an endpoint (no lyrics) gives null.
+String? lyricsBrowseId(Json nextJson) {
+  final tabs = _list(
+    dig(nextJson, [
+      'contents',
+      'singleColumnMusicWatchNextResultsRenderer',
+      'tabbedRenderer',
+      'watchNextTabbedResultsRenderer',
+      'tabs',
+    ]),
+  );
+  String? idOf(Object? tab) =>
+      _str(dig(tab, ['tabRenderer', 'endpoint', 'browseEndpoint', 'browseId']));
+  for (final tab in tabs) {
+    if (dig(tab, ['tabRenderer', 'title']) == 'Lyrics') return idOf(tab);
+  }
+  for (final tab in tabs) {
+    final id = idOf(tab);
+    if (id != null && id.startsWith('MPLY')) return id;
+  }
+  return null;
+}
+
+/// Plain lyrics from a lyrics `browse` response; null when there is no text.
+TrackLyrics? parseLyricsBrowse(Json json) {
+  final shelf = dig(json, [
+    'contents',
+    'sectionListRenderer',
+    'contents',
+    0,
+    'musicDescriptionShelfRenderer',
+  ]);
+  final text = _runsText(_runs(dig(shelf, ['description'])));
+  if (text == null) return null;
+  return TrackLyrics(
+    kind: LyricsKind.plain,
+    source: LyricsSource.youtube,
+    text: text,
+    credit: _runsText(_runs(dig(shelf, ['footer']))),
+  );
+}

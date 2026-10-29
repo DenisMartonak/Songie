@@ -1,5 +1,6 @@
 import '../core/log.dart';
 import '../core/result.dart';
+import '../lyrics/lyrics.dart';
 import 'clients.dart';
 import 'innertube_client.dart';
 import 'yt_session.dart';
@@ -119,6 +120,27 @@ class YtmService {
     }
   }
 
+  /// Plain lyrics for [videoId] (signed out): `next` for the Lyrics tab, then
+  /// `browse` for its text. Ok(null) when the song has none.
+  Future<Result<TrackLyrics?>> lyrics(String videoId) async {
+    final next = await _c.call(kWebRemix, 'next', {
+      'videoId': videoId,
+      'isAudioOnly': true,
+    });
+    switch (next) {
+      case Err(:final failure):
+        return Err(failure);
+      case Ok(:final value):
+        final id = lyricsBrowseId(value);
+        if (id == null) return const Ok(null);
+        final page = await _browse(id);
+        return switch (page) {
+          Err(:final failure) => Err(failure),
+          Ok(:final value) => Ok(parseLyricsBrowse(value)),
+        };
+    }
+  }
+
   /// A first page with no sections at all means YouTube changed the home
   /// shape: an unexpected-shape Err (Home shows Retry), not a silent empty
   /// feed. An empty continuation page is just the end of the feed.
@@ -212,10 +234,7 @@ class YtmService {
   /// The `playbackTracking` URLs of a signed-in WEB_REMIX `player` call, so
   /// a play counts in the account's history. Called only after a play
   /// qualified; its streams are never used. Null on any failure.
-  Future<PlaybackTracking?> accountTracking(
-    String videoId,
-    YtSession s,
-  ) async {
+  Future<PlaybackTracking?> accountTracking(String videoId, YtSession s) async {
     final res = await _c.call(kWebRemix, 'player', {
       'videoId': videoId,
       'contentCheckOk': true,
