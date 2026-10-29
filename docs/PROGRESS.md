@@ -4,8 +4,8 @@ _Last updated: 2026-10-28_
 
 ## Plan 7 (YouTube sign-in for a personal feed) — done, reviewed; live check pending
 
-- **Branch:** `plan-7-youtube-login` (from `plan-6-song-menu`). Plan: [Plan 7](superpowers/plans/2026-10-28-songies-plan-7-youtube-login.md). Spec: [YouTube login design](superpowers/specs/2026-10-27-songies-youtube-login-design.md). **Neither `plan-6-song-menu` nor `plan-7-youtube-login` is pushed yet**, and nothing is merged.
-- **Status:** Tasks 1–7 are done and each was reviewed. Tests: 1,430 passing, `flutter analyze` clean, `flutter build apk --release` succeeds (81.2 MB), `flutter build linux --release` succeeds (bundle 34 MB). Windows is built on your PC. **No live sign-in has been run**: the Task 1 probe never ran, so the personal feed, history attribution and expiry detection are marked "manual check pending" in [innertube-notes.md](innertube-notes.md).
+- **Branch:** `plan-7-youtube-login` (from `plan-6-song-menu`). Plan: [Plan 7](superpowers/plans/2026-10-28-songies-plan-7-youtube-login.md). Spec: [YouTube login design](superpowers/specs/2026-10-27-songies-youtube-login-design.md). Both `plan-6-song-menu` and `plan-7-youtube-login` are pushed; nothing is merged.
+- **Status:** Tasks 1–7 are done and each was reviewed. The final whole-branch review ran (no secret leak; ready to merge with fixes) and its fix wave landed: the session keeps only the cookies a browser sends to music.youtube.com, never google.com ones (R8), and signed-in play reports go only to https YouTube hosts; a bad cookie value no longer breaks Home; a keyring hiccup no longer signs you out; unlocking the keyring later restores the sign-in without a restart; "Sign in again" offers every route. Tests: 1,457 passing (1,430 before the fix wave), `flutter analyze` clean, `flutter build apk --release` succeeds (81.2 MB), `flutter build linux --release` succeeds (bundle 34 MB). Windows is built on your PC. **No live sign-in has been run**: the Task 1 probe never ran, so the personal feed, history attribution and expiry detection are marked "manual check pending" in [innertube-notes.md](innertube-notes.md).
 - **What it does now:**
   - **Sign in:** Settings → YouTube. Android and Windows open Google's page in an in-app web view; Linux opens it in a WebKitGTK window, or reads the sign-in from your browser ("Use the YouTube sign-in from my browser", Firefox family and Chromium family, Flatpaks included, only after you pick and confirm).
   - **Personal feed:** only the Home `browse` request and play reports go out signed in. Qualifying plays are reported with account tracking URLs so they count in YouTube Music history.
@@ -30,11 +30,11 @@ _Last updated: 2026-10-28_
 - **Stash:** `stash@{0}` holds unrelated `dart format` changes from Task 6; left alone.
 - **Next:** your device checks (the Plan 6 and Plan 7 sections of the [manual checklist](manual-test-checklist.md)), then **Plan 8 (synced lyrics)**, **Plan 9 (listening statistics)**, then device sync and packaging.
 - **To resume in a new Claude session:**
-  > Songies Plan 7 is implemented on branch `plan-7-youtube-login` (Tasks 1–7 done and reviewed, 1,430 tests; Plan 6 is on `plan-6-song-menu`; neither is pushed). The live sign-in check is still pending. Next: the device checks, then write Plan 8 (synced lyrics). Read docs/PROGRESS.md. Don't push or merge.
+  > Songies Plan 7 is implemented on branch `plan-7-youtube-login` (Tasks 1–7 done and reviewed, final review fixed, 1,457 tests; Plan 6 is on `plan-6-song-menu`; both pushed). The live sign-in check is still pending. Next: the device checks, then write Plan 8 (synced lyrics). Read docs/PROGRESS.md. Don't merge.
 
 ## Plan 6 (the one song menu) — done, reviewed
 
-- **Branch:** `plan-6-song-menu` (commits `60ba176` and `80d415f`), not pushed. One song menu now opens from every song row (library, playlist, search, YouTube Music results, Home), by long-press or right-click, with Play next, Add to queue, Add to playlist, Download, Start radio, Go to artist and Go to album and, inside a playlist, Remove from this playlist. It also opens from the queue, the YouTube Music album, artist and playlist pages, and the Now Playing ⋯ button. (The roadmap numbers shifted: lyrics are now Plan 8 and statistics Plan 9.)
+- **Branch:** `plan-6-song-menu` (commits `60ba176` and `80d415f`), pushed. One song menu now opens from every song row (library, playlist, search, YouTube Music results, Home), by long-press or right-click, with Play next, Add to queue, Add to playlist, Download, Start radio, Go to artist and Go to album and, inside a playlist, Remove from this playlist. It also opens from the queue, the YouTube Music album, artist and playlist pages, and the Now Playing ⋯ button. (The roadmap numbers shifted: lyrics are now Plan 8 and statistics Plan 9.)
 
 ## Plan 5 (YouTube Music) — done, reviewed, final review fixed
 

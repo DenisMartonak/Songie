@@ -1,9 +1,9 @@
 # Songies Plans 6–7: session log
 
-_Last updated: 2026-10-28. You stopped the session during Plan 7's final whole-branch review. **Nothing from Plans 6 or 7 is pushed.**_
+_Last updated: 2026-10-29. **Plans 6 and 7 are finished and pushed.** The final whole-branch review ran, its fix wave and one residual keyring fix landed and were reviewed. Nothing is merged._
 
-**To resume:**
-> Continue Songies Plan 7 subagent-driven on branch `plan-7-youtube-login`: re-run the final whole-branch review (base 05da877, head 23c227c), do one fix round, review it, then ask me before pushing. Read docs/plan-7-session-log.md and the ledger it names.
+**To resume (next plan):**
+> Songies Plans 6 and 7 are done (branches `plan-6-song-menu`, `plan-7-youtube-login`, pushed). Next: the live sign-in check and device checks in docs/manual-test-checklist.md, then write Plan 8 (synced lyrics). Read docs/PROGRESS.md. Don't merge.
 
 ## Where things are
 - **Plan 6, one song menu everywhere:** done and reviewed, on branch `plan-6-song-menu` (`60ba176`, `80d415f`).
@@ -14,7 +14,8 @@ _Last updated: 2026-10-28. You stopped the session during Plan 7's final whole-b
   - Tasks 1–7 are done, each reviewed and fixed. HEAD is `23c227c`.
   - 1,430 tests pass and `flutter analyze` is clean. The APK (81.2 MB) and the Linux release builds succeed.
 - **Ledger:** `.superpowers/sdd/2026-10-28-songies-plan-7-youtube-login/progress.md` (git-ignored). It holds the conflict scan, rulings R1–R7, and every deferred minor. `constraints.md` sits next to it.
-- **Left to do:**
+- **Done since the stop:** the final review (no secret leak), one fix wave (`bfc2f03`: YouTube-only cookies R8, bad cookie values, keyring hiccups, recovery from a locked keyring, all routes on "Sign in again", and the small items), and a residual fix (`03a0033`: a failed keyring check is never cached). 1,457 tests pass; APK and Linux builds succeed.
+- **Was left to do (now done):**
   1. The final whole-branch review on the most capable model. It was stopped before it reported, and it was read-only, so there's nothing to undo.
   2. One fix round, which also covers a small Task 7 doc item: the Plan 6 entry in PROGRESS.md leaves out Go to artist/album, the queue, YouTube Music pages and Now Playing ⋯.
   3. A scoped review of that fix.
@@ -36,6 +37,7 @@ _Last updated: 2026-10-28. You stopped the session during Plan 7's final whole-b
 - **R5:** nothing touches the keyring at app start. It's read the first time the session is needed. *If wrong:* the first signed-in Home load waits for the keyring once.
 - **R6:** only an explicit "signed out" marker or HTTP 401/403 expires the sign-in. *If wrong:* a session that has truly expired but sends no marker shows the regular feed with no notice.
 - **R7:** the browser sign-in asks first and reads nothing until you pick a browser. *If wrong:* the list can include a browser that isn't signed in to YouTube.
+- **R8 (final review):** the stored session holds only the cookies a browser sends to music.youtube.com, no google.com cookies; signed-in reports go only to https YouTube hosts. *If wrong:* if YouTube needs a google.com cookie, Home comes back signed out (shown as the regular feed, no error).
 
 ## Worth your attention
 - **Something got deleted:** during Task 6, a test deleted two leftover WebKit folders from the probe (`~/.local/share/com.songies.songies` and `~/.cache/com.songies.songies`). Your Songies data in `~/.local/share/songies` is intact, and the test can no longer reach real folders.
