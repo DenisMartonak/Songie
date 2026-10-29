@@ -822,6 +822,45 @@ void main() {
     });
   });
 
+  group('upNext', () {
+    PlayerState at(
+      List<Track> q,
+      int index, [
+      RepeatMode repeat = RepeatMode.off,
+    ]) => PlayerState(queue: q, index: index, repeat: repeat);
+
+    test('the middle of the queue gives the next track', () {
+      expect(at([a, b, c], 1).upNext, c);
+    });
+
+    test('the end with repeat off gives null', () {
+      expect(at([a, b, c], 2).upNext, isNull);
+    });
+
+    test('the end with repeat all gives the first track', () {
+      expect(at([a, b, c], 2, RepeatMode.all).upNext, a);
+    });
+
+    test('repeat one gives null', () {
+      expect(at([a, b, c], 0, RepeatMode.one).upNext, isNull);
+    });
+
+    test('an unavailable next track is skipped', () {
+      final gone = b.copyWith(unavailable: true);
+      expect(at([a, gone, c], 0).upNext, c);
+      expect(at([a, b, gone], 1).upNext, isNull);
+      expect(at([a, b, gone], 1, RepeatMode.all).upNext, a);
+    });
+
+    test('a one-song queue with repeat all gives null', () {
+      expect(at([a], 0, RepeatMode.all).upNext, isNull);
+    });
+
+    test('an empty queue gives null', () {
+      expect(const PlayerState().upNext, isNull);
+    });
+  });
+
   group('repeat', () {
     test('cycles off, all, one, off', () {
       expect(player.state.repeat, RepeatMode.off);

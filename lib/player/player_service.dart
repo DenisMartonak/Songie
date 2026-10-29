@@ -67,6 +67,21 @@ class PlayerState {
   Track? get current =>
       index >= 0 && index < queue.length ? queue[index] : null;
 
+  /// The song the player will play after [current]: the next entry that is
+  /// not unavailable, wrapping to the start only with [RepeatMode.all], never
+  /// [current] itself. Null with [RepeatMode.one] (shuffle has already
+  /// reordered [queue]).
+  Track? get upNext {
+    if (repeat == RepeatMode.one || current == null) return null;
+    final n = queue.length;
+    final last = repeat == RepeatMode.all ? index + n - 1 : n - 1;
+    for (var i = index + 1; i <= last; i++) {
+      final t = queue[i % n];
+      if (!t.unavailable) return t;
+    }
+    return null;
+  }
+
   static const Object _keep = Object();
 
   /// Nullable fields ([duration], [sourcePlaylistId], [error], [notice]) keep

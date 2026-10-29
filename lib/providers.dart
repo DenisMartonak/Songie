@@ -27,6 +27,7 @@ import 'library/play_history_repository.dart';
 import 'library/scan_queue.dart';
 import 'library/search_repository.dart';
 import 'library/yt_tracks.dart';
+import 'lyrics/lyrics_service.dart';
 import 'player/player_service.dart';
 import 'player/radio_controller.dart';
 import 'theme/app_theme.dart';
@@ -108,6 +109,48 @@ final playerStateProvider = StreamProvider<PlayerState>((ref) {
     controller.onCancel = sub.cancel;
   });
 });
+
+// --- Lyrics ----------------------------------------------------------------
+
+final lyricsServiceProvider = Provider<LyricsService>(
+  (ref) => _unwired('lyricsServiceProvider'),
+);
+
+/// Search again for one track: each bump forces a fresh lookup that ignores
+/// the stored result.
+class LyricsRetry extends Notifier<int> {
+  LyricsRetry(this.trackId);
+
+  final String trackId;
+
+  @override
+  int build() => 0;
+
+  void searchAgain() => state++;
+}
+
+final lyricsRetryProvider = NotifierProvider.autoDispose
+    .family<LyricsRetry, int, String>(LyricsRetry.new);
+
+/// One track's lyrics, looked up while a lyrics view watches it. The track
+/// comes from the player's queue, else the library.
+final lyricsProvider = FutureProvider.autoDispose.family<LyricsState, String>((
+  ref,
+  trackId,
+) async {
+  final force = ref.watch(lyricsRetryProvider(trackId)) > 0;
+  final service = ref.watch(lyricsServiceProvider);
+  final queued = ref
+      .read(playerServiceProvider)
+      .state
+      .queue
+      .where((t) => t.id == trackId);
+  final track = queued.isNotEmpty
+      ? queued.first
+      : await ref.read(libraryRepositoryProvider).trackById(trackId);
+  if (track == null) return const LyricsNone();
+  return service.lookup(track, force: force);
+}, retry: (_, _) => null);
 
 /// Every live playlist, for the sidebar and the library.
 final playlistsProvider = StreamProvider<List<PlaylistSummary>>(

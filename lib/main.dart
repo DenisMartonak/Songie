@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'core/app_version.dart';
 import 'core/connectivity.dart';
 import 'core/log.dart';
 import 'innertube/yt_session_store.dart';
@@ -31,6 +32,11 @@ import 'library/play_history_repository.dart';
 import 'library/search_repository.dart';
 import 'library/tag_reader.dart';
 import 'library/yt_tracks.dart';
+import 'lyrics/file_lyrics.dart';
+import 'lyrics/lrclib.dart';
+import 'lyrics/lyrics_service.dart';
+import 'lyrics/lyrics_store.dart';
+import 'lyrics/ytm_lyrics.dart';
 import 'player/audio_session_binding.dart';
 import 'player/composite_track_resolver.dart';
 import 'player/just_audio_backend.dart';
@@ -186,6 +192,21 @@ Future<void> main() async {
     player: player,
   );
 
+  // Lyrics: looked up only while a lyrics view is open.
+  final ytm = YtmService(innertube);
+  final lyrics = LyricsService(
+    db: db,
+    store: LyricsStore(db, stamp),
+    file: FileLyricsSource(AudioMetadataTagReader()),
+    lrclib: LrclibSource(
+      ioHttpGet,
+      userAgent:
+          'Songies/$appVersion (https://github.com/DenisMartonak/Songie)',
+    ),
+    ytm: YtmLyricsSource(ytm),
+    network: network,
+  );
+
   final navigatorKey = GlobalKey<NavigatorState>();
   final router = buildRouter(navigatorKey: navigatorKey);
   try {
@@ -213,6 +234,7 @@ Future<void> main() async {
       innertubeClientProvider.overrideWithValue(innertube),
       ytSessionStoreProvider.overrideWithValue(SecureYtSessionStore()),
       networkStatusProvider.overrideWithValue(network),
+      lyricsServiceProvider.overrideWithValue(lyrics),
       downloadRepositoryProvider.overrideWithValue(downloadRepo),
       downloadNotifierProvider.overrideWithValue(downloadNotifier),
       downloadServiceProvider.overrideWithValue(downloads),
@@ -226,7 +248,6 @@ Future<void> main() async {
   await container.read(ytAuthProvider.notifier).load();
   // Reports songs heard for 30 s to YouTube (to the account's history when
   // signed in); reacts to player state only.
-  final ytm = YtmService(innertube);
   PlayReporter(
     player.states,
     innertubeStreams,

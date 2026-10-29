@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/app_version.dart';
 import '../../core/log.dart';
 import '../../data/database.dart';
 import '../../data/settings_repository.dart';
@@ -19,9 +20,7 @@ import 'downloads_settings.dart';
 import 'storage_usage.dart';
 import 'youtube_settings.dart';
 
-/// The app version shown in About. Keep in sync with `version:` in
-/// pubspec.yaml (a test checks it).
-const String appVersion = '1.0.0';
+export '../../core/app_version.dart';
 
 /// Saves the exported log: returns true once saved, false if the user
 /// cancelled. Throws if saving fails.
