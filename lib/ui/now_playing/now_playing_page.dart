@@ -844,3 +844,8 @@ Color blurScrim(SongiesColors colors) {
 /// included.
 Color blurWorstCaseTop(SongiesColors colors) =>
     _blurredBackground(colors, _worstCover(colors), blurScrim(colors)).first;
+
+/// The bottom of the blurred background over the worst-case cover, scrim
+/// included.
+Color blurWorstCaseBottom(SongiesColors colors) =>
+    _blurredBackground(colors, _worstCover(colors), blurScrim(colors)).last;

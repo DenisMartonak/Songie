@@ -40,9 +40,12 @@ class FileLyricsSource {
     return null;
   }
 
+  /// Synced when the text parses to at least two non-blank lines, as for
+  /// LRCLIB: a stray timestamp in plain lyrics keeps the whole text.
   SourceAnswer _answer(String text) {
     final lines = parseLrc(text);
-    if (lines != null) {
+    if (lines != null &&
+        lines.where((l) => l.text.trim().isNotEmpty).length >= 2) {
       return Found(
         TrackLyrics(
           kind: LyricsKind.synced,

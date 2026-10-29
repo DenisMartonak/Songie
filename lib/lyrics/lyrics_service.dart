@@ -165,7 +165,16 @@ class LyricsService {
           ? LyricsShown(onlineSynced)
           : fileOr(LyricsShown(online));
     }
-    if (failures == sources.length) return fileOr(const LyricsOffline());
+    if (failures == sources.length) {
+      // Every source failed but the device is online (LRCLIB down, rate
+      // limited): no lyrics, with Search again, and nothing stored. Only a
+      // connection lost meanwhile is offline.
+      return fileOr(
+        await _network.current() == NetworkKind.offline
+            ? const LyricsOffline()
+            : const LyricsNone(),
+      );
+    }
     if (failures == 0) {
       await _store.write(
         t.id,

@@ -30,7 +30,10 @@ class Sidebar extends ConsumerWidget {
 
   final StatefulNavigationShell shell;
   final bool collapsed;
-  final VoidCallback onToggle;
+
+  /// Flips the user's collapse preference; null disables the button (the
+  /// shell holds the sidebar collapsed to make room for the lyrics panel).
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

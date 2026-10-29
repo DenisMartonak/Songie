@@ -16,6 +16,8 @@ import '../../theme/contrast.dart';
 import '../motion/motion.dart';
 import '../motion/shimmer.dart';
 import '../motion/visible_ticker.dart';
+import '../now_playing/now_playing_page.dart'
+    show blurWorstCaseBottom, blurWorstCaseTop;
 
 /// How big the lyrics are: [large] fills the phone's Lyrics tab, [compact]
 /// suits the desktop side panel.
@@ -155,13 +157,15 @@ class _LyricsStyle {
   final double lineGap;
 
   /// [SongiesColors.text] at about 45 %, raised until it reaches [minRatio]
-  /// on every background the view can sit on.
+  /// on every background the view can sit on: the panel's, and Now Playing's
+  /// (over the blurred cover at its worst when the theme blurs).
   static Color _dimmed(SongiesColors c, {required double minRatio}) {
     final backgrounds = [
       c.background,
       c.surface,
       c.nowPlayingTop,
       c.nowPlayingBottom,
+      if (c.blurNowPlaying) ...[blurWorstCaseTop(c), blurWorstCaseBottom(c)],
     ];
     for (var alpha = 0.45; alpha < 1; alpha += 0.05) {
       final dim = c.text.withValues(alpha: alpha);
@@ -201,6 +205,10 @@ class _SyncedLyricsState extends ConsumerState<_SyncedLyrics> {
   Timer? _resume;
   bool _following = true;
   bool _placed = false;
+  // True while the view's own follow scroll runs, so it is never taken for
+  // the user's; [_ownScrollRun] is the latest animated one.
+  bool _ownScroll = false;
+  Future<void>? _ownScrollRun;
   MotionDurations _motion = MotionDurations.full;
 
   int _indexAt(PlayerState? s) =>
@@ -259,14 +267,23 @@ class _SyncedLyricsState extends ConsumerState<_SyncedLyrics> {
     target = target.clamp(pos.minScrollExtent, pos.maxScrollExtent);
     if ((pos.pixels - target).abs() < 0.5) return;
     final duration = _motion.emphasized;
+    _ownScroll = true;
     if (!animate || duration == Duration.zero) {
       _scroll.jumpTo(target);
+      _ownScroll = false;
     } else {
-      _scroll.animateTo(
+      final done = _scroll.animateTo(
         target,
         duration: duration,
         curve: Motion.emphasizedCurve,
       );
+      // A later follow scroll may have started meanwhile; only it clears.
+      void clear() {
+        if (identical(_ownScrollRun, done)) _ownScroll = false;
+      }
+
+      _ownScrollRun = done;
+      done.then((_) => clear(), onError: (_) => clear());
     }
   }
 
@@ -284,8 +301,11 @@ class _SyncedLyricsState extends ConsumerState<_SyncedLyrics> {
   }
 
   bool _onScroll(ScrollNotification n) {
+    // A touch or scrollbar drag carries drag details; a keyboard scroll (or
+    // any other scroll the view didn't start) only shows as a start.
     final byUser = switch (n) {
-      ScrollStartNotification(:final dragDetails) => dragDetails != null,
+      ScrollStartNotification(:final dragDetails) =>
+        dragDetails != null || !_ownScroll,
       ScrollUpdateNotification(:final dragDetails) => dragDetails != null,
       _ => false,
     };

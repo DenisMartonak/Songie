@@ -21,8 +21,10 @@ _Last updated: 2026-10-29_
   - **R6:** small dim lines meet 4.5:1, large ones 3:1. Cost: small dim lines look a little less dim.
   - **R7:** the desktop dialog's Lyrics tab uses the smaller text. Cost: a one-word change.
   - **R8:** the player bar volume slider is flexible (up to 104 px). Cost: a narrower slider on narrow windows.
+  - **R9:** online but every source failing shows "No lyrics found" (with Search again), not cached; the connection message is only for offline. Cost: an LRCLIB outage reads as "No lyrics found".
+  - **R10:** under 1000 px the open lyrics panel holds the sidebar collapsed; if the main pane would still be under 360 px, the panel lies over the content. Cost: icon-only sidebar, or a covered strip of the page, on narrow windows.
   - **P1–P3:** the YouTube lyrics source lives in `lib/lyrics/ytm_lyrics.dart`; Search again bumps a retry counter that skips the cache; precedence is timed first, then your file's plain lyrics, then online plain.
-- **Next:** your device checks (the Plans 6, 7 and 8 sections of the [manual checklist](manual-test-checklist.md), plus the still-pending live sign-in check from Plan 7), then **Plan 9 (listening statistics)**, then device sync and packaging.
+- **Next:** your device checks (the Plans 7 and 8 sections of the [manual checklist](manual-test-checklist.md), plus the still-pending live sign-in check from Plan 7), then **Plan 9 (listening statistics)**, then device sync and packaging.
 - **To resume in a new Claude session:**
   > Songies Plan 8 is implemented on branch `plan-8-lyrics` (Tasks 1–9 done and reviewed; final review pending). Next: the device checks, then write Plan 9 (listening statistics). Read docs/PROGRESS.md. Don't merge.
 

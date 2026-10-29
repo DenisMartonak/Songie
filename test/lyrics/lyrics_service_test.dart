@@ -58,10 +58,12 @@ class FakeLrclib implements LrclibSource {
 class FakeYtm implements YtmLyricsSource {
   SourceAnswer answer = const Nothing();
   final videoIds = <String?>[];
+  void Function()? onFetch;
 
   @override
   Future<SourceAnswer> fetch(String? videoId) async {
     videoIds.add(videoId);
+    onFetch?.call();
     return answer;
   }
 }
@@ -422,12 +424,34 @@ void main() {
       expect((await store.read('t'))!.lyrics.kind, LyricsKind.none);
     });
 
-    test('every source failing gives LyricsOffline, nothing stored', () async {
+    test('every source failing while online gives LyricsNone, nothing '
+        'stored', () async {
       lrclib.exactAnswer = const Failed('x');
       lrclib.searchAnswer = const Failed('x');
       ytm.answer = const Failed('x');
       final s = await service.lookup(track('t', source: 'yt', ytVideoId: 'v'));
+      expect(s, isA<LyricsNone>());
+      expect(await store.read('t'), isNull);
+    });
+
+    test('every source failing after the connection dropped gives '
+        'LyricsOffline, nothing stored', () async {
+      lrclib.exactAnswer = const Failed('x');
+      lrclib.searchAnswer = const Failed('x');
+      ytm.answer = const Failed('x');
+      ytm.onFetch = () => network.kind = NetworkKind.offline;
+      final s = await service.lookup(track('t', source: 'yt', ytVideoId: 'v'));
       expect(s, isA<LyricsOffline>());
+      expect(await store.read('t'), isNull);
+    });
+
+    test('every source failing while online, with a plain file, shows the '
+        'file', () async {
+      file.answer = Found(plain(LyricsSource.file));
+      lrclib.exactAnswer = const Failed('x');
+      lrclib.searchAnswer = const Failed('x');
+      final s = await service.lookup(track('t'));
+      expect(shown(s), plain(LyricsSource.file));
       expect(await store.read('t'), isNull);
     });
 

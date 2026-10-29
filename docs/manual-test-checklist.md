@@ -193,6 +193,7 @@ Phone (Android), desktop Linux and Windows. Where a check says "desktop", do it 
 - [ ] With reduced motion on, the lyrics jump to the current line instead of scrolling.
 - [ ] While paused, nothing moves (no scrolling, no shimmer).
 - [ ] Desktop: the lyrics panel stays open when you switch tabs (Home, Library, Search), and the player bar Lyrics button toggles it.
+- [ ] Android tablet (or a phone in landscape, 720 dp or wider) and a desktop window under 1000 px: opening the lyrics panel collapses the sidebar to icons, nothing overflows (no yellow-black stripes), and closing it gives the sidebar back.
 - [ ] Desktop: the Now Playing dialog has a Lyrics tab.
 - [ ] The credit line is right: "Lyrics from LRCLIB", "Lyrics from YouTube Music" (with YouTube's own credit line when given) or "Lyrics from the file".
 - [ ] The desktop player bar still fits at a narrow window (about 720 px): the volume slider shrinks and the Lyrics button stays visible.

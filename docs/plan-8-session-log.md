@@ -27,6 +27,8 @@ _Last updated: 2026-10-29. **Plan 8 is implemented on branch `plan-8-lyrics`; Ta
 - **R6:** small dimmed lines meet the 4.5:1 contrast rule and large ones meet 3:1. *If wrong:* small dim lines look slightly less dim.
 - **R7:** the desktop Now Playing dialog's Lyrics tab uses the smaller text size. *If wrong:* a one-word change.
 - **R8:** the player bar volume slider is now flexible (up to 104 px) so the Lyrics button fits at the 720 px breakpoint. *If wrong:* a narrower volume slider on narrow windows.
+- **R9:** when the device is online but every online source fails (LRCLIB down or rate limited), the view says "No lyrics found" with Search again, and nothing is cached. "Lyrics need a connection" is only for offline. *If wrong:* during an LRCLIB outage you see "No lyrics found" instead of a connection message.
+- **R10:** on a desktop window narrower than 1000 px, the open lyrics panel holds the sidebar collapsed (your own choice comes back when the panel closes or the window widens). If the main pane would still be narrower than 360 px, the panel lies over the right side of the content instead of taking width. *If wrong:* on narrow windows and Android tablets the sidebar shrinks to icons, or the panel covers part of the page.
 - **P1:** the YouTube lyrics source lives in `lib/lyrics/ytm_lyrics.dart`, so the YouTube code doesn't depend on lyrics types. *If wrong:* a file move.
 - **P2:** "Search again" bumps a retry counter, and the next lookup skips the cache. *If wrong:* a small rework of one provider.
 - **P3:** precedence is: timed from any source (your file first), then your file's plain lyrics, then online plain lyrics. A cached result is reused only if your file has no timed answer. *If wrong:* a plain online lyric shows instead of your own plain file, or the other way round.
@@ -36,4 +38,4 @@ _Last updated: 2026-10-29. **Plan 8 is implemented on branch `plan-8-lyrics`; Ta
 - **Secret scan:** the only hits for the cookie names in this branch's history are text in docs and the scrub test's list of forbidden words. No real values.
 - **Test data:** the lyric fixtures hold invented lines only ("First invented line", and so on). The repo is public.
 - **Windows:** the Windows build is made on your PC. The panel and player bar layout need a look there.
-- **Small things left open:** the deferred minors are in the ledger (for example, no re-anchor of the current line on resize or rotate, and keyboard or scrollbar scrolling doesn't pause following).
+- **Small things left open:** the deferred minors are in the ledger (for example, no re-anchor of the current line on resize or rotate).

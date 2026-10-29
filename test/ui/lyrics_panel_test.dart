@@ -12,6 +12,7 @@ import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/lyrics/lyrics_panel.dart';
 import 'package:songies/ui/lyrics/lyrics_view.dart';
 import 'package:songies/ui/shell/player_bar.dart';
+import 'package:songies/ui/shell/sidebar.dart';
 
 import '../helpers/fake_lyrics_service.dart';
 import '../helpers/ui_harness.dart';
@@ -34,10 +35,14 @@ void main() {
   });
   tearDown(() => h.dispose());
 
-  /// The whole app on a 1280x800 desktop window; with [play], the seeded
+  /// The whole app on a desktop window ([size], 1280x800 by default); with [play], the seeded
   /// songs are queued and the first one plays.
-  Future<void> pumpApp(WidgetTester tester, {bool play = true}) async {
-    tester.view.physicalSize = const Size(1280, 800);
+  Future<void> pumpApp(
+    WidgetTester tester, {
+    bool play = true,
+    Size size = const Size(1280, 800),
+  }) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await real(tester, () async {
@@ -202,5 +207,68 @@ void main() {
     await tester.tap(button);
     await tester.pump();
     expect(tester.getSize(find.byType(LyricsPanel)).width, 320 + 8);
+  });
+
+  group('narrow windows', () {
+    final sidebar = find.byKey(const Key('sidebar'));
+    final shell = find.byType(StatefulNavigationShell);
+
+    for (final (width, overlay) in [(720.0, true), (800.0, false)]) {
+      uiTest('${width.toInt()}x800 on Home: the sidebar collapses while '
+          'open, nothing overflows', (tester) async {
+        await pumpApp(tester, size: Size(width, 800));
+        expect(router.state.uri.path, '/home');
+        expect(tester.getSize(sidebar).width, Sidebar.expandedWidth);
+
+        await toggle(tester);
+        expect(tester.takeException(), isNull);
+        expect(panel, findsOneWidget);
+        expect(tester.getSize(panel).width, 320);
+        expect(tester.getTopRight(panel).dx, width - 8);
+        expect(tester.getSize(sidebar).width, Sidebar.collapsedWidth);
+        final paneRight = tester.getTopRight(shell).dx;
+        if (overlay) {
+          // Over the right of the content, which keeps its width.
+          expect(paneRight, width - 8);
+          expect(tester.getTopLeft(panel).dx, lessThan(paneRight));
+        } else {
+          expect(tester.getTopLeft(panel).dx, greaterThan(paneRight));
+          expect(tester.getSize(shell).width, greaterThanOrEqualTo(360));
+        }
+        // The collapse button can't undo what the panel needs.
+        final toggleButton = tester.widget<IconButton>(
+          find.byKey(const Key('sidebar.toggle')),
+        );
+        expect(toggleButton.onPressed, isNull);
+
+        // Closing gives the user's own (expanded) sidebar back.
+        await toggle(tester);
+        expect(tester.takeException(), isNull);
+        expect(tester.getSize(sidebar).width, Sidebar.expandedWidth);
+      });
+    }
+
+    uiTest('a sidebar the user collapsed stays collapsed after the panel '
+        'closes', (tester) async {
+      await pumpApp(tester, size: const Size(800, 800));
+      await tester.tap(find.byKey(const Key('sidebar.toggle')));
+      await settle(tester);
+      expect(tester.getSize(sidebar).width, Sidebar.collapsedWidth);
+      await toggle(tester);
+      await toggle(tester);
+      expect(tester.getSize(sidebar).width, Sidebar.collapsedWidth);
+    });
+
+    uiTest('widening the window past 1000 px gives the sidebar back while '
+        'the panel stays open', (tester) async {
+      await pumpApp(tester, size: const Size(800, 800));
+      await toggle(tester);
+      expect(tester.getSize(sidebar).width, Sidebar.collapsedWidth);
+      tester.view.physicalSize = const Size(1280, 800);
+      await settle(tester);
+      expect(tester.takeException(), isNull);
+      expect(panel, findsOneWidget);
+      expect(tester.getSize(sidebar).width, Sidebar.expandedWidth);
+    });
   });
 }

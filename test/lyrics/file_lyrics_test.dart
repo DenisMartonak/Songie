@@ -55,6 +55,24 @@ void main() {
     expect(l.text, 'Just words\nMore words');
   });
 
+  test('plain tag lyrics with one stray timestamp stay plain, whole', () async {
+    const text =
+        'Kettle sings at dawn\n[00:42.00] The cat ignores it\n'
+        'Toast lands butter up\nNobody believes it';
+    final l = (await FileLyricsSource(
+      _Tags(lyrics: text),
+    ).read(audio) as Found).lyrics;
+    expect(l.kind, LyricsKind.plain);
+    expect(l.text, text);
+  });
+
+  test('a sidecar with one timed line is plain', () async {
+    await sidecar('[00:01.00] Only this\nand the rest untimed');
+    final l = (await FileLyricsSource(_Tags()).read(audio) as Found).lyrics;
+    expect(l.kind, LyricsKind.plain);
+    expect(l.text, '[00:01.00] Only this\nand the rest untimed');
+  });
+
   test('no sidecar, synced tag lyrics', () async {
     final a = await FileLyricsSource(
       _Tags(lyrics: '[00:01.00] One\n[00:02.00] Two'),

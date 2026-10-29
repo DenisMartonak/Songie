@@ -11,7 +11,10 @@ import 'package:songies/lyrics/lyrics_service.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/theme/app_theme.dart';
+import 'package:songies/theme/contrast.dart';
+import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/lyrics/lyrics_view.dart';
+import 'package:songies/ui/now_playing/now_playing_page.dart';
 
 import '../helpers/fake_lyrics_service.dart';
 import '../helpers/ui_harness.dart';
@@ -59,6 +62,7 @@ void main() {
     double? panelWidth,
     bool disableAnimations = false,
     bool loadPlayer = false,
+    ThemeSpec theme = ThemeSpec.builtInDefault,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -76,6 +80,7 @@ void main() {
     final view = LyricsView(density: density);
     await tester.pumpWidget(
       h.app(
+        theme: theme,
         disableAnimations: disableAnimations,
         initialLocation: '/',
         extraOverrides: [
@@ -188,6 +193,40 @@ void main() {
       );
     });
 
+    for (final (name, theme) in [
+      ('default', ThemeSpec.builtInDefault),
+      ('album glow', ThemeSpec.albumGlow),
+      ('terminal', ThemeSpec.terminal),
+    ]) {
+      for (final (density, minRatio) in [
+        (LyricsDensity.large, 3.0),
+        (LyricsDensity.compact, 4.5),
+      ]) {
+        uiTest('$name, ${density.name}: the dimmed lines reach '
+            '$minRatio:1 on the background and over the worst blurred '
+            'cover, top and bottom', (tester) async {
+          service.answers['t1'] = LyricsShown(syncedOf(invented(5)));
+          await pumpView(tester, density: density, theme: theme);
+          await push(tester, at(const Duration(seconds: 12)));
+          final c = colorsOf(tester);
+          final dim = lineColor(tester, 0);
+          expect(dim, isNot(c.text));
+          expect(c.blurNowPlaying, isTrue);
+          for (final bg in [
+            c.background,
+            blurWorstCaseTop(c),
+            blurWorstCaseBottom(c),
+          ]) {
+            expect(
+              contrastRatio(Color.alphaBlend(dim, bg), bg),
+              greaterThanOrEqualTo(minRatio),
+              reason: 'over $bg',
+            );
+          }
+        });
+      }
+    }
+
     uiTest('tapping line 2 seeks to its time', (tester) async {
       service.answers['t1'] = LyricsShown(syncedOf(invented(5)));
       await pumpView(tester, loadPlayer: true);
@@ -221,6 +260,39 @@ void main() {
       final vp = viewport(tester);
       final top = lineRect(tester, 22).top - vp.top;
       expect(top / vp.height, closeTo(0.35, 0.08));
+    });
+
+    uiTest('a keyboard scroll stops following; the view\'s own follow '
+        'scrolls do not', (tester) async {
+      service.answers['t1'] = LyricsShown(syncedOf(invented(60)));
+      await pumpView(tester);
+      await push(tester, at(const Duration(seconds: 102))); // line 19
+      // Several follow scrolls in a row: each one still follows.
+      await push(tester, at(const Duration(seconds: 117))); // line 22
+      final at22 = offset(tester);
+      await push(tester, at(const Duration(seconds: 157))); // line 30
+      final at30 = offset(tester);
+      expect(at30, greaterThan(at22), reason: 'still following');
+
+      // A Page Up, as the keyboard sends it: no drag details.
+      Actions.invoke(
+        tester.element(find.text('Paper lantern number 30')),
+        const ScrollIntent(
+          direction: AxisDirection.up,
+          type: ScrollIncrementType.page,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      final scrolled = offset(tester);
+      expect(scrolled, lessThan(at30));
+
+      await push(tester, at(const Duration(seconds: 202))); // line 39
+      expect(offset(tester), scrolled, reason: 'not following');
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 1));
+      expect(offset(tester), greaterThan(at30), reason: 'resumed');
     });
 
     uiTest('while paused, a position change does not scroll', (tester) async {

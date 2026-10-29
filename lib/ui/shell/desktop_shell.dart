@@ -77,7 +77,16 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   /// Holds focus when no text field does, so shortcuts always have a target.
   final _rootFocus = FocusNode(debugLabel: 'shell root');
 
+  /// The user's own choice; the lyrics panel can hold the sidebar collapsed
+  /// for a while without changing it.
   bool _sidebarCollapsed = false;
+
+  /// Below this width an open lyrics panel holds the sidebar collapsed.
+  static const _roomyWidth = 1000.0;
+
+  /// The narrowest the main pane gets beside the panel; narrower, the panel
+  /// lies over the right of the content instead.
+  static const _minMainWidth = 360.0;
 
   @override
   void dispose() {
@@ -107,6 +116,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final player = ref.read(playerServiceProvider);
     final hasTitleBar = ref.watch(hasCustomTitleBarProvider);
+    final panelOpen = ref.watch(lyricsPanelOpenProvider);
     // Keep the field in step when something else sets the query.
     ref.listen(searchQueryProvider, (_, query) {
       if (_searchController.text != query) _searchController.text = query;
@@ -155,53 +165,90 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                     onTapOutsideSearch: _rootFocus.requestFocus,
                   ),
                 Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Buttons in the chrome must not take focus, or Space
-                      // would re-press the last one clicked.
-                      ExcludeFocus(
-                        child: Sidebar(
-                          shell: widget.shell,
-                          collapsed: _sidebarCollapsed,
-                          onToggle: () => setState(
-                            () => _sidebarCollapsed = !_sidebarCollapsed,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      // On a narrow window the open panel holds the sidebar
+                      // collapsed; the user's own choice comes back when it
+                      // closes or the window widens.
+                      final squeezed = panelOpen && width < _roomyWidth;
+                      final collapsed = _sidebarCollapsed || squeezed;
+                      final sidebarWidth = collapsed
+                          ? Sidebar.collapsedWidth
+                          : Sidebar.expandedWidth;
+                      // Main pane's right gap, then the panel and its gap.
+                      final mainBeside =
+                          width - sidebarWidth - 8 - (LyricsPanel.width + 8);
+                      final overlay = panelOpen && mainBeside < _minMainWidth;
+                      final main = Padding(
+                        padding: const EdgeInsets.only(right: 8, bottom: 8),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(
+                            colors.radius + 4,
                           ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 8, bottom: 8),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                              colors.radius + 4,
-                            ),
-                            child: ColoredBox(
-                              color: colors.background,
-                              child: PlayerErrorSnacks(
-                                child: Column(
-                                  children: [
-                                    // Focusable, so Update and Dismiss can be
-                                    // reached by keyboard.
-                                    const DownloadsBanner(),
-                                    if (!hasTitleBar)
-                                      _SearchRow(
-                                        controller: _searchController,
-                                        focus: _searchFocus,
-                                        onChanged: _onQueryChanged,
-                                        onTapOutside: _rootFocus.requestFocus,
-                                      ),
-                                    Expanded(child: widget.shell),
-                                  ],
-                                ),
+                          child: ColoredBox(
+                            color: colors.background,
+                            child: PlayerErrorSnacks(
+                              child: Column(
+                                children: [
+                                  // Focusable, so Update and Dismiss can be
+                                  // reached by keyboard.
+                                  const DownloadsBanner(),
+                                  if (!hasTitleBar)
+                                    _SearchRow(
+                                      controller: _searchController,
+                                      focus: _searchFocus,
+                                      onChanged: _onQueryChanged,
+                                      onTapOutside: _rootFocus.requestFocus,
+                                    ),
+                                  Expanded(child: widget.shell),
+                                ],
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      // Beside the main pane, which gives it room as it opens.
-                      const LyricsPanel(),
-                    ],
+                      );
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Buttons in the chrome must not take focus, or
+                          // Space would re-press the last one clicked.
+                          ExcludeFocus(
+                            child: Sidebar(
+                              shell: widget.shell,
+                              collapsed: collapsed,
+                              onToggle: squeezed
+                                  ? null
+                                  : () => setState(
+                                      () => _sidebarCollapsed =
+                                          !_sidebarCollapsed,
+                                    ),
+                            ),
+                          ),
+                          Expanded(
+                            child: overlay
+                                // Too narrow to share: the panel lies over
+                                // the right of the content.
+                                ? Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      main,
+                                      const Positioned(
+                                        top: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        child: LyricsPanel(),
+                                      ),
+                                    ],
+                                  )
+                                : main,
+                          ),
+                          // Beside the main pane, which gives it room as it
+                          // opens.
+                          if (!overlay) const LyricsPanel(),
+                        ],
+                      );
+                    },
                   ),
                 ),
                 const ExcludeFocus(child: PlayerBar()),
