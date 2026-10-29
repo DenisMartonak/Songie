@@ -198,6 +198,21 @@ Phone (Android), desktop Linux and Windows. Where a check says "desktop", do it 
 - [ ] The credit line is right: "Lyrics from LRCLIB", "Lyrics from YouTube Music" (with YouTube's own credit line when given) or "Lyrics from the file".
 - [ ] The desktop player bar still fits at a narrow window (about 720 px): the volume slider shrinks and the Lyrics button stays visible.
 
+## Plan 9: listening stats
+
+Phone (Android), desktop Linux and Windows. Where a check says "desktop", do it on both Linux and Windows. The card is "Your listening" on Home; tapping it opens the stats page.
+- [ ] Play a song for 1 minute. The card's minutes and plays go up (about 1 minute, 1 play).
+- [ ] Pause for a minute. The minutes don't grow while paused.
+- [ ] Skip a song after 10 s. The minutes grow but the plays don't.
+- [ ] With repeat-one on, let a short song loop twice. That gives 2 plays.
+- [ ] On the stats page, switch between 7 days, 1 month, 6 months and 12 months. The numbers change and the chart bars look right (no overflow, the newest bar on the right).
+- [ ] Show top 10 works for top artists and for top songs.
+- [ ] Tapping a top song plays it.
+- [ ] Tapping a top artist opens Search with the artist's name (artist pages aren't linked yet).
+- [ ] A song with a featured artist (for example "Artist A, Artist B", or "Artist A feat. Artist B" on a local file) counts for the main artist only.
+- [ ] Force-quit the app in the middle of a song. At most about 30 s of that song is lost.
+- [ ] Phone: the card is compact, and your playlists stay visible on Home without scrolling far.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.
