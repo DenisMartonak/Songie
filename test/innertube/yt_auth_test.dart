@@ -338,4 +338,33 @@ void main() {
     expect(store.stored, isNull);
     expect(c.read(ytAuthProvider), isNot(isA<YtSignedIn>()));
   });
+
+  test('a failed probe is never cached: unlocking the keyring recovers the '
+      'sign-in in the same process', () async {
+    final store = _Mem();
+    await make(store).read(ytAuthProvider.notifier).signIn(sess, name: 'N');
+    store.readThrows = true;
+    final c = make(store);
+    final n = c.read(ytAuthProvider.notifier);
+    await n.load();
+    expect(await n.ensureSession(), isNull);
+    expect(c.read(ytAuthProvider), isA<YtAuthUnavailable>());
+
+    // Settings while still locked: the probe fails.
+    store.isAvailable = false;
+    await n.checkAvailable();
+    expect(c.read(ytAuthProvider), isA<YtAuthUnavailable>());
+
+    // Unlocked, Settings again: probed afresh, signed in again.
+    store
+      ..isAvailable = true
+      ..readThrows = false;
+    await n.checkAvailable();
+    final st = c.read(ytAuthProvider);
+    expect(st, isA<YtSignedIn>());
+    expect((st as YtSignedIn).name, 'N');
+    store.touched = 0;
+    expect(await n.ensureSession(), sess);
+    expect(store.touched, 1, reason: 'the keyring is read again');
+  });
 }

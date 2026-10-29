@@ -96,10 +96,25 @@ class YtAuth extends Notifier<YtAuthState> {
   bool _sessionLoaded = false;
   int _gen = 0;
 
-  /// The keyring probe's answer, kept for the life of the app (one
-  /// container per process) so Settings visits don't prompt again. A
-  /// sign-in or sign-out forgets it.
-  bool? _available;
+  /// Whether a keyring probe has succeeded, kept for the life of the app
+  /// (one container per process) so Settings visits don't prompt again. A
+  /// failed probe is never kept: unlocking the keyring must be noticed on
+  /// the next check. A sign-in or sign-out forgets it.
+  bool _available = false;
+
+  /// The keyring probe, skipped once one has succeeded. A throwing probe
+  /// counts as unavailable.
+  Future<bool> _probe() async {
+    if (_available) return true;
+    bool ok;
+    try {
+      ok = await ref.read(ytSessionStoreProvider).available();
+    } catch (_) {
+      ok = false;
+    }
+    if (ok) _available = true;
+    return ok;
+  }
 
   @override
   YtAuthState build() => const YtSignedOut();
@@ -144,7 +159,7 @@ class YtAuth extends Notifier<YtAuthState> {
     if (gen != _gen) return null;
     if (s == null) {
       // Distinguish "store unreadable" from "store empty".
-      final ok = await ref.read(ytSessionStoreProvider).available();
+      final ok = await _probe();
       if (gen != _gen) return null;
       if (!ok) {
         state = const YtAuthUnavailable();
@@ -165,21 +180,14 @@ class YtAuth extends Notifier<YtAuthState> {
   }
 
   /// Lazy keyring probe, for the Settings row and the sign-in start; asked
-  /// once per process (see [_available]). Recovering from
-  /// [YtAuthUnavailable] re-derives the state from the device-local markers,
-  /// as [load] does, and the next [ensureSession] reads the keyring again.
+  /// again until a probe succeeds, then not again (see [_available]).
+  /// Recovering from [YtAuthUnavailable] re-derives the state from the
+  /// device-local markers, as [load] does, and the next [ensureSession]
+  /// reads the keyring again.
   Future<void> checkAvailable() async {
     final gen = _gen;
-    var ok = _available;
-    if (ok == null) {
-      try {
-        ok = await ref.read(ytSessionStoreProvider).available();
-      } catch (_) {
-        ok = false;
-      }
-      if (gen != _gen) return;
-      _available = ok;
-    }
+    final ok = await _probe();
+    if (gen != _gen) return;
     if (!ok) {
       state = const YtAuthUnavailable();
     } else if (state is YtAuthUnavailable) {
@@ -193,7 +201,7 @@ class YtAuth extends Notifier<YtAuthState> {
   Future<void> signIn(YtSession s, {String? name}) async {
     final gen = ++_gen;
     final store = ref.read(ytSessionStoreProvider);
-    _available = null;
+    _available = false;
     await store.write(s);
     final settings = ref.read(settingsRepositoryProvider);
     try {
@@ -215,7 +223,7 @@ class YtAuth extends Notifier<YtAuthState> {
 
   Future<void> signOut() async {
     final gen = ++_gen;
-    _available = null;
+    _available = false;
     _session = null;
     _sessionLoaded = false;
     state = const YtSignedOut();
