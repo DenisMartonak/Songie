@@ -181,6 +181,22 @@ Per platform (Android, Windows, Linux): sign in, check the feed, play a song pas
 - [ ] Sign out: Home returns to the regular feed; the Settings row goes back to "Sign in to YouTube".
 - [ ] A locked keyring on Linux shows the explanation ("Sign-in needs a keyring (KWallet or GNOME Keyring), which isn't available"), and the rest of Settings and the app work.
 
+## Plan 8: lyrics
+
+Phone (Android), desktop Linux and Windows. Where a check says "desktop", do it on both Linux and Windows.
+- [ ] A mainstream YouTube song shows timed lyrics, and the current line is highlighted and follows the song (phone: Lyrics tab on Now Playing; desktop: the right-side panel).
+- [ ] Tapping a line seeks to it.
+- [ ] Scrolling the lyrics by hand pauses following; it resumes after 5 s.
+- [ ] A local file with a sidecar `.lrc` next to it uses that file's lyrics, and the credit says "Lyrics from the file".
+- [ ] An obscure song shows "No lyrics found" and a Search again button; Search again tries once more.
+- [ ] In airplane mode, lyrics you already viewed still show; a song you never opened lyrics for shows "Lyrics need a connection".
+- [ ] With reduced motion on, the lyrics jump to the current line instead of scrolling.
+- [ ] While paused, nothing moves (no scrolling, no shimmer).
+- [ ] Desktop: the lyrics panel stays open when you switch tabs (Home, Library, Search), and the player bar Lyrics button toggles it.
+- [ ] Desktop: the Now Playing dialog has a Lyrics tab.
+- [ ] The credit line is right: "Lyrics from LRCLIB", "Lyrics from YouTube Music" (with YouTube's own credit line when given) or "Lyrics from the file".
+- [ ] The desktop player bar still fits at a narrow window (about 720 px): the volume slider shrinks and the Lyrics button stays visible.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.

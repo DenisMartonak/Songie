@@ -1,6 +1,30 @@
 # Songies — Progress
 
-_Last updated: 2026-10-28_
+_Last updated: 2026-10-29_
+
+## Plan 8 (synced lyrics) — done, reviewed; final review pending
+
+- **Branch:** `plan-8-lyrics` (from `plan-7-youtube-login`). Plan: [Plan 8](superpowers/plans/2026-10-29-songies-plan-8-lyrics.md). Spec: [Lyrics design](superpowers/specs/2026-10-29-songies-lyrics-design.md). Session log: [plan-8-session-log.md](plan-8-session-log.md). Nothing is pushed or merged.
+- **Status:** Tasks 1–9 are done and each was reviewed. The final whole-branch review is pending. Tests: 1,621 passing, `flutter analyze` clean, `flutter build apk --release` succeeds (81.3 MB), `flutter build linux --release` succeeds (bundle 35 MB). Windows is built on your PC. The secret scan of the branch history found only doc text, and the lyric fixtures hold invented lines only. **Nothing has been run on a device yet.**
+- **What it does now:**
+  - **Where:** a Lyrics tab next to Queue on Now Playing (phone), a right-side panel on desktop toggled from the player bar (it stays open across tabs), and a Lyrics tab in the desktop Now Playing dialog.
+  - **Lookup:** your own `.lrc` file next to the song, then LRCLIB, then YouTube Music (YouTube songs only). Timed lyrics beat plain ones. Lookups happen only while a Lyrics view is open; there is no background fetching.
+  - **Reading:** the current line is highlighted and followed, tapping a line seeks, scrolling by hand pauses following for 5 s, and reduced motion jumps instead of scrolling. Nothing moves while paused.
+  - **Offline:** results are cached on the device (the new `lyrics` table, schema 6, synced like the other tables). Seen lyrics show offline; others say "Lyrics need a connection". "No lyrics found" has a Search again button.
+  - **Credit:** a small line at the end ("Lyrics from LRCLIB", "Lyrics from YouTube Music", "Lyrics from the file").
+- **Rulings** (each with its cost if wrong; the full text is in the session log):
+  - **R1:** YouTube Music lyrics are plain only. Cost: songs LRCLIB lacks aren't timed.
+  - **R2:** an LRCLIB timed answer with fewer than 2 timed lines is ignored. Cost: a real one-line lyric is dropped.
+  - **R3:** an instrumental LRCLIB search result is skipped if another in-range result has lyrics. Cost: an instrumental may show another version's lyrics.
+  - **R4:** the best online result is still cached when your file's plain lyrics are shown. Cost: a cached lyric you never see.
+  - **R5:** timed lyrics use a plain scrolling column. Cost: slower layout on a very long lyric.
+  - **R6:** small dim lines meet 4.5:1, large ones 3:1. Cost: small dim lines look a little less dim.
+  - **R7:** the desktop dialog's Lyrics tab uses the smaller text. Cost: a one-word change.
+  - **R8:** the player bar volume slider is flexible (up to 104 px). Cost: a narrower slider on narrow windows.
+  - **P1–P3:** the YouTube lyrics source lives in `lib/lyrics/ytm_lyrics.dart`; Search again bumps a retry counter that skips the cache; precedence is timed first, then your file's plain lyrics, then online plain.
+- **Next:** your device checks (the Plans 6, 7 and 8 sections of the [manual checklist](manual-test-checklist.md), plus the still-pending live sign-in check from Plan 7), then **Plan 9 (listening statistics)**, then device sync and packaging.
+- **To resume in a new Claude session:**
+  > Songies Plan 8 is implemented on branch `plan-8-lyrics` (Tasks 1–9 done and reviewed; final review pending). Next: the device checks, then write Plan 9 (listening statistics). Read docs/PROGRESS.md. Don't merge.
 
 ## Plan 7 (YouTube sign-in for a personal feed) — done, reviewed; live check pending
 

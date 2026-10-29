@@ -251,6 +251,8 @@ Fetch the current id list (same flat call), then in one transaction:
 
 ## 10. Lyrics
 
+Replaced by 2026-10-29-songies-lyrics-design.md
+
 - A Lyrics tab next to Queue on Now Playing (phone). On desktop, a right-side panel toggled from the player bar.
 - Lookup order, stopping at the first hit:
   1. Local track: a sidecar `<same name>.lrc` next to the file, then embedded `SYLT`/`USLT` ID3 frames.
