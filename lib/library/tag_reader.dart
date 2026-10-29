@@ -12,6 +12,7 @@ class TrackTags {
     this.album,
     this.duration,
     this.picture,
+    this.lyrics,
   });
 
   final String? title;
@@ -21,6 +22,9 @@ class TrackTags {
 
   /// Raw bytes of the cover image (any format the art cache can decode).
   final Uint8List? picture;
+
+  /// Embedded lyrics text, plain or LRC.
+  final String? lyrics;
 }
 
 abstract class TagReader {
@@ -52,5 +56,6 @@ TrackTags _read(String path) {
     album: m.album,
     duration: m.duration,
     picture: cover?.bytes,
+    lyrics: m.lyrics,
   );
 }
