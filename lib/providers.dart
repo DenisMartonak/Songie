@@ -30,6 +30,8 @@ import 'library/yt_tracks.dart';
 import 'lyrics/lyrics_service.dart';
 import 'player/player_service.dart';
 import 'player/radio_controller.dart';
+import 'stats/stats_models.dart';
+import 'stats/stats_repository.dart';
 import 'theme/app_theme.dart';
 import 'theme/cover_palette.dart';
 import 'theme/font_service.dart';
@@ -731,3 +733,28 @@ final downloadBytesPerPlaylistProvider =
     StreamProvider.autoDispose<List<(String playlistId, int bytes)>>(
       (ref) => ref.watch(downloadRepositoryProvider).watchBytesPerPlaylist(),
     );
+
+// --- Listening stats -------------------------------------------------------
+
+final statsRepositoryProvider = Provider<StatsRepository>(
+  (ref) => _unwired('statsRepositoryProvider'),
+);
+
+/// Stats for one period, live while a page or card shows them.
+final periodStatsProvider = StreamProvider.autoDispose
+    .family<PeriodStats, StatsPeriod>(
+      (ref, period) => ref.watch(statsRepositoryProvider).watch(period),
+    );
+
+/// The stats page's chosen period. Session-only: it starts at 7 days on
+/// every launch.
+class SelectedStatsPeriod extends Notifier<StatsPeriod> {
+  @override
+  StatsPeriod build() => StatsPeriod.week;
+
+  void select(StatsPeriod period) => state = period;
+}
+
+final statsPeriodProvider = NotifierProvider<SelectedStatsPeriod, StatsPeriod>(
+  SelectedStatsPeriod.new,
+);

@@ -39,6 +39,7 @@ import 'lyrics/lyrics_store.dart';
 import 'lyrics/ytm_lyrics.dart';
 import 'stats/listen_recorder.dart';
 import 'stats/listen_store.dart';
+import 'stats/stats_repository.dart';
 import 'player/audio_session_binding.dart';
 import 'player/composite_track_resolver.dart';
 import 'player/just_audio_backend.dart';
@@ -244,6 +245,7 @@ Future<void> main() async {
       downloadServiceProvider.overrideWithValue(downloads),
       fontServiceProvider.overrideWithValue(fonts),
       themeRepositoryProvider.overrideWithValue(themes),
+      statsRepositoryProvider.overrideWithValue(StatsRepository(db)),
       initialThemeSpecProvider.overrideWithValue(initialTheme),
     ],
   );
