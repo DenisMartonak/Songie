@@ -183,6 +183,7 @@ class PlayerService {
 
   final StreamController<PlayerState> _controller =
       StreamController<PlayerState>.broadcast();
+  final StreamController<Track> _starts = StreamController<Track>.broadcast();
   late final StreamSubscription<BackendState> _sub;
   late final StreamSubscription<Object> _errorSub;
 
@@ -248,6 +249,11 @@ class PlayerService {
 
   Stream<PlayerState> get states => _controller.stream;
   PlayerState get state => _state;
+
+  /// Every successful start of a song: a new queue, next or previous song, a
+  /// repeat-one restart or a "previous" restart. Seeking, pausing and
+  /// resuming never emit.
+  Stream<Track> get trackStarts => _starts.stream;
 
   /// Changes on every [playQueue] call (synchronously, when it is called), and
   /// never on [playNext], [addToQueue] or other edits. Lets a caller that
@@ -547,6 +553,7 @@ class PlayerService {
     await _sub.cancel();
     await _errorSub.cancel();
     await _controller.close();
+    await _starts.close();
     await _backend.dispose();
   }
 
@@ -868,6 +875,7 @@ class PlayerService {
   }
 
   Future<void> _reportStarted(Track track) async {
+    _emitStart(track);
     try {
       await _onTrackStarted?.call(track, _state.sourcePlaylistId);
     } catch (e, s) {
@@ -934,6 +942,11 @@ class PlayerService {
     _wasCompleted = false;
     await _backend.seek(Duration.zero);
     _emit(_state.copyWith(position: Duration.zero));
+    _emitStart(entry.track);
+  }
+
+  void _emitStart(Track track) {
+    if (!_starts.isClosed) _starts.add(track);
   }
 
   // --- backend events -------------------------------------------------------

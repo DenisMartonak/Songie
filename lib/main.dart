@@ -37,6 +37,7 @@ import 'lyrics/lrclib.dart';
 import 'lyrics/lyrics_service.dart';
 import 'lyrics/lyrics_store.dart';
 import 'lyrics/ytm_lyrics.dart';
+import 'stats/listen_recorder.dart';
 import 'stats/listen_store.dart';
 import 'player/audio_session_binding.dart';
 import 'player/composite_track_resolver.dart';
@@ -76,7 +77,8 @@ Future<void> main() async {
 
   final db = AppDatabase.open(paths.db);
   final stamp = await SyncStamp.load(db);
-  unawaited(ListenStore(db, stamp).prune());
+  final listenStore = ListenStore(db, stamp);
+  unawaited(listenStore.prune());
 
   await initAudioPlatform();
   if (Platform.isWindows || Platform.isLinux) await _initDesktopWindow();
@@ -257,6 +259,8 @@ Future<void> main() async {
     session: container.read(ytAuthProvider.notifier).ensureSession,
     accountTracking: ytm.accountTracking,
   );
+  // Records listening statistics; reacts to player events only.
+  ListenRecorder(player.states, player.trackStarts, listenStore);
   runApp(
     UncontrolledProviderScope(
       container: container,

@@ -3,6 +3,7 @@ import 'dart:math';
 
 import '../core/log.dart';
 import '../data/database.dart';
+import '../player/heard_time.dart';
 import '../player/play_rules.dart';
 import '../player/player_service.dart';
 import 'clients.dart';
@@ -36,8 +37,6 @@ class PlayReporter {
     _sub = states.listen(_onState);
   }
 
-  /// Position steps larger than this are seeks, not listening.
-  static const _maxStep = Duration(seconds: 5);
   static const _cpnChars =
       'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
@@ -52,7 +51,7 @@ class PlayReporter {
   late final StreamSubscription<PlayerState> _sub;
 
   String? _trackId;
-  Duration _heard = Duration.zero;
+  final _heard = HeardTime();
   Duration? _lastPos;
   bool _reported = false;
 
@@ -62,11 +61,7 @@ class PlayReporter {
   /// ticks are sparse, so the last one rarely lands exactly on the duration.
   static const _endTolerance = Duration(seconds: 1);
 
-  /// A first tick this close to the start is credited as heard.
-  static const _startCredit = Duration(seconds: 2);
-
   Track? _track;
-  bool _wasPlaying = false;
   Duration? _length;
 
   void _onState(PlayerState s) {
@@ -75,10 +70,9 @@ class PlayReporter {
       // Natural end or skip: judge the song we are leaving on what was heard.
       _finish();
       _trackId = t?.id;
-      _heard = Duration.zero;
+      _heard.reset();
       _reported = false;
       _lastPos = null;
-      _wasPlaying = false;
     }
     _track = t;
     if (t == null) return;
@@ -88,17 +82,8 @@ class PlayReporter {
     final last = _lastPos;
     _lastPos = s.position;
     if (_reported) return;
-    // The step into a stopping state counts: playing was true until then.
-    if (s.playing || _wasPlaying) {
-      if (last == null) {
-        if (s.playing && s.position <= _startCredit) _heard += s.position;
-      } else {
-        final step = s.position - last;
-        if (step > Duration.zero && step <= _maxStep) _heard += step;
-      }
-    }
-    _wasPlaying = s.playing;
-    if (s.playing && reachedPlay(_heard, _length)) {
+    _heard.onState(playing: s.playing, position: s.position);
+    if (s.playing && reachedPlay(_heard.heard, _length)) {
       _report();
     } else if (!s.playing && last != null) {
       // Stopped or completed: the end of a short song may land here.
@@ -112,7 +97,7 @@ class PlayReporter {
     if (_reported || _track == null) return;
     final length = _length;
     final adjusted = length == null ? null : length - _endTolerance;
-    if (reachedPlay(_heard, adjusted)) _report();
+    if (reachedPlay(_heard.heard, adjusted)) _report();
   }
 
   void _report() {
@@ -123,7 +108,8 @@ class PlayReporter {
     // Signed out, the stream's own tracking is all there is.
     if (anonymous == null && _session == null) return;
     _reported = true;
-    unawaited(_run(videoId, anonymous, _heard, _lastPos ?? _heard));
+    final heard = _heard.heard;
+    unawaited(_run(videoId, anonymous, heard, _lastPos ?? heard));
   }
 
   /// A qualified play: signed in, one account-attributed `player` call gives

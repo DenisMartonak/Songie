@@ -1554,4 +1554,48 @@ void main() {
       expect(player.state.notice!.trackTitle, y1.title);
     });
   });
+
+  group('trackStarts', () {
+    test('emits on every start and not on seek, pause or play', () async {
+      final ids = <String>[];
+      final sub = player.trackStarts.listen((t) => ids.add(t.id));
+      addTearDown(sub.cancel);
+
+      await player.playQueue([a, b, c]);
+      await settle();
+      expect(ids, ['a']);
+
+      await player.next();
+      await settle();
+      expect(ids, ['a', 'b']);
+
+      await player.seek(const Duration(seconds: 10));
+      await player.pause();
+      await player.play();
+      await settle();
+      expect(ids, ['a', 'b']);
+
+      player.cycleRepeat();
+      player.cycleRepeat();
+      backend.complete();
+      await settle();
+      expect(player.state.current, b);
+      expect(ids, ['a', 'b', 'b']);
+
+      backend.setPosition(const Duration(seconds: 5));
+      await player.previous();
+      await settle();
+      expect(ids, ['a', 'b', 'b', 'b']);
+    });
+
+    test('a failed start does not emit', () async {
+      final ids = <String>[];
+      final sub = player.trackStarts.listen((t) => ids.add(t.id));
+      addTearDown(sub.cancel);
+      resolver.missing.add('a');
+      await player.playQueue([a, b]);
+      await settle();
+      expect(ids, ['b']);
+    });
+  });
 }
