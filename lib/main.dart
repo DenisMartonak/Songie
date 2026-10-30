@@ -50,6 +50,7 @@ import 'player/stream_source.dart';
 import 'player/track_resolver.dart';
 import 'providers.dart';
 import 'router.dart';
+import 'sync/device_identity.dart';
 import 'theme/font_service.dart';
 import 'theme/theme_repository.dart';
 import 'ui/library/import_dialog.dart';
@@ -212,6 +213,15 @@ Future<void> main() async {
     network: network,
   );
 
+  // Sync's TLS identity. Failure here must not stop the app: only the Sync
+  // devices page needs it.
+  DeviceIdentity? deviceIdentity;
+  try {
+    deviceIdentity = await DeviceIdentity.loadOrCreate(paths.sync);
+  } catch (e, s) {
+    AppLog.e('Device identity unavailable', e, s);
+  }
+
   final navigatorKey = GlobalKey<NavigatorState>();
   final router = buildRouter(navigatorKey: navigatorKey);
   try {
@@ -224,6 +234,8 @@ Future<void> main() async {
   final container = ProviderContainer(
     overrides: [
       appPathsProvider.overrideWithValue(paths),
+      if (deviceIdentity != null)
+        deviceIdentityProvider.overrideWithValue(deviceIdentity),
       databaseProvider.overrideWithValue(db),
       syncStampProvider.overrideWithValue(stamp),
       libraryRepositoryProvider.overrideWithValue(library),

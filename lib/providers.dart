@@ -37,6 +37,8 @@ import 'theme/cover_palette.dart';
 import 'theme/font_service.dart';
 import 'theme/image_palette.dart';
 import 'theme/theme_repository.dart';
+import 'sync/device_identity.dart';
+import 'sync/peer_repository.dart';
 import 'theme/theme_service.dart';
 import 'theme/theme_spec.dart';
 import 'ui/shell/window_controls.dart';
@@ -51,6 +53,27 @@ Never _unwired(String name) =>
 final appPathsProvider = Provider<AppPaths>(
   (ref) => _unwired('appPathsProvider'),
 );
+
+/// This device's sync TLS identity (loaded in `main()`).
+final deviceIdentityProvider = Provider<DeviceIdentity>(
+  (ref) => _unwired('deviceIdentityProvider'),
+);
+
+final peerRepositoryProvider = Provider<PeerRepository>(
+  (ref) => PeerRepository(ref.watch(databaseProvider)),
+);
+
+/// The name other devices see: the saved `device_name`, else the hostname on
+/// desktop and `Android` on Android.
+final deviceNameProvider = StreamProvider.autoDispose<String>((ref) {
+  final fallback = ref.watch(isAndroidProvider)
+      ? 'Android'
+      : Platform.localHostname;
+  return ref
+      .watch(settingsRepositoryProvider)
+      .watchString(kDeviceName)
+      .map((v) => v == null || v.trim().isEmpty ? fallback : v.trim());
+});
 
 final databaseProvider = Provider<AppDatabase>(
   (ref) => _unwired('databaseProvider'),
