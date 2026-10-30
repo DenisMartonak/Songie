@@ -78,20 +78,35 @@ class FileRef {
 }
 
 /// Where a file copy stands. [done] counts files handled in both directions
-/// (copied or skipped) of [total]; [received] counts the ones that arrived on
-/// this device.
+/// (copied or skipped) of [total]; [copied] counts the ones that were copied,
+/// either way.
 class FileProgress {
   const FileProgress({
     required this.done,
     required this.total,
     this.current,
-    this.received = 0,
+    this.copied = 0,
   });
 
   final int done;
   final int total;
   final String? current;
-  final int received;
+  final int copied;
+}
+
+/// How one [FileTransfer.receive] ended.
+enum _Got {
+  /// Complete, checked and in place.
+  done,
+
+  /// The bytes ended early; the `.part` is kept to resume.
+  partial,
+
+  /// Too long or failed its check; the `.part` is gone (worth one retry).
+  bad,
+
+  /// Complete, but no longer wanted or not attachable: not worth a retry.
+  dropped,
 }
 
 /// Copies the local audio files, imported fonts and covers one device has and
@@ -246,6 +261,8 @@ class FileTransfer {
         }
         return null;
       case FileKind.art:
+        // Only covers live rows use: a deleted row's cover stays private.
+        if ((await _artRefs(only: r.name)).isEmpty) return null;
         final file = _dest(r);
         return await file.exists() ? file : null;
     }
@@ -286,10 +303,18 @@ class FileTransfer {
   /// [FontService.loadImported]).
   ///
   /// Returns false, keeping the `.part`, when [bytes] ends early; and false,
-  /// deleting it, when the file is too long or fails its check. An error in
-  /// [bytes] propagates and keeps the `.part`. Throws [FormatException] for a
-  /// bad ref, ext or size.
+  /// deleting it, when the file is too long or fails its check, or when it is
+  /// no longer wanted once complete (say its track was deleted meanwhile). An
+  /// error in [bytes] propagates and keeps the `.part`. Throws
+  /// [FormatException] for a bad ref, ext or size, or a `.part` shorter than
+  /// `r.have`.
   Future<bool> receive(
+    FileRef r,
+    Stream<List<int>> bytes, {
+    required int total,
+  }) async => await _receive(r, bytes, total: total) == _Got.done;
+
+  Future<_Got> _receive(
     FileRef r,
     Stream<List<int>> bytes, {
     required int total,
@@ -302,15 +327,16 @@ class FileTransfer {
     }
     final dest = _dest(r);
     final part = _part(r);
+    // Checked before opening, which would create an empty `.part`.
+    final length = await _partSize(r);
+    if (length < r.have) {
+      throw FormatException('partial file is $length bytes, not ${r.have}');
+    }
     await dest.parent.create(recursive: true);
     final raf = await part.open(mode: FileMode.append);
     var written = r.have;
     var tooLong = false;
     try {
-      final length = await raf.length();
-      if (length < r.have) {
-        throw FormatException('partial file is $length bytes, not ${r.have}');
-      }
       if (length > r.have) await raf.truncate(r.have);
       await raf.setPosition(r.have);
       await for (final chunk in bytes) {
@@ -327,27 +353,34 @@ class FileTransfer {
     if (tooLong) {
       AppLog.w('File $r is longer than announced; discarded');
       await part.delete();
-      return false;
+      return _Got.bad;
     }
-    if (written < total) return false;
+    if (written < total) return _Got.partial;
     if (r.kind != FileKind.art && await sha256File(part) != r.name) {
       AppLog.w('File $r failed its hash check; discarded');
       await part.delete();
-      return false;
+      return _Got.bad;
+    }
+    // The copy took a while: importing a file whose track was deleted
+    // meanwhile would bring the track back.
+    if (!await wants(r)) {
+      AppLog.i('File $r is no longer needed; discarded');
+      await part.delete();
+      return _Got.dropped;
     }
     await part.rename(dest.path);
     switch (r.kind) {
       case FileKind.audio:
         if (await _scanner.importFile(dest.path) case Err(:final failure)) {
           AppLog.w('Received $r could not be attached: ${failure.message}');
-          return false;
+          return _Got.dropped;
         }
       case FileKind.font:
         await _fonts.loadImported();
       case FileKind.art:
         break;
     }
-    return true;
+    return _Got.done;
   }
 
   // --- Initiator -----------------------------------------------------------
@@ -392,7 +425,7 @@ class FileTransfer {
 
     final total = pulls.length + pushes.length;
     var done = 0;
-    var received = 0;
+    var copied = 0;
     yield FileProgress(done: 0, total: total);
     for (final (r, size) in pulls) {
       if (cancelled()) return;
@@ -400,11 +433,11 @@ class FileTransfer {
         done: done,
         total: total,
         current: r.name,
-        received: received,
+        copied: copied,
       );
-      if (await _pull(c, r, size, cancelled)) received++;
+      if (await _pull(c, r, size, cancelled)) copied++;
       done++;
-      yield FileProgress(done: done, total: total, received: received);
+      yield FileProgress(done: done, total: total, copied: copied);
     }
     for (final (r, file) in pushes) {
       if (cancelled()) return;
@@ -412,11 +445,11 @@ class FileTransfer {
         done: done,
         total: total,
         current: r.name,
-        received: received,
+        copied: copied,
       );
-      await _push(c, r, file, cancelled);
+      if (await _push(c, r, file, cancelled)) copied++;
       done++;
-      yield FileProgress(done: done, total: total, received: received);
+      yield FileProgress(done: done, total: total, copied: copied);
     }
   }
 
@@ -436,7 +469,14 @@ class FileTransfer {
         final bytes = c
             .getFile(r._path, from: have)
             .takeWhile((_) => !cancelled());
-        if (await receive(r.withHave(have), bytes, total: size)) return true;
+        switch (await _receive(r.withHave(have), bytes, total: size)) {
+          case _Got.done:
+            return true;
+          case _Got.dropped:
+            return false;
+          case _Got.partial || _Got.bad:
+            break; // resume or retry once
+        }
       } on SyncNetError catch (e) {
         if (_skips(e)) {
           AppLog.w('Skipping $r', e);
@@ -449,7 +489,8 @@ class FileTransfer {
     return false;
   }
 
-  Future<void> _push(
+  /// Whether the peer took the file.
+  Future<bool> _push(
     SyncClient c,
     FileRef r,
     File file,
@@ -465,21 +506,22 @@ class FileTransfer {
           from: from,
           total: size,
         );
-        return;
+        return true;
       } on FileSystemException catch (e) {
         AppLog.w('Skipping $r: cannot read it', e);
-        return;
+        return false;
       } on SyncNetError catch (e) {
-        if (cancelled()) return;
+        if (cancelled()) return false;
         if (e.status == HttpStatus.unprocessableEntity) continue;
         if (_skips(e)) {
           AppLog.w('Skipping $r', e);
-          return;
+          return false;
         }
         rethrow;
       }
     }
     if (!cancelled()) AppLog.w('Skipping $r: the peer rejected it twice');
+    return false;
   }
 
   /// Whether [e] concerns one file (it is gone, refused or rejected) rather
@@ -532,8 +574,9 @@ class FileTransfer {
   }
 
   /// Answers `GET /files/<kind>/<name>` (with `Range: bytes=<from>-`).
-  /// Returns whether the whole file was sent.
-  Future<bool> serve(HttpRequest req) async {
+  /// Returns whether the whole file was sent. [onChunk] runs as each chunk
+  /// goes out.
+  Future<bool> serve(HttpRequest req, {void Function()? onChunk}) async {
     final r = refOf(req.uri);
     final file = await locate(r);
     if (file == null) {
@@ -558,16 +601,17 @@ class FileTransfer {
       ..statusCode = range == null ? HttpStatus.ok : HttpStatus.partialContent
       ..headers.contentType = ContentType.binary
       ..contentLength = size - from;
-    await req.response.addStream(file.openRead(from));
+    await req.response.addStream(_watched(file.openRead(from), onChunk));
     await req.response.close();
     return true;
   }
 
   /// Answers `PUT /files/<kind>/<name>?ext=&from=&total=`: 409 `not_needed`
-  /// for a file this device does not lack, 422 `rejected` for one that
-  /// failed its check (the sender retries once). Returns whether the file
-  /// arrived.
-  Future<bool> accept(HttpRequest req) async {
+  /// for a file this device does not lack (or no longer wants once it
+  /// arrived), 422 `rejected` for one that failed its check (the sender
+  /// retries once). Returns whether the file arrived. [onChunk] runs as each
+  /// chunk comes in.
+  Future<bool> accept(HttpRequest req, {void Function()? onChunk}) async {
     final r = refOf(req.uri);
     final q = req.uri.queryParameters;
     final from = int.parse(q['from'] ?? '');
@@ -579,12 +623,34 @@ class FileTransfer {
       await sendJson(req, {'error': 'not_needed'}, status: HttpStatus.conflict);
       return false;
     }
-    final ok = await receive(r.withHave(from), req, total: total);
+    final got = await _receive(
+      r.withHave(from),
+      _watched(req, onChunk),
+      total: total,
+    );
     await sendJson(
       req,
-      ok ? {'ok': true} : {'error': 'rejected'},
-      status: ok ? HttpStatus.ok : HttpStatus.unprocessableEntity,
+      switch (got) {
+        _Got.done => {'ok': true},
+        _Got.dropped => {'error': 'not_needed'},
+        _Got.partial || _Got.bad => {'error': 'rejected'},
+      },
+      status: switch (got) {
+        _Got.done => HttpStatus.ok,
+        _Got.dropped => HttpStatus.conflict,
+        _Got.partial || _Got.bad => HttpStatus.unprocessableEntity,
+      },
     );
-    return ok;
+    return got == _Got.done;
   }
+
+  static Stream<List<int>> _watched(
+    Stream<List<int>> s,
+    void Function()? onChunk,
+  ) => onChunk == null
+      ? s
+      : s.map((chunk) {
+          onChunk();
+          return chunk;
+        });
 }

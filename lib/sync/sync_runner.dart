@@ -261,10 +261,18 @@ class _Run {
         _emit(const SyncStep(SyncStage.files));
         await for (final p in files(client, _cancel)) {
           _emit(SyncStep(SyncStage.files, done: p.done, total: p.total));
-          filesCopied = p.received;
+          filesCopied = p.copied;
         }
       }
-      await client.postJson('/files/done', {'sync_id': syncId});
+      try {
+        await client.postJson('/files/done', {
+          'sync_id': syncId,
+          'copied': filesCopied,
+        });
+      } on SyncNetError catch (e) {
+        // Everything is in; the peer's session times out on its own.
+        AppLog.w('Telling ${_peer.name} the files are done failed', e);
+      }
       try {
         await _r._downloads.queueNewInEnabled();
       } catch (e) {

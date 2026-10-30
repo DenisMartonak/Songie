@@ -14,6 +14,7 @@ import 'package:songies/data/database.dart';
 import 'package:songies/data/sync_stamp.dart';
 import 'package:songies/downloads/download_repository.dart';
 import 'package:songies/library/art_cache.dart';
+import 'package:songies/library/file_hasher.dart';
 import 'package:songies/library/library_repository.dart';
 import 'package:songies/library/library_scanner.dart';
 import 'package:songies/library/tag_reader.dart';
@@ -35,6 +36,44 @@ import '../helpers/test_db.dart';
 class _NoTags implements TagReader {
   @override
   Future<TrackTags> read(File f) async => const TrackTags();
+}
+
+/// Timers the responder starts, fired by hand.
+class _Timers {
+  final made = <_FakeTimer>[];
+
+  Timer create(Duration d, void Function() callback) {
+    final t = _FakeTimer(callback);
+    made.add(t);
+    return t;
+  }
+
+  void fire() {
+    for (final t in made.where((t) => t.isActive).toList()) {
+      t.fire();
+    }
+  }
+}
+
+class _FakeTimer implements Timer {
+  _FakeTimer(this._callback);
+
+  final void Function() _callback;
+  bool _active = true;
+
+  void fire() {
+    _active = false;
+    _callback();
+  }
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  int get tick => 0;
+
+  @override
+  void cancel() => _active = false;
 }
 
 /// One simulated device with its files: database, app data, scanner, fonts,
@@ -59,6 +98,10 @@ class _Dev {
 
   /// Font families handed to the engine, in order.
   final registered = <String>[];
+  final timers = _Timers();
+
+  /// Makes the scanner fail to read files (so an import fails).
+  bool failHash = false;
   final states = <ResponderState>[];
 
   String get id => stamp.deviceId;
@@ -80,6 +123,9 @@ class _Dev {
       _NoTags(),
       ArtCache(d.paths.art),
       LibraryRepository(db, d.stamp),
+      hasher: (f) => d.failHash
+          ? throw FileSystemException('cannot read', f.path)
+          : sha256File(f),
     );
     d.fonts = FontService(
       db,
@@ -110,6 +156,7 @@ class _Dev {
       downloads: DownloadRepository(db),
       files: d.files,
       runningLocally: () => d.runner.running,
+      timer: d.timers.create,
     );
     d.responder.state.listen(d.states.add);
     d.server = SyncServer(identity, RequestVerifier(d.peers));
@@ -344,8 +391,9 @@ void main() {
 
     final events = await _sync(a, b);
 
-    expect(_done(events).filesCopied, 2);
-    expect(((await bDone) as ResponderDone).summary.filesCopied, 1);
+    // Copied either way, the same on both devices.
+    expect(_done(events).filesCopied, 3);
+    expect(((await bDone) as ResponderDone).summary.filesCopied, 3);
 
     final onA = (await a.localFile(theirs))!;
     expect(onA.state, 'done');
@@ -472,9 +520,9 @@ void main() {
     expect(await a.fonts.import(mono.path), isA<Ok<String>>());
     final bDone = b.responder.state.firstWhere((s) => s is ResponderDone);
 
-    expect(_done(await _sync(a, b)).filesCopied, 1);
+    expect(_done(await _sync(a, b)).filesCopied, 2);
 
-    expect(((await bDone) as ResponderDone).summary.filesCopied, 1);
+    expect(((await bDone) as ResponderDone).summary.filesCopied, 2);
     // Each side registers the font it received, and nothing twice.
     expect(a.registered, ['Mono Thing', 'Fancy Sans']);
     expect(b.registered, ['Fancy Sans', 'Mono Thing']);
@@ -567,5 +615,265 @@ void main() {
     expect(names.where((n) => n.startsWith('x')), isEmpty);
     expect(b.parts(b.dir), isEmpty);
     await c.postJson('/files/done', {'sync_id': 's1'});
+  });
+
+  /// A signed client from A to B, with A's session on B in its files phase.
+  Future<SyncClient> committedSession() async {
+    final peer = (await a.peers.byId(b.id))!;
+    final c = SyncClient.pinned(
+      host: '127.0.0.1',
+      port: b.port,
+      fingerprint: peer.certFingerprint,
+      pairKey: base64.decode(peer.pairKey),
+      myDeviceId: a.id,
+    );
+    addTearDown(c.close);
+    await c.postJson('/session/begin', {'sync_id': 's1'});
+    final high = (await c.getJson('/changes?since=0'))['high'] as int;
+    await c.postJson('/commit', {
+      'sync_id': 's1',
+      'initiator_high': 0,
+      'responder_high': high,
+    });
+    return c;
+  }
+
+  Matcher status(int code) =>
+      throwsA(isA<SyncNetError>().having((e) => e.status, 'status', code));
+
+  /// A track on [d] with [hash] and no file there (or a cover [artwork]).
+  Future<String> track(
+    _Dev d, {
+    String? hash,
+    String? artwork,
+    bool deleted = false,
+  }) async {
+    final st = await d.stamp.next();
+    await d.db
+        .into(d.db.tracks)
+        .insert(
+          trackRow(
+            id: st.id,
+            fileHash: hash,
+            clock: st.clock,
+            originDevice: st.originDevice,
+            localSeq: st.localSeq,
+          ).copyWith(artworkRef: Value(artwork), deleted: Value(deleted)),
+        );
+    return st.id;
+  }
+
+  /// Counts B's file downloads, which it still serves.
+  List<String?> countGets({Future<void> Function()? before}) {
+    final ranges = <String?>[];
+    b.server.route('GET', '/files/', (req, peer) async {
+      ranges.add(req.headers.value(HttpHeaders.rangeHeader));
+      await before?.call();
+      await b.files.serve(req);
+    });
+    return ranges;
+  }
+
+  test("a deleted row's cover is neither offered nor served", () async {
+    final cover = '${_hash([9])}.jpg';
+    File(p.join(b.paths.art.path, cover)).writeAsBytesSync(_bytes(100));
+    await track(b, artwork: cover, deleted: true);
+    final c = await committedSession();
+
+    await expectLater(
+      c.getFile('/files/art/$cover').drain<void>(),
+      status(404),
+    );
+    final offered = await c.postJson('/files/have', {
+      'files': [
+        {'kind': 'art', 'name': cover},
+      ],
+      'pushing': 0,
+    });
+    expect(offered['files'], isEmpty);
+
+    // Once a live row uses it, it is served.
+    await track(b, artwork: cover);
+    final got = await c
+        .getFile('/files/art/$cover')
+        .fold<int>(0, (n, chunk) => n + chunk.length);
+    expect(got, 100);
+    await c.postJson('/files/done', {'sync_id': 's1'});
+  });
+
+  test('refuses unneeded, overlong and out-of-range uploads', () async {
+    final hash = _hash([5]);
+    await track(b, hash: hash);
+    final c = await committedSession();
+    final part = File(p.join(b.paths.libraryLocal.path, '$hash.mp3.part'));
+
+    // A file B does not lack.
+    await expectLater(
+      c.putFile(
+        '/files/audio/${_hash([6])}?ext=mp3',
+        Stream.value([1, 2, 3]),
+        total: 3,
+      ),
+      status(409),
+    );
+    // Resuming past the partial file B has (none): refused, and no empty
+    // part is left behind.
+    await expectLater(
+      c.putFile(
+        '/files/audio/$hash?ext=mp3',
+        Stream.value(List.filled(10, 1)),
+        from: 10,
+        total: 20,
+      ),
+      status(400),
+    );
+    expect(part.existsSync(), isFalse);
+    // More bytes than announced (HTTP itself stops a PUT body at its
+    // Content-Length, so this goes to receive directly): the part is deleted.
+    expect(
+      await b.files.receive(
+        FileRef(FileKind.audio, hash, ext: 'mp3'),
+        Stream.fromIterable([List.filled(10, 1), List.filled(10, 1)]),
+        total: 15,
+      ),
+      isFalse,
+    );
+    expect(part.existsSync(), isFalse);
+    await c.postJson('/files/done', {'sync_id': 's1'});
+  });
+
+  test('a stalled upload lets the session time out', () async {
+    final hash = _hash([5]);
+    await track(b, hash: hash);
+    final c = await committedSession();
+    final bytes = StreamController<List<int>>();
+    final put = c.putFile(
+      '/files/audio/$hash?ext=mp3',
+      bytes.stream,
+      total: 200000,
+    );
+    unawaited(put.then((_) {}, onError: (Object _) {}));
+    // Enough to get past the client's write buffer.
+    bytes.add(List.filled(100000, 1));
+    final part = File(p.join(b.paths.libraryLocal.path, '$hash.mp3.part'));
+    for (var i = 0; i < 500; i++) {
+      if (part.existsSync() && part.lengthSync() > 0) break;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(part.lengthSync(), greaterThan(0));
+    expect(b.responder.inSession, isTrue);
+
+    b.timers.fire(); // 15 minutes without a chunk
+
+    expect(b.responder.inSession, isFalse);
+    await pumpEventQueue();
+    expect(b.states.last, isA<ResponderDone>());
+    bytes.addError(StateError('peer gone'));
+    await bytes.close();
+  });
+
+  test('a cancelled copy keeps its part and resumes next time', () async {
+    final song = _bytes(300000);
+    final id = await b.mp3('song.mp3', song);
+    final hash = _hash(song);
+    _done(await _sync(a, b, runner: a.rowsOnly()));
+    final part = File(p.join(a.paths.libraryLocal.path, '$hash.mp3.part'));
+    final cancel = SyncCancel();
+    // Sends a first piece, cancels once A has written some of it, then
+    // sends the rest.
+    b.server.route('GET', '/files/', (req, peer) async {
+      req.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType.binary
+        ..contentLength = song.length;
+      try {
+        req.response.add(song.sublist(0, 100000));
+        await req.response.flush();
+        for (var i = 0; i < 500; i++) {
+          if (part.existsSync() && part.lengthSync() > 0) break;
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        cancel.cancel();
+        req.response.add(song.sublist(100000));
+        await req.response.close();
+      } catch (_) {
+        // A stopped reading.
+      }
+    });
+
+    final events = await a.runner
+        .run(
+          (await a.peers.byId(b.id))!,
+          host: '127.0.0.1',
+          port: b.port,
+          choose: _noClashes,
+          cancel: cancel,
+        )
+        .toList();
+
+    expect(_done(events).filesCopied, 0);
+    final kept = part.lengthSync();
+    expect(kept, inExclusiveRange(0, song.length));
+    expect(await a.localFile(id), isNull);
+
+    final ranges = countGets();
+    expect(_done(await _sync(a, b)).filesCopied, 1);
+    expect(ranges, ['bytes=$kept-']);
+    expect(part.existsSync(), isFalse);
+    expect(File((await a.localFile(id))!.path).readAsBytesSync(), song);
+  });
+
+  test('a song deleted during its copy is not brought back', () async {
+    final song = _bytes(5000);
+    final id = await b.mp3('song.mp3', song);
+    _done(await _sync(a, b, runner: a.rowsOnly()));
+    final gets = countGets(
+      before: () async {
+        final st = await a.stamp.next();
+        await (a.db.update(a.db.tracks)..where((t) => t.id.equals(id))).write(
+          TracksCompanion(
+            deleted: const Value(true),
+            clock: Value(st.clock),
+            originDevice: Value(st.originDevice),
+            localSeq: Value(st.localSeq),
+          ),
+        );
+      },
+    );
+
+    expect(_done(await _sync(a, b)).filesCopied, 0);
+
+    expect(gets, hasLength(1));
+    final row = await (a.db.select(
+      a.db.tracks,
+    )..where((t) => t.id.equals(id))).getSingle();
+    expect(row.deleted, isTrue);
+    expect(await a.localFile(id), isNull);
+    expect(a.parts(a.paths.root), isEmpty);
+    expect(
+      File(p.join(a.paths.libraryLocal.path, '${_hash(song)}.mp3'))
+          .existsSync(),
+      isFalse,
+    );
+  });
+
+  test('a copy that cannot be attached is not downloaded again', () async {
+    final id = await b.mp3('song.mp3', _bytes(5000));
+    a.failHash = true;
+    final gets = countGets();
+
+    expect(_done(await _sync(a, b)).filesCopied, 0);
+
+    expect(gets, hasLength(1));
+    expect(await a.localFile(id), isNull);
+  });
+
+  test('a failed /files/done still finishes the run', () async {
+    await b.mp3('song.mp3', _bytes(5000));
+    b.server.route('POST', '/files/done', (req, peer) async {
+      await sendJson(req, {'error': 'server'}, status: 500);
+    });
+
+    expect(_done(await _sync(a, b)).filesCopied, 1);
   });
 }

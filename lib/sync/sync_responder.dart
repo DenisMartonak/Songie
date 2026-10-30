@@ -65,7 +65,8 @@ class ResponderDone extends ResponderState {
 /// - files phase, with [FileTransfer]: `GET /files/missing` → `{files}`,
 ///   `POST /files/have {files, pushing}` → `{files}`,
 ///   `GET /files/<kind>/<name>` and `PUT /files/<kind>/<name>?ext=&from=&total=`
-/// - `POST /files/done {sync_id}` ends the session (shows [ResponderDone])
+/// - `POST /files/done {sync_id, copied?}` ends the session (shows
+///   [ResponderDone] with `copied` files, else the files served or received)
 /// - `POST /session/abort {sync_id}`, `POST /unpair`
 ///
 /// A step of a session that is not open (or belongs to another peer, or is
@@ -300,7 +301,7 @@ class SyncResponder {
   Future<void> _filePut(HttpRequest req, String? peerId) =>
       _transfer(req, peerId, received: true);
 
-  /// Sends or receives one file; the session does not time out meanwhile.
+  /// Sends or receives one file.
   Future<void> _transfer(
     HttpRequest req,
     String? peerId, {
@@ -309,24 +310,31 @@ class SyncResponder {
     final s = _filesSession(peerId);
     if (s == null) return _noSession(req);
     final ref = FileTransfer.refOf(req.uri).toString();
-    s.idle?.cancel();
+    // Each chunk keeps the session alive; a peer that stalls lets it time out.
+    void alive() {
+      if (identical(_session, s)) _touch(s);
+    }
+
     try {
       final ok = received
-          ? await _files!.accept(req)
-          : await _files!.serve(req);
+          ? await _files!.accept(req, onChunk: alive)
+          : await _files!.serve(req, onChunk: alive);
       if (!identical(_session, s)) return;
       // A retried file counts once.
       s.filesHandled.add(ref);
-      if (ok && received) s.filesReceived++;
+      if (ok) s.filesCopied++;
       _emit(Receiving(SyncStage.files, s.filesHandled.length, s.filesTotal));
     } finally {
-      if (identical(_session, s)) _touch(s);
+      alive();
     }
   }
 
   Future<void> _filesDone(HttpRequest req, String? peerId) async {
     final s = _open(req, peerId, committed: true);
     if (s == null) return _noSession(req);
+    // The initiator knows which copies passed their check on its side.
+    final copied = SyncServer.jsonBody(req)['copied'];
+    if (copied is int && copied >= 0) s.filesCopied = copied;
     await _finish(s);
     await sendJson(req, {'ok': true});
   }
@@ -345,7 +353,7 @@ class SyncResponder {
           peerName: s.peerName,
           playlistsChanged: s.playlistsChanged,
           songsAdded: s.songsAdded,
-          filesCopied: s.filesReceived,
+          filesCopied: s.filesCopied,
         ),
       ),
     );
@@ -445,6 +453,8 @@ class _Session {
   bool committed = false;
   final filesHandled = <String>{};
   int filesTotal = 0;
-  int filesReceived = 0;
+
+  /// Files copied either way (the initiator's count once it reports it).
+  int filesCopied = 0;
   Timer? idle;
 }
