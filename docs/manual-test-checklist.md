@@ -215,6 +215,30 @@ Phone (Android), desktop Linux and Windows. Where a check says "desktop", do it 
 - [ ] Force-quit the app in the middle of a song. At most about 30 s of that song is lost.
 - [ ] Phone: the card is compact, and your playlists stay visible on Home without scrolling far.
 
+## Plan 10: device sync
+
+Phone (Android), desktop Linux and Windows. Open Settings and then Sync devices on both devices before each check: the other device must have Sync devices open, because nothing runs in the background. Back up nothing first, but try the large-library check on a copy if you can.
+- [ ] Pair by code, phone and Linux: one device shows a 6-digit code, the other types it. They find each other, pair, and run a first sync.
+- [ ] Pair by code, phone and Windows (same check).
+- [ ] Pair by code, Linux and Windows (same check).
+- [ ] A wrong code: the app says the code was wrong and nothing is paired. After 5 wrong tries the code stops working and you need a new one.
+- [ ] An expired code: show a code, wait 5 minutes, then type it on the other device. Pairing fails and you need a new code.
+- [ ] Connect by address: type the other device's address and the code. Pairing works, including on Linux without Avahi.
+- [ ] After pairing, "Your devices" lists the other device; a later sync is one tap on it.
+- [ ] Sync with music playing: playback does not stop or stutter, and the queue stays as it was.
+- [ ] A clash on a playlist (rename it on both devices, or edit it on both): the prompt offers Keep this device's, Keep the other's and Keep both. Check each choice leaves the right playlist on both devices after the next sync.
+- [ ] Delete a playlist on one device and edit it on the other, then sync. The prompt appears, and each choice does what it says.
+- [ ] Changes to different parts of one playlist (a song added on one device, the name changed on the other) combine without asking.
+- [ ] A large library's first sync (thousands of songs): it finishes, progress moves, memory stays reasonable and the app stays usable. Cancel part-way and sync again; it picks up.
+- [ ] An MP3 added on one device arrives on the other and plays. A font added on one device arrives and can be chosen in Settings. A cover arrives too.
+- [ ] The summary after a sync reads sensibly ("1 playlist changed", "N files copied").
+- [ ] Forwarding: pair A with B and B with C, sync A and B, then B and C. A's changes reach C without A and C ever meeting.
+- [ ] Unpair: the device disappears from Your devices, and the other device can no longer sync with this one until you pair again.
+- [ ] Linux firewall: allow port 47823/tcp and the mdns service (for example `sudo firewall-cmd --add-port=47823/tcp --add-service=mdns`, add `--permanent` to keep it). Without them the other devices cannot find or reach the Linux machine; with them they can. Discovery needs Avahi; without it, Connect by address still works.
+- [ ] Windows: the first time, Windows may ask to allow private networks. Allow it; sync works.
+- [ ] Android: with the app paused (switched away) or the tab hidden, the page stops serving, so another device can't connect; coming back makes it available again. A sync that is running keeps going.
+- [ ] Leaving the Sync devices page on any device stops it serving (the other device then says it can't find it).
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.

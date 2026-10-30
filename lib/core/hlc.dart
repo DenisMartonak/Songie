@@ -20,27 +20,18 @@ class Hlc implements Comparable<Hlc> {
       '${wallMs.toString().padLeft(13, '0')}-'
       '${counter.toString().padLeft(5, '0')}-$deviceId';
 
-  /// Parses the output of [pack]. Device ids may contain `-`.
+  /// Parses the output of [pack] (only the canonical form). Device ids may
+  /// contain `-`.
   /// Throws [FormatException] on malformed input.
+  static final _canonical = RegExp(r'^(\d{13})-(\d{5})-(.+)$');
+
   static Hlc parse(String s) {
-    final first = s.indexOf('-');
-    final second = first < 0 ? -1 : s.indexOf('-', first + 1);
-    if (first < 0 || second < 0) {
-      throw FormatException('Malformed HLC', s);
-    }
-    final wallStr = s.substring(0, first);
-    final counterStr = s.substring(first + 1, second);
-    final deviceId = s.substring(second + 1);
-    final digits = RegExp(r'^[0-9]+$');
-    if (!digits.hasMatch(wallStr) ||
-        !digits.hasMatch(counterStr) ||
-        deviceId.isEmpty) {
-      throw FormatException('Malformed HLC', s);
-    }
+    final m = _canonical.firstMatch(s);
+    if (m == null) throw FormatException('Malformed HLC', s);
     return Hlc(
-      wallMs: int.parse(wallStr),
-      counter: int.parse(counterStr),
-      deviceId: deviceId,
+      wallMs: int.parse(m.group(1)!),
+      counter: int.parse(m.group(2)!),
+      deviceId: m.group(3)!,
     );
   }
 

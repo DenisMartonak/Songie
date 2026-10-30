@@ -1,6 +1,13 @@
 # Songies — Progress
 
-_Last updated: 2026-10-29_
+_Last updated: 2026-10-30_
+
+## Plan 10 (device sync) — done, reviewed, final review fixed
+
+- **Branch:** `plan-10-device-sync` (from `plan-9-stats`). Spec: [device sync design](superpowers/specs/2026-10-30-songies-device-sync-design.md). Plan: [Plan 10](superpowers/plans/2026-10-30-songies-plan-10-device-sync.md). Session log: [plan-10-session-log.md](plan-10-session-log.md). Nothing is pushed or merged.
+- **Status:** Tasks 1–12 are done, and each was reviewed. The whole-branch review's fixes landed and were re-reviewed: no false "changed on both devices" prompts after a sync, a large first sync no longer times out, and a code shown on a locked Android phone keeps working. Tests: 1,961 passing, `flutter analyze` clean. The release builds succeeded at Task 12 (APK 83.2 MB, Linux bundle 36 MB). **Nothing has been run on a device.**
+- **What it does:** Settings → Sync devices. One device shows a 6-digit code (valid 5 minutes, 5 tries), the other types it and finds it on the network, and the two pair and sync straight away. After that, one tap syncs. Playlists, songs, themes, fonts, lyrics and listening history go both ways, and your MP3s, fonts and covers are copied. You're asked only when both devices changed the same thing. The other device must have Sync devices open too.
+- **Next:** the Plan 10 section of the [manual checklist](manual-test-checklist.md) on your devices, then packaging.
 
 ## Plan 9 (listening statistics) — done, reviewed, final review fixed
 

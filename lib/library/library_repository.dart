@@ -7,7 +7,8 @@ import '../data/database.dart';
 import '../data/db_guard.dart';
 import '../data/sync_stamp.dart';
 
-const _maxNameLength = 100;
+/// The longest playlist name, in UTF-16 code units.
+const maxPlaylistNameLength = 100;
 
 /// One row of the playlist list.
 class PlaylistSummary {
@@ -174,7 +175,7 @@ class LibraryRepository {
     if (clean == null) return _badName<void>();
     return guardDb(_db, () async {
       if (await _livePlaylist(id) == null) return _notFound('playlist $id');
-      final stamp = await _stamp.next();
+      final stamp = await _stamp.next(id: id);
       await (_db.update(_db.playlists)..where((p) => p.id.equals(id))).write(
         PlaylistsCompanion(
           name: Value(clean),
@@ -203,7 +204,7 @@ class LibraryRepository {
       for (final entryId in entryIds) {
         await _tombstoneEntry(entryId);
       }
-      final stamp = await _stamp.next();
+      final stamp = await _stamp.next(id: id);
       await (_db.update(_db.playlists)..where((p) => p.id.equals(id))).write(
         PlaylistsCompanion(
           deleted: const Value(true),
@@ -318,7 +319,7 @@ class LibraryRepository {
         );
       }
 
-      final stamp = await _stamp.next();
+      final stamp = await _stamp.next(id: entryId);
       await (_db.update(
         _db.playlistEntries,
       )..where((e) => e.id.equals(entryId))).write(
@@ -346,7 +347,7 @@ class LibraryRepository {
   Future<Result<void>> keepEntry(String entryId) {
     return guardDb(_db, () async {
       if (await _liveEntry(entryId) == null) return _notFound('entry $entryId');
-      final stamp = await _stamp.next();
+      final stamp = await _stamp.next(id: entryId);
       await (_db.update(
         _db.playlistEntries,
       )..where((e) => e.id.equals(entryId))).write(
@@ -388,7 +389,7 @@ class LibraryRepository {
     return guardDb(_db, () async {
       if (await _liveEntry(entryId) == null) return _notFound('entry $entryId');
       if (await trackById(trackId) == null) return _notFound('track $trackId');
-      final stamp = await _stamp.next();
+      final stamp = await _stamp.next(id: entryId);
       await (_db.update(
         _db.playlistEntries,
       )..where((e) => e.id.equals(entryId))).write(
@@ -428,7 +429,7 @@ class LibraryRepository {
           newDuration == null) {
         return const Ok(null);
       }
-      final stamp = await _stamp.next();
+      final stamp = await _stamp.next(id: trackId);
       await (_db.update(_db.tracks)..where((r) => r.id.equals(trackId))).write(
         TracksCompanion(
           title: Value.absentIfNull(newTitle),
@@ -458,7 +459,7 @@ class LibraryRepository {
       final t = await trackById(trackId);
       if (t == null) return _notFound('track $trackId');
       if (t.unavailable) return const Ok(null);
-      final stamp = await _stamp.next();
+      final stamp = await _stamp.next(id: trackId);
       await (_db.update(_db.tracks)..where((r) => r.id.equals(trackId))).write(
         TracksCompanion(
           unavailable: const Value(true),
@@ -506,7 +507,7 @@ class LibraryRepository {
   }
 
   Future<void> _tombstoneEntry(String entryId) async {
-    final stamp = await _stamp.next();
+    final stamp = await _stamp.next(id: entryId);
     await (_db.update(
       _db.playlistEntries,
     )..where((e) => e.id.equals(entryId))).write(
@@ -522,14 +523,14 @@ class LibraryRepository {
   /// Trimmed name, or null when it is not 1-100 characters.
   String? _cleanName(String name) {
     final trimmed = name.trim();
-    if (trimmed.isEmpty || trimmed.length > _maxNameLength) return null;
+    if (trimmed.isEmpty || trimmed.length > maxPlaylistNameLength) return null;
     return trimmed;
   }
 
   Err<T> _badName<T>() => Err(
     const Failure(
       FailureKind.invalidInput,
-      'Playlist name must be 1-$_maxNameLength characters',
+      'Playlist name must be 1-$maxPlaylistNameLength characters',
     ),
   );
 

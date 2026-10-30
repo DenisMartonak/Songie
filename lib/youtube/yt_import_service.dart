@@ -204,7 +204,7 @@ class YtImportService {
       restored = back.length;
       w.needArt.addAll(upgrade);
 
-      final ps = await _stamp.next();
+      final ps = await _stamp.next(id: playlistId);
       await (_db.update(
         _db.playlists,
       )..where((p) => p.id.equals(playlistId))).write(
@@ -368,7 +368,7 @@ class YtImportService {
 
   Future<void> _setStatus(List<String> entryIds, String status) async {
     if (entryIds.isEmpty) return;
-    final stamps = await _stamp.nextMany(entryIds.length);
+    final stamps = await _stamp.nextMany(entryIds.length, ids: entryIds);
     await _db.batch((b) {
       for (var i = 0; i < entryIds.length; i++) {
         b.update(
@@ -388,7 +388,7 @@ class YtImportService {
   Future<void> _setUnavailable(Map<String, bool> flips) async {
     if (flips.isEmpty) return;
     final ids = flips.keys.toList();
-    final stamps = await _stamp.nextMany(ids.length);
+    final stamps = await _stamp.nextMany(ids.length, ids: ids);
     await _db.batch((b) {
       for (var i = 0; i < ids.length; i++) {
         b.update(
@@ -475,7 +475,7 @@ class YtImportService {
       if (refs.isEmpty) return;
       await guardDb<void>(_db, () async {
         final ids = refs.keys.toList();
-        final stamps = await _stamp.nextMany(ids.length);
+        final stamps = await _stamp.nextMany(ids.length, ids: ids);
         await _db.batch((b) {
           for (var i = 0; i < ids.length; i++) {
             b.update(

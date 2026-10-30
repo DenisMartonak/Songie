@@ -21,6 +21,10 @@ const kYtVisitorData = 'yt_visitor_data';
 /// then on Innertube requests carry the `SOCS=CAI` cookie. Device-local.
 const kYtConsentGiven = 'yt_consent_given';
 
+/// This device's name as shown to paired devices. Device-local; unset means
+/// the default (hostname on desktop, `Android` on Android).
+const kDeviceName = 'device_name';
+
 /// Cached display name of the signed-in YouTube account. Device-local, not
 /// secret; removed on sign out.
 const kYtAccountName = 'yt_account_name';
@@ -54,6 +58,10 @@ class SettingsRepository {
         .into(_db.settings)
         .insertOnConflictUpdate(SettingsCompanion.insert(key: key, value: v));
   }
+
+  /// Emits the current value (null when unset), then every change.
+  Stream<String?> watchString(String key) =>
+      _row(key).watchSingleOrNull().map((r) => r?.value).distinct();
 
   Future<bool> getBool(String key, {required bool fallback}) async =>
       _parse(await getString(key), fallback);

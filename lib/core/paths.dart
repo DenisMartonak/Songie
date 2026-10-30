@@ -12,6 +12,7 @@ class AppPaths {
       fonts = Directory(p.join(root.path, 'fonts')),
       bin = Directory(p.join(root.path, 'bin')),
       logs = Directory(p.join(root.path, 'logs')),
+      sync = Directory(p.join(root.path, 'sync')),
       db = File(p.join(root.path, 'songies.db'));
 
   final Directory root;
@@ -21,6 +22,7 @@ class AppPaths {
   final Directory fonts;
   final Directory bin;
   final Directory logs;
+  final Directory sync;
   final File db;
 
   /// Paths rooted at an explicit directory (tests).
@@ -56,7 +58,16 @@ class AppPaths {
   }
 
   Future<void> ensureCreated() async {
-    for (final d in [root, art, libraryLocal, libraryYt, fonts, bin, logs]) {
+    for (final d in [
+      root,
+      art,
+      libraryLocal,
+      libraryYt,
+      fonts,
+      bin,
+      logs,
+      sync,
+    ]) {
       await d.create(recursive: true);
     }
   }

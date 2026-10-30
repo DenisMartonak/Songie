@@ -11,12 +11,28 @@ Future<String?> showPlaylistNameDialog(
   String initial = '',
   String confirmLabel = 'Save',
 }) {
-  return showDialog<String>(
-    context: context,
-    builder: (_) =>
-        _NameDialog(title: title, initial: initial, confirmLabel: confirmLabel),
+  return Navigator.of(context, rootNavigator: true).push(
+    playlistNameDialogRoute(
+      context,
+      title: title,
+      initial: initial,
+      confirmLabel: confirmLabel,
+    ),
   );
 }
+
+/// The route [showPlaylistNameDialog] pushes, for a caller that needs to
+/// remove it itself (when its page goes away).
+DialogRoute<String> playlistNameDialogRoute(
+  BuildContext context, {
+  required String title,
+  String initial = '',
+  String confirmLabel = 'Save',
+}) => DialogRoute<String>(
+  context: context,
+  builder: (_) =>
+      _NameDialog(title: title, initial: initial, confirmLabel: confirmLabel),
+);
 
 class _NameDialog extends StatefulWidget {
   const _NameDialog({

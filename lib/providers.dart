@@ -37,6 +37,11 @@ import 'theme/cover_palette.dart';
 import 'theme/font_service.dart';
 import 'theme/image_palette.dart';
 import 'theme/theme_repository.dart';
+import 'sync/device_identity.dart';
+import 'sync/discovery.dart';
+import 'sync/file_transfer.dart';
+import 'sync/peer_repository.dart';
+import 'sync/sync_host.dart';
 import 'theme/theme_service.dart';
 import 'theme/theme_spec.dart';
 import 'ui/shell/window_controls.dart';
@@ -51,6 +56,58 @@ Never _unwired(String name) =>
 final appPathsProvider = Provider<AppPaths>(
   (ref) => _unwired('appPathsProvider'),
 );
+
+/// This device's sync TLS identity (loaded in `main()`).
+final deviceIdentityProvider = Provider<DeviceIdentity>(
+  (ref) => _unwired('deviceIdentityProvider'),
+);
+
+final peerRepositoryProvider = Provider<PeerRepository>(
+  (ref) => PeerRepository(ref.watch(databaseProvider)),
+);
+
+/// The name other devices see: the saved `device_name`, else the hostname on
+/// desktop and `Android` on Android.
+final deviceNameProvider = StreamProvider.autoDispose<String>((ref) {
+  final fallback = ref.watch(isAndroidProvider)
+      ? 'Android'
+      : Platform.localHostname;
+  return ref
+      .watch(settingsRepositoryProvider)
+      .watchString(kDeviceName)
+      .map((v) => v == null || v.trim().isEmpty ? fallback : v.trim());
+});
+
+/// Sync devices' server, pairing and discovery, alive while the page that
+/// reads it is open (the page calls `start()`). On Android it stops while the
+/// app is paused.
+final syncHostProvider = Provider.autoDispose<SyncHost>((ref) {
+  final isAndroid = ref.watch(isAndroidProvider);
+  var name = isAndroid ? 'Android' : Platform.localHostname;
+  ref.listen(deviceNameProvider, (_, next) {
+    final v = next.value;
+    if (v != null) name = v;
+  }, fireImmediately: true);
+  final db = ref.watch(databaseProvider);
+  final host = SyncHost(
+    db: db,
+    stamp: ref.watch(syncStampProvider),
+    peers: ref.watch(peerRepositoryProvider),
+    identity: ref.watch(deviceIdentityProvider),
+    downloads: ref.watch(downloadRepositoryProvider),
+    myName: () => name,
+    discovery: BonsoirDiscovery.new,
+    files: FileTransfer(
+      db: db,
+      paths: ref.watch(appPathsProvider),
+      scanner: ref.watch(libraryScannerProvider),
+      fonts: ref.watch(fontServiceProvider),
+    ),
+    stopWhenPaused: isAndroid,
+  );
+  ref.onDispose(host.dispose);
+  return host;
+});
 
 final databaseProvider = Provider<AppDatabase>(
   (ref) => _unwired('databaseProvider'),
@@ -588,9 +645,11 @@ class ConsentAsked extends Notifier<bool> {
   void markAsked() => state = true;
 }
 
-/// Platform flags for the YouTube settings; tests override them.
+/// Platform flags for the YouTube and Sync devices settings; tests override
+/// them.
 final isAndroidProvider = Provider<bool>((ref) => Platform.isAndroid);
 final isLinuxProvider = Provider<bool>((ref) => Platform.isLinux);
+final isWindowsProvider = Provider<bool>((ref) => Platform.isWindows);
 
 /// The installed yt-dlp version, or null when it is missing. Read when
 /// Settings opens (a user action) and again after an update.

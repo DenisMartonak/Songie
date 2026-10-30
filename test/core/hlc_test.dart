@@ -43,6 +43,19 @@ void main() {
     expect(h.deviceId, 'my-phone-1');
   });
 
+  test('parse rejects non-canonical clocks', () {
+    for (final bad in [
+      '1-0-dev',
+      '+000000000001-00000-dev',
+      '0000000000001-0000-dev',
+      '0000000000001-00000-',
+    ]) {
+      expect(() => Hlc.parse(bad), throwsFormatException, reason: bad);
+    }
+    const h = Hlc(wallMs: 5, counter: 3, deviceId: 'a-b');
+    expect(Hlc.parse(h.pack()), h);
+  });
+
   test('parse throws FormatException on malformed input', () {
     for (final bad in [
       '',

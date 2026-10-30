@@ -216,6 +216,7 @@ class UiHarness {
   /// The platform the YouTube settings think they run on.
   bool isAndroid = false;
   bool isLinux = false;
+  bool isWindows = false;
 
   /// The YouTube sign-in routes. Empty by default: the real routes scan the
   /// home folder for browser profiles and (WebKit) delete web data folders
@@ -280,6 +281,7 @@ class UiHarness {
     ),
     isAndroidProvider.overrideWithValue(isAndroid),
     isLinuxProvider.overrideWithValue(isLinux),
+    isWindowsProvider.overrideWithValue(isWindows),
     innertubeClientProvider.overrideWithValue(innertube),
     ytSessionStoreProvider.overrideWithValue(ytSessions),
     ytSignInRoutesProvider.overrideWithValue(ytSignInRoutes),

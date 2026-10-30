@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
@@ -220,6 +219,23 @@ void main() {
       // First path wins: the original LocalFiles rows are untouched.
       final locals = await db.select(db.localFiles).get();
       expect(locals.every((l) => l.path.startsWith(music.path)), isTrue);
+    });
+
+    test('re-adding a deleted local track revives its row', () async {
+      final f = write('a.mp3');
+      final first = await scanner.importFile(f.path);
+      final id = (first as Ok<String>).value;
+      final before = (await allTracks()).single;
+      await (db.update(db.tracks)..where((t) => t.id.equals(id))).write(
+        const TracksCompanion(deleted: Value(true), mergedInto: Value('other')),
+      );
+      final again = await scanner.importFile(f.path);
+      expect((again as Ok<String>).value, id);
+      final rows = await allTracks();
+      expect(rows, hasLength(1));
+      expect(rows.single.deleted, isFalse);
+      expect(rows.single.mergedInto, isNull);
+      expect(rows.single.localSeq, greaterThan(before.localSeq));
     });
 
     test('a moved file keeps its track and repoints the local file', () async {

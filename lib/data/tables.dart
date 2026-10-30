@@ -16,6 +16,7 @@ mixin SyncColumns on Table {
   Set<Column> get primaryKey => {id};
 }
 
+@TableIndex(name: 'tracks_local_seq', columns: {#localSeq})
 class Tracks extends Table with SyncColumns {
   /// 'yt' | 'local'
   TextColumn get source => text()();
@@ -28,8 +29,12 @@ class Tracks extends Table with SyncColumns {
   TextColumn get fileHash => text().nullable().unique()();
   BoolColumn get unavailable => boolean().withDefault(const Constant(false))();
   TextColumn get searchText => text()();
+
+  /// Set on a track merged into another by sync dedupe; points at the winner.
+  TextColumn get mergedInto => text().nullable()();
 }
 
+@TableIndex(name: 'playlists_local_seq', columns: {#localSeq})
 class Playlists extends Table with SyncColumns {
   TextColumn get name => text()();
   TextColumn get coverRef => text().nullable()();
@@ -38,12 +43,16 @@ class Playlists extends Table with SyncColumns {
   TextColumn get source => text()();
   TextColumn get ytPlaylistUrl => text().nullable()();
   DateTimeColumn get lastYtSyncAt => dateTime().nullable()();
+
+  /// Set on a playlist merged into another by sync; points at the winner.
+  TextColumn get mergedInto => text().nullable()();
 }
 
 @TableIndex(
   name: 'playlist_entries_playlist_position',
   columns: {#playlistId, #position},
 )
+@TableIndex(name: 'playlist_entries_local_seq', columns: {#localSeq})
 class PlaylistEntries extends Table with SyncColumns {
   TextColumn get playlistId => text()();
   TextColumn get trackId => text()();
@@ -57,6 +66,7 @@ class PlaylistEntries extends Table with SyncColumns {
 
 /// Synced: which YouTube videos a playlist has already seen, so sync never
 /// re-adds one the user removed.
+@TableIndex(name: 'yt_seen_local_seq', columns: {#localSeq})
 class YtSeen extends Table with SyncColumns {
   TextColumn get playlistId => text()();
   TextColumn get videoId => text()();
@@ -70,6 +80,7 @@ class YtSeen extends Table with SyncColumns {
 /// Synced: a user-saved theme. [specJson] is the `ThemeSpec` JSON (spec §9).
 /// The built-in themes are never stored here.
 @DataClassName('ThemeRow')
+@TableIndex(name: 'themes_local_seq', columns: {#localSeq})
 class Themes extends Table with SyncColumns {
   TextColumn get name => text()();
   TextColumn get specJson => text()();
@@ -77,6 +88,7 @@ class Themes extends Table with SyncColumns {
 
 /// Synced: an imported font. The file lives at `<appData>/fonts/<fileHash>.<ext>`.
 @DataClassName('FontRow')
+@TableIndex(name: 'fonts_local_seq', columns: {#localSeq})
 class Fonts extends Table with SyncColumns {
   TextColumn get family => text()();
   TextColumn get fileHash => text()();
@@ -154,6 +166,7 @@ class PlayHistory extends Table {
 
 /// Synced lyrics for a track; the row id is the track id (one row per track).
 @DataClassName('LyricsRow')
+@TableIndex(name: 'lyrics_local_seq', columns: {#localSeq})
 class Lyrics extends Table with SyncColumns {
   /// 'synced' | 'plain' | 'none'
   TextColumn get kind => text()();
@@ -170,6 +183,7 @@ class Lyrics extends Table with SyncColumns {
 /// re-stamped as it is heard; pruned after 730 days.
 @DataClassName('ListenRow')
 @TableIndex(name: 'listens_started_at', columns: {#startedAt})
+@TableIndex(name: 'listens_local_seq', columns: {#localSeq})
 class Listens extends Table with SyncColumns {
   TextColumn get trackId => text()();
 
@@ -187,4 +201,25 @@ class Listens extends Table with SyncColumns {
   TextColumn get titleSnapshot => text()();
   TextColumn get artistSnapshot => text()();
   TextColumn get artworkRef => text().nullable()();
+}
+
+/// A paired device (Plan 10). Device-local, never synced.
+@DataClassName('PeerRow')
+class Peers extends Table {
+  TextColumn get deviceId => text()();
+  TextColumn get name => text()();
+
+  /// Lowercase hex SHA-256 of the peer's certificate DER.
+  TextColumn get certFingerprint => text()();
+
+  /// Base64 pairing key.
+  TextColumn get pairKey => text()();
+  TextColumn get host => text().nullable()();
+  IntColumn get port => integer().nullable()();
+  IntColumn get lastSentSeq => integer().withDefault(const Constant(0))();
+  IntColumn get lastReceivedSeq => integer().withDefault(const Constant(0))();
+  DateTimeColumn get lastSyncAt => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {deviceId};
 }
