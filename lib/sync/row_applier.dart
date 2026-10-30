@@ -462,16 +462,7 @@ class _Run {
     [playlistId, trackId, except ?? ''],
   );
 
-  TableInfo _info(SyncTable t) => switch (t) {
-    SyncTable.tracks => _db.tracks,
-    SyncTable.playlists => _db.playlists,
-    SyncTable.playlistEntries => _db.playlistEntries,
-    SyncTable.ytSeen => _db.ytSeen,
-    SyncTable.themes => _db.themes,
-    SyncTable.fonts => _db.fonts,
-    SyncTable.lyrics => _db.lyrics,
-    SyncTable.listens => _db.listens,
-  };
+  TableInfo _info(SyncTable t) => t.info(_db);
 
   Future<SyncRow?> _local(SyncTable t, String id) async {
     final rows = await _select(t, 'id = ?', [id]);

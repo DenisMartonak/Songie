@@ -25,6 +25,18 @@ enum SyncTable {
   bool get clashes =>
       this == SyncTable.playlists || this == SyncTable.playlistEntries;
 
+  /// This table in [db].
+  TableInfo<Table, DataClass> info(AppDatabase db) => switch (this) {
+    SyncTable.tracks => db.tracks,
+    SyncTable.playlists => db.playlists,
+    SyncTable.playlistEntries => db.playlistEntries,
+    SyncTable.ytSeen => db.ytSeen,
+    SyncTable.themes => db.themes,
+    SyncTable.fonts => db.fonts,
+    SyncTable.lyrics => db.lyrics,
+    SyncTable.listens => db.listens,
+  };
+
   static SyncTable fromWire(String wire) =>
       SyncTable.values.firstWhere((t) => t.wire == wire);
 }

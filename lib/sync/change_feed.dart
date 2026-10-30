@@ -18,16 +18,7 @@ class ChangeFeed {
 
   final AppDatabase _db;
 
-  TableInfo _info(SyncTable t) => switch (t) {
-    SyncTable.tracks => _db.tracks,
-    SyncTable.playlists => _db.playlists,
-    SyncTable.playlistEntries => _db.playlistEntries,
-    SyncTable.ytSeen => _db.ytSeen,
-    SyncTable.themes => _db.themes,
-    SyncTable.fonts => _db.fonts,
-    SyncTable.lyrics => _db.lyrics,
-    SyncTable.listens => _db.listens,
-  };
+  TableInfo _info(SyncTable t) => t.info(_db);
 
   Future<ChangePage> since(int seq, {int limit = 500}) async {
     final all = <SyncRow>[];

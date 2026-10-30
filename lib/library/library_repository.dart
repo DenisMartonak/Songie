@@ -7,7 +7,8 @@ import '../data/database.dart';
 import '../data/db_guard.dart';
 import '../data/sync_stamp.dart';
 
-const _maxNameLength = 100;
+/// The longest playlist name, in UTF-16 code units.
+const maxPlaylistNameLength = 100;
 
 /// One row of the playlist list.
 class PlaylistSummary {
@@ -522,14 +523,14 @@ class LibraryRepository {
   /// Trimmed name, or null when it is not 1-100 characters.
   String? _cleanName(String name) {
     final trimmed = name.trim();
-    if (trimmed.isEmpty || trimmed.length > _maxNameLength) return null;
+    if (trimmed.isEmpty || trimmed.length > maxPlaylistNameLength) return null;
     return trimmed;
   }
 
   Err<T> _badName<T>() => Err(
     const Failure(
       FailureKind.invalidInput,
-      'Playlist name must be 1-$_maxNameLength characters',
+      'Playlist name must be 1-$maxPlaylistNameLength characters',
     ),
   );
 
