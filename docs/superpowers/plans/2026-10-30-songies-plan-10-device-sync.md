@@ -28,7 +28,7 @@
 - **Branch:** `plan-10-device-sync`, made from `plan-9-stats`. Don't push or merge.
 - **Schema:** goes from 7 to 8. JSON bodies all carry `"schema_version": 8`, and a mismatch is refused with HTTP 409 `{"error":"schema"}`.
 - **Port:** 47823, falling back to any free port. mDNS type `_songies._tcp`, TXT `id`, `name`, `port`, `pairing` (`"1"` or `"0"`). **The code is never advertised, logged or sent in clear.**
-- **Code:** 6 digits, zero-padded, from `Random.secure()`. It is valid for **5 minutes**, and 5 failed confirmations invalidate it.
+- **Code:** 6 digits, zero-padded, from `Random.secure()`. It is valid for **5 minutes**, and 5 pairing attempts (each `/pair/start` that reaches the key exchange, right or wrong) use it up.
 - **Requests:** rejected when their time is more than **60 s** from the receiver's clock, after the hello clock offset is applied.
 - **Never synced:** settings, `local_files`, `playlist_device_prefs`, `library_folders`, `play_history`, `peers`, the YouTube session or visitor id. The device-local `local_files` and `playlist_device_prefs` are still rewritten when ids merge.
 - **Stamping:** every synced write is stamped.
@@ -281,7 +281,7 @@
   - `class PairingCode`, with:
     - `PairingCode({Random? random, DateTime Function() now = DateTime.now})`;
     - `String get code`, `bool get usable` (not expired after 5 min and fewer than 5 failures);
-    - `void fail()`.
+    - `void chargeAttempt()`, with `static const maxAttempts = 5`.
   - **Roles:** the device that types the code is the RFC "A" (initiator), and `idA` is its certificate fingerprint. The device showing the code is "B", and `idB` is the fingerprint the initiator saw over TLS. Both use the lowercase hex strings as bytes.
 
 - [ ] **Step 1: Write the failing tests.**
@@ -332,7 +332,7 @@
     - Messages:
       - `/pair/start`: `{msg, id_a, device_id, name}` → `{msg, confirm, device_id, name}`;
       - `/pair/finish`: `{confirm}` → `{ok:true}`.
-    - The responder accepts one pairing exchange at a time. It calls `fail()` on a bad confirmation and refuses with 403 when the code is not `usable`. Both sides save a `PeerRow` with the peer's fingerprint and `pairKeyFrom(ke)`.
+    - The responder accepts one pairing exchange at a time. It refuses with 403 when the code is not `usable`, and otherwise calls `chargeAttempt()` on every `/pair/start` before `Spake2.finish`, whether that succeeds or throws. Both sides save a `PeerRow` with the peer's fingerprint and `pairKeyFrom(ke)`.
 
 - [ ] **Step 1: Write the failing tests.**
   - `verifier accepts a fresh signature and rejects stale, replayed, tampered and unknown`.
