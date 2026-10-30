@@ -90,6 +90,12 @@ class DbLocalView implements LocalView {
 /// on one side while the other made any live change to it is a clash of the
 /// whole playlist.
 ///
+/// A playlist tombstone left by duplicate merging (`mergedInto` set) is not
+/// a user deletion: it never clashes and wins against the other side's
+/// version, and entries pointing at the merged-away playlist are moved to
+/// the end of its merge chain (as the applier would), so edits to them land
+/// in the survivor.
+///
 /// Known limit: no base version of a row is kept, so changes to different
 /// fields of the same row (a rename on one device, a cover on the other)
 /// still clash.
@@ -100,9 +106,16 @@ class Merger {
   final String peerName;
 
   MergeResult merge(List<SyncRow> mine, List<SyncRow> theirs) {
+    final into = <String, String>{
+      for (final r in [...mine, ...theirs])
+        if (_merged(r)) r.id: r.data['mergedInto']! as String,
+    };
     final settled = <SyncRow>[];
     final groups = <String, List<(SyncRow?, SyncRow?)>>{};
-    for (final pair in _pairs(mine, theirs)) {
+    for (final pair in _pairs(
+      [for (final r in mine) _follow(r, into)],
+      [for (final r in theirs) _follow(r, into)],
+    )) {
       final row = (pair.$1 ?? pair.$2)!;
       if (row.table.clashes) {
         groups.putIfAbsent(_playlistOf(row), () => []).add(pair);
@@ -176,6 +189,26 @@ class Merger {
     return pairs.values.toList();
   }
 
+  /// Whether [r] is a playlist merged away into another by sync.
+  static bool _merged(SyncRow? r) =>
+      r != null &&
+      r.table == SyncTable.playlists &&
+      r.data['mergedInto'] != null;
+
+  /// [r], an entry, pointed at the end of its playlist's merge chain in
+  /// [into]; any other row as it is.
+  static SyncRow _follow(SyncRow r, Map<String, String> into) {
+    if (r.table != SyncTable.playlistEntries) return r;
+    final from = r.data['playlistId']! as String;
+    final seen = {from};
+    var end = from;
+    for (var next = into[end]; next != null && seen.add(next);) {
+      end = next;
+      next = into[end];
+    }
+    return end == from ? r : SyncRow(r.table, {...r.data, 'playlistId': end});
+  }
+
   static String _key(SyncRow r) => '${r.table.wire}/${r.id}';
 
   static String _playlistOf(SyncRow r) =>
@@ -184,21 +217,25 @@ class Merger {
   static Hlc _hlc(SyncRow r) => Hlc.parse(r.clock);
 
   /// The row taken without asking: the only one, either of two equal ones,
-  /// or the one with the higher clock.
+  /// a merge tombstone, or the one with the higher clock.
   static SyncRow _settle((SyncRow?, SyncRow?) pair) {
     final (a, b) = pair;
     if (a == null) return b!;
     if (b == null || a.contentHash == b.contentHash) return a;
+    if (_merged(a) != _merged(b)) return _merged(a) ? a : b;
     return _hlc(a).compareTo(_hlc(b)) >= 0 ? a : b;
   }
 
-  /// Both sides changed the row differently. Two tombstones never clash.
+  /// Both sides changed the row differently. Two tombstones never clash, nor
+  /// does a merge tombstone.
   static bool _differ((SyncRow?, SyncRow?) pair) {
     final (a, b) = pair;
     return a != null &&
         b != null &&
         a.contentHash != b.contentHash &&
-        !(a.deleted && b.deleted);
+        !(a.deleted && b.deleted) &&
+        !_merged(a) &&
+        !_merged(b);
   }
 
   static SyncRow? _playlistRow(List<SyncRow> rows) {
@@ -216,8 +253,11 @@ class Merger {
     final theirs = [for (final p in pairs) ?p.$2];
     final minePl = _playlistRow(mine);
     final theirPl = _playlistRow(theirs);
-    final mineDeleted = minePl?.deleted ?? false;
-    final theirsDeleted = theirPl?.deleted ?? false;
+    // A merged-away playlist's changes go to its survivor, so a deletion of
+    // it on either side is not one the user is asked about.
+    final merged = _merged(minePl) || _merged(theirPl);
+    final mineDeleted = !merged && (minePl?.deleted ?? false);
+    final theirsDeleted = !merged && (theirPl?.deleted ?? false);
     final clash =
         pairs.any(_differ) ||
         (mineDeleted && theirs.any((r) => !r.deleted)) ||

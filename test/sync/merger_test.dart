@@ -22,6 +22,7 @@ SyncRow pl(
   String? url,
   int? lastSync,
   bool deleted = false,
+  String? mergedInto,
   String clock = '0000000000100-00000-me',
 }) => SyncRow(SyncTable.playlists, {
   'id': id,
@@ -34,7 +35,7 @@ SyncRow pl(
   'source': source,
   'ytPlaylistUrl': url,
   'lastYtSyncAt': lastSync,
-  'mergedInto': null,
+  'mergedInto': mergedInto,
 });
 
 SyncRow en(
@@ -199,6 +200,77 @@ void main() {
     expect(
       r.settled.map((r) => r.contentHash),
       unorderedEquals(rows.map((r) => r.contentHash)),
+    );
+  });
+
+  group('merge tombstones', () {
+    // This device merged playlist p into q (a duplicate linked playlist).
+    final mergedP = pl('p', deleted: true, mergedInto: 'q', source: 'yt');
+
+    test('an edit of the merged-away playlist does not clash', () {
+      final added = en('e9', 'p', track: 't9', clock: clk(5000));
+      final renamed = pl('p', name: 'Renamed', source: 'yt', clock: clk(5000));
+      final r = merger.merge([mergedP], [renamed, added]);
+      expect(r.clashes, isEmpty);
+      final s = byId(r.settled);
+      expect(s.keys, unorderedEquals(['playlists/p', 'playlist_entries/e9']));
+      expect(s['playlists/p'], same(mergedP), reason: 'the merge stands');
+      expect(s['playlist_entries/e9']!.data['playlistId'], 'q');
+      expect(s['playlist_entries/e9']!.deleted, isFalse);
+    });
+
+    test('a user deletion of the merged-away playlist does not clash', () {
+      final mine = [mergedP, en('e1', 'q', clock: clk(200, 'me'))];
+      final theirs = [pl('p', deleted: true, source: 'yt', clock: clk(5000))];
+      final r = merger.merge(mine, theirs);
+      expect(r.clashes, isEmpty);
+      expect(byId(r.settled)['playlists/p'], same(mergedP));
+    });
+
+    test(
+      'songs added to the merged-away playlist land in the survivor',
+      () async {
+        await db.into(db.tracks).insert(trackRow(id: 't1'));
+        await db.into(db.tracks).insert(trackRow(id: 't9'));
+        await RowApplier(
+          db,
+          stamp,
+        ).apply([pl('q', source: 'yt'), mergedP, en('e1', 'q')]);
+        final r = merger.merge(
+          [mergedP],
+          [en('e9', 'p', track: 't9', position: 'a5', clock: clk(5000))],
+        );
+        final f = await merger.resolve(r, {}, DbLocalView(db));
+        await RowApplier(db, stamp).apply(f);
+        final live = await DbLocalView(db).entriesOf('q');
+        expect(
+          live.where((e) => !e.deleted).map((e) => e.id),
+          unorderedEquals(['e1', 'e9']),
+        );
+      },
+    );
+
+    test(
+      'an entry moved to the survivor on one side only is grouped there',
+      () {
+        final mine = [mergedP, en('e1', 'q', clock: clk(200, 'me'))];
+        final unchanged = [en('e1', 'p', clock: clk(5000))];
+        final moved = [en('e1', 'p', position: 'a5', clock: clk(5000))];
+
+        final r1 = merger.merge(mine, unchanged);
+        expect(r1.clashes, isEmpty);
+        expect(
+          r1.settled.where((r) => r.id == 'e1').single.data['playlistId'],
+          'q',
+        );
+
+        final r2 = merger.merge(mine, moved);
+        final c = r2.clashes.single;
+        expect(c.playlistId, 'q');
+        expect(c.mine.single.id, 'e1');
+        expect(c.theirs.single.data['playlistId'], 'q');
+        expect(c.mineDeleted, isFalse);
+      },
     );
   });
 
