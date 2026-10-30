@@ -2,17 +2,12 @@
 
 _Last updated: 2026-10-30_
 
-## Plan 10 (device sync) — Tasks 1–12 done; whole-branch review next
+## Plan 10 (device sync) — done, reviewed, final review fixed
 
 - **Branch:** `plan-10-device-sync` (from `plan-9-stats`). Spec: [device sync design](superpowers/specs/2026-10-30-songies-device-sync-design.md). Plan: [Plan 10](superpowers/plans/2026-10-30-songies-plan-10-device-sync.md). Session log: [plan-10-session-log.md](plan-10-session-log.md). Nothing is pushed or merged.
-- **Status:** Tasks 1–11 are done and each was reviewed, with fixes re-reviewed; Task 12 (checklist, README, builds) is done. Tests: 1,940 passing, `flutter analyze` clean (the known flaky `stats_repository_test` "under 500 ms" may fail under load). `flutter build apk --release` succeeds (83.2 MB). `flutter build linux --release` succeeds (bundle 36 MB). Windows is built on your PC. **Nothing has been run on a device yet.**
-- **What it does now:**
-  - **Pairing:** Settings, Sync devices. One device shows a 6-digit code, the other types it (or uses Connect by address). Devices remember each other, so a later sync is one tap; Unpair removes a device.
-  - **Sync:** both ways, deletions included. Real clashes on a playlist ask: Keep this device's, Keep the other's, or Keep both. Changes to different parts combine silently. MP3s, fonts and covers are copied too.
-  - **Only while open:** the other device must have Sync devices open. The page serves only while visible (on Android, not while paused), unless a sync is running.
-  - **Platform notes:** Linux needs port 47823/tcp and the mdns service in the firewall, and Avahi for discovery (Connect by address works without it). Windows may ask to allow private networks.
-- **Unverified:** everything on real devices and networks, the large-library first sync, and the Linux/Windows firewall steps.
-- **Next:** the whole-branch review, then your device checks (the Plan 10 section of the [manual checklist](manual-test-checklist.md)), then packaging.
+- **Status:** Tasks 1–12 are done, and each was reviewed. The whole-branch review's fixes landed and were re-reviewed: no false "changed on both devices" prompts after a sync, a large first sync no longer times out, and a code shown on a locked Android phone keeps working. Tests: 1,961 passing, `flutter analyze` clean. The release builds succeeded at Task 12 (APK 83.2 MB, Linux bundle 36 MB). **Nothing has been run on a device.**
+- **What it does:** Settings → Sync devices. One device shows a 6-digit code (valid 5 minutes, 5 tries), the other types it and finds it on the network, and the two pair and sync straight away. After that, one tap syncs. Playlists, songs, themes, fonts, lyrics and listening history go both ways, and your MP3s, fonts and covers are copied. You're asked only when both devices changed the same thing. The other device must have Sync devices open too.
+- **Next:** the Plan 10 section of the [manual checklist](manual-test-checklist.md) on your devices, then packaging.
 
 ## Plan 9 (listening statistics) — done, reviewed, final review fixed
 

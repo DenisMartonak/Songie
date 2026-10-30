@@ -1,14 +1,13 @@
 # Plan 10 (device sync) — session log
 
-_2026-10-30. Tasks 1–12 done; the whole-branch review is next._
+_2026-10-30. Tasks 1–12 done; the whole-branch review ran and its fixes are in and re-reviewed. Ready for device checks._
 
 ## Where things stand
 
 - **Branch:** `plan-10-device-sync` (made from `plan-9-stats`). Nothing pushed or merged.
 - **Spec:** [device sync design](superpowers/specs/2026-10-30-songies-device-sync-design.md) (commit `605d6ab`, which also sits on `plan-9-stats`). **Plan:** [Plan 10](superpowers/plans/2026-10-30-songies-plan-10-device-sync.md).
-- **Done:** Tasks 1–11 each reviewed with fixes re-reviewed; Task 12 (checklist, docs, builds) done. Last full run: 1,940 tests passing (the known flaky `stats_repository_test` "under 500 ms" passed this time; it may fail under load), `flutter analyze` clean. `flutter build apk --release` succeeds (83.2 MB). `flutter build linux --release` succeeds (bundle 36 MB). Windows is built on the user's PC. Nothing has been run on a device.
-- **Next:** the whole-branch review (the controller runs it), then the device checks in the Plan 10 section of the [manual checklist](manual-test-checklist.md), then packaging.
-- The run ledger (git-ignored) is at `.superpowers/sdd/2026-10-30-songies-plan-10-device-sync/progress.md`. It holds every ruling, deferred minor, brief, report and review.
+- **Done:** Tasks 1–12, each reviewed with fixes re-reviewed. The whole-branch review found 3 problems (false clash prompts after any sync; a large first sync timing out; an Android phone lock killing the shown code), plus one more found while fixing them (a false prompt after create, rename, sync). All are fixed and re-reviewed. Last full run: 1,961 tests passing, `flutter analyze` clean. Release builds (APK 83.2 MB, Linux 36 MB) were last built at Task 12, before the fix wave; no native or package changes since. Nothing has been run on a device.
+- **Next:** the device checks in the Plan 10 section of the [manual checklist](manual-test-checklist.md), then packaging.
 
 ## What the user decided (brainstorming)
 
@@ -35,6 +34,7 @@ _2026-10-30. Tasks 1–12 done; the whole-branch review is next._
 | 10 | `d6fb1fe`, `312146f` | Device discovery (mDNS) and `SyncHost`. The fix: robust teardown, and dispose cancels its own runs |
 | 11 | `32f13dd`, `4fc945b` | The Sync devices page. The fix: it serves only while visible |
 | 12 | docs commit | Plan 10 checklist, README note, progress docs, final checks and builds |
+| Final review fixes | `e83f93c`, `1c5fbf5`, `7ac0532`, `c4032fc`, `881cc82`, `5b8faa2` | Same-device row versions never clash; 10-minute wait for the peer to save a big sync; a showing code survives an Android pause; 400s are logged; an overwritten change no longer holds back the sync point |
 
 ## Rulings I made (cost if wrong in each)
 
@@ -72,8 +72,19 @@ _2026-10-30. Tasks 1–12 done; the whole-branch review is next._
 - Ruling: isWindowsProvider added for the Windows firewall note — cost if wrong: none.
 - Ruling: Sync devices open in a background tab (shell keeps branches mounted) must stop serving/advertising while the page is not visible, and resume when visible again unless a run is in progress — spec anti-goal "server left running outside the screen" — goes into Task 11 fix round — cost if wrong: a returning user waits a moment for discovery.
 - Ruling: Task 11 Minors 1 (pair buttons disabled while a run is unfinished), 2 (test answers host.choose after pairing), 3 (mounted check after rename dialog), 4 (Cancel/Try again colour via readableOn), 7 (log pairByCode errors) join fix round 1 — user-visible correctness, contrast rule — cost if wrong: larger fix.
+- Ruling (final C1): two versions of a row with the same originDevice never clash; the higher clock wins (they are causally ordered — the echo of this device's own earlier write) — cost if wrong: none known; a true concurrent edit always has different origins.
+- Ruling (final I1): /apply/commit (and /commit) use a long client timeout (10 min) instead of 60 s; the responder keeps its session alive during the apply — simplest fix that keeps one-transaction apply — cost if wrong: a truly hung peer takes 10 min to report failure.
+- Ruling (final I2): a showing pairing code keeps the host serving through an Android pause (like a running sync), until the code expires or is hidden; if the code was cleared anyway, the sheet shows it as expired and offers a new one — the locked-phone walk to the PC is the main pairing scenario — cost if wrong: up to 5 min of serving while paused.
+- Ruling (final): add a log line for TypeError/StateError mapped to 400 in SyncServer (Task 7 deferred minor) — cost if wrong: none.
+- Ruling (final, safeHigh): SyncStamp records the row id with each issued seq where known (next/nextMany); safeHigh counts a missing recent seq as pending only if no row with that id has a local_seq above it (an overwritten seq is not pending). reserve() seqs (applier, inside one transaction) carry no id and are not tracked as pending at all — the applier writes them in the same transaction that consumes them. Added to the same fix wave — load-bearing: create-then-rename-then-sync is common — cost if wrong: an id-less write path that stamps outside a transaction would lose the pending protection.
+- Ruling (final): 30 s keep-serving grace after pairing on a paused Android host accepted — lets the PC's first sync start — cost if wrong: 30 s extra serving.
+- Ruling (final): update stamps pass the row id (~20 call sites) so repeated edits of one row within 60 s don't hold the watermark; lyrics stamps reuse the track id (cross-table id overlap is safe: lyrics writes run in a transaction) — needed for the safeHigh ruling to work — cost if wrong: a stamp passed the wrong id would drop pending protection for that one write.
+- Final: parked — an update stamped outside a transaction that loses a race to another write of the same row may now land below the watermark — Ruling: accepted under the safeHigh ruling's stated cost; rare (most updates run in guardDb transactions)
+- Final: parked — merger can still prompt falsely when RowApplier restamps a peer row with local origin (merge-survivor moves) or with three devices relaying echoes — Ruling: rare false prompts, never hidden conflicts; fix later if seen on devices
 
-## Deferred minor findings (for the final review)
+## Deferred minor findings and parked items
+
+The final review checked these and found none that block a merge, except the large-sync timeout, which is now fixed.
 
 - Task 1: minor (deferred): scanner fast path does an extra PK lookup per unchanged file
 - Task 1: minor (deferred): doc comment placed above `_canonical` in hlc.dart
@@ -110,6 +121,8 @@ _2026-10-30. Tasks 1–12 done; the whole-branch review is next._
 - Task 10: minor (deferred): no test for server.start throwing path in _startServing
 - Task 11: minor (deferred): _dateTimeText duplicates settings_page helper; sync_devices_page.dart 586 lines
 - Task 11: minor (deferred): fast visible→hidden→visible toggle can briefly enable pair buttons / set _startFailed from a stale start (heals itself)
+- Final: parked — an update stamped outside a transaction that loses a race to another write of the same row may now land below the watermark — Ruling: accepted under the safeHigh ruling's stated cost; rare (most updates run in guardDb transactions)
+- Final: parked — merger can still prompt falsely when RowApplier restamps a peer row with local origin (merge-survivor moves) or with three devices relaying echoes — Ruling: rare false prompts, never hidden conflicts; fix later if seen on devices
 
 ## Worth knowing
 
