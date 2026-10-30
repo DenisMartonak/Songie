@@ -238,7 +238,7 @@ class ThemeRepository {
       }
       if (await _liveRow(id) == null) return _notFound<String>(id);
       final unique = await _uniqueName(clean, exceptId: id);
-      final stamp = await _stamp.next();
+      final stamp = await _stamp.next(id: id);
       await (_db.update(_db.themes)..where((t) => t.id.equals(id))).write(
         ThemesCompanion(
           name: Value(unique),
@@ -279,7 +279,7 @@ class ThemeRepository {
     }
     return guardDb(_db, () async {
       if (await _liveRow(id) == null) return _notFound<void>(id);
-      final stamp = await _stamp.next();
+      final stamp = await _stamp.next(id: id);
       await (_db.update(_db.themes)..where((t) => t.id.equals(id))).write(
         ThemesCompanion(
           deleted: const Value(true),

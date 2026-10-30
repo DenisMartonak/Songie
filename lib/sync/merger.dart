@@ -456,7 +456,7 @@ class Merger {
     SyncRow row, [
     Map<String, Object?> changes = const {},
   ]) async {
-    final st = await _stamp.next();
+    final st = await _stamp.next(id: row.id);
     return SyncRow(row.table, {
       ...row.data,
       ...changes,

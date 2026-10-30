@@ -417,7 +417,7 @@ class LibraryScanner {
     int bytes,
     int mtimeMs,
   ) async {
-    final stamp = await _stamp.next();
+    final stamp = await _stamp.next(id: trackId);
     await (_db.update(_db.tracks)..where((t) => t.id.equals(trackId))).write(
       TracksCompanion(
         title: Value(d.title),

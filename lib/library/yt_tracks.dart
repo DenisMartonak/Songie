@@ -61,7 +61,7 @@ class YtTrackStore {
           return Ok(await _byId(st.id));
         }
         if (old.deleted) {
-          final st = await _stamp.next();
+          final st = await _stamp.next(id: old.id);
           await (_db.update(
             _db.tracks,
           )..where((t) => t.id.equals(old.id))).write(
@@ -165,7 +165,7 @@ class YtTrackStore {
         newDuration == null) {
       return;
     }
-    final st = await _stamp.next();
+    final st = await _stamp.next(id: t.id);
     await (_db.update(_db.tracks)..where((r) => r.id.equals(t.id))).write(
       TracksCompanion(
         title: Value.absentIfNull(newTitle),
@@ -200,7 +200,7 @@ class YtTrackStore {
         );
         if (art == null) return;
         await guardDb<void>(_db, () async {
-          final st = await _stamp.next();
+          final st = await _stamp.next(id: t.id);
           await (_db.update(_db.tracks)..where((r) => r.id.equals(t.id))).write(
             TracksCompanion(
               artworkRef: Value(art),

@@ -514,7 +514,7 @@ class _Run {
 
   /// Writes [row] with a fresh stamp from this device.
   Future<void> _restamp(SyncRow row) async {
-    final st = await _stamp.next();
+    final st = await _stamp.next(id: row.id);
     await _put(
       row.withStamp(clock: st.clock, originDevice: st.originDevice),
       st.localSeq,

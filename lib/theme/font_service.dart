@@ -317,7 +317,7 @@ class FontService {
             ))
             .get();
     for (final row in rows) {
-      final s = await _stamp.next();
+      final s = await _stamp.next(id: row.id);
       await (_db.update(_db.fonts)..where((f) => f.id.equals(row.id))).write(
         FontsCompanion(
           deleted: const Value(true),

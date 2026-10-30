@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/data/sync_stamp.dart';
@@ -81,13 +82,43 @@ void main() {
     });
 
     test('an issued seq never written stops holding it after 60 s', () async {
-      await stamp.reserve(1); // 1, never used
+      await stamp.next(); // 1, never written (a rolled-back write)
       await write(await stamp.next()); // 2
       expect(await feed.safeHigh(), 0);
 
       nowMs += const Duration(seconds: 59).inMilliseconds;
       expect(await feed.safeHigh(), 0);
       nowMs += const Duration(seconds: 2).inMilliseconds;
+      expect(await feed.safeHigh(), 2);
+    });
+
+    test('a row written, then overwritten, does not hold it', () async {
+      final created = await stamp.next(); // 1
+      await write(created);
+      final renamed = await stamp.next(); // 2, rewrites the same row
+      await (db.update(db.tracks)..where((t) => t.id.equals(created.id))).write(
+        TracksCompanion(localSeq: Value(renamed.localSeq)),
+      );
+      await write(await stamp.next()); // 3
+      expect(await feed.safeHigh(), 3);
+    });
+
+    test('an overwritten seq still waits for an earlier pending one', () async {
+      final pending = await stamp.next(); // 1, written later
+      final created = await stamp.next(); // 2
+      await write(created);
+      final renamed = await stamp.next(); // 3
+      await (db.update(db.tracks)..where((t) => t.id.equals(created.id))).write(
+        TracksCompanion(localSeq: Value(renamed.localSeq)),
+      );
+      expect(await feed.safeHigh(), 0);
+      await write(pending);
+      expect(await feed.safeHigh(), 3);
+    });
+
+    test('seqs reserved for applied rows do not hold it', () async {
+      await stamp.reserve(1); // 1, the applier writes it in its transaction
+      await write(await stamp.next()); // 2
       expect(await feed.safeHigh(), 2);
     });
 

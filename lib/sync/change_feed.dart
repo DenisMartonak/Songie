@@ -60,13 +60,17 @@ class ChangeFeed {
   }
 
   /// The highest seq a sync watermark may move to: [highSeq], but below the
-  /// lowest seq issued in the last [SyncStamp.pendingWindow] that has no row
-  /// yet, since its write may still land and must not be skipped. A seq that
-  /// never gets a row (a rolled-back write, an unused reservation) holds it
-  /// back only until it leaves that window; rows above it are just sent again.
+  /// lowest seq issued in the last [SyncStamp.pendingWindow] that is still
+  /// pending, since its write may still land and must not be skipped.
+  ///
+  /// An issued seq with no row is pending unless a row with its stamp's id
+  /// has a higher seq: that row was written and then overwritten by a later
+  /// write (a playlist created, then renamed). A seq that never gets a row (a
+  /// rolled-back write) holds it back only until it leaves that window; rows
+  /// above it are just sent again.
   Future<int> safeHigh() async {
     final high = await highSeq();
-    final recent = [...?_stamp?.recentSeqs().where((s) => s <= high)];
+    final recent = [...?_stamp?.recentStamps().where((s) => s.$1 <= high)];
     if (recent.isEmpty) return high;
     final present = <int>{};
     for (final t in SyncTable.values) {
@@ -74,14 +78,33 @@ class ChangeFeed {
           .customSelect(
             'SELECT local_seq AS s FROM ${t.wire} '
             'WHERE local_seq BETWEEN ? AND ?',
-            variables: [Variable.withInt(recent.first), Variable.withInt(high)],
+            variables: [
+              Variable.withInt(recent.first.$1),
+              Variable.withInt(high),
+            ],
           )
           .get();
       present.addAll(rows.map((r) => r.read<int>('s')));
     }
-    for (final s in recent) {
-      if (!present.contains(s)) return s - 1;
+    for (final (seq, id) in recent) {
+      if (!present.contains(seq) && !await _overwritten(id, seq)) {
+        return seq - 1;
+      }
     }
     return high;
+  }
+
+  /// Whether a row with [id] has a seq above [seq].
+  Future<bool> _overwritten(String id, int seq) async {
+    for (final t in SyncTable.values) {
+      final rows = await _db
+          .customSelect(
+            'SELECT 1 FROM ${t.wire} WHERE id = ? AND local_seq > ? LIMIT 1',
+            variables: [Variable.withString(id), Variable.withInt(seq)],
+          )
+          .get();
+      if (rows.isNotEmpty) return true;
+    }
+    return false;
   }
 }
