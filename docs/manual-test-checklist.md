@@ -222,6 +222,7 @@ Phone (Android), desktop Linux and Windows. Open Settings and then Sync devices 
 - [ ] Pair by code, phone and Windows (same check).
 - [ ] Pair by code, Linux and Windows (same check).
 - [ ] A wrong code: the app says the code was wrong and nothing is paired. After 5 wrong tries the code stops working and you need a new one.
+- [ ] An expired code: show a code, wait 5 minutes, then type it on the other device. Pairing fails and you need a new code.
 - [ ] Connect by address: type the other device's address and the code. Pairing works, including on Linux without Avahi.
 - [ ] After pairing, "Your devices" lists the other device; a later sync is one tap on it.
 - [ ] Sync with music playing: playback does not stop or stutter, and the queue stays as it was.

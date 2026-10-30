@@ -9,11 +9,12 @@ database; every row carries sync metadata for the later device-sync plan.
 
 ## Syncing devices
 
-Songies can keep your library, playlists and settings the same on your phone
-and computers, with no account or cloud. Open Settings, then Sync devices, on
+Songies can keep your library, playlists, themes, lyrics and listening history
+the same on your phone and computers, with no account or cloud. Open Settings, then Sync devices, on
 both devices. One shows a 6-digit code and the other types it. After that,
 syncing is one tap. Both devices must have Sync devices open at the time, and
-they must be on the same network. Your music files are copied across too.
+they must be on the same network. Your music files are copied across too. Settings, sign-in and download choices
+stay on each device.
 
 On Linux, allow port 47823/tcp and the mdns service in the firewall, and have
 Avahi installed so devices can find each other; without Avahi you can still use
