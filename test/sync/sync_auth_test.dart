@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/sync/device_identity.dart';
@@ -250,11 +251,43 @@ void main() {
       expect(e.status, 409);
     });
 
-    test('malformed body is a 400, not a 500', () async {
+    /// AppLog's console lines (it prints when no log file is set up).
+    List<String> captureLog() {
+      final lines = <String>[];
+      final previous = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = previous);
+      return lines;
+    }
+
+    test('malformed body is a 400, not a 500, and is logged', () async {
+      final log = captureLog();
       final e = await failure(pinned().postJson('/echo', {'value': 'nope'}));
       expect(e.kind, SyncNetKind.server);
       expect(e.status, 400);
       expect(e.message, contains('bad_request'));
+      expect(log, [
+        allOf(
+          contains(' W Sync request POST /echo answered 400'),
+          contains('is not a subtype'),
+          isNot(contains('nope')),
+        ),
+      ]);
+    });
+
+    test('a StateError in a handler is a logged 400', () async {
+      server.route('POST', '/state', (req, peerId) async {
+        throw StateError('no such row');
+      });
+      final log = captureLog();
+      final e = await failure(pinned().postJson('/state', {}));
+      expect(e.status, 400);
+      expect(log, [
+        allOf(
+          contains(' W Sync request POST /state answered 400'),
+          contains('no such row'),
+        ),
+      ]);
     });
 
     Future<int> raw(

@@ -158,9 +158,12 @@ class SyncServer {
       await route.handler(req, peerId);
     } on FormatException {
       await _error(req, HttpStatus.badRequest, 'bad_request');
-    } on TypeError {
+    } on TypeError catch (e, st) {
+      // Usually a malformed body; logged in case it is a bug in a handler.
+      _logBadRequest(req, e, st);
       await _error(req, HttpStatus.badRequest, 'bad_request');
-    } on StateError {
+    } on StateError catch (e, st) {
+      _logBadRequest(req, e, st);
       await _error(req, HttpStatus.badRequest, 'bad_request');
     } on HttpException {
       // For example a repeated header that must be single.
@@ -170,6 +173,15 @@ class SyncServer {
       await _error(req, HttpStatus.internalServerError, 'server');
     }
   }
+
+  /// Logs a handler error answered with a 400: the route and the error only,
+  /// never the body or headers.
+  static void _logBadRequest(HttpRequest req, Object e, StackTrace st) =>
+      AppLog.w(
+        'Sync request ${req.method} ${req.uri.path} answered 400',
+        e,
+        st,
+      );
 
   /// The whole body, or null when it exceeds [maxJsonBytes].
   static Future<List<int>?> _readCapped(HttpRequest req) async {
