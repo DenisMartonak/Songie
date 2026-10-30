@@ -256,7 +256,8 @@ void main() {
     expect(lyrics['a']!.body, 'words');
     expect(lyrics['a']!.deleted, isFalse);
     expect(lyrics['b']!.deleted, isTrue);
-    expect(report.tracksAdded, 1);
+    // 'a' replaced the live 'b': the same song, so no song was added.
+    expect(report.tracksAdded, 0);
   });
 
   test('same file hash merges and moves local_files', () async {
@@ -350,6 +351,7 @@ void main() {
         ('p1', true),
       ]);
       expect(report.playlistIds, contains('p1'));
+      expect(report.playlistIds, isNot(contains('p2'))); // merged away
 
       // Both sides end with the same content.
       expect(await snapshot(peer), await snapshot(db));

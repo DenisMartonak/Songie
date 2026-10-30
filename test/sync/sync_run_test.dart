@@ -1,0 +1,744 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:drift/drift.dart' show Value;
+import 'package:flutter_test/flutter_test.dart';
+import 'package:songies/core/app_version.dart';
+import 'package:songies/data/database.dart';
+import 'package:songies/data/sync_stamp.dart';
+import 'package:songies/downloads/download_repository.dart';
+import 'package:songies/sync/change_feed.dart';
+import 'package:songies/sync/device_identity.dart';
+import 'package:songies/sync/merger.dart';
+import 'package:songies/sync/peer_repository.dart';
+import 'package:songies/sync/sync_auth.dart';
+import 'package:songies/sync/sync_progress.dart';
+import 'package:songies/sync/sync_responder.dart';
+import 'package:songies/sync/sync_runner.dart';
+import 'package:songies/sync/sync_server.dart';
+
+import '../helpers/sync_devices.dart';
+import '../helpers/sync_fixtures.dart';
+import '../helpers/test_db.dart';
+
+/// Timers the responder starts, fired by hand.
+class _Timers {
+  final made = <_FakeTimer>[];
+
+  Timer create(Duration d, void Function() callback) {
+    final t = _FakeTimer(d, callback);
+    made.add(t);
+    return t;
+  }
+
+  /// Fires every active timer.
+  void fire() {
+    for (final t in made.where((t) => t.isActive).toList()) {
+      t.fire();
+    }
+  }
+}
+
+class _FakeTimer implements Timer {
+  _FakeTimer(this.duration, this._callback);
+
+  final Duration duration;
+  final void Function() _callback;
+  bool _active = true;
+
+  void fire() {
+    _active = false;
+    _callback();
+  }
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  int get tick => 0;
+
+  @override
+  void cancel() => _active = false;
+}
+
+/// One simulated device: database, stamp, server, responder and runner.
+class _Dev {
+  _Dev._(this.name, this.identity, this.db, this.stamp, this.peers);
+
+  final String name;
+  final DeviceIdentity identity;
+  final AppDatabase db;
+  final SyncStamp stamp;
+  final PeerRepository peers;
+  final timers = _Timers();
+  late final SyncServer server;
+  late final SyncResponder responder;
+  late final SyncRunner runner;
+  late final int port;
+  final states = <ResponderState>[];
+
+  String get id => stamp.deviceId;
+
+  static Future<_Dev> create(
+    Directory root,
+    String name, {
+    Duration skew = Duration.zero,
+  }) async {
+    final db = testDb();
+    final d = _Dev._(
+      name,
+      await testIdentity(root, name),
+      db,
+      await SyncStamp.load(db),
+      PeerRepository(db),
+    );
+    DateTime now() => DateTime.now().add(skew);
+    d.runner = SyncRunner(
+      db: db,
+      stamp: d.stamp,
+      peers: d.peers,
+      myDeviceId: d.id,
+      downloads: DownloadRepository(db),
+    );
+    d.responder = SyncResponder(
+      db: db,
+      stamp: d.stamp,
+      peers: d.peers,
+      myDeviceId: d.id,
+      myName: () => name,
+      downloads: DownloadRepository(db),
+      runningLocally: () => d.runner.running,
+      now: now,
+      timer: d.timers.create,
+    );
+    d.responder.state.listen(d.states.add);
+    d.server = SyncServer(d.identity, RequestVerifier(d.peers, now: now));
+    d.responder.register(d.server);
+    d.port = await serveLoopback(d.server);
+    return d;
+  }
+
+  Future<void> dispose() async {
+    await server.stop();
+    await db.close();
+  }
+
+  Future<PeerRow> peer(_Dev other) async => (await peers.byId(other.id))!;
+
+  Future<Map<String, String>> snap() => snapshot(db);
+
+  Future<int> high() => ChangeFeed(db).highSeq();
+}
+
+Future<void> _pair(_Dev a, _Dev b) async {
+  final rnd = Random.secure();
+  final key = base64.encode([for (var i = 0; i < 32; i++) rnd.nextInt(256)]);
+  PeerRow row(_Dev other) => PeerRow(
+    deviceId: other.id,
+    name: other.name,
+    certFingerprint: other.identity.fingerprint,
+    pairKey: key,
+    lastSentSeq: 0,
+    lastReceivedSeq: 0,
+  );
+  await a.peers.save(row(b));
+  await b.peers.save(row(a));
+}
+
+Future<Map<String, Resolution>?> _noClashes(List<PlaylistClash> c) async {
+  fail('unexpected clash: ${c.map((x) => x.playlistId)}');
+}
+
+/// Runs a sync from [a] to [b] and returns every progress event.
+Future<List<SyncProgress>> _sync(
+  _Dev a,
+  _Dev b, {
+  Future<Map<String, Resolution>?> Function(List<PlaylistClash>)? choose,
+  SyncRunner? runner,
+}) async => (runner ?? a.runner)
+    .run(
+      await a.peer(b),
+      host: '127.0.0.1',
+      port: b.port,
+      choose: choose ?? _noClashes,
+    )
+    .toList();
+
+SyncSummary _done(List<SyncProgress> events) {
+  final last = events.last;
+  if (last is! SyncDone) fail('sync did not finish: $last');
+  return last.summary;
+}
+
+SyncFailure? _failure(List<SyncProgress> events) {
+  final last = events.last;
+  return last is SyncFailed ? last.failure : null;
+}
+
+// --- Writes, stamped like the app's ------------------------------------------
+
+Future<String> _track(
+  _Dev d, {
+  String? id,
+  String? video,
+  String title = 'Title',
+}) async {
+  final st = await d.stamp.next(id: id);
+  await d.db
+      .into(d.db.tracks)
+      .insert(
+        trackRow(
+          id: st.id,
+          ytVideoId: video,
+          source: video == null ? 'local' : 'yt',
+          title: title,
+          clock: st.clock,
+          originDevice: st.originDevice,
+          localSeq: st.localSeq,
+        ),
+      );
+  return st.id;
+}
+
+Future<String> _playlist(_Dev d, String name) async {
+  final st = await d.stamp.next();
+  await d.db
+      .into(d.db.playlists)
+      .insert(
+        PlaylistsCompanion.insert(
+          id: st.id,
+          clock: st.clock,
+          originDevice: st.originDevice,
+          localSeq: st.localSeq,
+          name: name,
+          source: 'local',
+        ),
+      );
+  return st.id;
+}
+
+Future<String> _entry(_Dev d, String playlistId, String trackId) async {
+  final st = await d.stamp.next();
+  await d.db
+      .into(d.db.playlistEntries)
+      .insert(
+        PlaylistEntriesCompanion.insert(
+          id: st.id,
+          clock: st.clock,
+          originDevice: st.originDevice,
+          localSeq: st.localSeq,
+          playlistId: playlistId,
+          trackId: trackId,
+          position: 'a0',
+          addedAt: DateTime.now(),
+        ),
+      );
+  return st.id;
+}
+
+Future<String> _listen(_Dev d, String trackId) async {
+  final st = await d.stamp.next();
+  await d.db
+      .into(d.db.listens)
+      .insert(
+        ListensCompanion.insert(
+          id: st.id,
+          clock: st.clock,
+          originDevice: st.originDevice,
+          localSeq: st.localSeq,
+          trackId: trackId,
+          startedAt: DateTime.now(),
+          heardMs: 1000,
+          counted: true,
+          mainArtist: 'A',
+          titleSnapshot: 'T',
+          artistSnapshot: 'A',
+        ),
+      );
+  return st.id;
+}
+
+Future<void> _rename(_Dev d, String playlistId, String name) async {
+  final st = await d.stamp.next();
+  await (d.db.update(
+    d.db.playlists,
+  )..where((p) => p.id.equals(playlistId))).write(
+    PlaylistsCompanion(
+      name: Value(name),
+      clock: Value(st.clock),
+      originDevice: Value(st.originDevice),
+      localSeq: Value(st.localSeq),
+    ),
+  );
+}
+
+Future<List<Playlist>> _livePlaylists(_Dev d) =>
+    (d.db.select(d.db.playlists)..where((p) => p.deleted.equals(false))).get();
+
+void main() {
+  final root = setUpSyncDevices('songies_sync_run');
+  late _Dev a;
+  late _Dev b;
+  final extra = <_Dev>[];
+
+  setUp(() async {
+    a = await _Dev.create(root(), 'A');
+    b = await _Dev.create(root(), 'B');
+    await _pair(a, b);
+  });
+  tearDown(() async {
+    for (final d in [a, b, ...extra]) {
+      await d.dispose();
+    }
+    extra.clear();
+  });
+
+  /// A playlist both devices have, then renamed differently on each.
+  Future<String> clashingRename() async {
+    final p = await _playlist(a, 'Shared');
+    await _entry(a, p, await _track(a));
+    _done(await _sync(a, b));
+    await _rename(a, p, 'From A');
+    await _rename(b, p, 'From B');
+    return p;
+  }
+
+  test('first sync makes both databases equal', () async {
+    final pa = await _playlist(a, 'Mine');
+    await _entry(a, pa, await _track(a, title: 'One'));
+    final pb = await _playlist(b, 'Theirs');
+    final tb = await _track(b, title: 'Two');
+    await _entry(b, pb, tb);
+    await _listen(b, tb);
+    await _track(b, title: 'Three');
+    final bDone = b.responder.state.firstWhere((s) => s is ResponderDone);
+
+    final events = await _sync(a, b);
+
+    final summary = _done(events);
+    expect(summary.peerName, 'B');
+    expect(summary.songsAdded, 2);
+    expect(summary.playlistsChanged, 1);
+    expect(summary.filesCopied, 0);
+    final onB = (await bDone as ResponderDone).summary;
+    expect(onB.peerName, 'A');
+    expect(onB.songsAdded, 1);
+    expect(onB.playlistsChanged, 1);
+    expect(await a.snap(), await b.snap());
+    expect(await a.snap(), hasLength(8));
+
+    final stages = [
+      for (final e in events)
+        if (e is SyncStep) e.stage,
+    ];
+    expect(stages.first, SyncStage.hello);
+    expect(
+      stages.toSet(),
+      containsAll([
+        SyncStage.pulling,
+        SyncStage.merging,
+        SyncStage.applying,
+        SyncStage.finishing,
+      ]),
+    );
+
+    final onA = await a.peer(b);
+    final mirror = await b.peer(a);
+    expect(onA.lastSyncAt, isNotNull);
+    expect(mirror.lastSyncAt, isNotNull);
+    expect(onA.lastSentSeq, mirror.lastReceivedSeq);
+    expect(onA.lastReceivedSeq, mirror.lastSentSeq);
+    expect(onA.lastSentSeq, greaterThan(0));
+    expect(onA.lastReceivedSeq, greaterThan(0));
+    expect(b.states.last, isA<ResponderDone>());
+  });
+
+  test('second sync writes nothing', () async {
+    await _track(a, title: 'One');
+    await _track(b, title: 'Two');
+    _done(await _sync(a, b));
+    final before = [await a.snap(), await a.high(), await b.high()];
+
+    final summary = _done(await _sync(a, b));
+
+    expect(summary.songsAdded, 0);
+    expect(summary.playlistsChanged, 0);
+    expect([await a.snap(), await a.high(), await b.high()], before);
+    expect(await b.snap(), before.first);
+  });
+
+  test('changes travel A to B to C', () async {
+    final c = await _Dev.create(root(), 'C');
+    extra.add(c);
+    await _pair(b, c);
+    final t = await _track(a, title: 'From A');
+
+    _done(await _sync(a, b));
+    _done(await _sync(b, c));
+
+    expect((await c.snap()).keys, contains('tracks/$t'));
+    expect(await c.snap(), await a.snap());
+  });
+
+  test('first sync dedupes shared songs', () async {
+    // The same video found on both devices before they ever synced.
+    final ta = await _track(a, id: 'aaaa-song', video: 'vid');
+    final tb = await _track(b, id: 'bbbb-song', video: 'vid');
+    final pa = await _playlist(a, 'On A');
+    final pb = await _playlist(b, 'On B');
+    await _entry(a, pa, ta);
+    await _entry(b, pb, tb);
+    final bDone = b.responder.state.firstWhere((s) => s is ResponderDone);
+
+    final summary = _done(await _sync(a, b));
+
+    expect(summary.songsAdded, 0);
+    expect(((await bDone) as ResponderDone).summary.songsAdded, 0);
+    expect(await a.snap(), await b.snap());
+    for (final d in [a, b]) {
+      final live = await (d.db.select(
+        d.db.tracks,
+      )..where((t) => t.deleted.equals(false))).get();
+      expect(live.map((t) => t.id), ['aaaa-song'], reason: d.name);
+      final entries = await d.db.select(d.db.playlistEntries).get();
+      expect(entries, hasLength(2));
+      expect(entries.map((e) => e.trackId).toSet(), {'aaaa-song'});
+    }
+  });
+
+  test(
+    'clash goes to choose and keepBoth makes a copy on both sides',
+    () async {
+      final p = await clashingRename();
+      List<PlaylistClash>? asked;
+
+      final summary = _done(
+        await _sync(
+          a,
+          b,
+          choose: (clashes) async {
+            asked = clashes;
+            return {p: Resolution.keepBoth};
+          },
+        ),
+      );
+
+      expect(asked, hasLength(1));
+      expect(asked!.single.playlistId, p);
+      expect(asked!.single.name, 'From A');
+      expect(summary.playlistsChanged, greaterThan(0));
+      expect(await a.snap(), await b.snap());
+      for (final d in [a, b]) {
+        final names = (await _livePlaylists(d)).map((x) => x.name).toSet();
+        expect(names, {'From A', 'From B (from B)'}, reason: d.name);
+      }
+    },
+  );
+
+  test('clash on entries only names the playlist from the local row', () async {
+    final p = await _playlist(a, 'Shared');
+    final e = await _entry(a, p, await _track(a));
+    _done(await _sync(a, b));
+    Future<void> move(_Dev d, String pos) async {
+      final st = await d.stamp.next();
+      await (d.db.update(
+        d.db.playlistEntries,
+      )..where((x) => x.id.equals(e))).write(
+        PlaylistEntriesCompanion(
+          position: Value(pos),
+          clock: Value(st.clock),
+          originDevice: Value(st.originDevice),
+          localSeq: Value(st.localSeq),
+        ),
+      );
+    }
+
+    await move(a, 'b0');
+    await move(b, 'c0');
+    List<PlaylistClash>? asked;
+
+    _done(
+      await _sync(
+        a,
+        b,
+        choose: (clashes) async {
+          asked = clashes;
+          return {p: Resolution.keepTheirs};
+        },
+      ),
+    );
+
+    expect(asked!.single.name, 'Shared');
+    expect(await a.snap(), await b.snap());
+  });
+
+  test('choose returning null cancels and changes nothing', () async {
+    await clashingRename();
+    await _track(b, title: 'New on B');
+    final before = [await a.snap(), await b.snap()];
+    final peers = (await a.peer(b), await b.peer(a));
+
+    final events = await _sync(a, b, choose: (_) async => null);
+
+    expect(_failure(events), SyncFailure.cancelled);
+    expect([await a.snap(), await b.snap()], before);
+    expect((await a.peer(b), await b.peer(a)), peers);
+    expect(b.states.last, isA<Idle>());
+  });
+
+  test('cancel before apply sends abort and changes nothing', () async {
+    await _track(a);
+    await _track(b);
+    final before = [await a.snap(), await b.snap()];
+    final cancel = SyncCancel();
+
+    final events = await a.runner
+        .run(
+          await a.peer(b),
+          host: '127.0.0.1',
+          port: b.port,
+          choose: _noClashes,
+          cancel: cancel,
+        )
+        .map((e) {
+          if (e is SyncStep && e.stage == SyncStage.merging) cancel.cancel();
+          return e;
+        })
+        .toList();
+
+    expect(_failure(events), SyncFailure.cancelled);
+    expect([await a.snap(), await b.snap()], before);
+    expect(b.states.last, isA<Idle>());
+  });
+
+  test(
+    'failure after pull leaves both databases and watermarks unchanged',
+    () async {
+      await _track(a, title: 'One');
+      await _track(b, title: 'Two');
+      final before = [await a.snap(), await b.snap()];
+      final peers = (await a.peer(b), await b.peer(a));
+      b.server.route('POST', '/apply/part', (req, _) async {
+        await sendJson(req, {'error': 'server'}, status: 500);
+      });
+
+      final events = await _sync(a, b);
+
+      expect(_failure(events), SyncFailure.network);
+      expect([await a.snap(), await b.snap()], before);
+      expect((await a.peer(b), await b.peer(a)), peers);
+      expect(b.states.last, isA<Idle>());
+    },
+  );
+
+  test('failure after the initiator applies leaves watermarks unchanged, '
+      'and a rerun converges', () async {
+    final ta = await _track(a, title: 'One');
+    final tb = await _track(b, title: 'Two');
+    final beforeB = await b.snap();
+    final peers = (await a.peer(b), await b.peer(a));
+    b.server.route('POST', '/apply/commit', (req, _) async {
+      await sendJson(req, {'error': 'server'}, status: 500);
+    });
+
+    final events = await _sync(a, b);
+
+    expect(_failure(events), SyncFailure.network);
+    expect((await a.snap()).keys, contains('tracks/$tb'));
+    expect(await b.snap(), beforeB);
+    expect((await a.peer(b), await b.peer(a)), peers);
+
+    b.responder.register(b.server); // the peer recovers
+    _done(await _sync(a, b));
+
+    expect(await a.snap(), await b.snap());
+    expect((await b.snap()).keys, containsAll(['tracks/$ta', 'tracks/$tb']));
+    expect(await a.snap(), hasLength(2));
+  });
+
+  test('write between pull and apply survives', () async {
+    final p = await clashingRename();
+    final song = await _track(a);
+    _done(await _sync(a, b, choose: (_) async => {p: Resolution.keepMine}));
+    await _rename(a, p, 'Again A');
+    await _rename(b, p, 'Again B');
+    late String onA, onB;
+
+    _done(
+      await _sync(
+        a,
+        b,
+        choose: (_) async {
+          // Music plays on both devices while the user decides.
+          onA = await _listen(a, song);
+          onB = await _listen(b, song);
+          return {p: Resolution.keepMine};
+        },
+      ),
+    );
+
+    expect((await a.snap()).keys, contains('listens/$onA'));
+    expect((await b.snap()).keys, contains('listens/$onB'));
+
+    _done(await _sync(a, b));
+
+    expect(await a.snap(), await b.snap());
+    expect(
+      (await a.snap()).keys,
+      containsAll(['listens/$onA', 'listens/$onB']),
+    );
+  });
+
+  test('clock skew of 10 minutes still syncs', () async {
+    final skewed = await _Dev.create(
+      root(),
+      'Skewed',
+      skew: const Duration(minutes: 10),
+    );
+    extra.add(skewed);
+    await _pair(a, skewed);
+    await _track(a);
+    await _track(skewed);
+
+    _done(await _sync(a, skewed));
+
+    expect(await a.snap(), await skewed.snap());
+  });
+
+  test('abandoned session times out', () async {
+    final p = await clashingRename();
+    final beforeB = await b.snap();
+    final asked = Completer<void>();
+    final answer = Completer<Map<String, Resolution>?>();
+
+    final run = _sync(
+      a,
+      b,
+      choose: (_) {
+        asked.complete();
+        return answer.future;
+      },
+    );
+    await asked.future;
+    expect(b.states.last, isA<WaitingFor>());
+    expect((b.states.last as WaitingFor).peerName, 'A');
+    final idle = b.timers.made.where((t) => t.isActive).toList();
+    expect(idle.map((t) => t.duration), [const Duration(minutes: 15)]);
+
+    b.timers.fire(); // 15 minutes pass
+    await pumpEventQueue();
+
+    expect(b.states.last, isA<Idle>());
+    expect(await b.snap(), beforeB);
+    // The initiator comes back too late: nothing is applied anywhere.
+    final beforeA = await a.snap();
+    answer.complete({p: Resolution.keepMine});
+    expect(_failure(await run), SyncFailure.network);
+    expect(await a.snap(), beforeA);
+    expect(await b.snap(), beforeB);
+
+    // The responder is unlocked.
+    _done(await _sync(a, b, choose: (_) async => {p: Resolution.keepMine}));
+    expect(await a.snap(), await b.snap());
+  });
+
+  test('schema mismatch fails cleanly', () async {
+    await _track(a);
+    await _track(b);
+    final before = [await a.snap(), await b.snap()];
+    b.server.route('GET', '/hello', (req, _) async {
+      await sendJson(req, {
+        'device_id': b.id,
+        'name': b.name,
+        'app_version': appVersion,
+        'time_ms': DateTime.now().millisecondsSinceEpoch,
+        'schema_version': syncSchemaVersion + 1,
+      });
+    }, open: true);
+
+    final events = await _sync(a, b);
+
+    expect(_failure(events), SyncFailure.schemaMismatch);
+    expect([await a.snap(), await b.snap()], before);
+  });
+
+  test('busy peer fails as busy', () async {
+    await clashingRename();
+    final asked = Completer<void>();
+    final answer = Completer<Map<String, Resolution>?>();
+    final first = _sync(
+      a,
+      b,
+      choose: (_) {
+        asked.complete();
+        return answer.future;
+      },
+    );
+    await asked.future;
+
+    // B has a session open with A.
+    final second = SyncRunner(
+      db: a.db,
+      stamp: a.stamp,
+      peers: a.peers,
+      myDeviceId: a.id,
+      downloads: DownloadRepository(a.db),
+    );
+    expect(_failure(await _sync(a, b, runner: second)), SyncFailure.busy);
+    // The same runner refuses a second run while one is going.
+    expect(_failure(await _sync(a, b)), SyncFailure.busy);
+    // A device running its own sync refuses to answer one: B, busy with A,
+    // is asked by A (now a responder) - A's runner is running.
+    expect(_failure(await _sync(b, a)), SyncFailure.busy);
+
+    answer.complete(null);
+    expect(_failure(await first), SyncFailure.cancelled);
+  });
+
+  test('unpaired peer fails as forgotten', () async {
+    await _track(a);
+    await b.peers.remove(a.id);
+    final before = await a.snap();
+
+    final events = await _sync(a, b);
+
+    expect(_failure(events), SyncFailure.forgotten);
+    expect(await a.snap(), before);
+  });
+
+  test('a peer that is not listening fails as notFound', () async {
+    await b.server.stop();
+
+    expect(_failure(await _sync(a, b)), SyncFailure.notFound);
+  });
+
+  test('unpair removes the peer on the other side', () async {
+    final events = <SyncProgress>[];
+    await a.runner.unpair(await a.peer(b), host: '127.0.0.1', port: b.port);
+    events.addAll(await _sync(a, b));
+
+    expect(await b.peers.byId(a.id), isNull);
+    expect(_failure(events), SyncFailure.forgotten);
+  });
+
+  test('hello answers unsigned with time and versions', () async {
+    final before = DateTime.now().millisecondsSinceEpoch;
+    final client = HttpClient()..badCertificateCallback = (_, _, _) => true;
+    addTearDown(() => client.close(force: true));
+    final req = await client.getUrl(
+      Uri.parse('https://127.0.0.1:${b.port}/hello'),
+    );
+    final res = await req.close();
+    final body =
+        jsonDecode(await utf8.decodeStream(res)) as Map<String, dynamic>;
+
+    expect(res.statusCode, 200);
+    expect(body['device_id'], b.id);
+    expect(body['name'], 'B');
+    expect(body['app_version'], appVersion);
+    expect(body['schema_version'], syncSchemaVersion);
+    expect(body['time_ms'] as int, greaterThanOrEqualTo(before));
+  });
+}

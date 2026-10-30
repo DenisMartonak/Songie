@@ -1,9 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
-import 'package:drift/drift.dart' show driftRuntimeOptions;
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/sync/device_identity.dart';
@@ -15,6 +14,7 @@ import 'package:songies/sync/sync_auth.dart';
 import 'package:songies/sync/sync_client.dart';
 import 'package:songies/sync/sync_server.dart';
 
+import '../helpers/sync_devices.dart';
 import '../helpers/test_db.dart';
 
 /// One simulated device: identity, database, server and pairing service.
@@ -34,9 +34,7 @@ class _Device {
     String id, {
     DateTime Function() now = DateTime.now,
   }) async {
-    final identity = await DeviceIdentity.loadOrCreate(
-      Directory('${root.path}/$id'),
-    );
+    final identity = await testIdentity(root, id);
     final db = testDb();
     final peers = PeerRepository(db);
     final pairing = PairingService(
@@ -53,10 +51,7 @@ class _Device {
     final s = SyncServer(identity, RequestVerifier(peers));
     pairing.register(s);
     server = s;
-    port = await s.start(
-      preferredPort: 0,
-      address: InternetAddress.loopbackIPv4,
-    );
+    port = await serveLoopback(s);
   }
 
   Future<void> dispose() async {
@@ -75,26 +70,14 @@ String _other(String code) =>
     ((int.parse(code) + 1) % 1000000).toString().padLeft(6, '0');
 
 void main() {
+  final rootDir = setUpSyncDevices('songies_pairing');
   late Directory root;
   late _Device a; // types the code (initiator)
   late _Device b; // shows the code (responder)
   var now = DateTime(2026, 10, 30, 12);
 
-  final previousWarn = driftRuntimeOptions.dontWarnAboutMultipleDatabases;
-  final previousPrint = debugPrint;
-  setUpAll(() async {
-    // Two devices means two in-memory databases at once.
-    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
-    debugPrint = (message, {wrapWidth}) {}; // AppLog echoes to the console.
-    root = Directory.systemTemp.createTempSync('songies_pairing');
-  });
-  tearDownAll(() {
-    driftRuntimeOptions.dontWarnAboutMultipleDatabases = previousWarn;
-    debugPrint = previousPrint;
-    root.deleteSync(recursive: true);
-  });
-
   setUp(() async {
+    root = rootDir();
     now = DateTime(2026, 10, 30, 12);
     a = await _Device.create(root, _devA);
     b = await _Device.create(root, _devB, now: () => now);
@@ -294,10 +277,7 @@ void main() {
       finishes++;
       await sendJson(req, {'ok': true});
     }, open: true);
-    final port = await server.start(
-      preferredPort: 0,
-      address: InternetAddress.loopbackIPv4,
-    );
+    final port = await serveLoopback(server);
     fake.server = server;
     expect(
       await a.pairing.pairWith('127.0.0.1', port, '135790'),
@@ -369,10 +349,7 @@ void main() {
       finishes++;
       await sendJson(req, {'ok': true});
     }, open: true);
-    final port = await server.start(
-      preferredPort: 0,
-      address: InternetAddress.loopbackIPv4,
-    );
+    final port = await serveLoopback(server);
     fake.server = server;
 
     expect(
@@ -417,10 +394,7 @@ void main() {
       raw = jsonEncode(SyncServer.jsonBody(req));
       await sendJson(req, {'error': 'no_code'}, status: 403);
     }, open: true);
-    final port = await server.start(
-      preferredPort: 0,
-      address: InternetAddress.loopbackIPv4,
-    );
+    final port = await serveLoopback(server);
     fake.server = server;
     await a.pairing.pairWith('127.0.0.1', port, '987654');
     expect(raw, isNotNull);

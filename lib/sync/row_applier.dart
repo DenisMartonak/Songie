@@ -19,10 +19,12 @@ class ApplyReport {
   /// Synced rows written: applied rows plus rows restamped by merging.
   final int written;
 
-  /// Playlists whose row or entries were written.
+  /// Playlists whose row or entries were written, leaving out playlists
+  /// merged away into another.
   final Set<String> playlistIds;
 
-  /// Tracks that did not exist here before and are live afterwards.
+  /// Tracks live afterwards that were not live here before, leaving out a
+  /// track that took the place of a live duplicate (the same song).
   final int tracksAdded;
 }
 
@@ -72,6 +74,9 @@ class _Run {
   final _seqs = Queue<int>();
   final _playlistIds = <String>{};
   final _addedTracks = <String>{};
+
+  /// Survivors that took over a track live here before this apply.
+  final _absorbing = <String>{};
   var _written = 0;
 
   /// Tracks and playlists merged away in this apply, whose references are
@@ -100,10 +105,14 @@ class _Run {
       await _applyOne(r);
     }
     await _rewriteRefs();
+    final mergedAway = <String>{};
+    for (final id in _playlistIds) {
+      if (await _end(_db.playlists, id) != id) mergedAway.add(id);
+    }
     return ApplyReport(
       written: _written,
-      playlistIds: _playlistIds,
-      tracksAdded: _addedTracks.length,
+      playlistIds: _playlistIds.difference(mergedAway),
+      tracksAdded: _addedTracks.difference(_absorbing).length,
     );
   }
 
@@ -127,7 +136,8 @@ class _Run {
   Future<void> _applyOne(SyncRow incoming) async {
     final followed = await _decide(incoming);
     if (followed == null) return;
-    final existed = await _local(incoming.table, incoming.id) != null;
+    final before = await _local(incoming.table, incoming.id);
+    final wasLive = before != null && !before.deleted;
     final row = await _claim(followed);
     if (identical(row, incoming)) {
       await _put(row, _seqs.isNotEmpty ? _seqs.removeFirst() : await _seq());
@@ -136,7 +146,7 @@ class _Run {
     }
     switch (row.table) {
       case SyncTable.tracks:
-        if (!existed && !row.deleted) _addedTracks.add(row.id);
+        if (!wasLive && !row.deleted) _addedTracks.add(row.id);
         final into = row.data['mergedInto'] as String?;
         if (into != null) _merged.add((SyncTable.tracks, row.id));
       case SyncTable.playlists:
@@ -335,7 +345,8 @@ class _Run {
     await _restamp(
       _with(loser, {..._noTrackKeys, 'deleted': true, 'mergedInto': survivor}),
     );
-    _addedTracks.remove(loser.id);
+    // A live song merging into [survivor] makes it no new song here.
+    if (!_addedTracks.remove(loser.id)) _absorbing.add(survivor);
     _merged.add((SyncTable.tracks, loser.id));
   }
 
