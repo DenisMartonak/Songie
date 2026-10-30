@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/sync/device_identity.dart';
 
@@ -52,4 +53,41 @@ void main() {
       await server.close(force: true);
     }
   });
+
+  test('corrupt files are regenerated and the old ones kept as .bak', () async {
+    final logs = <String>[];
+    final original = debugPrint;
+    debugPrint = (m, {wrapWidth}) => logs.add(m ?? '');
+    addTearDown(() => debugPrint = original);
+    final a = await DeviceIdentity.loadOrCreate(dir);
+    File('${dir.path}/cert.pem').writeAsStringSync('garbage cert');
+    final b = await DeviceIdentity.loadOrCreate(dir);
+    expect(b.fingerprint, isNot(a.fingerprint));
+    expect(logs.single, contains('regenerating'));
+    expect(logs.single, isNot(contains('PRIVATE')));
+    expect(File('${dir.path}/cert.pem.bak').readAsStringSync(), 'garbage cert');
+    expect(File('${dir.path}/key.pem.bak').readAsStringSync(), a.keyPem);
+    expect((await DeviceIdentity.loadOrCreate(dir)).fingerprint, b.fingerprint);
+  });
+
+  test('an unreadable file throws and nothing is overwritten', () async {
+    final a = await DeviceIdentity.loadOrCreate(dir);
+    final key = File('${dir.path}/key.pem');
+    Process.runSync('chmod', ['000', key.path]);
+    addTearDown(() => Process.runSync('chmod', ['600', key.path]));
+    var readable = true;
+    try {
+      key.readAsStringSync();
+    } on FileSystemException {
+      readable = false;
+    }
+    if (readable) return; // running as root: cannot simulate
+    await expectLater(
+      DeviceIdentity.loadOrCreate(dir),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(File('${dir.path}/cert.pem').readAsStringSync(), a.certPem);
+    expect(File('${dir.path}/cert.pem.bak').existsSync(), isFalse);
+    expect(File('${dir.path}/key.pem.bak').existsSync(), isFalse);
+  }, skip: !Platform.isLinux);
 }
