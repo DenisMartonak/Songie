@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/log.dart';
 import '../../../sync/pairing_code.dart';
 import '../../../sync/pairing_service.dart';
 import '../../../sync/sync_host.dart';
@@ -259,7 +260,8 @@ class _EnterCodeSheetState extends State<_EnterCodeSheet> {
     FindOutcome outcome;
     try {
       outcome = await widget.host.pairByCode(_code.text);
-    } catch (_) {
+    } catch (e) {
+      AppLog.w('Pairing by code failed', e);
       outcome = FindOutcome.noneFound;
     }
     if (!mounted) return;
@@ -285,7 +287,8 @@ class _EnterCodeSheetState extends State<_EnterCodeSheet> {
     PairOutcome outcome;
     try {
       outcome = await widget.host.pairByAddress(host, port, _code.text);
-    } catch (_) {
+    } catch (e) {
+      AppLog.w('Pairing by address failed', e);
       outcome = PairOutcome.unreachable;
     }
     if (!mounted) return;

@@ -57,7 +57,22 @@ class _SyncDevicesPageState extends ConsumerState<SyncDevicesPage> {
 
   /// Completes when the page goes away: an open clash question ends (null).
   final _left = Completer<void>();
-  DialogRoute<Resolution>? _dialog;
+
+  /// Dialogs the page opened that are still open, removed when it leaves.
+  final _dialogs = <Route<Object?>>{};
+
+  /// Whether the page is on screen ([TickerMode]: off in a background tab
+  /// and under a covering route).
+  bool _visible = true;
+
+  /// Whether the host was asked to serve (it is stopped otherwise).
+  bool _serving = false;
+
+  /// A peer has a session open here (this device is the responder).
+  bool _responderBusy = false;
+
+  /// Pairing sheets open; their exchange needs the host serving.
+  int _pairingOpen = 0;
 
   @override
   void initState() {
@@ -83,17 +98,59 @@ class _SyncDevicesPageState extends ConsumerState<SyncDevicesPage> {
       )
       ..add(host.responder.listen(_onResponder))
       ..add(host.runs.listen((r) => _follow(r.peerId, r.progress, r.cancel)));
+    _serving = false;
+    // Not before the first didChangeDependencies: visibility is known then.
+    if (_visibilityKnown) _updateServing();
+  }
+
+  bool _visibilityKnown = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _visible = TickerMode.valuesOf(context).enabled;
+    _visibilityKnown = true;
+    _updateServing();
+  }
+
+  /// Serves while the page is visible, or while a sync, a responder session
+  /// or a pairing sheet still needs it; stops otherwise (no idle work in a
+  /// background tab).
+  void _updateServing() {
+    final host = _host;
+    if (host == null) return;
+    final want = _visible || _running || _responderBusy || _pairingOpen > 0;
+    if (want == _serving) return;
+    _serving = want;
+    if (!want) {
+      _started = false;
+      unawaited(
+        host.stop().catchError(
+          (Object e) => AppLog.w('Sync devices could not stop', e),
+        ),
+      );
+      return;
+    }
+    _startFailed = false;
     host.start().then(
       (_) {
-        if (mounted && identical(host, _host)) setState(() => _started = true);
+        if (mounted && identical(host, _host) && _serving) {
+          setState(() => _started = true);
+        }
       },
       onError: (Object e) {
         AppLog.w('Sync devices could not start', e);
-        if (mounted && identical(host, _host)) {
+        if (mounted && identical(host, _host) && _serving) {
           setState(() => _startFailed = true);
         }
       },
     );
+  }
+
+  /// Rebuilds, then stops the host if it is no longer needed.
+  void _changed(VoidCallback change) {
+    setState(change);
+    _updateServing();
   }
 
   void _detach() {
@@ -106,19 +163,21 @@ class _SyncDevicesPageState extends ConsumerState<SyncDevicesPage> {
     _subs.clear();
     _host = null;
     _started = false;
+    _serving = false;
   }
 
   @override
   void dispose() {
     _left.complete();
-    final dialog = _dialog;
-    if (dialog != null && dialog.isActive) {
+    for (final dialog in [..._dialogs]) {
+      if (!dialog.isActive) continue;
       // Not while the tree is being torn down.
       final nav = dialog.navigator;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (dialog.isActive) nav?.removeRoute(dialog);
       });
     }
+    _dialogs.clear();
     final run = _run;
     if (run != null && !run.finished) run.cancel.cancel();
     unawaited(run?.sub?.cancel());
@@ -136,8 +195,11 @@ class _SyncDevicesPageState extends ConsumerState<SyncDevicesPage> {
   }
 
   void _onResponder(ResponderState s) {
-    if (!mounted || s is Idle || _running) return;
-    setState(() => _shown = s);
+    if (!mounted) return;
+    _changed(() {
+      _responderBusy = s is WaitingFor || s is Receiving;
+      if (s is! Idle && !_running) _shown = s;
+    });
   }
 
   void _sync(String peerId) {
@@ -166,17 +228,17 @@ class _SyncDevicesPageState extends ConsumerState<SyncDevicesPage> {
     run.sub = progress.listen(
       (e) {
         if (!mounted) return;
-        setState(() {
+        _changed(() {
           run.last = e;
           // The last event: a new sync may start before the stream closes.
           if (e is SyncDone || e is SyncFailed) run.finished = true;
         });
       },
       onDone: () {
-        if (mounted) setState(() => run.finished = true);
+        if (mounted) _changed(() => run.finished = true);
       },
     );
-    setState(() => _shown = _run = run);
+    _changed(() => _shown = _run = run);
   }
 
   /// Asks about each clash in turn; null as soon as one is dismissed or the
@@ -188,26 +250,47 @@ class _SyncDevicesPageState extends ConsumerState<SyncDevicesPage> {
     final choices = <String, Resolution>{};
     for (final clash in clashes) {
       if (!mounted || _left.isCompleted) return null;
-      final route = clashDialogRoute(context, clash, _nameOf(peerId));
-      _dialog = route;
-      final choice = await Future.any<Resolution?>([
-        Navigator.of(context, rootNavigator: true).push(route),
-        _left.future.then((_) => null),
-      ]);
-      if (identical(_dialog, route)) _dialog = null;
+      final choice = await _open(
+        clashDialogRoute(context, clash, _nameOf(peerId)),
+      );
       if (choice == null) return null;
       choices[clash.playlistId] = choice;
     }
     return choices;
   }
 
+  /// Shows [route] as a dialog; null when dismissed or the page leaves
+  /// (which also removes it).
+  Future<T?> _open<T>(Route<T> route) async {
+    _dialogs.add(route);
+    try {
+      return await Future.any<T?>([
+        Navigator.of(context, rootNavigator: true).push(route),
+        _left.future.then((_) => null),
+      ]);
+    } finally {
+      _dialogs.remove(route);
+    }
+  }
+
+  /// Keeps the host serving while a pairing sheet is open.
+  Future<void> _pairing(Future<void> Function(SyncHost host) sheet) async {
+    final host = _host;
+    if (host == null) return;
+    _pairingOpen++;
+    try {
+      await sheet(host);
+    } finally {
+      _pairingOpen--;
+      if (mounted) _updateServing();
+    }
+  }
+
   Future<void> _editName(String current) async {
-    final name = await showPlaylistNameDialog(
-      context,
-      title: 'Device name',
-      initial: current,
+    final name = await _open(
+      playlistNameDialogRoute(context, title: 'Device name', initial: current),
     );
-    if (name == null) return;
+    if (name == null || !mounted) return;
     await ref.read(settingsRepositoryProvider).setString(kDeviceName, name);
   }
 
@@ -291,6 +374,9 @@ class _SyncDevicesPageState extends ConsumerState<SyncDevicesPage> {
     final bottom = MediaQuery.paddingOf(context).bottom;
     final host = _host;
     final card = _statusCard();
+    // Not while a sync runs here: the first sync after pairing would
+    // replace it.
+    final pairable = _started && host != null && !_running;
     final muted = TextStyle(color: colors.mutedText, fontSize: 12);
     return SafeArea(
       bottom: false,
@@ -363,16 +449,16 @@ class _SyncDevicesPageState extends ConsumerState<SyncDevicesPage> {
               children: [
                 FilledButton.tonalIcon(
                   key: const Key('sync.showCode'),
-                  onPressed: _started && host != null
-                      ? () => showCodeSheet(context, host)
+                  onPressed: pairable
+                      ? () => _pairing((h) => showCodeSheet(context, h))
                       : null,
                   icon: const Icon(Icons.pin_outlined),
                   label: const Text('Show a code'),
                 ),
                 FilledButton.tonalIcon(
                   key: const Key('sync.enterCode'),
-                  onPressed: _started && host != null
-                      ? () => enterCodeSheet(context, host)
+                  onPressed: pairable
+                      ? () => _pairing((h) => enterCodeSheet(context, h))
                       : null,
                   icon: const Icon(Icons.dialpad_rounded),
                   label: const Text('Enter a code'),

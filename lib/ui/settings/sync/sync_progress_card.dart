@@ -80,6 +80,9 @@ class SyncProgressCard extends StatelessWidget {
     final progress = this.progress;
     // AA on the card, which is not the page background.
     final textColor = readableOn(colors.surface, preferred: colors.text);
+    final buttonStyle = TextButton.styleFrom(
+      foregroundColor: readableOn(colors.surface, preferred: colors.accent),
+    );
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
@@ -102,12 +105,14 @@ class SyncProgressCard extends StatelessWidget {
               if (onCancel != null)
                 TextButton(
                   key: const Key('sync.cancel'),
+                  style: buttonStyle,
                   onPressed: onCancel,
                   child: const Text('Cancel'),
                 ),
               if (onRetry != null)
                 TextButton(
                   key: const Key('sync.retry'),
+                  style: buttonStyle,
                   onPressed: onRetry,
                   child: const Text('Try again'),
                 ),

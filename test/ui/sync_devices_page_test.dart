@@ -51,6 +51,8 @@ class _FakeHost implements SyncHost {
   List<SyncDeviceView> current = const [];
 
   int starts = 0;
+  int stops = 0;
+  bool serving = false;
   bool codeShowing = false;
   final unpaired = <String>[];
   final syncs = <_Run>[];
@@ -65,7 +67,7 @@ class _FakeHost implements SyncHost {
   ChooseClashes? choose;
 
   @override
-  int? get port => starts > 0 ? 47823 : null;
+  int? get port => serving ? 47823 : null;
 
   void setDevices(List<SyncDeviceView> devices) {
     current = devices;
@@ -86,10 +88,16 @@ class _FakeHost implements SyncHost {
   Stream<HostRun> get runs => _runs.stream;
 
   @override
-  Future<void> start() async => starts++;
+  Future<void> start() async {
+    starts++;
+    serving = true;
+  }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    stops++;
+    serving = false;
+  }
 
   @override
   Future<void> dispose() async {}
@@ -107,6 +115,8 @@ class _FakeHost implements SyncHost {
   Future<FindOutcome> pairByCode(String code) async {
     codesTried.add(code);
     if (findOutcome == FindOutcome.paired) {
+      // The host saves the peer, then starts the first sync.
+      setDevices([...current, SyncDeviceView(_peer('laptop', 'Laptop'), null)]);
       _runs.add(HostRun('laptop', pairedRun.stream, pairedCancel));
     }
     return findOutcome;
@@ -173,9 +183,13 @@ void main() {
   late UiHarness h;
   late _FakeHost host;
 
+  /// Whether the page is on screen (a background tab turns it off).
+  late ValueNotifier<bool> visible;
+
   setUp(() async {
     h = await UiHarness.create();
     host = _FakeHost();
+    visible = ValueNotifier(true);
   });
   tearDown(() => h.dispose());
 
@@ -197,7 +211,14 @@ void main() {
             routes: [
               GoRoute(
                 path: 'sync',
-                builder: (_, _) => const Scaffold(body: SyncDevicesPage()),
+                builder: (_, _) => Scaffold(
+                  body: ValueListenableBuilder<bool>(
+                    valueListenable: visible,
+                    builder: (_, on, child) =>
+                        TickerMode(enabled: on, child: child!),
+                    child: const SyncDevicesPage(),
+                  ),
+                ),
               ),
             ],
           ),
@@ -320,6 +341,14 @@ void main() {
     expect(host.codesTried, ['123456']);
     expect(find.byKey(const Key('sync.code.field')), findsNothing);
     expect(host.choose, isNotNull);
+
+    // The first sync asks about clashes on this page, naming the new peer.
+    final answer = host.choose!([_clash('p1', 'Road trip')]);
+    await settle(tester);
+    expect(find.text("Keep Laptop's"), findsOneWidget);
+    await tester.tap(find.text("Keep this device's"));
+    await settle(tester);
+    expect(await answer, {'p1': Resolution.keepMine});
 
     host.pairedRun.add(const SyncStep(SyncStage.pulling));
     await settle(tester);
@@ -517,5 +546,122 @@ void main() {
     await tester.tap(find.text('Save'));
     await settle(tester);
     expect(find.text('Den laptop'), findsOneWidget);
+  });
+
+  group('serving only while visible', () {
+    Future<void> hide(WidgetTester tester, bool hidden) async {
+      visible.value = !hidden;
+      await settle(tester);
+    }
+
+    uiTest('hidden stops and visible starts again', (tester) async {
+      await pumpPage(tester);
+      expect(host.starts, 1);
+      expect(host.stops, 0);
+
+      await hide(tester, true);
+      expect(host.stops, 1);
+      expect(host.serving, isFalse);
+
+      await hide(tester, false);
+      expect(host.starts, 2);
+      expect(host.serving, isTrue);
+      expect(
+        tester
+            .widget<ButtonStyleButton>(find.byKey(const Key('sync.showCode')))
+            .enabled,
+        isTrue,
+      );
+    });
+
+    uiTest('hidden during a run stops after the run', (tester) async {
+      pairedDevices();
+      await pumpPage(tester);
+      await tester.tap(find.byKey(const Key('sync.device.laptop')));
+      await settle(tester);
+
+      await hide(tester, true);
+      expect(host.stops, 0);
+
+      host.syncs.single.events.add(
+        const SyncDone(
+          SyncSummary(
+            peerName: 'Laptop',
+            playlistsChanged: 0,
+            songsAdded: 0,
+            filesCopied: 0,
+          ),
+        ),
+      );
+      await settle(tester);
+      expect(host.stops, 1);
+    });
+
+    uiTest('hidden while a peer syncs here stops when it is done', (
+      tester,
+    ) async {
+      await pumpPage(tester);
+      host._responder.add(const WaitingFor('Laptop'));
+      await settle(tester);
+
+      await hide(tester, true);
+      expect(host.stops, 0);
+
+      host._responder.add(
+        const ResponderDone(
+          SyncSummary(
+            peerName: 'Laptop',
+            playlistsChanged: 0,
+            songsAdded: 0,
+            filesCopied: 0,
+          ),
+        ),
+      );
+      await settle(tester);
+      expect(host.stops, 1);
+    });
+
+    uiTest('an open pairing sheet keeps serving until it closes', (
+      tester,
+    ) async {
+      await pumpPage(tester);
+      await tester.tap(find.text('Show a code'));
+      await settle(tester);
+
+      await hide(tester, true);
+      expect(host.stops, 0);
+
+      await tester.tapAt(const Offset(5, 5));
+      await settle(tester);
+      expect(host.stops, 1);
+    });
+  });
+
+  uiTest('pairing is off while a sync runs here', (tester) async {
+    pairedDevices();
+    await pumpPage(tester);
+    await tester.tap(find.byKey(const Key('sync.device.laptop')));
+    await settle(tester);
+
+    bool enabled(String key) =>
+        tester.widget<ButtonStyleButton>(find.byKey(Key(key))).enabled;
+    expect(enabled('sync.showCode'), isFalse);
+    expect(enabled('sync.enterCode'), isFalse);
+
+    host.syncs.single.events.add(const SyncFailed(SyncFailure.network));
+    await settle(tester);
+    expect(enabled('sync.showCode'), isTrue);
+  });
+
+  uiTest('leaving closes the rename dialog', (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.byKey(const Key('sync.deviceName.edit')));
+    await settle(tester);
+    expect(find.text('Device name'), findsOneWidget);
+
+    GoRouter.of(tester.element(find.byType(SyncDevicesPage))).go('/settings');
+    await settle(tester);
+    expect(find.text('Device name'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }
