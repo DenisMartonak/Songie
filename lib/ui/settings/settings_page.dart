@@ -39,8 +39,8 @@ final logSaverProvider = Provider<LogSaver>(
   },
 );
 
-/// Music folders, appearance, YouTube, downloads, storage, the log and
-/// About.
+/// Music folders, appearance, YouTube, downloads, sync, storage, the log
+/// and About.
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -81,6 +81,7 @@ class SettingsPage extends ConsumerWidget {
           const _AppearanceSection(),
           const YouTubeSettingsSection(),
           const DownloadsSettingsSection(),
+          const _SyncSection(),
           const _StorageSection(),
           const _LogsSection(),
           const _AboutSection(),
@@ -351,6 +352,32 @@ class _AppearanceSection extends ConsumerWidget {
           value: ref.watch(reduceMotionProvider),
           onChanged: (v) =>
               ref.read(settingsRepositoryProvider).setBool(kReduceMotion, v),
+        ),
+      ],
+    );
+  }
+}
+
+/// Opens Sync devices (pairing and syncing with other devices).
+class _SyncSection extends StatelessWidget {
+  const _SyncSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SettingsSectionTitle('Sync'),
+        ListTile(
+          key: const Key('settings.syncDevices'),
+          title: Text('Sync devices', style: TextStyle(color: colors.text)),
+          subtitle: Text(
+            'Pair your devices and sync playlists and songs over Wi-Fi',
+            style: TextStyle(color: colors.mutedText, fontSize: 12),
+          ),
+          trailing: Icon(Icons.chevron_right_rounded, color: colors.mutedText),
+          onTap: () => context.push('/settings/sync'),
         ),
       ],
     );

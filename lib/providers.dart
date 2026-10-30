@@ -645,9 +645,11 @@ class ConsentAsked extends Notifier<bool> {
   void markAsked() => state = true;
 }
 
-/// Platform flags for the YouTube settings; tests override them.
+/// Platform flags for the YouTube and Sync devices settings; tests override
+/// them.
 final isAndroidProvider = Provider<bool>((ref) => Platform.isAndroid);
 final isLinuxProvider = Provider<bool>((ref) => Platform.isLinux);
+final isWindowsProvider = Provider<bool>((ref) => Platform.isWindows);
 
 /// The installed yt-dlp version, or null when it is missing. Read when
 /// Settings opens (a user action) and again after an update.
