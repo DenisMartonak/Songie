@@ -132,6 +132,10 @@ class SyncHost {
   bool _wanted = false;
   bool _paused = false;
   bool _disposed = false;
+  final _disposedSignal = Completer<void>();
+
+  /// Cancels the runs the host started itself ([runs]).
+  final _ownRuns = <SyncCancel>{};
   int _localRuns = 0;
 
   var _peerRows = const <PeerRow>[];
@@ -191,9 +195,17 @@ class SyncHost {
   }
 
   /// Stops and releases everything; the host is not used again.
+  /// Runs the host started itself are cancelled, and a clash question they
+  /// are waiting on is left (as null).
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    choose = null;
+    for (final c in _ownRuns) {
+      c.cancel();
+    }
+    _ownRuns.clear();
+    _disposedSignal.complete();
     _lifecycle?.dispose();
     await stop();
     await _peerSub.cancel();
@@ -215,6 +227,7 @@ class SyncHost {
       peers: _peers,
       myDeviceId: _myId,
       myName: _myName,
+      onCodeSpent: _onCodeSpent,
     );
     final responder = SyncResponder(
       db: _db,
@@ -229,7 +242,13 @@ class SyncHost {
     final server = SyncServer(_identity, RequestVerifier(_peers));
     pairing.register(server);
     responder.register(server);
-    await server.start(preferredPort: _preferredPort, address: _bindAddress);
+    try {
+      await server.start(preferredPort: _preferredPort, address: _bindAddress);
+    } catch (_) {
+      await responder.dispose();
+      await pairing.dispose();
+      rethrow;
+    }
     _server = server;
     _pairing = pairing;
     _responder = responder;
@@ -238,13 +257,14 @@ class SyncHost {
       ..add(pairing.paired.listen(_onPaired));
     AppLog.i('Sync server on port ${server.port}');
 
-    final discovery = _discovery = _newDiscovery();
-    _subs.add(discovery.found.listen(_onFound));
+    // Connect by address still works without mDNS, so a failure here only
+    // logs.
     try {
+      final discovery = _discovery = _newDiscovery();
+      _subs.add(discovery.found.listen(_onFound));
       await _advertise();
       await discovery.startBrowsing();
     } catch (e) {
-      // Connect by address still works without mDNS.
       AppLog.w('mDNS browsing unavailable', e);
     }
   }
@@ -254,28 +274,46 @@ class SyncHost {
     if (server == null) return;
     _server = null;
     _hideCode();
-    for (final s in _subs) {
-      await s.cancel();
-    }
+    final subs = [..._subs];
     _subs.clear();
     final discovery = _discovery;
     _discovery = null;
-    if (discovery != null) {
-      try {
-        await discovery.stopAdvertising();
-      } catch (e) {
-        AppLog.w('Stopping the mDNS advertisement failed', e);
-      }
-      await discovery.dispose();
-    }
-    await server.stop();
-    await _responder?.dispose();
-    await _pairing?.dispose();
+    final responder = _responder;
+    final pairing = _pairing;
     _responder = null;
     _pairing = null;
+    // Each step runs whatever the others do: the server must always stop.
+    for (final s in subs) {
+      await _quietly('Cancelling a sync subscription', s.cancel);
+    }
+    if (discovery != null) {
+      await _quietly(
+        'Stopping the mDNS advertisement',
+        discovery.stopAdvertising,
+      );
+      await _quietly('Stopping mDNS browsing', discovery.dispose);
+    }
+    await _quietly('Stopping the sync server', server.stop);
+    if (responder != null) {
+      await _quietly('Closing the sync responder', responder.dispose);
+    }
+    if (pairing != null) {
+      await _quietly('Closing pairing', pairing.dispose);
+    }
     _setFound(const []);
     _setResponder(const Idle());
     AppLog.i('Sync server stopped');
+  }
+
+  static Future<void> _quietly(
+    String what,
+    Future<void> Function() step,
+  ) async {
+    try {
+      await step();
+    } catch (e) {
+      AppLog.w('$what failed', e);
+    }
   }
 
   /// Stops on `paused` and starts again on `resumed` (Android). A run in
@@ -322,10 +360,16 @@ class SyncHost {
     return next;
   }
 
-  void _onFound(List<FoundDevice> devices) => _setFound([
-    for (final d in devices)
-      if (d.id != _myId) d,
-  ]);
+  /// Keeps one entry per device id (the last one wins), not this device.
+  void _onFound(List<FoundDevice> devices) {
+    final byId = <String, FoundDevice>{};
+    for (final d in devices) {
+      if (d.id == _myId) continue;
+      byId.remove(d.id);
+      byId[d.id] = d;
+    }
+    _setFound([...byId.values]);
+  }
 
   void _setFound(List<FoundDevice> devices) {
     _found = List.unmodifiable(devices);
@@ -410,6 +454,14 @@ class SyncHost {
     _codeExpiry = null;
   }
 
+  /// The code took its last attempt: stop advertising `pairing=1`. The code
+  /// itself stays, so an exchange started on that attempt can still finish.
+  void _onCodeSpent() {
+    if (!_codeShowing) return;
+    _codeShowing = false;
+    unawaited(_advertise());
+  }
+
   void _onPaired(PeerRow peer) {
     // The code pairs once: when it was ours, stop advertising pairing.
     if (_codeShowing && !(_pairing?.codeShowing ?? false)) hideCode();
@@ -469,9 +521,12 @@ class SyncHost {
     return outcome;
   }
 
-  /// Starts the first sync with [peerId], just paired here.
+  /// Starts the first sync with [peerId], just paired here. Nothing starts
+  /// once the host is disposed.
   void _syncAfterPairing(String peerId) {
+    if (_disposed) return;
     final cancel = SyncCancel();
+    _ownRuns.add(cancel);
     final events = <SyncProgress>[];
     final live = StreamController<SyncProgress>.broadcast();
     var done = false;
@@ -484,21 +539,27 @@ class SyncHost {
       final sub = live.stream.listen(m.add, onDone: m.close);
       m.onCancel = sub.cancel;
     });
-    if (!_runsOut.isClosed) _runsOut.add(HostRun(peerId, progress, cancel));
-    sync(peerId, choose: (c) => (choose ?? _leave)(c), cancel: cancel).listen(
+    _runsOut.add(HostRun(peerId, progress, cancel));
+    sync(peerId, choose: _askOrLeave, cancel: cancel).listen(
       (e) {
         events.add(e);
         live.add(e);
       },
       onDone: () {
+        _ownRuns.remove(cancel);
         done = true;
         live.close();
       },
     );
   }
 
-  static Future<Map<String, Resolution>?> _leave(List<PlaylistClash> _) async =>
-      null;
+  /// Asks [choose]; leaves (null) when there is none or the host is disposed
+  /// while it waits.
+  Future<Map<String, Resolution>?> _askOrLeave(List<PlaylistClash> c) {
+    final ask = choose;
+    if (ask == null || _disposed) return Future.value();
+    return Future.any([ask(c), _disposedSignal.future.then((_) => null)]);
+  }
 
   // --- Sync -----------------------------------------------------------------
 
@@ -517,20 +578,27 @@ class SyncHost {
     }
     _localRuns++;
     try {
-      final peer = await _peers.byId(peerId);
-      if (peer == null) {
-        yield const SyncFailed(SyncFailure.notFound);
+      final PeerRow? peer;
+      final String? host;
+      final int? port;
+      try {
+        peer = await _peers.byId(peerId);
+        final online = _foundById(peerId);
+        host = online?.host ?? peer?.host;
+        port = online?.port ?? peer?.port;
+        if (peer != null &&
+            online != null &&
+            (peer.host != host || peer.port != port)) {
+          await _peers.setAddress(peerId, host!, port!);
+        }
+      } catch (e) {
+        AppLog.w('Preparing a sync failed', e);
+        yield const SyncFailed(SyncFailure.network);
         return;
       }
-      final online = _foundById(peerId);
-      final host = online?.host ?? peer.host;
-      final port = online?.port ?? peer.port;
-      if (host == null || port == null) {
+      if (peer == null || host == null || port == null) {
         yield const SyncFailed(SyncFailure.notFound);
         return;
-      }
-      if (online != null && (peer.host != host || peer.port != port)) {
-        await _peers.setAddress(peerId, host, port);
       }
       yield* _runner.run(
         peer,

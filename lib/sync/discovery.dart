@@ -98,8 +98,10 @@ class BonsoirDiscovery implements Discovery {
         },
       ),
     );
-    _broadcast = b;
+    // Kept only once initialised: stopping one that failed to initialise
+    // throws on some platforms (Linux without Avahi).
     await b.initialize();
+    _broadcast = b;
     await b.start();
   });
 
@@ -109,17 +111,20 @@ class BonsoirDiscovery implements Discovery {
   Future<void> _stopBroadcast() async {
     final b = _broadcast;
     _broadcast = null;
-    if (b != null && !b.isStopped) await b.stop();
+    if (b == null || b.isStopped) return;
+    try {
+      await b.stop();
+    } catch (e) {
+      AppLog.w('Stopping the mDNS broadcast failed', e);
+    }
   }
 
   @override
   Future<void> startBrowsing() async {
     if (_browser != null) return;
-    final d = _browser = bonsoir.BonsoirDiscovery(
-      printLogs: false,
-      type: syncServiceType,
-    );
+    final d = bonsoir.BonsoirDiscovery(printLogs: false, type: syncServiceType);
     await d.initialize();
+    _browser = d;
     _events = d.eventStream?.listen(
       (e) => _onEvent(d, e),
       onError: (Object e) => AppLog.w('mDNS browsing failed', e),
@@ -135,9 +140,10 @@ class BonsoirDiscovery implements Discovery {
       case bonsoir.BonsoirDiscoveryServiceResolvedEvent(:final service) ||
           bonsoir.BonsoirDiscoveryServiceUpdatedEvent(:final service):
         final f = _parse(service);
-        if (f == null) {
-          _devices.remove(service.name);
-        } else {
+        _devices.remove(service.name);
+        if (f != null) {
+          // One entry per device: a renamed instance replaces the old one.
+          _devices.removeWhere((_, d) => d.id == f.id);
           _devices[service.name] = f;
         }
         _publish();
@@ -185,14 +191,29 @@ class BonsoirDiscovery implements Discovery {
     return next;
   }
 
+  /// Each step runs even when an earlier one fails.
   @override
   Future<void> dispose() async {
-    await stopAdvertising();
-    await _events?.cancel();
+    try {
+      await stopAdvertising();
+    } catch (e) {
+      AppLog.w('Stopping the mDNS advertisement failed', e);
+    }
+    try {
+      await _events?.cancel();
+    } catch (e) {
+      AppLog.w('Cancelling mDNS events failed', e);
+    }
     _events = null;
     final d = _browser;
     _browser = null;
-    if (d != null && !d.isStopped) await d.stop();
+    if (d != null && !d.isStopped) {
+      try {
+        await d.stop();
+      } catch (e) {
+        AppLog.w('Stopping mDNS browsing failed', e);
+      }
+    }
     _devices.clear();
     await _found.close();
   }

@@ -29,6 +29,7 @@ class PairingService {
     required this._peers,
     required this._myDeviceId,
     required this._myName,
+    this._onCodeSpent,
     this._now = DateTime.now,
   });
 
@@ -37,6 +38,10 @@ class PairingService {
   final String _myDeviceId;
   final String Function() _myName;
   final DateTime Function() _now;
+
+  /// Called when the showing code takes its last attempt (an exchange started
+  /// on it may still finish).
+  final void Function()? _onCodeSpent;
   final _paired = StreamController<PeerRow>.broadcast();
 
   PairingCode? _code;
@@ -112,6 +117,7 @@ class PairingService {
       idB: utf8.encode(_identity.fingerprint),
     );
     code.chargeAttempt();
+    if (!code.usable) _onCodeSpent?.call();
     final keys = spake.finish(msg); // a bad share throws: a 400
     _pending = _Pending(keys, deviceId, name, idA);
     await sendJson(req, {

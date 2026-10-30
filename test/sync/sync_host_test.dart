@@ -31,6 +31,10 @@ class FakeDiscovery implements Discovery {
   bool browsing = false;
   bool disposed = false;
 
+  /// Platform failures to simulate.
+  bool failStart = false;
+  bool failStop = false;
+
   ({String id, String name, int port, bool pairing}) get last =>
       advertised.last;
 
@@ -43,21 +47,32 @@ class FakeDiscovery implements Discovery {
     required int port,
     required bool pairing,
   }) async {
+    if (failStart) throw StateError('no mDNS daemon');
     advertised.add((id: id, name: name, port: port, pairing: pairing));
     advertising = true;
   }
 
   @override
-  Future<void> stopAdvertising() async => advertising = false;
+  Future<void> stopAdvertising() async {
+    if (failStop) throw StateError('no mDNS daemon');
+    advertising = false;
+  }
 
   @override
   Stream<List<FoundDevice>> get found => _found.stream;
 
   @override
-  Future<void> startBrowsing() async => browsing = true;
+  Future<void> startBrowsing() async {
+    if (failStart) throw StateError('no mDNS daemon');
+    browsing = true;
+  }
 
   @override
   Future<void> dispose() async {
+    if (failStop) {
+      await _found.close();
+      throw StateError('no mDNS daemon');
+    }
     advertising = false;
     browsing = false;
     disposed = true;
@@ -93,6 +108,7 @@ class _Dev {
     Directory root,
     String name, {
     Duration findTimeout = SyncHost.findTimeout,
+    void Function(FakeDiscovery)? configure,
   }) async {
     final db = testDb();
     final d = _Dev._(
@@ -111,6 +127,7 @@ class _Dev {
       myName: () => name,
       discovery: () {
         final f = FakeDiscovery();
+        configure?.call(f);
         d.discoveries.add(f);
         return f;
       },
@@ -154,6 +171,44 @@ Future<int> _deadPort() async {
   return port;
 }
 
+Future<String> _playlist(_Dev d, String name) async {
+  final st = await d.stamp.next();
+  await d.db
+      .into(d.db.playlists)
+      .insert(
+        PlaylistsCompanion.insert(
+          id: st.id,
+          clock: st.clock,
+          originDevice: st.originDevice,
+          localSeq: st.localSeq,
+          name: name,
+          source: 'local',
+        ),
+      );
+  return st.id;
+}
+
+Future<void> _rename(_Dev d, String playlistId, String name) async {
+  final st = await d.stamp.next();
+  await (d.db.update(
+    d.db.playlists,
+  )..where((p) => p.id.equals(playlistId))).write(
+    PlaylistsCompanion(
+      name: Value(name),
+      clock: Value(st.clock),
+      originDevice: Value(st.originDevice),
+      localSeq: Value(st.localSeq),
+    ),
+  );
+}
+
+class _BrokenPeers extends PeerRepository {
+  _BrokenPeers(super.db);
+
+  @override
+  Future<PeerRow?> byId(String deviceId) => Future.error(StateError('gone'));
+}
+
 /// Lets stream listeners and the peers table watch catch up.
 Future<void> _settle() =>
     Future<void>.delayed(const Duration(milliseconds: 50));
@@ -162,11 +217,16 @@ void main() {
   final root = setUpSyncDevices('songies_sync_host_');
   final devs = <_Dev>[];
 
-  Future<_Dev> dev(String name, {Duration? findTimeout}) async {
+  Future<_Dev> dev(
+    String name, {
+    Duration? findTimeout,
+    void Function(FakeDiscovery)? configure,
+  }) async {
     final d = await _Dev.create(
       root(),
       name,
       findTimeout: findTimeout ?? SyncHost.findTimeout,
+      configure: configure,
     );
     devs.add(d);
     return d;
@@ -491,5 +551,144 @@ void main() {
       expect(ip.type, InternetAddressType.IPv4);
       expect(ip.isLoopback, isFalse);
     }
+  });
+
+  group('fix round 1', () {
+    test(
+      'mDNS failing to start leaves the server up, and stop stops it',
+      () async {
+        final a = await dev('A', configure: (f) => f.failStart = true);
+        final port = a.port;
+        final hello = SyncClient.open(host: '127.0.0.1', port: port);
+        expect((await hello.getJson('/hello'))['device_id'], a.id);
+        hello.close();
+        await a.host.stop();
+        expect(a.host.port, isNull);
+        final after = SyncClient.open(host: '127.0.0.1', port: port);
+        await expectLater(
+          after.getJson('/hello'),
+          throwsA(isA<SyncNetError>()),
+        );
+        after.close();
+      },
+    );
+
+    test('mDNS failing to stop still stops the server', () async {
+      final a = await dev('A', configure: (f) => f.failStop = true);
+      final port = a.port;
+      await a.host.stop();
+      expect(a.host.port, isNull);
+      final after = SyncClient.open(host: '127.0.0.1', port: port);
+      await expectLater(after.getJson('/hello'), throwsA(isA<SyncNetError>()));
+      after.close();
+      // And it starts again.
+      await a.host.start();
+      expect(a.host.port, isNotNull);
+    });
+
+    test('dispose cancels the first sync waiting on a clash', () async {
+      final a = await dev('A');
+      final b = await dev('B');
+      await _pairRows(b, a, host: '127.0.0.1', port: a.port);
+      final p = await _playlist(b, 'Shared');
+      expect(
+        (await b.host.sync(a.id, choose: _noClashes).toList()).last,
+        isA<SyncDone>(),
+      );
+      await _rename(a, p, 'From A');
+      await _rename(b, p, 'From B');
+      await a.peers.remove(b.id);
+      await b.peers.remove(a.id);
+
+      final asked = Completer<void>();
+      b.host.choose = (c) {
+        asked.complete();
+        return Completer<Map<String, Resolution>?>().future; // never answers
+      };
+      final runs = <HostRun>[];
+      b.host.runs.listen(runs.add);
+      final code = a.host.showCode().code;
+      expect(
+        await b.host.pairByAddress('127.0.0.1', a.port, code),
+        PairOutcome.paired,
+      );
+      await asked.future;
+      final progress = runs.single.progress.toList();
+      await b.host.dispose();
+      expect(b.host.choose, isNull);
+      expect(runs.single.cancel.isCancelled, isTrue);
+      final last = (await progress).last;
+      expect((last as SyncFailed).failure, SyncFailure.cancelled);
+    });
+
+    test('a pairing that completes after dispose starts no run', () async {
+      final a = await dev('A');
+      final b = await dev('B');
+      final states = <ResponderState>[];
+      a.host.responder.listen(states.add);
+      final runs = <HostRun>[];
+      b.host.runs.listen(runs.add);
+      final code = a.host.showCode().code;
+      final pairing = b.host.pairByAddress('127.0.0.1', a.port, code);
+      await b.host.dispose();
+      expect(await pairing, PairOutcome.paired);
+      await _settle();
+      expect(runs, isEmpty);
+      expect(states.whereType<WaitingFor>(), isEmpty);
+    });
+
+    test('errors preparing a sync end it as network', () async {
+      final db = testDb();
+      final host = SyncHost(
+        db: db,
+        stamp: await SyncStamp.load(db),
+        peers: _BrokenPeers(db),
+        identity: await testIdentity(root(), 'broken'),
+        downloads: DownloadRepository(db),
+        myName: () => 'X',
+        discovery: FakeDiscovery.new,
+      );
+      final events = await host.sync('p', choose: _noClashes).toList();
+      expect(events.map((e) => (e as SyncFailed).failure), [
+        SyncFailure.network,
+      ]);
+      await host.dispose();
+      await db.close();
+    });
+
+    test('a code spent by wrong attempts stops advertising pairing', () async {
+      final a = await dev('A');
+      final b = await dev('B');
+      final code = a.host.showCode().code;
+      await _settle();
+      expect(a.discovery.last.pairing, isTrue);
+      final wrong = ((int.parse(code) + 1) % 1000000).toString().padLeft(
+        6,
+        '0',
+      );
+      for (var i = 0; i < 4; i++) {
+        await b.host.pairByAddress('127.0.0.1', a.port, wrong);
+      }
+      await _settle();
+      expect(a.discovery.last.pairing, isTrue);
+      await b.host.pairByAddress('127.0.0.1', a.port, wrong);
+      await _settle();
+      expect(a.discovery.last.pairing, isFalse);
+    });
+
+    test('one entry per device id, the last one wins', () async {
+      final a = await dev('A');
+      final b = await dev('B');
+      await _pairRows(a, b); // B's row for A has no address
+      final views = <List<SyncDeviceView>>[];
+      b.host.devices.listen(views.add);
+      b.discovery.emit([a.found(port: await _deadPort()), a.found()]);
+      await _settle();
+      expect(views.last.single.online?.port, a.port);
+      expect(
+        (await b.host.sync(a.id, choose: _noClashes).toList()).last,
+        isA<SyncDone>(),
+      );
+    });
   });
 }
