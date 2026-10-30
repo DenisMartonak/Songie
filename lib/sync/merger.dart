@@ -84,8 +84,10 @@ class DbLocalView implements LocalView {
 /// Settles this device's changed rows ("mine") against a peer's ("theirs").
 ///
 /// Rows are matched per table by id. Rows changed on one side, or the same
-/// on both, are taken. On the playlist tables, a row both sides changed
-/// differently is a clash, and clashes are grouped per playlist for the
+/// on both, are taken. Two versions written by the same device never clash:
+/// they are that device's earlier and later writes (a peer sends back rows it
+/// applied from this device), so the higher clock wins. On the playlist
+/// tables, a row both sides changed differently is a clash, and clashes are grouped per playlist for the
 /// user to answer once; elsewhere the higher clock wins. Deleting a playlist
 /// on one side while the other made any live change to it is a clash of the
 /// whole playlist.
@@ -226,13 +228,22 @@ class Merger {
     return _hlc(a).compareTo(_hlc(b)) >= 0 ? a : b;
   }
 
+  /// Both versions were written by the same device, one after the other: not
+  /// concurrent, so the higher clock simply wins. This is how a device's own
+  /// earlier write comes back from a peer that applied it in the last sync.
+  static bool _sameOrigin((SyncRow?, SyncRow?) pair) {
+    final (a, b) = pair;
+    return a != null && b != null && a.originDevice == b.originDevice;
+  }
+
   /// Both sides changed the row differently. Two tombstones never clash, nor
-  /// does a merge tombstone.
+  /// does a merge tombstone, nor two versions from the same device.
   static bool _differ((SyncRow?, SyncRow?) pair) {
     final (a, b) = pair;
     return a != null &&
         b != null &&
         a.contentHash != b.contentHash &&
+        !_sameOrigin(pair) &&
         !(a.deleted && b.deleted) &&
         !_merged(a) &&
         !_merged(b);
@@ -258,10 +269,14 @@ class Merger {
     final merged = _merged(minePl) || _merged(theirPl);
     final mineDeleted = !merged && (minePl?.deleted ?? false);
     final theirsDeleted = !merged && (theirPl?.deleted ?? false);
+    // A live version paired with one from the same device is that device's
+    // older or newer write, not a change made against the deletion.
+    bool liveChange(SyncRow? r, (SyncRow?, SyncRow?) p) =>
+        r != null && !r.deleted && !_sameOrigin(p);
     final clash =
         pairs.any(_differ) ||
-        (mineDeleted && theirs.any((r) => !r.deleted)) ||
-        (theirsDeleted && mine.any((r) => !r.deleted));
+        (mineDeleted && pairs.any((p) => liveChange(p.$2, p))) ||
+        (theirsDeleted && pairs.any((p) => liveChange(p.$1, p)));
     if (!clash) return null;
     final named = [
       if (minePl != null && !mineDeleted) minePl,

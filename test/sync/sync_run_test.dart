@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart'
+    show BooleanExpressionOperators, Value, Variable;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/app_version.dart';
 import 'package:songies/data/database.dart';
@@ -64,6 +65,10 @@ class _FakeTimer implements Timer {
   void cancel() => _active = false;
 }
 
+/// How far every device's stamps run ahead of real time; moved forward to
+/// stand for time passing between edits.
+var _stampAhead = Duration.zero;
+
 /// One simulated device: database, stamp, server, responder and runner.
 class _Dev {
   _Dev._(this.name, this.identity, this.db, this.stamp, this.peers);
@@ -92,7 +97,10 @@ class _Dev {
       name,
       await testIdentity(root, name),
       db,
-      await SyncStamp.load(db),
+      await SyncStamp.load(
+        db,
+        nowMs: () => DateTime.now().add(_stampAhead).millisecondsSinceEpoch,
+      ),
       PeerRepository(db),
     );
     DateTime now() => DateTime.now().add(skew);
@@ -275,6 +283,34 @@ Future<void> _rename(_Dev d, String playlistId, String name) async {
   );
 }
 
+Future<void> _tombstone(_Dev d, String table, String id) async {
+  final st = await d.stamp.next();
+  await d.db.customUpdate(
+    'UPDATE $table SET deleted = 1, clock = ?, origin_device = ?, '
+    'local_seq = ? WHERE id = ?',
+    variables: [
+      Variable.withString(st.clock),
+      Variable.withString(st.originDevice),
+      Variable.withInt(st.localSeq),
+      Variable.withString(id),
+    ],
+    updates: {d.db.playlists, d.db.playlistEntries},
+  );
+}
+
+/// Deletes [playlistId] as the app does: its live entries, then itself.
+Future<void> _deletePlaylist(_Dev d, String playlistId) async {
+  final live =
+      await (d.db.select(d.db.playlistEntries)..where(
+            (e) => e.playlistId.equals(playlistId) & e.deleted.equals(false),
+          ))
+          .get();
+  for (final e in live) {
+    await _tombstone(d, 'playlist_entries', e.id);
+  }
+  await _tombstone(d, 'playlists', playlistId);
+}
+
 Future<List<Playlist>> _livePlaylists(_Dev d) =>
     (d.db.select(d.db.playlists)..where((p) => p.deleted.equals(false))).get();
 
@@ -285,6 +321,7 @@ void main() {
   final extra = <_Dev>[];
 
   setUp(() async {
+    _stampAhead = Duration.zero;
     a = await _Dev.create(root(), 'A');
     b = await _Dev.create(root(), 'B');
     await _pair(a, b);
@@ -473,6 +510,108 @@ void main() {
 
     expect(asked!.single.name, 'Shared');
     expect(await a.snap(), await b.snap());
+  });
+
+  group('edits after a sync do not clash with their own echo', () {
+    late String p;
+    late String e1;
+    setUp(() async {
+      p = await _playlist(a, 'Shared');
+      e1 = await _entry(a, p, await _track(a, title: 'One'));
+      await _entry(a, p, await _track(a, title: 'Two'));
+      _done(await _sync(a, b));
+    });
+
+    test('rename on A lands on B without asking', () async {
+      await _rename(a, p, 'Renamed');
+
+      _done(await _sync(a, b));
+
+      expect((await _livePlaylists(b)).single.name, 'Renamed');
+      expect(await a.snap(), await b.snap());
+    });
+
+    test('rename on B, synced by A, lands on A without asking', () async {
+      await _rename(b, p, 'Renamed');
+
+      _done(await _sync(a, b));
+
+      expect((await _livePlaylists(a)).single.name, 'Renamed');
+      expect(await a.snap(), await b.snap());
+    });
+
+    test('rename on A, synced by B, lands on B without asking', () async {
+      await _rename(a, p, 'Renamed');
+
+      _done(await _sync(b, a));
+
+      expect((await _livePlaylists(b)).single.name, 'Renamed');
+      expect(await a.snap(), await b.snap());
+    });
+
+    test('removing a song on A syncs without asking', () async {
+      await _tombstone(a, 'playlist_entries', e1);
+
+      _done(await _sync(a, b));
+
+      final onB = await (b.db.select(
+        b.db.playlistEntries,
+      )..where((x) => x.id.equals(e1))).getSingle();
+      expect(onB.deleted, isTrue);
+      expect(await a.snap(), await b.snap());
+    });
+
+    test('deleting the playlist on A deletes it on B without asking', () async {
+      await _deletePlaylist(a, p);
+
+      _done(await _sync(a, b));
+
+      expect(await _livePlaylists(b), isEmpty);
+      expect(await a.snap(), await b.snap());
+    });
+
+    test('edits on each side in turn never ask', () async {
+      // A minute or more between edit-and-sync rounds, so no recent stamp
+      // holds a watermark back (see the report's note on safeHigh).
+      Future<void> edit(_Dev d, String name) async {
+        _stampAhead += SyncStamp.pendingWindow + const Duration(seconds: 1);
+        await _rename(d, p, name);
+      }
+
+      for (var i = 0; i < 3; i++) {
+        await edit(a, 'A $i');
+        _done(await _sync(a, b));
+        await edit(b, 'B $i');
+        _done(await _sync(b, a));
+        await edit(a, 'A2 $i');
+        _done(await _sync(b, a));
+        await edit(b, 'B2 $i');
+        _done(await _sync(a, b));
+      }
+      expect((await _livePlaylists(a)).single.name, 'B2 2');
+      expect(await a.snap(), await b.snap());
+    });
+
+    test('a real concurrent edit on both sides still asks', () async {
+      await _rename(a, p, 'From A');
+      await _rename(b, p, 'From B');
+      List<PlaylistClash>? asked;
+
+      _done(
+        await _sync(
+          a,
+          b,
+          choose: (c) async {
+            asked = c;
+            return {p: Resolution.keepMine};
+          },
+        ),
+      );
+
+      expect(asked!.single.playlistId, p);
+      expect((await _livePlaylists(b)).single.name, 'From A');
+      expect(await a.snap(), await b.snap());
+    });
   });
 
   test('choose returning null cancels and changes nothing', () async {

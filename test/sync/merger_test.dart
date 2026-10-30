@@ -189,6 +189,44 @@ void main() {
     expect(r.settled, unorderedEquals([...mine, ...theirs]));
   });
 
+  group('two versions from the same device', () {
+    test('never clash and the higher clock wins', () {
+      // My rename, against the peer's echo of my earlier version.
+      final mine = pl('p', name: 'Renamed', clock: clk(500, 'me'));
+      final echo = pl('p', clock: clk(100, 'me'));
+      final moved = en('e1', 'p', position: 'b0', clock: clk(600, 'peer'));
+      final theirMove = en('e1', 'p', position: 'c0', clock: clk(700, 'peer'));
+      final r = merger.merge([mine, moved], [echo, theirMove]);
+      expect(r.clashes, isEmpty);
+      expect(r.settled, unorderedEquals([mine, theirMove]));
+    });
+
+    test('a deletion against the echo of the live rows does not clash', () {
+      final mine = [
+        pl('p', deleted: true, clock: clk(500, 'me')),
+        en('e1', 'p', deleted: true, clock: clk(500, 'me')),
+      ];
+      final echo = [pl('p', clock: clk(100, 'me')), en('e1', 'p')];
+      final r = merger.merge(mine, echo);
+      expect(r.clashes, isEmpty);
+      expect(r.settled, unorderedEquals(mine));
+    });
+
+    test('a deletion against a real live change still clashes', () {
+      final mine = [
+        pl('p', deleted: true, clock: clk(500, 'me')),
+        en('e1', 'p', deleted: true, clock: clk(500, 'me')),
+      ];
+      final theirs = [
+        pl('p', clock: clk(100, 'me')),
+        en('e1', 'p'),
+        en('e2', 'p', track: 't2', clock: clk(400)),
+      ];
+      final c = merger.merge(mine, theirs).clashes.single;
+      expect(c.mineDeleted, isTrue);
+    });
+  });
+
   test('merge of identical sets has no clashes', () {
     final rows = [pl('p'), en('e1', 'p'), th('h1', 'Dark', clk(300))];
     final copies = [
