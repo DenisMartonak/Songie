@@ -74,6 +74,10 @@ class _Run {
   final _addedTracks = <String>{};
   var _written = 0;
 
+  /// Tracks and playlists merged away in this apply, whose references are
+  /// rewritten once every incoming row is written (see [_rewriteRefs]).
+  final _merged = <(SyncTable, String)>{};
+
   Future<ApplyReport> apply(List<SyncRow> rows) async {
     final sorted = [...rows]
       ..sort((a, b) {
@@ -95,6 +99,7 @@ class _Run {
     for (final r in sorted) {
       await _applyOne(r);
     }
+    await _rewriteRefs();
     return ApplyReport(
       written: _written,
       playlistIds: _playlistIds,
@@ -133,20 +138,35 @@ class _Run {
       case SyncTable.tracks:
         if (!existed && !row.deleted) _addedTracks.add(row.id);
         final into = row.data['mergedInto'] as String?;
-        if (into != null) {
-          final end = await _end(_db.tracks, into);
-          if (end != row.id) await _trackRefs(row.id, end);
-        }
+        if (into != null) _merged.add((SyncTable.tracks, row.id));
       case SyncTable.playlists:
         final into = row.data['mergedInto'] as String?;
-        if (into != null) {
-          final end = await _end(_db.playlists, into);
-          if (end != row.id) await _playlistRefs(row.id, end);
-        }
+        if (into != null) _merged.add((SyncTable.playlists, row.id));
       case SyncTable.lyrics:
-        final end = await _end(_db.tracks, row.id);
-        if (end != row.id) await _moveLyrics(row.id, end);
+        // Lyrics of a track merged earlier move with the track.
+        _merged.add((SyncTable.tracks, row.id));
       default:
+    }
+  }
+
+  /// Points references to every merged-away track and playlist at the end of
+  /// its chain. This runs after all incoming rows are written: a reference
+  /// rewritten earlier would get a fresh clock and beat an incoming row with
+  /// the same id (the survivor's own lyrics, say) on one side only.
+  Future<void> _rewriteRefs() async {
+    final merged = _merged.toList()
+      ..sort((a, b) {
+        final t = _order.indexOf(a.$1) - _order.indexOf(b.$1);
+        return t != 0 ? t : a.$2.compareTo(b.$2);
+      });
+    for (final (table, from) in merged) {
+      if (table == SyncTable.tracks) {
+        final to = await _end(_db.tracks, from);
+        if (to != from) await _trackRefs(from, to);
+      } else {
+        final to = await _end(_db.playlists, from);
+        if (to != from) await _playlistRefs(from, to);
+      }
     }
   }
 
@@ -316,12 +336,12 @@ class _Run {
       _with(loser, {..._noTrackKeys, 'deleted': true, 'mergedInto': survivor}),
     );
     _addedTracks.remove(loser.id);
-    await _trackRefs(loser.id, survivor);
+    _merged.add((SyncTable.tracks, loser.id));
   }
 
   Future<void> _mergePlaylist(SyncRow loser, String survivor) async {
     await _restamp(_with(loser, {'deleted': true, 'mergedInto': survivor}));
-    await _playlistRefs(loser.id, survivor);
+    _merged.add((SyncTable.playlists, loser.id));
   }
 
   /// Points every reference to track [from] at track [to].
@@ -482,7 +502,7 @@ class _Run {
   Future<void> _put(SyncRow row, int seq) async {
     await _db
         .into(_info(row.table))
-        .insertOnConflictUpdate(_explicitNulls(row.toInsertable(seq)));
+        .insertOnConflictUpdate(row.toInsertable(seq));
     _written++;
     if (row.table == SyncTable.playlists) _playlistIds.add(row.id);
     if (row.table == SyncTable.playlistEntries) {
@@ -498,22 +518,6 @@ class _Run {
       st.localSeq,
     );
   }
-
-  /// A data class writes its null fields as absent, which on update would
-  /// keep the old value; a companion built with `nullToAbsent: false`
-  /// writes them as null.
-  static Insertable<DataClass> _explicitNulls(Insertable<DataClass> d) =>
-      switch (d) {
-        Track t => t.toCompanion(false),
-        Playlist p => p.toCompanion(false),
-        PlaylistEntry e => e.toCompanion(false),
-        YtSeenData y => y.toCompanion(false),
-        ThemeRow t => t.toCompanion(false),
-        FontRow f => f.toCompanion(false),
-        LyricsRow l => l.toCompanion(false),
-        ListenRow l => l.toCompanion(false),
-        _ => d,
-      };
 
   static SyncRow _with(SyncRow r, Map<String, Object?> changes) =>
       SyncRow(r.table, {...r.data, ...changes});

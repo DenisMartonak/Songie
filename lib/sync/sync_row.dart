@@ -69,18 +69,22 @@ class SyncRow {
     Map<String, Object?>.from(json['data']! as Map),
   );
 
-  /// The row as a drift data class, ready to insert with a fresh [localSeq].
+  /// The row as a drift companion with a fresh [localSeq], ready to insert or
+  /// upsert. Every column is present, nulls included, so an upsert also sets
+  /// columns back to null (a data class would leave its nulls out).
   Insertable<DataClass> toInsertable(int localSeq) {
     final json = <String, dynamic>{...data, 'localSeq': localSeq};
     return switch (table) {
-      SyncTable.tracks => Track.fromJson(json),
-      SyncTable.playlists => Playlist.fromJson(json),
-      SyncTable.playlistEntries => PlaylistEntry.fromJson(json),
-      SyncTable.ytSeen => YtSeenData.fromJson(json),
-      SyncTable.themes => ThemeRow.fromJson(json),
-      SyncTable.fonts => FontRow.fromJson(json),
-      SyncTable.lyrics => LyricsRow.fromJson(json),
-      SyncTable.listens => ListenRow.fromJson(json),
+      SyncTable.tracks => Track.fromJson(json).toCompanion(false),
+      SyncTable.playlists => Playlist.fromJson(json).toCompanion(false),
+      SyncTable.playlistEntries => PlaylistEntry.fromJson(
+        json,
+      ).toCompanion(false),
+      SyncTable.ytSeen => YtSeenData.fromJson(json).toCompanion(false),
+      SyncTable.themes => ThemeRow.fromJson(json).toCompanion(false),
+      SyncTable.fonts => FontRow.fromJson(json).toCompanion(false),
+      SyncTable.lyrics => LyricsRow.fromJson(json).toCompanion(false),
+      SyncTable.listens => ListenRow.fromJson(json).toCompanion(false),
     };
   }
 }

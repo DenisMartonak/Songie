@@ -356,6 +356,27 @@ void main() {
     },
   );
 
+  test('lyrics on both sides of a merged pair end the same', () async {
+    await addTrack(db, 'b', video: 'v');
+    await addLyrics(db, 'b', 'Y');
+    await addTrack(peer, 'a', video: 'v', clock: clk(9));
+    await addLyrics(peer, 'a', 'X');
+    final fromPeer = await rowsOf(peer);
+    final fromMe = await rowsOf(db);
+
+    await applier.apply(fromPeer);
+    final peerStamp = await SyncStamp.load(peer, nowMs: () => _nowMs);
+    await RowApplier(peer, peerStamp, now: () => _now).apply(fromMe);
+
+    for (final d in [db, peer]) {
+      final lyrics = {for (final l in await d.select(d.lyrics).get()) l.id: l};
+      expect(lyrics['a']!.body, 'X');
+      expect(lyrics['a']!.deleted, isFalse);
+      expect(lyrics['b']!.deleted, isTrue);
+    }
+    expect(await snapshot(peer), await snapshot(db));
+  });
+
   test('local playlist keeps the same song twice', () async {
     await addTrack(db, 't');
     await addPlaylist(db, 'pl');
