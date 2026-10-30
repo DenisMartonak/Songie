@@ -65,6 +65,11 @@ class _Device {
   }
 }
 
+const _devA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const _devB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const _devFake = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+const _devSpy = '55555555-5555-4555-8555-555555555555';
+
 /// A code that is not [code].
 String _other(String code) =>
     ((int.parse(code) + 1) % 1000000).toString().padLeft(6, '0');
@@ -91,8 +96,8 @@ void main() {
 
   setUp(() async {
     now = DateTime(2026, 10, 30, 12);
-    a = await _Device.create(root, 'dev-a');
-    b = await _Device.create(root, 'dev-b', now: () => now);
+    a = await _Device.create(root, _devA);
+    b = await _Device.create(root, _devB, now: () => now);
     await b.serve();
   });
   tearDown(() async {
@@ -107,20 +112,20 @@ void main() {
     final outcome = await a.pairing.pairWith('127.0.0.1', b.port, code.code);
     expect(outcome, PairOutcome.paired);
 
-    final onA = await a.peers.byId('dev-b');
-    final onB = await b.peers.byId('dev-a');
+    final onA = await a.peers.byId(_devB);
+    final onB = await b.peers.byId(_devA);
     expect(onA, isNotNull);
     expect(onB, isNotNull);
     expect(onA!.certFingerprint, b.identity.fingerprint);
     expect(onB!.certFingerprint, a.identity.fingerprint);
-    expect(onA.name, 'Name of dev-b');
-    expect(onB.name, 'Name of dev-a');
+    expect(onA.name, 'Name of $_devB');
+    expect(onB.name, 'Name of $_devA');
     expect(onA.pairKey, onB.pairKey);
     expect(base64.decode(onA.pairKey), hasLength(32));
     expect(onA.host, '127.0.0.1');
     expect(onA.port, b.port);
-    expect((await aSaw).deviceId, 'dev-b');
-    expect((await bSaw).deviceId, 'dev-a');
+    expect((await aSaw).deviceId, _devB);
+    expect((await bSaw).deviceId, _devA);
 
     // The code is used up by a successful pairing.
     expect(
@@ -142,8 +147,8 @@ void main() {
       await a.pairing.pairWith('127.0.0.1', b.port, code.code),
       PairOutcome.noCodeShowing,
     );
-    expect(await a.peers.byId('dev-b'), isNull);
-    expect(await b.peers.byId('dev-a'), isNull);
+    expect(await a.peers.byId(_devB), isNull);
+    expect(await b.peers.byId(_devA), isNull);
   });
 
   test('a wrong code then the right one pairs', () async {
@@ -168,7 +173,7 @@ void main() {
         await c.postJson('/pair/start', {
           'msg': base64.encode(offCurve),
           'id_a': a.identity.fingerprint,
-          'device_id': 'dev-a',
+          'device_id': _devA,
           'name': 'A',
         });
         fail('expected a 400');
@@ -179,6 +184,128 @@ void main() {
     expect(code.usable, isFalse);
   });
 
+  group('exchanges by hand', () {
+    late SyncClient c;
+    setUp(() => c = SyncClient.open(host: '127.0.0.1', port: b.port));
+    tearDown(() => c.close());
+
+    Future<Map<String, dynamic>> start(String code, {String id = _devA}) async {
+      final fp = await c.fetchFingerprint();
+      final spake = Spake2.initiator(
+        pairingScalar(code),
+        idA: utf8.encode(a.identity.fingerprint),
+        idB: utf8.encode(fp),
+      );
+      final reply = await c.postJson('/pair/start', {
+        'msg': base64.encode(spake.message),
+        'id_a': a.identity.fingerprint,
+        'device_id': id,
+        'name': 'A',
+      });
+      final keys = spake.finish(base64.decode(reply['msg'] as String));
+      expect(keys.verifyPeer(base64.decode(reply['confirm'] as String)), true);
+      return {'confirm': base64.encode(keys.myConfirm)};
+    }
+
+    Future<int> finish(Map<String, dynamic> body) async {
+      try {
+        await c.postJson('/pair/finish', body);
+        return 200;
+      } on SyncNetError catch (e) {
+        return e.status!;
+      }
+    }
+
+    test('a stray finish does not cancel the real exchange', () async {
+      final code = b.pairing.showCode();
+      final real = await start(code.code);
+      final stray = {'confirm': base64.encode(List.filled(32, 0))};
+      expect(await finish(stray), 403);
+      expect(await finish({'confirm': 'AA=='}), 403);
+      expect(await finish(real), 200);
+      expect(await b.peers.byId(_devA), isNotNull);
+    });
+
+    test('a second start replaces the pending exchange', () async {
+      final code = b.pairing.showCode();
+      final first = await start(code.code);
+      final second = await start(code.code);
+      expect(await finish(first), 403);
+      expect(await b.peers.byId(_devA), isNull);
+      expect(await finish(second), 200);
+      expect(await b.peers.byId(_devA), isNotNull);
+    });
+
+    test('a finish after the code expires is refused', () async {
+      final code = b.pairing.showCode();
+      final pending = await start(code.code);
+      now = now.add(PairingCode.lifetime);
+      expect(await finish(pending), 403);
+      expect(await b.peers.byId(_devA), isNull);
+    });
+
+    test('the last attempt can still finish', () async {
+      final code = b.pairing.showCode();
+      for (var i = 0; i < PairingCode.maxAttempts - 1; i++) {
+        code.chargeAttempt();
+      }
+      final pending = await start(code.code);
+      expect(code.usable, isFalse);
+      expect(await finish(pending), 200);
+    });
+
+    test('a malformed or own device id is refused', () async {
+      final code = b.pairing.showCode();
+      for (final id in ['not-a-uuid', _devB, _devA.toUpperCase(), '']) {
+        await expectLater(
+          start(code.code, id: id),
+          throwsA(isA<SyncNetError>().having((e) => e.status, 'status', 400)),
+        );
+      }
+      expect(code.usable, isTrue, reason: 'rejected before the exchange');
+    });
+  });
+
+  test('the initiator refuses a malformed responder device id', () async {
+    final fake = await _Device.create(root, _devFake);
+    addTearDown(() async {
+      await fake.server?.stop();
+      await fake.db.close();
+    });
+    final server = SyncServer(fake.identity, RequestVerifier(fake.peers));
+    var finishes = 0;
+    server.route('POST', '/pair/start', (req, _) async {
+      final body = SyncServer.jsonBody(req);
+      // An honest exchange with the right code, but a bad device id.
+      final spake = Spake2.responder(
+        pairingScalar('135790'),
+        idA: utf8.encode(body['id_a'] as String),
+        idB: utf8.encode(fake.identity.fingerprint),
+      );
+      final keys = spake.finish(base64.decode(body['msg'] as String));
+      await sendJson(req, {
+        'msg': base64.encode(spake.message),
+        'confirm': base64.encode(keys.myConfirm),
+        'device_id': 'x\r\ny',
+        'name': 'Fake',
+      });
+    }, open: true);
+    server.route('POST', '/pair/finish', (req, _) async {
+      finishes++;
+      await sendJson(req, {'ok': true});
+    }, open: true);
+    final port = await server.start(
+      preferredPort: 0,
+      address: InternetAddress.loopbackIPv4,
+    );
+    fake.server = server;
+    expect(
+      await a.pairing.pairWith('127.0.0.1', port, '135790'),
+      PairOutcome.wrongCode,
+    );
+    expect(finishes, 0);
+  });
+
   test('expired code is refused', () async {
     final code = b.pairing.showCode();
     now = now.add(PairingCode.lifetime);
@@ -186,7 +313,7 @@ void main() {
       await a.pairing.pairWith('127.0.0.1', b.port, code.code),
       PairOutcome.noCodeShowing,
     );
-    expect(await b.peers.byId('dev-a'), isNull);
+    expect(await b.peers.byId(_devA), isNull);
   });
 
   test('no code showing and hidden code are refused', () async {
@@ -215,7 +342,7 @@ void main() {
   test('a fake device showing pairing learns nothing usable', () async {
     // The attacker does not know the code the user types, so it answers as
     // an honest responder with a guess.
-    final fake = await _Device.create(root, 'dev-fake');
+    final fake = await _Device.create(root, _devFake);
     addTearDown(() async {
       await fake.server?.stop();
       await fake.db.close();
@@ -234,7 +361,7 @@ void main() {
       await sendJson(req, {
         'msg': base64.encode(guess.message),
         'confirm': base64.encode(keys.myConfirm),
-        'device_id': 'dev-fake',
+        'device_id': _devFake,
         'name': 'Totally B',
       });
     }, open: true);
@@ -254,7 +381,7 @@ void main() {
     );
     expect(recorded, isNotNull);
     expect(finishes, 0, reason: 'the initiator never sends its confirmation');
-    expect(await a.peers.byId('dev-fake'), isNull);
+    expect(await a.peers.byId(_devFake), isNull);
 
     // By construction: the initiator's confirmation depends on the
     // responder's own random scalar, so knowing the right code and the
@@ -279,7 +406,7 @@ void main() {
 
   test('the code is never sent in clear', () async {
     // The start message carries only the SPAKE2 share, never the code.
-    final fake = await _Device.create(root, 'dev-spy');
+    final fake = await _Device.create(root, _devSpy);
     addTearDown(() async {
       await fake.server?.stop();
       await fake.db.close();

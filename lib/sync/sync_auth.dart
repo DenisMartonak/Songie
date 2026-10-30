@@ -53,12 +53,12 @@ class RequestVerifier {
   final _seen = <String, DateTime>{};
 
   Future<VerifyResult> verify(HttpRequest req, String bodyHash) async {
-    final device = req.headers.value(headerDevice);
+    final device = _single(req, headerDevice);
     final peer = device == null ? null : await _peers.byId(device);
     if (peer == null) return VerifyResult.unknownDevice;
 
-    final timeMs = int.tryParse(req.headers.value(headerTime) ?? '');
-    final sig = req.headers.value(headerSig);
+    final timeMs = int.tryParse(_single(req, headerTime) ?? '');
+    final sig = _single(req, headerSig);
     if (timeMs == null || sig == null) return VerifyResult.badSignature;
     final now = _now();
     final skew = now.millisecondsSinceEpoch - timeMs;
@@ -85,6 +85,12 @@ class RequestVerifier {
     if (_seen.containsKey(sig)) return VerifyResult.replay;
     _seen[sig] = now;
     return VerifyResult.ok;
+  }
+
+  /// The header's only value; null when it is missing or repeated.
+  static String? _single(HttpRequest req, String name) {
+    final values = req.headers[name];
+    return values != null && values.length == 1 ? values.single : null;
   }
 
   static bool _equal(List<int> a, List<int> b) {

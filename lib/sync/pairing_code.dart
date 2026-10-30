@@ -26,8 +26,11 @@ class PairingCode {
 
   final String code;
 
-  bool get usable =>
-      _attempts < maxAttempts && _now().difference(_created) < lifetime;
+  bool get usable => _attempts < maxAttempts && !expired;
+
+  /// Past [lifetime], regardless of attempts. An exchange started on the last
+  /// attempt may still finish while the code is not [expired].
+  bool get expired => _now().difference(_created) >= lifetime;
 
   /// Charges one pairing attempt against this code.
   void chargeAttempt() => _attempts++;

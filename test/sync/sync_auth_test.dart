@@ -140,6 +140,9 @@ void main() {
         final body = SyncServer.jsonBody(req);
         await sendJson(req, {'got': body['value'] as int});
       });
+      server.route('POST', '/open', (req, peerId) async {
+        await sendJson(req, {'keys': SyncServer.jsonBody(req).keys.length});
+      }, open: true);
       server.route('GET', '/hello', (req, peerId) async {
         seen.add(peerId);
         await sendJson(req, {'hi': true});
@@ -252,6 +255,75 @@ void main() {
       expect(e.kind, SyncNetKind.server);
       expect(e.status, 400);
       expect(e.message, contains('bad_request'));
+    });
+
+    Future<int> raw(
+      String method,
+      String path, {
+      List<int> body = const [],
+      void Function(HttpHeaders h)? headers,
+    }) async {
+      final http = HttpClient(context: SecurityContext(withTrustedRoots: false))
+        ..badCertificateCallback = (_, _, _) => true;
+      addTearDown(() => http.close(force: true));
+      final req = await http.openUrl(
+        method,
+        Uri.parse('https://127.0.0.1:$port$path'),
+      );
+      headers?.call(req.headers);
+      req.add(body);
+      final res = await req.close();
+      await res.drain<void>();
+      return res.statusCode;
+    }
+
+    test('malformed JSON bytes and non-object JSON are a 400', () async {
+      expect(await raw('POST', '/open', body: utf8.encode('{"schema_')), 400);
+      expect(await raw('POST', '/open', body: [0xff, 0xfe, 0x7b]), 400);
+      expect(await raw('POST', '/open', body: utf8.encode('[8]')), 400);
+      expect(
+        await raw(
+          'POST',
+          '/open',
+          body: utf8.encode('{"schema_version":$syncSchemaVersion}'),
+        ),
+        200,
+      );
+    });
+
+    test('repeated signature headers are refused, not a 500', () async {
+      // dart:io's client folds repeated headers into one line, so this
+      // writes the request by hand, one header line per value.
+      final t = DateTime.now().millisecondsSinceEpoch;
+      final sig = signRequest(
+        _key,
+        method: 'GET',
+        pathAndQuery: '/hello2',
+        timeMs: t,
+        bodyHash: bodyHashOf(const []),
+      );
+      server.route('GET', '/hello2', (req, _) => sendJson(req, {}));
+      for (final repeated in [headerDevice, headerTime, headerSig]) {
+        final socket = await SecureSocket.connect(
+          '127.0.0.1',
+          port,
+          onBadCertificate: (_) => true,
+        );
+        socket.write(
+          'GET /hello2 HTTP/1.1\r\n'
+          'host: 127.0.0.1\r\n'
+          'connection: close\r\n'
+          '$headerDevice: dev-b\r\n'
+          '$headerTime: $t\r\n'
+          '$headerSig: $sig\r\n'
+          '$repeated: other\r\n'
+          '\r\n',
+        );
+        final reply = await utf8.decoder.bind(socket).join();
+        socket.destroy();
+        expect(reply, startsWith('HTTP/1.1 401'), reason: repeated);
+      }
+      expect(seen, isEmpty);
     });
 
     test('unknown route is a 404', () async {

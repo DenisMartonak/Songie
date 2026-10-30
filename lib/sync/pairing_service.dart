@@ -46,6 +46,15 @@ class PairingService {
   bool _finishing = false;
 
   static final _fingerprint = RegExp(r'^[0-9a-f]{64}$');
+
+  /// Device ids are lowercase UUID v4 strings (`newId()`).
+  static final _deviceIdPattern = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+  );
+
+  bool _validPeerId(String id) =>
+      _deviceIdPattern.hasMatch(id) && id != _myDeviceId;
+
   static const _maxNameLength = 64;
 
   /// Peers paired on either side, as they are saved.
@@ -82,7 +91,7 @@ class PairingService {
     final idA = body['id_a'] as String;
     final deviceId = body['device_id'] as String;
     final name = _cleanName(body['name'] as String, deviceId);
-    if (!_fingerprint.hasMatch(idA) || deviceId.isEmpty) {
+    if (!_fingerprint.hasMatch(idA) || !_validPeerId(deviceId)) {
       throw const FormatException('bad pairing request');
     }
 
@@ -105,14 +114,21 @@ class PairingService {
   }
 
   Future<void> _finish(HttpRequest req, String? _) async {
+    final code = _code;
+    if (code == null || code.expired) {
+      _pending = null;
+      return sendJson(req, {'error': 'no_code'}, status: HttpStatus.forbidden);
+    }
     final pending = _pending;
-    _pending = null;
     final confirm = base64.decode(
       SyncServer.jsonBody(req)['confirm'] as String,
     );
-    if (pending == null || _code == null || !pending.keys.verifyPeer(confirm)) {
+    // A wrong confirm leaves the pending exchange alone: a 32-byte MAC cannot
+    // be guessed, and dropping it would let anyone cancel a real pairing.
+    if (pending == null || !pending.keys.verifyPeer(confirm)) {
       return sendJson(req, {'error': 'auth'}, status: HttpStatus.forbidden);
     }
+    _pending = null;
     _finishing = true;
     try {
       final peer = _peerRow(
@@ -174,7 +190,7 @@ class PairingService {
         }
         deviceId = reply['device_id'] as String;
         name = _cleanName(reply['name'] as String, deviceId);
-        if (deviceId.isEmpty) return PairOutcome.wrongCode;
+        if (!_validPeerId(deviceId)) return PairOutcome.wrongCode;
       } on FormatException {
         return PairOutcome.wrongCode;
       } on TypeError {

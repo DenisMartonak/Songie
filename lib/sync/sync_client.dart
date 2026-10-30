@@ -266,16 +266,18 @@ class SyncClient {
   Stream<List<int>> _guardStream(Stream<List<int>> s) =>
       s.handleError((Object e) => throw _translate(e));
 
-  Object _translate(Object e) {
+  SyncNetError _translate(Object e) {
     if (e is SyncNetError) return e;
     if (_sawWrongCertificate) {
       return SyncNetError(SyncNetKind.wrongCertificate, 'certificate mismatch');
     }
     return switch (e) {
       TimeoutException() => SyncNetError(SyncNetKind.timeout, 'timed out'),
-      SocketException() || HandshakeException() || HttpException() =>
-        SyncNetError(SyncNetKind.unreachable, e.runtimeType.toString()),
-      _ => e,
+      IOException() => SyncNetError(
+        SyncNetKind.unreachable,
+        e.runtimeType.toString(),
+      ),
+      _ => SyncNetError(SyncNetKind.server, e.runtimeType.toString()),
     };
   }
 }

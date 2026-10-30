@@ -156,6 +156,9 @@ class SyncServer {
       await _error(req, HttpStatus.badRequest, 'bad_request');
     } on StateError {
       await _error(req, HttpStatus.badRequest, 'bad_request');
+    } on HttpException {
+      // For example a repeated header that must be single.
+      await _error(req, HttpStatus.badRequest, 'bad_request');
     } catch (e) {
       AppLog.w('Sync request ${req.method} ${req.uri.path} failed', e);
       await _error(req, HttpStatus.internalServerError, 'server');
