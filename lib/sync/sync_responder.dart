@@ -7,6 +7,7 @@ import '../data/database.dart';
 import '../data/sync_stamp.dart';
 import '../downloads/download_repository.dart';
 import 'change_feed.dart';
+import 'file_transfer.dart';
 import 'peer_repository.dart';
 import 'row_applier.dart';
 import 'sync_progress.dart';
@@ -58,13 +59,20 @@ class ResponderDone extends ResponderState {
 /// - `POST /apply/commit {sync_id}` applies every staged row in one
 ///   transaction → `{written, playlists_changed, songs_added}`
 /// - `POST /commit {sync_id, initiator_high, responder_high}` saves the
-///   watermarks and ends the session; `responder_high` must be the high
-///   `/changes` served in this session (409 `high_mismatch` otherwise)
+///   watermarks and moves the session to its files phase; `responder_high`
+///   must be the high `/changes` served in this session (409 `high_mismatch`
+///   otherwise)
+/// - files phase, with [FileTransfer]: `GET /files/missing` → `{files}`,
+///   `POST /files/have {files, pushing}` → `{files}`,
+///   `GET /files/<kind>/<name>` and `PUT /files/<kind>/<name>?ext=&from=&total=`
+/// - `POST /files/done {sync_id}` ends the session (shows [ResponderDone])
 /// - `POST /session/abort {sync_id}`, `POST /unpair`
 ///
-/// A step of a session that is not open (or belongs to another peer) gets a
-/// 409 `no_session`. A session idle for [idleTimeout] is dropped with its
-/// staged rows.
+/// A step of a session that is not open (or belongs to another peer, or is
+/// not in that step's phase) gets a 409 `no_session`; so do file routes
+/// outside the files phase of the asking peer's session. A session idle for
+/// [idleTimeout] is dropped with its staged rows; one in its files phase is
+/// finished instead.
 class SyncResponder {
   SyncResponder({
     required this._db,
@@ -73,6 +81,7 @@ class SyncResponder {
     required this._myDeviceId,
     required this._myName,
     required this._downloads,
+    this._files,
     this._runningLocally = _never,
     this._now = DateTime.now,
     this._timer = Timer.new,
@@ -87,6 +96,7 @@ class SyncResponder {
   final String _myDeviceId;
   final String Function() _myName;
   final DownloadRepository _downloads;
+  final FileTransfer? _files;
   final bool Function() _runningLocally;
   final DateTime Function() _now;
   final Timer Function(Duration, void Function()) _timer;
@@ -108,6 +118,13 @@ class SyncResponder {
     s.route('POST', '/apply/part', _part);
     s.route('POST', '/apply/commit', _applyCommit);
     s.route('POST', '/commit', _commit);
+    if (_files != null) {
+      s.route('GET', '/files/missing', _filesMissing);
+      s.route('POST', '/files/have', _filesHave);
+      s.route('GET', '/files/', _fileGet);
+      s.route('PUT', '/files/', _filePut);
+    }
+    s.route('POST', '/files/done', _filesDone);
     s.route('POST', '/session/abort', _abort);
     s.route('POST', '/unpair', _unpair);
   }
@@ -243,8 +260,80 @@ class SyncResponder {
       received: initiatorHigh,
       at: _now(),
     );
-    _end(s);
+    s.committed = true;
+    if (_files != null) _emit(Receiving(SyncStage.files, 0, 0));
     await sendJson(req, {'ok': true});
+  }
+
+  // --- Files phase ----------------------------------------------------------
+
+  /// The asking peer's session, when it is in its files phase.
+  _Session? _filesSession(String? peerId) {
+    final s = _session;
+    if (s == null || s.peerId != peerId || !s.committed) return null;
+    _touch(s);
+    return s;
+  }
+
+  Future<void> _filesMissing(HttpRequest req, String? peerId) async {
+    if (_filesSession(peerId) == null) return _noSession(req);
+    await sendJson(req, {
+      'files': [for (final r in await _files!.needs()) r.toWire()],
+    });
+  }
+
+  Future<void> _filesHave(HttpRequest req, String? peerId) async {
+    final s = _filesSession(peerId);
+    if (s == null) return _noSession(req);
+    final body = SyncServer.jsonBody(req);
+    final offered = await _files!.offer(body['files'] as List);
+    final pushing = body['pushing'];
+    s.filesTotal =
+        offered.length + (pushing is int && pushing > 0 ? pushing : 0);
+    _emit(Receiving(SyncStage.files, s.filesHandled.length, s.filesTotal));
+    await sendJson(req, {'files': offered});
+  }
+
+  Future<void> _fileGet(HttpRequest req, String? peerId) =>
+      _transfer(req, peerId, received: false);
+
+  Future<void> _filePut(HttpRequest req, String? peerId) =>
+      _transfer(req, peerId, received: true);
+
+  /// Sends or receives one file; the session does not time out meanwhile.
+  Future<void> _transfer(
+    HttpRequest req,
+    String? peerId, {
+    required bool received,
+  }) async {
+    final s = _filesSession(peerId);
+    if (s == null) return _noSession(req);
+    final ref = FileTransfer.refOf(req.uri).toString();
+    s.idle?.cancel();
+    try {
+      final ok = received
+          ? await _files!.accept(req)
+          : await _files!.serve(req);
+      if (!identical(_session, s)) return;
+      // A retried file counts once.
+      s.filesHandled.add(ref);
+      if (ok && received) s.filesReceived++;
+      _emit(Receiving(SyncStage.files, s.filesHandled.length, s.filesTotal));
+    } finally {
+      if (identical(_session, s)) _touch(s);
+    }
+  }
+
+  Future<void> _filesDone(HttpRequest req, String? peerId) async {
+    final s = _open(req, peerId, committed: true);
+    if (s == null) return _noSession(req);
+    await _finish(s);
+    await sendJson(req, {'ok': true});
+  }
+
+  /// Ends [s] after its files phase: queues downloads and shows the summary.
+  Future<void> _finish(_Session s) async {
+    _end(s);
     try {
       await _downloads.queueNewInEnabled();
     } catch (e) {
@@ -256,7 +345,7 @@ class SyncResponder {
           peerName: s.peerName,
           playlistsChanged: s.playlistsChanged,
           songsAdded: s.songsAdded,
-          filesCopied: 0,
+          filesCopied: s.filesReceived,
         ),
       ),
     );
@@ -285,10 +374,14 @@ class SyncResponder {
 
   // --- Sessions -------------------------------------------------------------
 
-  /// The open session named by the request's `sync_id`, if it is [peerId]'s.
-  _Session? _open(HttpRequest req, String? peerId) {
+  /// The open session named by the request's `sync_id`, if it is [peerId]'s
+  /// and in the phase [committed] asks for.
+  _Session? _open(HttpRequest req, String? peerId, {bool committed = false}) {
     final s = _session;
-    if (s == null || s.peerId != peerId || s.syncId != _syncId(req)) {
+    if (s == null ||
+        s.peerId != peerId ||
+        s.syncId != _syncId(req) ||
+        s.committed != committed) {
       return null;
     }
     _touch(s);
@@ -301,6 +394,11 @@ class SyncResponder {
     s.idle = _timer(idleTimeout, () {
       if (!identical(_session, s)) return;
       AppLog.w('Sync session with ${s.peerName} timed out');
+      if (s.committed) {
+        // Its rows are in; only files were left.
+        unawaited(_finish(s));
+        return;
+      }
       _session = null;
       _emit(const Idle());
     });
@@ -342,5 +440,11 @@ class _Session {
   List<SyncRow> staged = [];
   int playlistsChanged = 0;
   int songsAdded = 0;
+
+  /// Set once `/commit` saved the watermarks: only files are left.
+  bool committed = false;
+  final filesHandled = <String>{};
+  int filesTotal = 0;
+  int filesReceived = 0;
   Timer? idle;
 }

@@ -112,10 +112,11 @@ class FontService {
   Future<List<FontRow>> _liveRows() =>
       (_db.select(_db.fonts)..where((f) => f.deleted.equals(false))).get();
 
-  /// Registers every stored font; a missing or unreadable file is logged and
-  /// skipped.
+  /// Registers every stored font not registered yet; a missing or unreadable
+  /// file is logged and skipped.
   Future<void> loadImported() async {
     for (final row in await _liveRows()) {
+      if (_registered.contains(row.family)) continue;
       final file = File(p.join(_fontsDir.path, '${row.fileHash}.${row.ext}'));
       try {
         if (!await file.exists()) {

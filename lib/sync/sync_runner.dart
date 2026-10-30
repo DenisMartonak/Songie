@@ -7,6 +7,7 @@ import '../data/database.dart';
 import '../data/sync_stamp.dart';
 import '../downloads/download_repository.dart';
 import 'change_feed.dart';
+import 'file_transfer.dart';
 import 'merger.dart';
 import 'peer_repository.dart';
 import 'row_applier.dart';
@@ -20,9 +21,11 @@ typedef ChooseClashes = Future<Map<String, Resolution>?> Function(
   List<PlaylistClash> clashes,
 );
 
-/// Copies files both ways after the commit and returns how many were copied
-/// (Task 9's `FileTransfer`).
-typedef FilesStep = Future<int> Function(SyncClient c, SyncCancel? cancel);
+/// Copies files both ways after the commit ([FileTransfer.exchange]).
+typedef FilesStep = Stream<FileProgress> Function(
+  SyncClient c,
+  SyncCancel? cancel,
+);
 
 /// Drives a two-way sync with a paired device's [SyncResponder] (spec "A sync
 /// run"): hello → begin → pull → merge → choose → stage → apply → commit →
@@ -167,7 +170,8 @@ class _Run {
   SyncClient? _client;
   String? _syncId;
 
-  /// Set once the peer saved its watermarks; there is nothing to abort then.
+  /// Set once the peer saved its watermarks: it is then told the files are
+  /// done instead of aborting.
   bool _committed = false;
 
   void _check() {
@@ -255,8 +259,12 @@ class _Run {
       final files = _r._files;
       if (files != null) {
         _emit(const SyncStep(SyncStage.files));
-        filesCopied = await files(client, _cancel);
+        await for (final p in files(client, _cancel)) {
+          _emit(SyncStep(SyncStage.files, done: p.done, total: p.total));
+          filesCopied = p.received;
+        }
       }
+      await client.postJson('/files/done', {'sync_id': syncId});
       try {
         await _r._downloads.queueNewInEnabled();
       } catch (e) {
@@ -356,13 +364,16 @@ class _Run {
     ];
   }
 
-  /// Best effort: tells the peer to drop the session and its staged rows.
+  /// Best effort: tells the peer to drop the session and its staged rows, or,
+  /// after the commit, to end it.
   Future<void> _abort() async {
     final client = _client;
     final syncId = _syncId;
-    if (client == null || syncId == null || _committed) return;
+    if (client == null || syncId == null) return;
     try {
-      await client.postJson('/session/abort', {'sync_id': syncId});
+      await client.postJson(_committed ? '/files/done' : '/session/abort', {
+        'sync_id': syncId,
+      });
     } on SyncNetError catch (e) {
       AppLog.w('Sync abort not delivered', e);
     }
