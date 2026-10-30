@@ -60,7 +60,8 @@ class SyncRunner {
   bool get running => _running;
 
   /// Syncs with [peer] at [host]:[port]. The stream ends with one [SyncDone]
-  /// or [SyncFailed]; it never errors.
+  /// or [SyncFailed]; it never errors. Cancelling its subscription works like
+  /// [cancel].
   Stream<SyncProgress> run(
     PeerRow peer, {
     required String host,
@@ -68,7 +69,13 @@ class SyncRunner {
     required ChooseClashes choose,
     SyncCancel? cancel,
   }) {
+    // Cancelling the subscription cancels the run.
+    final token = cancel ?? SyncCancel();
+    var finished = false;
     final out = StreamController<SyncProgress>();
+    out.onCancel = () {
+      if (!finished) token.cancel();
+    };
     out.onListen = () async {
       if (_running) {
         out.add(const SyncFailed(SyncFailure.busy));
@@ -76,12 +83,13 @@ class SyncRunner {
         _running = true;
         try {
           out.add(
-            await _Run(this, peer, host, port, choose, cancel, out.add).go(),
+            await _Run(this, peer, host, port, choose, token, out.add).go(),
           );
         } finally {
           _running = false;
         }
       }
+      finished = true;
       await out.close();
     };
     return out.stream;
@@ -184,9 +192,9 @@ class _Run {
       final (theirs, responderHigh) = await _pull(client);
 
       _emit(const SyncStep(SyncStage.merging));
-      final feed = ChangeFeed(_r._db);
+      final feed = ChangeFeed(_r._db, stamp: _r._stamp);
       // Before reading: rows written from now on go out next time.
-      final initiatorHigh = await feed.highSeq();
+      final initiatorHigh = await feed.safeHigh();
       final mine = await _readAll(feed, _peer.lastSentSeq);
       _check();
       final merger = Merger(stamp: _r._stamp, peerName: _peer.name);

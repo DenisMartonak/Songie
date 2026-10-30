@@ -50,14 +50,16 @@ class ResponderDone extends ResponderState {
 ///
 /// Routes (all signed except `/hello`):
 /// - `GET /hello` → `{device_id, name, app_version, schema_version, time_ms}`
-/// - `POST /session/begin {sync_id}` (409 `busy` while a session is open or
-///   this device runs a sync of its own)
+/// - `POST /session/begin {sync_id}` (409 `busy` while another peer's
+///   session is open or this device runs a sync of its own; the same peer's
+///   open session is replaced)
 /// - `GET /changes?since=&cursor=&limit=` → `{rows, next, high}`
 /// - `POST /apply/part {sync_id, rows, total?}` stages at most [maxPartRows]
 /// - `POST /apply/commit {sync_id}` applies every staged row in one
 ///   transaction → `{written, playlists_changed, songs_added}`
 /// - `POST /commit {sync_id, initiator_high, responder_high}` saves the
-///   watermarks and ends the session
+///   watermarks and ends the session; `responder_high` must be the high
+///   `/changes` served in this session (409 `high_mismatch` otherwise)
 /// - `POST /session/abort {sync_id}`, `POST /unpair`
 ///
 /// A step of a session that is not open (or belongs to another peer) gets a
@@ -125,8 +127,15 @@ class SyncResponder {
         'error': 'unknown_device',
       }, status: HttpStatus.unauthorized);
     }
-    if (_session != null || _runningLocally()) {
+    final open = _session;
+    if (_runningLocally() || (open != null && open.peerId != peerId)) {
       return sendJson(req, {'error': 'busy'}, status: HttpStatus.conflict);
+    }
+    if (open != null) {
+      // The same peer starting over (say after a crash): its old session and
+      // staged rows are dropped.
+      AppLog.i('Sync session with ${peer.name} restarted');
+      _end(open);
     }
     final s = _session = _Session(syncId, peerId, peer.name);
     _touch(s);
@@ -148,10 +157,10 @@ class SyncResponder {
       1,
       maxPartRows,
     );
-    final feed = ChangeFeed(_db);
+    final feed = ChangeFeed(_db, stamp: _stamp);
     // Taken before the first page is read, so every row at or below it is
     // in the pages; rows written later go out next time.
-    if (cursor == null || s.high == null) s.high = await feed.highSeq();
+    if (cursor == null || s.high == null) s.high = await feed.safeHigh();
     final page = await feed.since(cursor ?? since, limit: limit);
     s.sent += page.rows.length;
     _emit(
@@ -220,7 +229,14 @@ class SyncResponder {
     }
     final body = SyncServer.jsonBody(req);
     final initiatorHigh = _seq(body['initiator_high']);
-    final responderHigh = _seq(body['responder_high']);
+    // The watermark is the high this session served, never a value the
+    // initiator makes up: a mismatch, or no pull at all, is refused.
+    final responderHigh = s.high;
+    if (responderHigh == null || body['responder_high'] != responderHigh) {
+      return sendJson(req, {
+        'error': 'high_mismatch',
+      }, status: HttpStatus.conflict);
+    }
     await _peers.setWatermarks(
       peerId!,
       sent: responderHigh,

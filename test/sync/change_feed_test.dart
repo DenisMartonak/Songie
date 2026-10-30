@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/data/database.dart';
+import 'package:songies/data/sync_stamp.dart';
 import 'package:songies/sync/change_feed.dart';
 
 import '../helpers/sync_fixtures.dart';
@@ -46,5 +47,54 @@ void main() {
     final snap = await snapshot(db);
     expect(snap.length, 8);
     expect(snap.keys.first, startsWith('tracks/'));
+  });
+
+  group('safeHigh', () {
+    var nowMs = 1700000000000;
+    late SyncStamp stamp;
+    late ChangeFeed feed;
+    setUp(() async {
+      nowMs = 1700000000000;
+      stamp = await SyncStamp.load(db, nowMs: () => nowMs);
+      feed = ChangeFeed(db, stamp: stamp);
+    });
+
+    Future<void> write(Stamp st) =>
+        db.into(db.tracks).insert(trackRow(id: st.id, localSeq: st.localSeq));
+
+    test('is highSeq when every issued seq has its row', () async {
+      await write(await stamp.next());
+      await write(await stamp.next());
+      expect(await feed.safeHigh(), 2);
+      expect(await ChangeFeed(db).safeHigh(), 2); // no stamp: highSeq
+    });
+
+    test('a stamped row not yet written holds it below that seq', () async {
+      await write(await stamp.next()); // 1
+      final pending = await stamp.next(); // 2, written later
+      await write(await stamp.next()); // 3, lands first
+      expect(await feed.highSeq(), 3);
+      expect(await feed.safeHigh(), 1);
+
+      await write(pending);
+      expect(await feed.safeHigh(), 3);
+    });
+
+    test('an issued seq never written stops holding it after 60 s', () async {
+      await stamp.reserve(1); // 1, never used
+      await write(await stamp.next()); // 2
+      expect(await feed.safeHigh(), 0);
+
+      nowMs += const Duration(seconds: 59).inMilliseconds;
+      expect(await feed.safeHigh(), 0);
+      nowMs += const Duration(seconds: 2).inMilliseconds;
+      expect(await feed.safeHigh(), 2);
+    });
+
+    test('seqs above highSeq do not hold it', () async {
+      await write(await stamp.next()); // 1
+      await stamp.nextMany(3); // 2..4, not written yet
+      expect(await feed.safeHigh(), 1);
+    });
   });
 }

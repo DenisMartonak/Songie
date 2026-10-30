@@ -14,6 +14,7 @@ import 'package:songies/sync/device_identity.dart';
 import 'package:songies/sync/merger.dart';
 import 'package:songies/sync/peer_repository.dart';
 import 'package:songies/sync/sync_auth.dart';
+import 'package:songies/sync/sync_client.dart';
 import 'package:songies/sync/sync_progress.dart';
 import 'package:songies/sync/sync_responder.dart';
 import 'package:songies/sync/sync_runner.dart';
@@ -678,15 +679,11 @@ void main() {
     );
     await asked.future;
 
-    // B has a session open with A.
-    final second = SyncRunner(
-      db: a.db,
-      stamp: a.stamp,
-      peers: a.peers,
-      myDeviceId: a.id,
-      downloads: DownloadRepository(a.db),
-    );
-    expect(_failure(await _sync(a, b, runner: second)), SyncFailure.busy);
+    // B has a session open with A, so another peer is refused.
+    final c = await _Dev.create(root(), 'C');
+    extra.add(c);
+    await _pair(c, b);
+    expect(_failure(await _sync(c, b)), SyncFailure.busy);
     // The same runner refuses a second run while one is going.
     expect(_failure(await _sync(a, b)), SyncFailure.busy);
     // A device running its own sync refuses to answer one: B, busy with A,
@@ -740,5 +737,145 @@ void main() {
     expect(body['app_version'], appVersion);
     expect(body['schema_version'], syncSchemaVersion);
     expect(body['time_ms'] as int, greaterThanOrEqualTo(before));
+  });
+
+  test('a stamped row not yet written holds the watermark and is sent once '
+      'it lands', () async {
+    final pending = await a.stamp.next(); // the scanner, mid-write
+    await _track(a, title: 'Lands first');
+
+    _done(await _sync(a, b));
+
+    expect((await a.peer(b)).lastSentSeq, lessThan(pending.localSeq));
+    expect((await b.peer(a)).lastReceivedSeq, lessThan(pending.localSeq));
+    await a.db
+        .into(a.db.tracks)
+        .insert(
+          trackRow(
+            id: pending.id,
+            clock: pending.clock,
+            originDevice: pending.originDevice,
+            localSeq: pending.localSeq,
+          ),
+        );
+    _done(await _sync(a, b));
+
+    expect((await b.snap()).keys, contains('tracks/${pending.id}'));
+    expect(await a.snap(), await b.snap());
+  });
+
+  group('sessions', () {
+    late _Dev c;
+    setUp(() async {
+      c = await _Dev.create(root(), 'C');
+      extra.add(c);
+      await _pair(c, b);
+    });
+
+    Future<SyncClient> client(_Dev from) async {
+      final p = await from.peer(b);
+      final cl = SyncClient.pinned(
+        host: '127.0.0.1',
+        port: b.port,
+        fingerprint: p.certFingerprint,
+        pairKey: base64.decode(p.pairKey),
+        myDeviceId: from.id,
+      );
+      addTearDown(cl.close);
+      return cl;
+    }
+
+    Matcher refused(String code) => throwsA(
+      isA<SyncNetError>()
+          .having((e) => e.status, 'status', 409)
+          .having((e) => e.message, 'message', code),
+    );
+
+    test('another peer or a stale or wrong sync_id gets no_session', () async {
+      final fromA = await client(a);
+      final fromC = await client(c);
+      await fromA.postJson('/session/begin', {'sync_id': 's1'});
+      final high = (await fromA.getJson('/changes?since=0'))['high'] as int;
+      // A starts over: s1 is now stale.
+      await fromA.postJson('/session/begin', {'sync_id': 's2'});
+
+      final steps = <String, Map<String, Object?> Function(String)>{
+        '/apply/part': (id) => {'sync_id': id, 'rows': <Object>[]},
+        '/apply/commit': (id) => {'sync_id': id},
+        '/commit': (id) => {
+          'sync_id': id,
+          'initiator_high': 0,
+          'responder_high': high,
+        },
+      };
+      for (final MapEntry(key: path, value: body) in steps.entries) {
+        expect(fromC.postJson(path, body('s2')), refused('no_session'));
+        expect(fromA.postJson(path, body('wrong')), refused('no_session'));
+        expect(fromA.postJson(path, body('s1')), refused('no_session'));
+      }
+      // The live session still works.
+      await fromA.postJson('/apply/commit', {'sync_id': 's2'});
+    });
+
+    test(
+      'a begin from the session owner replaces it; another peer is busy',
+      () async {
+        final fromA = await client(a);
+        await fromA.postJson('/session/begin', {'sync_id': 's1'});
+        await fromA.postJson('/session/begin', {'sync_id': 's2'});
+
+        await expectLater(
+          (await client(c)).postJson('/session/begin', {'sync_id': 's3'}),
+          refused('busy'),
+        );
+        await fromA.postJson('/apply/commit', {'sync_id': 's2'});
+      },
+    );
+
+    test('commit is refused without a pull or with another high', () async {
+      final fromA = await client(a);
+      await fromA.postJson('/session/begin', {'sync_id': 's1'});
+      Future<void> commit(int high) => fromA.postJson('/commit', {
+        'sync_id': 's1',
+        'initiator_high': 0,
+        'responder_high': high,
+      });
+
+      await expectLater(commit(0), refused('high_mismatch'));
+      final high = (await fromA.getJson('/changes?since=0'))['high'] as int;
+      await expectLater(commit(high + 1), refused('high_mismatch'));
+      expect((await b.peer(a)).lastSyncAt, isNull);
+
+      await commit(high);
+      expect((await b.peer(a)).lastSyncAt, isNotNull);
+    });
+  });
+
+  test('cancelling the progress subscription cancels the run', () async {
+    final p = await clashingRename();
+    final before = [await a.snap(), await b.snap()];
+    final asked = Completer<void>();
+    final answer = Completer<Map<String, Resolution>?>();
+    final idle = b.responder.state.firstWhere((s) => s is Idle);
+
+    final sub = a.runner
+        .run(
+          await a.peer(b),
+          host: '127.0.0.1',
+          port: b.port,
+          choose: (_) {
+            asked.complete();
+            return answer.future;
+          },
+        )
+        .listen(null);
+    await asked.future;
+    await sub.cancel();
+    answer.complete({p: Resolution.keepMine});
+
+    await idle; // the run sent /session/abort
+    expect([await a.snap(), await b.snap()], before);
+    await pumpEventQueue();
+    expect(a.runner.running, isFalse);
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import '../core/hlc.dart';
 import '../core/ids.dart';
 import 'database.dart';
@@ -25,10 +27,17 @@ class Stamp {
 /// the next `local_seq`. State is persisted in the `Settings` table so it
 /// survives restarts.
 class SyncStamp {
-  SyncStamp._(this._db, this.deviceId, this._clock, this._seq);
+  SyncStamp._(this._db, this.deviceId, this._clock, this._seq, this._nowMs);
 
   final AppDatabase _db;
   final HlcClock _clock;
+  final int Function() _nowMs;
+
+  /// Seqs handed out lately, with when, oldest first (see [recentSeqs]).
+  final _issued = Queue<(int, int)>();
+
+  /// How long an issued seq counts as possibly not yet written.
+  static const pendingWindow = Duration(seconds: 60);
   int _seq;
 
   final String deviceId;
@@ -52,7 +61,13 @@ class SyncStamp {
       nowMs: nowMs,
     );
     final seq = int.tryParse(values[_kLocalSeq] ?? '') ?? 0;
-    return SyncStamp._(db, deviceId, clock, seq);
+    return SyncStamp._(
+      db,
+      deviceId,
+      clock,
+      seq,
+      nowMs ?? () => DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   /// Returns the next stamp (with [id], or a new UUID) and persists the
@@ -63,6 +78,7 @@ class SyncStamp {
   /// which only leaves harmless gaps.
   Future<Stamp> next({String? id}) async {
     final seq = ++_seq;
+    _issue([seq]);
     final clock = _clock.tick().pack();
     await _db.batch((b) {
       b.insertAllOnConflictUpdate(_db.settings, [
@@ -95,6 +111,7 @@ class SyncStamp {
           localSeq: ++_seq,
         ),
     ];
+    _issue([for (final st in stamps) st.localSeq]);
     await _db.batch((b) {
       b.insertAllOnConflictUpdate(_db.settings, [
         SettingsCompanion.insert(key: _kLocalSeq, value: _seq.toString()),
@@ -111,6 +128,7 @@ class SyncStamp {
   Future<List<int>> reserve(int n, {String? observedClock}) async {
     if (observedClock != null) _clock.receive(Hlc.parse(observedClock));
     final seqs = <int>[for (var i = 0; i < n; i++) ++_seq];
+    _issue(seqs);
     await _db.batch((b) {
       b.insertAllOnConflictUpdate(_db.settings, [
         SettingsCompanion.insert(key: _kLocalSeq, value: _seq.toString()),
@@ -118,6 +136,30 @@ class SyncStamp {
       ]);
     });
     return seqs;
+  }
+
+  /// Seqs issued within [pendingWindow], ascending. A caller may still be
+  /// about to write a row with one of them (stamps are handed out before the
+  /// write commits, not always inside a transaction), so a sync watermark
+  /// must not pass the lowest one that has no row yet.
+  List<int> recentSeqs() {
+    _prune();
+    return [for (final (seq, _) in _issued) seq];
+  }
+
+  void _issue(List<int> seqs) {
+    final at = _nowMs();
+    for (final s in seqs) {
+      _issued.add((s, at));
+    }
+    _prune();
+  }
+
+  void _prune() {
+    final cutoff = _nowMs() - pendingWindow.inMilliseconds;
+    while (_issued.isNotEmpty && _issued.first.$2 < cutoff) {
+      _issued.removeFirst();
+    }
   }
 
   static Future<void> _put(AppDatabase db, String key, String value) => db
