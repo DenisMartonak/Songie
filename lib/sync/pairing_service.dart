@@ -65,6 +65,9 @@ class PairingService {
     s.route('POST', '/pair/finish', _finish, open: true);
   }
 
+  /// Whether a code is showing (it is cleared once it pairs).
+  bool get codeShowing => _code != null;
+
   /// Shows a fresh code, replacing any earlier one.
   PairingCode showCode() {
     _pending = null;
@@ -74,6 +77,12 @@ class PairingService {
   void hideCode() {
     _code = null;
     _pending = null;
+  }
+
+  /// Forgets any code and closes [paired]. The service is not used again.
+  Future<void> dispose() async {
+    hideCode();
+    await _paired.close();
   }
 
   // Responder.
@@ -140,7 +149,7 @@ class PairingService {
       await _peers.save(peer);
       _code = null; // a code pairs once
       AppLog.i('Paired with ${peer.name}');
-      _paired.add(peer);
+      if (!_paired.isClosed) _paired.add(peer);
     } finally {
       _finishing = false;
     }
@@ -150,12 +159,20 @@ class PairingService {
   // Initiator.
 
   /// Pairs with the device at [host]:[port] that shows [code].
-  Future<PairOutcome> pairWith(String host, int port, String code) async {
+  Future<PairOutcome> pairWith(String host, int port, String code) async =>
+      (await pair(host, port, code)).$1;
+
+  /// [pairWith], also giving the peer saved when it paired.
+  Future<(PairOutcome, PeerRow?)> pair(
+    String host,
+    int port,
+    String code,
+  ) async {
     final BigInt w;
     try {
       w = pairingScalar(code);
     } on ArgumentError {
-      return PairOutcome.wrongCode;
+      return (PairOutcome.wrongCode, null);
     }
     final client = SyncClient.open(host: host, port: port);
     try {
@@ -174,10 +191,13 @@ class PairingService {
           'name': _myName(),
         });
       } on SyncNetError catch (e) {
-        return switch (e.kind) {
-          SyncNetKind.auth || SyncNetKind.busy => PairOutcome.noCodeShowing,
-          _ => PairOutcome.unreachable,
-        };
+        return (
+          switch (e.kind) {
+            SyncNetKind.auth || SyncNetKind.busy => PairOutcome.noCodeShowing,
+            _ => PairOutcome.unreachable,
+          },
+          null,
+        );
       }
 
       final Spake2Keys keys;
@@ -186,15 +206,15 @@ class PairingService {
       try {
         keys = spake.finish(base64.decode(reply['msg'] as String));
         if (!keys.verifyPeer(base64.decode(reply['confirm'] as String))) {
-          return PairOutcome.wrongCode;
+          return (PairOutcome.wrongCode, null);
         }
         deviceId = reply['device_id'] as String;
         name = _cleanName(reply['name'] as String, deviceId);
-        if (!_validPeerId(deviceId)) return PairOutcome.wrongCode;
+        if (!_validPeerId(deviceId)) return (PairOutcome.wrongCode, null);
       } on FormatException {
-        return PairOutcome.wrongCode;
+        return (PairOutcome.wrongCode, null);
       } on TypeError {
-        return PairOutcome.wrongCode;
+        return (PairOutcome.wrongCode, null);
       }
 
       try {
@@ -202,9 +222,12 @@ class PairingService {
           'confirm': base64.encode(keys.myConfirm),
         });
       } on SyncNetError catch (e) {
-        return e.kind == SyncNetKind.auth
-            ? PairOutcome.wrongCode
-            : PairOutcome.unreachable;
+        return (
+          e.kind == SyncNetKind.auth
+              ? PairOutcome.wrongCode
+              : PairOutcome.unreachable,
+          null,
+        );
       }
 
       final peer = _peerRow(
@@ -215,10 +238,10 @@ class PairingService {
       ).copyWith(host: Value(host), port: Value(port));
       await _peers.save(peer);
       AppLog.i('Paired with ${peer.name}');
-      _paired.add(peer);
-      return PairOutcome.paired;
+      if (!_paired.isClosed) _paired.add(peer);
+      return (PairOutcome.paired, peer);
     } on SyncNetError {
-      return PairOutcome.unreachable;
+      return (PairOutcome.unreachable, null);
     } finally {
       client.close();
     }

@@ -417,7 +417,17 @@ class SyncResponder {
     if (identical(_session, s)) _session = null;
   }
 
-  void _emit(ResponderState st) => _state.add(st);
+  void _emit(ResponderState st) {
+    if (!_state.isClosed) _state.add(st);
+  }
+
+  /// Drops any open session (with its staged rows) and closes [state]. The
+  /// responder is not used again.
+  Future<void> dispose() async {
+    final s = _session;
+    if (s != null) _end(s);
+    await _state.close();
+  }
 
   static Future<void> _noSession(HttpRequest req) =>
       sendJson(req, {'error': 'no_session'}, status: HttpStatus.conflict);

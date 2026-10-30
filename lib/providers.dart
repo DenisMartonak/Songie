@@ -38,7 +38,10 @@ import 'theme/font_service.dart';
 import 'theme/image_palette.dart';
 import 'theme/theme_repository.dart';
 import 'sync/device_identity.dart';
+import 'sync/discovery.dart';
+import 'sync/file_transfer.dart';
 import 'sync/peer_repository.dart';
+import 'sync/sync_host.dart';
 import 'theme/theme_service.dart';
 import 'theme/theme_spec.dart';
 import 'ui/shell/window_controls.dart';
@@ -73,6 +76,37 @@ final deviceNameProvider = StreamProvider.autoDispose<String>((ref) {
       .watch(settingsRepositoryProvider)
       .watchString(kDeviceName)
       .map((v) => v == null || v.trim().isEmpty ? fallback : v.trim());
+});
+
+/// Sync devices' server, pairing and discovery, alive while the page that
+/// reads it is open (the page calls `start()`). On Android it stops while the
+/// app is paused.
+final syncHostProvider = Provider.autoDispose<SyncHost>((ref) {
+  final isAndroid = ref.watch(isAndroidProvider);
+  var name = isAndroid ? 'Android' : Platform.localHostname;
+  ref.listen(deviceNameProvider, (_, next) {
+    final v = next.value;
+    if (v != null) name = v;
+  }, fireImmediately: true);
+  final db = ref.watch(databaseProvider);
+  final host = SyncHost(
+    db: db,
+    stamp: ref.watch(syncStampProvider),
+    peers: ref.watch(peerRepositoryProvider),
+    identity: ref.watch(deviceIdentityProvider),
+    downloads: ref.watch(downloadRepositoryProvider),
+    myName: () => name,
+    discovery: BonsoirDiscovery.new,
+    files: FileTransfer(
+      db: db,
+      paths: ref.watch(appPathsProvider),
+      scanner: ref.watch(libraryScannerProvider),
+      fonts: ref.watch(fontServiceProvider),
+    ),
+    stopWhenPaused: isAndroid,
+  );
+  ref.onDispose(host.dispose);
+  return host;
 });
 
 final databaseProvider = Provider<AppDatabase>(

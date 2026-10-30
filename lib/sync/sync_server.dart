@@ -57,12 +57,18 @@ class SyncServer {
     _routes['$method $path'] = _Route(h, open);
   }
 
+  /// The port being served, or null when stopped.
+  int? get port => _server?.port;
+
   /// Starts serving on [preferredPort], or on any free port when it is taken.
-  /// Returns the port. [address] is for tests (loopback).
+  /// Returns the port. [address] is for tests (loopback). Calling it while
+  /// serving returns the current port.
   Future<int> start({
     int preferredPort = 47823,
     InternetAddress? address,
   }) async {
+    final running = _server;
+    if (running != null) return running.port;
     final host = address ?? InternetAddress.anyIPv4;
     final context = _identity.serverContext();
     HttpServer server;
