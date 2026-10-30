@@ -614,6 +614,43 @@ void main() {
     });
   });
 
+  test(
+    'a slow apply on the peer outlasts the normal response timeout',
+    () async {
+      const normal = Duration(milliseconds: 300);
+      final runner = SyncRunner(
+        db: a.db,
+        stamp: a.stamp,
+        peers: a.peers,
+        myDeviceId: a.id,
+        downloads: DownloadRepository(a.db),
+        responseTimeout: normal,
+      );
+      final t = await _track(a, title: 'Big library');
+      // Once rows are staged on B, keep B's database busy so its apply
+      // waits well past the normal timeout.
+      final busy = Completer<void>();
+      final sub = b.responder.state.listen((s) {
+        if (s is Receiving &&
+            s.stage == SyncStage.applying &&
+            !busy.isCompleted) {
+          busy.complete(
+            b.db.transaction(() => Future<void>.delayed(normal * 4)),
+          );
+        }
+      });
+      addTearDown(sub.cancel);
+
+      final events = await _sync(a, b, runner: runner);
+
+      await busy.future;
+      _done(events);
+      expect((await b.snap()).keys, contains('tracks/$t'));
+      expect(await a.snap(), await b.snap());
+      expect(b.states.last, isA<ResponderDone>());
+    },
+  );
+
   test('choose returning null cancels and changes nothing', () async {
     await clashingRename();
     await _track(b, title: 'New on B');

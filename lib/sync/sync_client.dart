@@ -46,10 +46,27 @@ class SyncClient {
     required Uint8List pairKey,
     required String myDeviceId,
     Duration clockOffset = Duration.zero,
-  }) : this._(host, port, fingerprint, pairKey, myDeviceId, clockOffset);
+    Duration responseTimeout = defaultResponseTimeout,
+  }) : this._(
+         host,
+         port,
+         fingerprint,
+         pairKey,
+         myDeviceId,
+         clockOffset,
+         responseTimeout,
+       );
 
   SyncClient.open({required String host, required int port})
-    : this._(host, port, null, null, null, Duration.zero);
+    : this._(
+        host,
+        port,
+        null,
+        null,
+        null,
+        Duration.zero,
+        defaultResponseTimeout,
+      );
 
   SyncClient._(
     this._host,
@@ -58,6 +75,7 @@ class SyncClient {
     this._pairKey,
     this._myDeviceId,
     this._clockOffset,
+    this.responseTimeout,
   ) {
     _http = HttpClient(context: SecurityContext(withTrustedRoots: false))
       ..connectionTimeout = connectTimeout
@@ -67,7 +85,15 @@ class SyncClient {
   static const connectTimeout = Duration(seconds: 5);
 
   /// How long a request may wait for a response, or a body for its next chunk.
-  static const responseTimeout = Duration(seconds: 60);
+  static const defaultResponseTimeout = Duration(seconds: 60);
+
+  /// How long a request that applies a whole sync on the peer (one
+  /// transaction, possibly a large first sync on a phone) may wait for its
+  /// response; see [postJson].
+  static const applyTimeout = Duration(minutes: 10);
+
+  /// This client's [defaultResponseTimeout] (shorter in tests).
+  final Duration responseTimeout;
 
   final String _host;
   final int _port;
@@ -118,11 +144,13 @@ class SyncClient {
     return _readJson(await req.close().timeout(responseTimeout));
   });
 
-  /// Posts [body] with `schema_version` added (a value in [body] wins).
+  /// Posts [body] with `schema_version` added (a value in [body] wins). The
+  /// response may take up to [timeout] (default [responseTimeout]).
   Future<Map<String, dynamic>> postJson(
     String pathAndQuery,
-    Map<String, Object?> body,
-  ) => _guard(() async {
+    Map<String, Object?> body, {
+    Duration? timeout,
+  }) => _guard(() async {
     final bytes = utf8.encode(
       jsonEncode({'schema_version': syncSchemaVersion, ...body}),
     );
@@ -130,7 +158,7 @@ class SyncClient {
     req.headers.contentType = ContentType.json;
     req.contentLength = bytes.length;
     req.add(bytes);
-    return _readJson(await req.close().timeout(responseTimeout));
+    return _readJson(await req.close().timeout(timeout ?? responseTimeout));
   });
 
   /// The body of [path] from byte [from] on (a Range request when > 0).
@@ -230,7 +258,7 @@ class SyncClient {
   }
 
   /// The response body as a JSON object, or null when it is not one.
-  static Future<Map<String, dynamic>?> _decode(HttpClientResponse res) async {
+  Future<Map<String, dynamic>?> _decode(HttpClientResponse res) async {
     final bytes = await res
         .fold<BytesBuilder>(BytesBuilder(copy: false), (b, c) => b..add(c))
         .timeout(responseTimeout);

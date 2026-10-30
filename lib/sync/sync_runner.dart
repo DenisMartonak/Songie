@@ -44,10 +44,17 @@ class SyncRunner {
     required this._downloads,
     this._files,
     this._now = DateTime.now,
+    this._responseTimeout = SyncClient.defaultResponseTimeout,
+    this._applyTimeout = SyncClient.applyTimeout,
   });
 
   /// Rows per page pulled and per part sent.
   static const pageSize = 500;
+
+  /// How long a request may wait for the peer's response; the two requests
+  /// that apply on the peer wait up to [_applyTimeout].
+  final Duration _responseTimeout;
+  final Duration _applyTimeout;
 
   final AppDatabase _db;
   final SyncStamp _stamp;
@@ -128,6 +135,7 @@ class SyncRunner {
       pairKey: base64.decode(peer.pairKey),
       myDeviceId: _myDeviceId,
       clockOffset: offset,
+      responseTimeout: _responseTimeout,
     );
     final hello = client();
     try {
@@ -239,14 +247,17 @@ class _Run {
         _r._stamp,
         now: _r._now,
       ).apply(_changedFrom(rows, mine));
-      await client.postJson('/apply/commit', {'sync_id': syncId});
+      // The peer applies everything in one transaction: give it time.
+      await client.postJson('/apply/commit', {
+        'sync_id': syncId,
+      }, timeout: _r._applyTimeout);
 
       _emit(const SyncStep(SyncStage.finishing));
       await client.postJson('/commit', {
         'sync_id': syncId,
         'initiator_high': initiatorHigh,
         'responder_high': responderHigh,
-      });
+      }, timeout: _r._applyTimeout);
       _committed = true;
       await _r._peers.setWatermarks(
         _peer.deviceId,
