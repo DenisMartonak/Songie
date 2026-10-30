@@ -1,14 +1,13 @@
 # Plan 10 (device sync) — session log
 
-_2026-10-30. Paused by the user during Task 9._
+_2026-10-30. Tasks 1–12 done; the whole-branch review is next._
 
 ## Where things stand
 
-- **Branch:** `plan-10-device-sync` (made from `plan-9-stats`). Nothing pushed or merged. Working tree clean.
+- **Branch:** `plan-10-device-sync` (made from `plan-9-stats`). Nothing pushed or merged.
 - **Spec:** [device sync design](superpowers/specs/2026-10-30-songies-device-sync-design.md) (commit `605d6ab`, which also sits on `plan-9-stats`). **Plan:** [Plan 10](superpowers/plans/2026-10-30-songies-plan-10-device-sync.md).
-- **Done, each reviewed and its fixes re-reviewed:** Tasks 1–8 of 12. Last full test run: 1,880 passing, `flutter analyze` clean. No release builds yet. Nothing run on a device.
-- **Stopped:** Task 9 (file transfer). Its agent was stopped before it committed anything. Not started: Task 10 (discovery and sync host), Task 11 (Sync devices page), Task 12 (checklist, docs, builds), then the whole-branch review.
-- **To resume:** "Songies Plan 10 is on branch `plan-10-device-sync`; Tasks 1–8 are done and reviewed. Resume with Task 9 using subagent-driven development. Read docs/plan-10-session-log.md and the ledger at .superpowers/sdd/2026-10-30-songies-plan-10-device-sync/progress.md. Don't merge."
+- **Done:** Tasks 1–11 each reviewed with fixes re-reviewed; Task 12 (checklist, docs, builds) done. Last full run: 1,940 tests passing (the known flaky `stats_repository_test` "under 500 ms" passed this time; it may fail under load), `flutter analyze` clean. `flutter build apk --release` succeeds (83.2 MB). `flutter build linux --release` succeeds (bundle 36 MB). Windows is built on the user's PC. Nothing has been run on a device.
+- **Next:** the whole-branch review (the controller runs it), then the device checks in the Plan 10 section of the [manual checklist](manual-test-checklist.md), then packaging.
 - The run ledger (git-ignored) is at `.superpowers/sdd/2026-10-30-songies-plan-10-device-sync/progress.md`. It holds every ruling, deferred minor, brief, report and review.
 
 ## What the user decided (brainstorming)
@@ -32,6 +31,10 @@ _2026-10-30. Paused by the user during Task 9._
 | 6 | `79d9df1`, `bd58905` | SPAKE2 (RFC 9382 P-256, passes the RFC vector) and `PairingCode`. The fix counts every attempt and requires exactly 6 digits |
 | 7 | `c0e6e49`, `2c89be1` | HTTPS server, signed requests, pinned client, pairing endpoints. The fix: a stray finish no longer cancels pairing, peer ids are validated, the expiry is rechecked |
 | 8 | `c51644d`, `4f1b27e` | `SyncRunner` and `SyncResponder` (hello, pull, merge, choose, apply, commit). The fix: a safe watermark, so a change saved mid-sync isn't skipped, plus tighter sessions |
+| 9 | `103d51e`, `7d42ba4` | File transfer: audio, fonts and covers copied in both directions, with progress. The fix: files are counted both ways, only live covers are served, stalled transfers time out |
+| 10 | `d6fb1fe`, `312146f` | Device discovery (mDNS) and `SyncHost`. The fix: robust teardown, and dispose cancels its own runs |
+| 11 | `32f13dd`, `4fc945b` | The Sync devices page. The fix: it serves only while visible |
+| 12 | docs commit | Plan 10 checklist, README note, progress docs, final checks and builds |
 
 ## Rulings I made (cost if wrong in each)
 
@@ -58,6 +61,17 @@ _2026-10-30. Paused by the user during Task 9._
 - Ruling: if a run breaks after the initiator applied a resolved clash but before the responder committed, the rerun asks about that clash again — follows from the relaxed interruption rule; rare — cost if wrong: one repeated prompt.
 - Ruling: Task 8 Important (watermark past an uncommitted stamped row) is fixed with a safe watermark, not by moving 37 stamp call sites into transactions: SyncStamp remembers seqs it issued in the last 60 s (in memory); ChangeFeed gets `safeHigh()` = min(highSeq, lowest recently-issued seq with no row in any synced table − 1); the runner and responder use safeHigh() for watermarks. A legit gap (rolled-back write, reserve without a row) only holds the watermark back ≤60 s, which just resends rows next time (applier no-ops them) — cost if wrong: a write that lands >60 s after its stamp could still be skipped (none known; scanner stamps immediately before inserting).
 - Ruling: Task 8 Minors 1 (/commit uses the responder's own served high, 409 on mismatch/none), 3 (same-peer /session/begin replaces its own stale session), 4 (tests for session checks), 6 (cancelling the progress subscription cancels the run) join fix round 1 — session-correctness and user-visible behaviour — cost if wrong: larger fix.
+- Ruling: Task 9 files hook returns Stream<FileProgress> (not Future<int>) so the initiator shows "3 of 12" — amends Ruling 1 — cost if wrong: none.
+- Ruling: added POST /files/have and POST /files/done; file routes require the paired peer's committed session; /files/done ends the session; uploads accepted only for files the receiver lacks — needed for sizes/exts and to stop planted files — cost if wrong: two extra routes.
+- Ruling: "N files copied" in the summary counts files moved in both directions on both devices — the user reads it as what the sync copied — cost if wrong: number semantics only. (Goes into Task 9 fix round.)
+- Ruling: Task 9 Minors 1 (stalled transfer holds session), 2 (/files/done best effort), 3 (security-path tests), 6 (received file revives a track deleted mid-copy), 7 (attach failure re-downloads) join fix round 1 — user-visible or data-correctness — cost if wrong: larger fix.
+- Ruling: SyncHost exposes a settable `choose` clash handler and `Stream<HostRun> runs` (progress replays to late listeners) so the post-pairing sync reaches the UI; the page calls start() — cost if wrong: Task 11 wiring only.
+- Ruling: a pairing attempt still running at pairByCode's 10 s deadline is abandoned, not cancelled; if it later succeeds the peer is saved (shows in Your devices) without an automatic first sync — rare; one tap syncs — cost if wrong: a confusing "not found" followed by the device appearing.
+- Ruling: Task 10 Minors 1 (sync() errors → SyncFailed), 2 (clear pairing=1 when the code is used up/expired), 4 (dispose services if server.start throws), 5 (dedupe found devices by id, newest wins) join fix round 1; also: if mDNS start fails (e.g. Linux without Avahi) the server still runs so Connect by address works — teardown/robustness on real devices — cost if wrong: larger fix.
+- Ruling: summary uses singular forms for 1 ("1 playlist changed") — natural English over literal "N playlists" — cost if wrong: wording only.
+- Ruling: isWindowsProvider added for the Windows firewall note — cost if wrong: none.
+- Ruling: Sync devices open in a background tab (shell keeps branches mounted) must stop serving/advertising while the page is not visible, and resume when visible again unless a run is in progress — spec anti-goal "server left running outside the screen" — goes into Task 11 fix round — cost if wrong: a returning user waits a moment for discovery.
+- Ruling: Task 11 Minors 1 (pair buttons disabled while a run is unfinished), 2 (test answers host.choose after pairing), 3 (mounted check after rename dialog), 4 (Cancel/Try again colour via readableOn), 7 (log pairByCode errors) join fix round 1 — user-visible correctness, contrast rule — cost if wrong: larger fix.
 
 ## Deferred minor findings (for the final review)
 
@@ -87,6 +101,15 @@ _2026-10-30. Paused by the user during Task 9._
 - Task 8: minor (deferred): SyncResponder._state never closed — carry to Task 10 (lifecycle)
 - Task 8: minor (deferred): first-sync memory is O(all rows) on both sides — final review / manual large-library check
 - Task 8: minor (deferred): stamp window pruning uses wall clock (forward jump >60 s reopens window); unawaited expect futures in sync_run_test:721-727
+- Task 9: minor (deferred): empty .part left on refused PUT; art content not checked for JPEG magic bytes
+- Task 9: minor (deferred): file_transfer.dart ~590 lines mixing concerns (split HTTP side)
+- Task 9: minor (deferred): suite noise — flaky stats_repository "under 500 ms" timing test; W log lines from font_service_test
+- Task 9: minor (deferred): after an attach failure the file stays at its final path and is re-downloaded next sync
+- Task 10: minor (deferred): device-name change not re-advertised until next advertisement
+- Task 10: minor (deferred): weak tests (localAddresses vacuous without IPv4; 50 ms _settle timing); sync_host.dart 573 lines
+- Task 10: minor (deferred): no test for server.start throwing path in _startServing
+- Task 11: minor (deferred): _dateTimeText duplicates settings_page helper; sync_devices_page.dart 586 lines
+- Task 11: minor (deferred): fast visible→hidden→visible toggle can briefly enable pair buttons / set _startFailed from a stale start (heals itself)
 
 ## Worth knowing
 
