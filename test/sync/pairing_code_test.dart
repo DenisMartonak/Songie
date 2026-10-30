@@ -11,21 +11,24 @@ void main() {
     }
   });
 
-  test('PairingCode expires after 5 minutes and dies after 5 failures', () {
-    var now = DateTime(2026, 10, 30, 12);
-    final timed = PairingCode(now: () => now);
-    expect(timed.usable, isTrue);
-    now = now.add(const Duration(minutes: 4, seconds: 59));
-    expect(timed.usable, isTrue);
-    now = now.add(const Duration(seconds: 1));
-    expect(timed.usable, isFalse);
+  test(
+    'PairingCode expires after 5 minutes and is exhausted by 5 attempts',
+    () {
+      var now = DateTime(2026, 10, 30, 12);
+      final timed = PairingCode(now: () => now);
+      expect(timed.usable, isTrue);
+      now = now.add(const Duration(minutes: 4, seconds: 59));
+      expect(timed.usable, isTrue);
+      now = now.add(const Duration(seconds: 1));
+      expect(timed.usable, isFalse);
 
-    final failing = PairingCode(now: () => DateTime(2026, 10, 30, 12));
-    for (var i = 0; i < 4; i++) {
-      failing.fail();
-      expect(failing.usable, isTrue);
-    }
-    failing.fail();
-    expect(failing.usable, isFalse);
-  });
+      final charged = PairingCode(now: () => DateTime(2026, 10, 30, 12));
+      for (var i = 0; i < 4; i++) {
+        charged.chargeAttempt();
+        expect(charged.usable, isTrue);
+      }
+      charged.chargeAttempt();
+      expect(charged.usable, isFalse);
+    },
+  );
 }

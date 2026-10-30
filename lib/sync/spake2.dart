@@ -98,7 +98,7 @@ class Spake2 {
     final hash = sha256.convert(transcript).bytes;
     final ke = Uint8List.fromList(hash.sublist(0, 16));
     final ka = Uint8List.fromList(hash.sublist(16));
-    final kc = hkdfSha256(ka, utf8.encode('ConfirmationKeys'), 32);
+    final kc = _hkdfSha256(ka, utf8.encode('ConfirmationKeys'), 32);
     final cA = _mac(kc.sublist(0, 16), transcript);
     final cB = _mac(kc.sublist(16), transcript);
     return Spake2Keys._(
@@ -140,7 +140,11 @@ class Spake2Keys {
 
 /// The SPAKE2 password scalar for a pairing code:
 /// SHA-256("songies-pair-v1" || code) as an unsigned integer mod n.
+/// Throws [ArgumentError] unless [code] is exactly 6 ASCII digits.
 BigInt pairingScalar(String code) {
+  if (!RegExp(r'^[0-9]{6}$').hasMatch(code)) {
+    throw ArgumentError.value(code, 'code', 'must be 6 ASCII digits');
+  }
   final digest = sha256.convert([
     ...utf8.encode('songies-pair-v1'),
     ...utf8.encode(code),
@@ -150,11 +154,10 @@ BigInt pairingScalar(String code) {
 
 /// The long-term pair key derived from a confirmed [Spake2Keys.ke].
 Uint8List pairKeyFrom(Uint8List ke) =>
-    hkdfSha256(ke, utf8.encode('songies pair key v1'), 32);
+    _hkdfSha256(ke, utf8.encode('songies pair key v1'), 32);
 
 /// HKDF-SHA256 (RFC 5869) with an empty salt.
-@visibleForTesting
-Uint8List hkdfSha256(Uint8List ikm, List<int> info, int length) {
+Uint8List _hkdfSha256(Uint8List ikm, List<int> info, int length) {
   final kdf = HKDFKeyDerivator(SHA256Digest())
     ..init(HkdfParameters(ikm, length, null, Uint8List.fromList(info)));
   return kdf.process(Uint8List(0));

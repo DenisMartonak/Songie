@@ -3,6 +3,8 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointycastle/ecc/api.dart';
+import 'package:pointycastle/ecc/curves/secp256r1.dart';
 import 'package:songies/sync/spake2.dart';
 
 /// Hands out the bytes of fixed scalars, so the test controls x and y. The
@@ -179,5 +181,48 @@ void main() {
       _hex(pairKeyFrom(_unhex(_ke))),
       '80b0ca078458904025ac1419087b62e645374bdc17292af042a24746fe0559a0',
     );
+  });
+
+  test('a share that makes K the identity is rejected', () {
+    // RFC 9382 §6 M and N; sending w*N (to A) or w*M (to B) zeroes K.
+    final curve = ECCurve_secp256r1().curve;
+    final m = curve.decodePoint(
+      _unhex(
+        '02886e2f97ace46e55ba9dd7242579f2993b64e16ef3dcab95afd497333d8fa12f',
+      ),
+    )!;
+    final n = curve.decodePoint(
+      _unhex(
+        '03d8bbd6c639c62937b04d997f38c3770719c629d7014d49a24b4f98baa1292b49',
+      ),
+    )!;
+    final w = pairingScalar('123456');
+    Uint8List enc(ECPoint p) => Uint8List.fromList(p.getEncoded(false));
+    final a = Spake2.initiator(
+      w,
+      idA: utf8.encode(_fpA),
+      idB: utf8.encode(_fpB),
+    );
+    final b = Spake2.responder(
+      w,
+      idA: utf8.encode(_fpA),
+      idB: utf8.encode(_fpB),
+    );
+    final degenerate = throwsA(
+      isA<FormatException>().having(
+        (e) => e.message,
+        'message',
+        contains('degenerate'),
+      ),
+    );
+    expect(() => a.finish(enc((n * w)!)), degenerate);
+    expect(() => b.finish(enc((m * w)!)), degenerate);
+  });
+
+  test('pairingScalar accepts only six ASCII digits', () {
+    for (final bad in ['', '12345', '1234567', '12345a', ' 12345', '١٢٣٤٥٦']) {
+      expect(() => pairingScalar(bad), throwsArgumentError, reason: bad);
+    }
+    expect(pairingScalar('000000'), isA<BigInt>());
   });
 }
