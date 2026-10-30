@@ -304,7 +304,9 @@ class LibraryScanner {
       final atPath = await _localFileAt(path, index);
       if (atPath != null &&
           atPath.bytes == bytes &&
-          atPath.mtimeMs == mtimeMs) {
+          atPath.mtimeMs == mtimeMs &&
+          // A deleted track must not be returned: fall through to revive it.
+          await _liveTrackById(atPath.trackId) != null) {
         if (atPath.state != 'done') await _setState(atPath.trackId, 'done');
         return Ok(_Handled(atPath.trackId, added: false));
       }
@@ -344,6 +346,14 @@ class LibraryScanner {
         if (rewritten != null) {
           await _updateInPlace(rewritten.id, hash, d, path, bytes, mtimeMs);
           return Ok(_Handled(rewritten.id, added: false));
+        }
+
+        // The same bytes were imported before and the track deleted: bring
+        // that row back (peers know its id) instead of inserting a clash.
+        final deleted = await _deletedTrackByHash(hash);
+        if (deleted != null) {
+          await _updateInPlace(deleted.id, hash, d, path, bytes, mtimeMs);
+          return Ok(_Handled(deleted.id, added: true));
         }
 
         final stamp = await _stamp.next();
@@ -419,6 +429,8 @@ class LibraryScanner {
         searchText: Value(
           normalizeForSearch('${d.title} ${d.artist} ${d.album ?? ''}'),
         ),
+        deleted: const Value(false),
+        mergedInto: const Value(null),
         clock: Value(stamp.clock),
         originDevice: Value(stamp.originDevice),
         localSeq: Value(stamp.localSeq),
@@ -435,6 +447,12 @@ class LibraryScanner {
             mtimeMs: mtimeMs,
           ),
         );
+  }
+
+  Future<Track?> _deletedTrackByHash(String hash) {
+    return (_db.select(_db.tracks)
+          ..where((t) => t.fileHash.equals(hash) & t.deleted.equals(true)))
+        .getSingleOrNull();
   }
 
   Future<Track?> _liveTrackByHash(String hash) {

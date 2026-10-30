@@ -15,6 +15,25 @@ const _v1Schema = <String>[
   'CREATE INDEX playlist_entries_playlist_position ON playlist_entries (playlist_id, position)',
 ];
 
+/// Undoes the v8 additions on an open current-schema database.
+Future<void> _stepBackToV7(AppDatabase db) async {
+  await db.customStatement('DROP TABLE IF EXISTS peers');
+  for (final t in [
+    'tracks',
+    'playlists',
+    'playlist_entries',
+    'yt_seen',
+    'themes',
+    'fonts',
+    'lyrics',
+    'listens',
+  ]) {
+    await db.customStatement('DROP INDEX IF EXISTS ${t}_local_seq');
+  }
+  await db.customStatement('ALTER TABLE tracks DROP COLUMN merged_into');
+  await db.customStatement('ALTER TABLE playlists DROP COLUMN merged_into');
+}
+
 void main() {
   test('a v1 database opened with v2 code gains play_history and keeps tracks', () async {
     final dir = await Directory.systemTemp.createTemp('songies_migration');
@@ -58,7 +77,7 @@ void main() {
     expect(await db.select(db.playHistory).get(), hasLength(1));
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 7);
+    expect(version.data.values.single, 8);
   });
 
   test('a v2 database opened with v3 code gains yt_seen and keeps data', () async {
@@ -118,7 +137,7 @@ void main() {
       throwsA(anything),
     );
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 7);
+    expect(version.data.values.single, 8);
   });
 
   test(
@@ -162,7 +181,7 @@ void main() {
       expect(pref.downloadEnabled, isFalse);
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 7);
+      expect(version.data.values.single, 8);
     },
   );
 
@@ -178,6 +197,7 @@ void main() {
     await first.customStatement('DROP TABLE fonts');
     await first.customStatement('DROP TABLE lyrics');
     await first.customStatement('DROP TABLE listens');
+    await _stepBackToV7(first);
     await first.customStatement('PRAGMA user_version = 4');
     await first.close();
 
@@ -211,11 +231,11 @@ void main() {
     expect(await db.select(db.themes).get(), hasLength(1));
     expect((await db.select(db.fonts).getSingle()).family, 'Fira');
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 7);
+    expect(version.data.values.single, 8);
   });
 
   test(
-    'a v5 database opened with v7 code gains an empty lyrics table',
+    'a v5 database opened with v8 code gains an empty lyrics table',
     () async {
       final dir = await Directory.systemTemp.createTemp('songies_migration');
       addTearDown(() => dir.delete(recursive: true));
@@ -225,6 +245,7 @@ void main() {
       await first.customSelect('select 1').get();
       await first.customStatement('DROP TABLE lyrics');
       await first.customStatement('DROP TABLE listens');
+      await _stepBackToV7(first);
       await first.customStatement('PRAGMA user_version = 5');
       await first.close();
 
@@ -232,12 +253,12 @@ void main() {
       addTearDown(db.close);
       expect(await db.select(db.lyrics).get(), isEmpty);
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 7);
+      expect(version.data.values.single, 8);
     },
   );
 
   test(
-    'a v6 database opened with v7 code gains an empty listens table and index',
+    'a v6 database opened with v8 code gains an empty listens table and index',
     () async {
       final dir = await Directory.systemTemp.createTemp('songies_migration');
       addTearDown(() => dir.delete(recursive: true));
@@ -246,6 +267,7 @@ void main() {
       final first = AppDatabase.open(file);
       await first.customSelect('select 1').get();
       await first.customStatement('DROP TABLE listens');
+      await _stepBackToV7(first);
       await first.customStatement('PRAGMA user_version = 6');
       await first.close();
 
@@ -260,7 +282,32 @@ void main() {
           .get();
       expect(idx, hasLength(1));
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 7);
+      expect(version.data.values.single, 8);
     },
   );
+
+  test('v7 to v8 adds merged_into, peers and local_seq indexes', () async {
+    final dir = await Directory.systemTemp.createTemp('songies_migration');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File('${dir.path}/songies.db');
+
+    final first = AppDatabase.open(file);
+    await first.customSelect('select 1').get();
+    await _stepBackToV7(first);
+    await first.customStatement('PRAGMA user_version = 7');
+    await first.close();
+
+    final db = AppDatabase.open(file);
+    addTearDown(db.close);
+    final cols = await db.customSelect('PRAGMA table_info(tracks)').get();
+    expect(cols.map((r) => r.read<String>('name')), contains('merged_into'));
+    expect(await db.select(db.peers).get(), isEmpty);
+    final idx = await db.customSelect('PRAGMA index_list(listens)').get();
+    expect(
+      idx.map((r) => r.read<String>('name')),
+      contains('listens_local_seq'),
+    );
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data.values.single, 8);
+  });
 }

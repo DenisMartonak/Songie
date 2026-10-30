@@ -22,6 +22,7 @@ part 'database.g.dart';
     Fonts,
     Lyrics,
     Listens,
+    Peers,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -32,7 +33,7 @@ class AppDatabase extends _$AppDatabase {
       AppDatabase(NativeDatabase.createInBackground(f));
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -53,6 +54,23 @@ class AppDatabase extends _$AppDatabase {
       if (from < 7) {
         await m.createTable(listens);
         await m.createIndex(listensStartedAt);
+      }
+      if (from < 8) {
+        await m.addColumn(tracks, tracks.mergedInto);
+        await m.addColumn(playlists, playlists.mergedInto);
+        await m.createTable(peers);
+        for (final idx in [
+          tracksLocalSeq,
+          playlistsLocalSeq,
+          playlistEntriesLocalSeq,
+          ytSeenLocalSeq,
+          themesLocalSeq,
+          fontsLocalSeq,
+          lyricsLocalSeq,
+          listensLocalSeq,
+        ]) {
+          await m.createIndex(idx);
+        }
       }
     },
     beforeOpen: (details) async {

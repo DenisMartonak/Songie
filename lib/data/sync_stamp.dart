@@ -104,6 +104,22 @@ class SyncStamp {
     return stamps;
   }
 
+  /// Reserves [n] fresh, strictly increasing `local_seq` values for rows
+  /// applied from a peer. With [observedClock] the clock is advanced past it
+  /// (so later local stamps sort after everything seen). Persisted with one
+  /// settings write; same transaction semantics as [next].
+  Future<List<int>> reserve(int n, {String? observedClock}) async {
+    if (observedClock != null) _clock.receive(Hlc.parse(observedClock));
+    final seqs = <int>[for (var i = 0; i < n; i++) ++_seq];
+    await _db.batch((b) {
+      b.insertAllOnConflictUpdate(_db.settings, [
+        SettingsCompanion.insert(key: _kLocalSeq, value: _seq.toString()),
+        SettingsCompanion.insert(key: _kHlcLast, value: _clock.last.pack()),
+      ]);
+    });
+    return seqs;
+  }
+
   static Future<void> _put(AppDatabase db, String key, String value) => db
       .into(db.settings)
       .insertOnConflictUpdate(SettingsCompanion.insert(key: key, value: value));

@@ -172,6 +172,17 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _mergedIntoMeta = const VerificationMeta(
+    'mergedInto',
+  );
+  @override
+  late final GeneratedColumn<String> mergedInto = GeneratedColumn<String>(
+    'merged_into',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -189,6 +200,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
     fileHash,
     unavailable,
     searchText,
+    mergedInto,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -311,6 +323,12 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
     } else if (isInserting) {
       context.missing(_searchTextMeta);
     }
+    if (data.containsKey('merged_into')) {
+      context.handle(
+        _mergedIntoMeta,
+        mergedInto.isAcceptableOrUnknown(data['merged_into']!, _mergedIntoMeta),
+      );
+    }
     return context;
   }
 
@@ -380,6 +398,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
         DriftSqlType.string,
         data['${effectivePrefix}search_text'],
       )!,
+      mergedInto: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}merged_into'],
+      ),
     );
   }
 
@@ -407,6 +429,9 @@ class Track extends DataClass implements Insertable<Track> {
   final String? fileHash;
   final bool unavailable;
   final String searchText;
+
+  /// Set on a track merged into another by sync dedupe; points at the winner.
+  final String? mergedInto;
   const Track({
     required this.id,
     required this.clock,
@@ -423,6 +448,7 @@ class Track extends DataClass implements Insertable<Track> {
     this.fileHash,
     required this.unavailable,
     required this.searchText,
+    this.mergedInto,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -450,6 +476,9 @@ class Track extends DataClass implements Insertable<Track> {
     }
     map['unavailable'] = Variable<bool>(unavailable);
     map['search_text'] = Variable<String>(searchText);
+    if (!nullToAbsent || mergedInto != null) {
+      map['merged_into'] = Variable<String>(mergedInto);
+    }
     return map;
   }
 
@@ -478,6 +507,9 @@ class Track extends DataClass implements Insertable<Track> {
           : Value(fileHash),
       unavailable: Value(unavailable),
       searchText: Value(searchText),
+      mergedInto: mergedInto == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mergedInto),
     );
   }
 
@@ -502,6 +534,7 @@ class Track extends DataClass implements Insertable<Track> {
       fileHash: serializer.fromJson<String?>(json['fileHash']),
       unavailable: serializer.fromJson<bool>(json['unavailable']),
       searchText: serializer.fromJson<String>(json['searchText']),
+      mergedInto: serializer.fromJson<String?>(json['mergedInto']),
     );
   }
   @override
@@ -523,6 +556,7 @@ class Track extends DataClass implements Insertable<Track> {
       'fileHash': serializer.toJson<String?>(fileHash),
       'unavailable': serializer.toJson<bool>(unavailable),
       'searchText': serializer.toJson<String>(searchText),
+      'mergedInto': serializer.toJson<String?>(mergedInto),
     };
   }
 
@@ -542,6 +576,7 @@ class Track extends DataClass implements Insertable<Track> {
     Value<String?> fileHash = const Value.absent(),
     bool? unavailable,
     String? searchText,
+    Value<String?> mergedInto = const Value.absent(),
   }) => Track(
     id: id ?? this.id,
     clock: clock ?? this.clock,
@@ -558,6 +593,7 @@ class Track extends DataClass implements Insertable<Track> {
     fileHash: fileHash.present ? fileHash.value : this.fileHash,
     unavailable: unavailable ?? this.unavailable,
     searchText: searchText ?? this.searchText,
+    mergedInto: mergedInto.present ? mergedInto.value : this.mergedInto,
   );
   Track copyWithCompanion(TracksCompanion data) {
     return Track(
@@ -586,6 +622,9 @@ class Track extends DataClass implements Insertable<Track> {
       searchText: data.searchText.present
           ? data.searchText.value
           : this.searchText,
+      mergedInto: data.mergedInto.present
+          ? data.mergedInto.value
+          : this.mergedInto,
     );
   }
 
@@ -606,7 +645,8 @@ class Track extends DataClass implements Insertable<Track> {
           ..write('artworkRef: $artworkRef, ')
           ..write('fileHash: $fileHash, ')
           ..write('unavailable: $unavailable, ')
-          ..write('searchText: $searchText')
+          ..write('searchText: $searchText, ')
+          ..write('mergedInto: $mergedInto')
           ..write(')'))
         .toString();
   }
@@ -628,6 +668,7 @@ class Track extends DataClass implements Insertable<Track> {
     fileHash,
     unavailable,
     searchText,
+    mergedInto,
   );
   @override
   bool operator ==(Object other) =>
@@ -647,7 +688,8 @@ class Track extends DataClass implements Insertable<Track> {
           other.artworkRef == this.artworkRef &&
           other.fileHash == this.fileHash &&
           other.unavailable == this.unavailable &&
-          other.searchText == this.searchText);
+          other.searchText == this.searchText &&
+          other.mergedInto == this.mergedInto);
 }
 
 class TracksCompanion extends UpdateCompanion<Track> {
@@ -666,6 +708,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
   final Value<String?> fileHash;
   final Value<bool> unavailable;
   final Value<String> searchText;
+  final Value<String?> mergedInto;
   final Value<int> rowid;
   const TracksCompanion({
     this.id = const Value.absent(),
@@ -683,6 +726,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
     this.fileHash = const Value.absent(),
     this.unavailable = const Value.absent(),
     this.searchText = const Value.absent(),
+    this.mergedInto = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TracksCompanion.insert({
@@ -701,6 +745,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
     this.fileHash = const Value.absent(),
     this.unavailable = const Value.absent(),
     required String searchText,
+    this.mergedInto = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        clock = Value(clock),
@@ -726,6 +771,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
     Expression<String>? fileHash,
     Expression<bool>? unavailable,
     Expression<String>? searchText,
+    Expression<String>? mergedInto,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -744,6 +790,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
       if (fileHash != null) 'file_hash': fileHash,
       if (unavailable != null) 'unavailable': unavailable,
       if (searchText != null) 'search_text': searchText,
+      if (mergedInto != null) 'merged_into': mergedInto,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -764,6 +811,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
     Value<String?>? fileHash,
     Value<bool>? unavailable,
     Value<String>? searchText,
+    Value<String?>? mergedInto,
     Value<int>? rowid,
   }) {
     return TracksCompanion(
@@ -782,6 +830,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
       fileHash: fileHash ?? this.fileHash,
       unavailable: unavailable ?? this.unavailable,
       searchText: searchText ?? this.searchText,
+      mergedInto: mergedInto ?? this.mergedInto,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -834,6 +883,9 @@ class TracksCompanion extends UpdateCompanion<Track> {
     if (searchText.present) {
       map['search_text'] = Variable<String>(searchText.value);
     }
+    if (mergedInto.present) {
+      map['merged_into'] = Variable<String>(mergedInto.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -858,6 +910,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
           ..write('fileHash: $fileHash, ')
           ..write('unavailable: $unavailable, ')
           ..write('searchText: $searchText, ')
+          ..write('mergedInto: $mergedInto, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -976,6 +1029,17 @@ class $PlaylistsTable extends Playlists
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _mergedIntoMeta = const VerificationMeta(
+    'mergedInto',
+  );
+  @override
+  late final GeneratedColumn<String> mergedInto = GeneratedColumn<String>(
+    'merged_into',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -988,6 +1052,7 @@ class $PlaylistsTable extends Playlists
     source,
     ytPlaylistUrl,
     lastYtSyncAt,
+    mergedInto,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1079,6 +1144,12 @@ class $PlaylistsTable extends Playlists
         ),
       );
     }
+    if (data.containsKey('merged_into')) {
+      context.handle(
+        _mergedIntoMeta,
+        mergedInto.isAcceptableOrUnknown(data['merged_into']!, _mergedIntoMeta),
+      );
+    }
     return context;
   }
 
@@ -1128,6 +1199,10 @@ class $PlaylistsTable extends Playlists
         DriftSqlType.dateTime,
         data['${effectivePrefix}last_yt_sync_at'],
       ),
+      mergedInto: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}merged_into'],
+      ),
     );
   }
 
@@ -1150,6 +1225,9 @@ class Playlist extends DataClass implements Insertable<Playlist> {
   final String source;
   final String? ytPlaylistUrl;
   final DateTime? lastYtSyncAt;
+
+  /// Set on a playlist merged into another by sync; points at the winner.
+  final String? mergedInto;
   const Playlist({
     required this.id,
     required this.clock,
@@ -1161,6 +1239,7 @@ class Playlist extends DataClass implements Insertable<Playlist> {
     required this.source,
     this.ytPlaylistUrl,
     this.lastYtSyncAt,
+    this.mergedInto,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1180,6 +1259,9 @@ class Playlist extends DataClass implements Insertable<Playlist> {
     }
     if (!nullToAbsent || lastYtSyncAt != null) {
       map['last_yt_sync_at'] = Variable<DateTime>(lastYtSyncAt);
+    }
+    if (!nullToAbsent || mergedInto != null) {
+      map['merged_into'] = Variable<String>(mergedInto);
     }
     return map;
   }
@@ -1202,6 +1284,9 @@ class Playlist extends DataClass implements Insertable<Playlist> {
       lastYtSyncAt: lastYtSyncAt == null && nullToAbsent
           ? const Value.absent()
           : Value(lastYtSyncAt),
+      mergedInto: mergedInto == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mergedInto),
     );
   }
 
@@ -1221,6 +1306,7 @@ class Playlist extends DataClass implements Insertable<Playlist> {
       source: serializer.fromJson<String>(json['source']),
       ytPlaylistUrl: serializer.fromJson<String?>(json['ytPlaylistUrl']),
       lastYtSyncAt: serializer.fromJson<DateTime?>(json['lastYtSyncAt']),
+      mergedInto: serializer.fromJson<String?>(json['mergedInto']),
     );
   }
   @override
@@ -1237,6 +1323,7 @@ class Playlist extends DataClass implements Insertable<Playlist> {
       'source': serializer.toJson<String>(source),
       'ytPlaylistUrl': serializer.toJson<String?>(ytPlaylistUrl),
       'lastYtSyncAt': serializer.toJson<DateTime?>(lastYtSyncAt),
+      'mergedInto': serializer.toJson<String?>(mergedInto),
     };
   }
 
@@ -1251,6 +1338,7 @@ class Playlist extends DataClass implements Insertable<Playlist> {
     String? source,
     Value<String?> ytPlaylistUrl = const Value.absent(),
     Value<DateTime?> lastYtSyncAt = const Value.absent(),
+    Value<String?> mergedInto = const Value.absent(),
   }) => Playlist(
     id: id ?? this.id,
     clock: clock ?? this.clock,
@@ -1264,6 +1352,7 @@ class Playlist extends DataClass implements Insertable<Playlist> {
         ? ytPlaylistUrl.value
         : this.ytPlaylistUrl,
     lastYtSyncAt: lastYtSyncAt.present ? lastYtSyncAt.value : this.lastYtSyncAt,
+    mergedInto: mergedInto.present ? mergedInto.value : this.mergedInto,
   );
   Playlist copyWithCompanion(PlaylistsCompanion data) {
     return Playlist(
@@ -1283,6 +1372,9 @@ class Playlist extends DataClass implements Insertable<Playlist> {
       lastYtSyncAt: data.lastYtSyncAt.present
           ? data.lastYtSyncAt.value
           : this.lastYtSyncAt,
+      mergedInto: data.mergedInto.present
+          ? data.mergedInto.value
+          : this.mergedInto,
     );
   }
 
@@ -1298,7 +1390,8 @@ class Playlist extends DataClass implements Insertable<Playlist> {
           ..write('coverRef: $coverRef, ')
           ..write('source: $source, ')
           ..write('ytPlaylistUrl: $ytPlaylistUrl, ')
-          ..write('lastYtSyncAt: $lastYtSyncAt')
+          ..write('lastYtSyncAt: $lastYtSyncAt, ')
+          ..write('mergedInto: $mergedInto')
           ..write(')'))
         .toString();
   }
@@ -1315,6 +1408,7 @@ class Playlist extends DataClass implements Insertable<Playlist> {
     source,
     ytPlaylistUrl,
     lastYtSyncAt,
+    mergedInto,
   );
   @override
   bool operator ==(Object other) =>
@@ -1329,7 +1423,8 @@ class Playlist extends DataClass implements Insertable<Playlist> {
           other.coverRef == this.coverRef &&
           other.source == this.source &&
           other.ytPlaylistUrl == this.ytPlaylistUrl &&
-          other.lastYtSyncAt == this.lastYtSyncAt);
+          other.lastYtSyncAt == this.lastYtSyncAt &&
+          other.mergedInto == this.mergedInto);
 }
 
 class PlaylistsCompanion extends UpdateCompanion<Playlist> {
@@ -1343,6 +1438,7 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
   final Value<String> source;
   final Value<String?> ytPlaylistUrl;
   final Value<DateTime?> lastYtSyncAt;
+  final Value<String?> mergedInto;
   final Value<int> rowid;
   const PlaylistsCompanion({
     this.id = const Value.absent(),
@@ -1355,6 +1451,7 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
     this.source = const Value.absent(),
     this.ytPlaylistUrl = const Value.absent(),
     this.lastYtSyncAt = const Value.absent(),
+    this.mergedInto = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   PlaylistsCompanion.insert({
@@ -1368,6 +1465,7 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
     required String source,
     this.ytPlaylistUrl = const Value.absent(),
     this.lastYtSyncAt = const Value.absent(),
+    this.mergedInto = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        clock = Value(clock),
@@ -1386,6 +1484,7 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
     Expression<String>? source,
     Expression<String>? ytPlaylistUrl,
     Expression<DateTime>? lastYtSyncAt,
+    Expression<String>? mergedInto,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1399,6 +1498,7 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
       if (source != null) 'source': source,
       if (ytPlaylistUrl != null) 'yt_playlist_url': ytPlaylistUrl,
       if (lastYtSyncAt != null) 'last_yt_sync_at': lastYtSyncAt,
+      if (mergedInto != null) 'merged_into': mergedInto,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1414,6 +1514,7 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
     Value<String>? source,
     Value<String?>? ytPlaylistUrl,
     Value<DateTime?>? lastYtSyncAt,
+    Value<String?>? mergedInto,
     Value<int>? rowid,
   }) {
     return PlaylistsCompanion(
@@ -1427,6 +1528,7 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
       source: source ?? this.source,
       ytPlaylistUrl: ytPlaylistUrl ?? this.ytPlaylistUrl,
       lastYtSyncAt: lastYtSyncAt ?? this.lastYtSyncAt,
+      mergedInto: mergedInto ?? this.mergedInto,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1464,6 +1566,9 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
     if (lastYtSyncAt.present) {
       map['last_yt_sync_at'] = Variable<DateTime>(lastYtSyncAt.value);
     }
+    if (mergedInto.present) {
+      map['merged_into'] = Variable<String>(mergedInto.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1483,6 +1588,7 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
           ..write('source: $source, ')
           ..write('ytPlaylistUrl: $ytPlaylistUrl, ')
           ..write('lastYtSyncAt: $lastYtSyncAt, ')
+          ..write('mergedInto: $mergedInto, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -6422,6 +6528,583 @@ class ListensCompanion extends UpdateCompanion<ListenRow> {
   }
 }
 
+class $PeersTable extends Peers with TableInfo<$PeersTable, PeerRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PeersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _certFingerprintMeta = const VerificationMeta(
+    'certFingerprint',
+  );
+  @override
+  late final GeneratedColumn<String> certFingerprint = GeneratedColumn<String>(
+    'cert_fingerprint',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pairKeyMeta = const VerificationMeta(
+    'pairKey',
+  );
+  @override
+  late final GeneratedColumn<String> pairKey = GeneratedColumn<String>(
+    'pair_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hostMeta = const VerificationMeta('host');
+  @override
+  late final GeneratedColumn<String> host = GeneratedColumn<String>(
+    'host',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _portMeta = const VerificationMeta('port');
+  @override
+  late final GeneratedColumn<int> port = GeneratedColumn<int>(
+    'port',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastSentSeqMeta = const VerificationMeta(
+    'lastSentSeq',
+  );
+  @override
+  late final GeneratedColumn<int> lastSentSeq = GeneratedColumn<int>(
+    'last_sent_seq',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastReceivedSeqMeta = const VerificationMeta(
+    'lastReceivedSeq',
+  );
+  @override
+  late final GeneratedColumn<int> lastReceivedSeq = GeneratedColumn<int>(
+    'last_received_seq',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastSyncAtMeta = const VerificationMeta(
+    'lastSyncAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSyncAt = GeneratedColumn<DateTime>(
+    'last_sync_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    deviceId,
+    name,
+    certFingerprint,
+    pairKey,
+    host,
+    port,
+    lastSentSeq,
+    lastReceivedSeq,
+    lastSyncAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'peers';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PeerRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('cert_fingerprint')) {
+      context.handle(
+        _certFingerprintMeta,
+        certFingerprint.isAcceptableOrUnknown(
+          data['cert_fingerprint']!,
+          _certFingerprintMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_certFingerprintMeta);
+    }
+    if (data.containsKey('pair_key')) {
+      context.handle(
+        _pairKeyMeta,
+        pairKey.isAcceptableOrUnknown(data['pair_key']!, _pairKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pairKeyMeta);
+    }
+    if (data.containsKey('host')) {
+      context.handle(
+        _hostMeta,
+        host.isAcceptableOrUnknown(data['host']!, _hostMeta),
+      );
+    }
+    if (data.containsKey('port')) {
+      context.handle(
+        _portMeta,
+        port.isAcceptableOrUnknown(data['port']!, _portMeta),
+      );
+    }
+    if (data.containsKey('last_sent_seq')) {
+      context.handle(
+        _lastSentSeqMeta,
+        lastSentSeq.isAcceptableOrUnknown(
+          data['last_sent_seq']!,
+          _lastSentSeqMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_received_seq')) {
+      context.handle(
+        _lastReceivedSeqMeta,
+        lastReceivedSeq.isAcceptableOrUnknown(
+          data['last_received_seq']!,
+          _lastReceivedSeqMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_sync_at')) {
+      context.handle(
+        _lastSyncAtMeta,
+        lastSyncAt.isAcceptableOrUnknown(
+          data['last_sync_at']!,
+          _lastSyncAtMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {deviceId};
+  @override
+  PeerRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PeerRow(
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      certFingerprint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cert_fingerprint'],
+      )!,
+      pairKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pair_key'],
+      )!,
+      host: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}host'],
+      ),
+      port: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}port'],
+      ),
+      lastSentSeq: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_sent_seq'],
+      )!,
+      lastReceivedSeq: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_received_seq'],
+      )!,
+      lastSyncAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_sync_at'],
+      ),
+    );
+  }
+
+  @override
+  $PeersTable createAlias(String alias) {
+    return $PeersTable(attachedDatabase, alias);
+  }
+}
+
+class PeerRow extends DataClass implements Insertable<PeerRow> {
+  final String deviceId;
+  final String name;
+
+  /// Lowercase hex SHA-256 of the peer's certificate DER.
+  final String certFingerprint;
+
+  /// Base64 pairing key.
+  final String pairKey;
+  final String? host;
+  final int? port;
+  final int lastSentSeq;
+  final int lastReceivedSeq;
+  final DateTime? lastSyncAt;
+  const PeerRow({
+    required this.deviceId,
+    required this.name,
+    required this.certFingerprint,
+    required this.pairKey,
+    this.host,
+    this.port,
+    required this.lastSentSeq,
+    required this.lastReceivedSeq,
+    this.lastSyncAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['device_id'] = Variable<String>(deviceId);
+    map['name'] = Variable<String>(name);
+    map['cert_fingerprint'] = Variable<String>(certFingerprint);
+    map['pair_key'] = Variable<String>(pairKey);
+    if (!nullToAbsent || host != null) {
+      map['host'] = Variable<String>(host);
+    }
+    if (!nullToAbsent || port != null) {
+      map['port'] = Variable<int>(port);
+    }
+    map['last_sent_seq'] = Variable<int>(lastSentSeq);
+    map['last_received_seq'] = Variable<int>(lastReceivedSeq);
+    if (!nullToAbsent || lastSyncAt != null) {
+      map['last_sync_at'] = Variable<DateTime>(lastSyncAt);
+    }
+    return map;
+  }
+
+  PeersCompanion toCompanion(bool nullToAbsent) {
+    return PeersCompanion(
+      deviceId: Value(deviceId),
+      name: Value(name),
+      certFingerprint: Value(certFingerprint),
+      pairKey: Value(pairKey),
+      host: host == null && nullToAbsent ? const Value.absent() : Value(host),
+      port: port == null && nullToAbsent ? const Value.absent() : Value(port),
+      lastSentSeq: Value(lastSentSeq),
+      lastReceivedSeq: Value(lastReceivedSeq),
+      lastSyncAt: lastSyncAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastSyncAt),
+    );
+  }
+
+  factory PeerRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PeerRow(
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      name: serializer.fromJson<String>(json['name']),
+      certFingerprint: serializer.fromJson<String>(json['certFingerprint']),
+      pairKey: serializer.fromJson<String>(json['pairKey']),
+      host: serializer.fromJson<String?>(json['host']),
+      port: serializer.fromJson<int?>(json['port']),
+      lastSentSeq: serializer.fromJson<int>(json['lastSentSeq']),
+      lastReceivedSeq: serializer.fromJson<int>(json['lastReceivedSeq']),
+      lastSyncAt: serializer.fromJson<DateTime?>(json['lastSyncAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'deviceId': serializer.toJson<String>(deviceId),
+      'name': serializer.toJson<String>(name),
+      'certFingerprint': serializer.toJson<String>(certFingerprint),
+      'pairKey': serializer.toJson<String>(pairKey),
+      'host': serializer.toJson<String?>(host),
+      'port': serializer.toJson<int?>(port),
+      'lastSentSeq': serializer.toJson<int>(lastSentSeq),
+      'lastReceivedSeq': serializer.toJson<int>(lastReceivedSeq),
+      'lastSyncAt': serializer.toJson<DateTime?>(lastSyncAt),
+    };
+  }
+
+  PeerRow copyWith({
+    String? deviceId,
+    String? name,
+    String? certFingerprint,
+    String? pairKey,
+    Value<String?> host = const Value.absent(),
+    Value<int?> port = const Value.absent(),
+    int? lastSentSeq,
+    int? lastReceivedSeq,
+    Value<DateTime?> lastSyncAt = const Value.absent(),
+  }) => PeerRow(
+    deviceId: deviceId ?? this.deviceId,
+    name: name ?? this.name,
+    certFingerprint: certFingerprint ?? this.certFingerprint,
+    pairKey: pairKey ?? this.pairKey,
+    host: host.present ? host.value : this.host,
+    port: port.present ? port.value : this.port,
+    lastSentSeq: lastSentSeq ?? this.lastSentSeq,
+    lastReceivedSeq: lastReceivedSeq ?? this.lastReceivedSeq,
+    lastSyncAt: lastSyncAt.present ? lastSyncAt.value : this.lastSyncAt,
+  );
+  PeerRow copyWithCompanion(PeersCompanion data) {
+    return PeerRow(
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      name: data.name.present ? data.name.value : this.name,
+      certFingerprint: data.certFingerprint.present
+          ? data.certFingerprint.value
+          : this.certFingerprint,
+      pairKey: data.pairKey.present ? data.pairKey.value : this.pairKey,
+      host: data.host.present ? data.host.value : this.host,
+      port: data.port.present ? data.port.value : this.port,
+      lastSentSeq: data.lastSentSeq.present
+          ? data.lastSentSeq.value
+          : this.lastSentSeq,
+      lastReceivedSeq: data.lastReceivedSeq.present
+          ? data.lastReceivedSeq.value
+          : this.lastReceivedSeq,
+      lastSyncAt: data.lastSyncAt.present
+          ? data.lastSyncAt.value
+          : this.lastSyncAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PeerRow(')
+          ..write('deviceId: $deviceId, ')
+          ..write('name: $name, ')
+          ..write('certFingerprint: $certFingerprint, ')
+          ..write('pairKey: $pairKey, ')
+          ..write('host: $host, ')
+          ..write('port: $port, ')
+          ..write('lastSentSeq: $lastSentSeq, ')
+          ..write('lastReceivedSeq: $lastReceivedSeq, ')
+          ..write('lastSyncAt: $lastSyncAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    deviceId,
+    name,
+    certFingerprint,
+    pairKey,
+    host,
+    port,
+    lastSentSeq,
+    lastReceivedSeq,
+    lastSyncAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PeerRow &&
+          other.deviceId == this.deviceId &&
+          other.name == this.name &&
+          other.certFingerprint == this.certFingerprint &&
+          other.pairKey == this.pairKey &&
+          other.host == this.host &&
+          other.port == this.port &&
+          other.lastSentSeq == this.lastSentSeq &&
+          other.lastReceivedSeq == this.lastReceivedSeq &&
+          other.lastSyncAt == this.lastSyncAt);
+}
+
+class PeersCompanion extends UpdateCompanion<PeerRow> {
+  final Value<String> deviceId;
+  final Value<String> name;
+  final Value<String> certFingerprint;
+  final Value<String> pairKey;
+  final Value<String?> host;
+  final Value<int?> port;
+  final Value<int> lastSentSeq;
+  final Value<int> lastReceivedSeq;
+  final Value<DateTime?> lastSyncAt;
+  final Value<int> rowid;
+  const PeersCompanion({
+    this.deviceId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.certFingerprint = const Value.absent(),
+    this.pairKey = const Value.absent(),
+    this.host = const Value.absent(),
+    this.port = const Value.absent(),
+    this.lastSentSeq = const Value.absent(),
+    this.lastReceivedSeq = const Value.absent(),
+    this.lastSyncAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PeersCompanion.insert({
+    required String deviceId,
+    required String name,
+    required String certFingerprint,
+    required String pairKey,
+    this.host = const Value.absent(),
+    this.port = const Value.absent(),
+    this.lastSentSeq = const Value.absent(),
+    this.lastReceivedSeq = const Value.absent(),
+    this.lastSyncAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : deviceId = Value(deviceId),
+       name = Value(name),
+       certFingerprint = Value(certFingerprint),
+       pairKey = Value(pairKey);
+  static Insertable<PeerRow> custom({
+    Expression<String>? deviceId,
+    Expression<String>? name,
+    Expression<String>? certFingerprint,
+    Expression<String>? pairKey,
+    Expression<String>? host,
+    Expression<int>? port,
+    Expression<int>? lastSentSeq,
+    Expression<int>? lastReceivedSeq,
+    Expression<DateTime>? lastSyncAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (deviceId != null) 'device_id': deviceId,
+      if (name != null) 'name': name,
+      if (certFingerprint != null) 'cert_fingerprint': certFingerprint,
+      if (pairKey != null) 'pair_key': pairKey,
+      if (host != null) 'host': host,
+      if (port != null) 'port': port,
+      if (lastSentSeq != null) 'last_sent_seq': lastSentSeq,
+      if (lastReceivedSeq != null) 'last_received_seq': lastReceivedSeq,
+      if (lastSyncAt != null) 'last_sync_at': lastSyncAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PeersCompanion copyWith({
+    Value<String>? deviceId,
+    Value<String>? name,
+    Value<String>? certFingerprint,
+    Value<String>? pairKey,
+    Value<String?>? host,
+    Value<int?>? port,
+    Value<int>? lastSentSeq,
+    Value<int>? lastReceivedSeq,
+    Value<DateTime?>? lastSyncAt,
+    Value<int>? rowid,
+  }) {
+    return PeersCompanion(
+      deviceId: deviceId ?? this.deviceId,
+      name: name ?? this.name,
+      certFingerprint: certFingerprint ?? this.certFingerprint,
+      pairKey: pairKey ?? this.pairKey,
+      host: host ?? this.host,
+      port: port ?? this.port,
+      lastSentSeq: lastSentSeq ?? this.lastSentSeq,
+      lastReceivedSeq: lastReceivedSeq ?? this.lastReceivedSeq,
+      lastSyncAt: lastSyncAt ?? this.lastSyncAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (certFingerprint.present) {
+      map['cert_fingerprint'] = Variable<String>(certFingerprint.value);
+    }
+    if (pairKey.present) {
+      map['pair_key'] = Variable<String>(pairKey.value);
+    }
+    if (host.present) {
+      map['host'] = Variable<String>(host.value);
+    }
+    if (port.present) {
+      map['port'] = Variable<int>(port.value);
+    }
+    if (lastSentSeq.present) {
+      map['last_sent_seq'] = Variable<int>(lastSentSeq.value);
+    }
+    if (lastReceivedSeq.present) {
+      map['last_received_seq'] = Variable<int>(lastReceivedSeq.value);
+    }
+    if (lastSyncAt.present) {
+      map['last_sync_at'] = Variable<DateTime>(lastSyncAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PeersCompanion(')
+          ..write('deviceId: $deviceId, ')
+          ..write('name: $name, ')
+          ..write('certFingerprint: $certFingerprint, ')
+          ..write('pairKey: $pairKey, ')
+          ..write('host: $host, ')
+          ..write('port: $port, ')
+          ..write('lastSentSeq: $lastSentSeq, ')
+          ..write('lastReceivedSeq: $lastReceivedSeq, ')
+          ..write('lastSyncAt: $lastSyncAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6441,13 +7124,46 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $FontsTable fonts = $FontsTable(this);
   late final $LyricsTable lyrics = $LyricsTable(this);
   late final $ListensTable listens = $ListensTable(this);
+  late final $PeersTable peers = $PeersTable(this);
+  late final Index tracksLocalSeq = Index(
+    'tracks_local_seq',
+    'CREATE INDEX tracks_local_seq ON tracks (local_seq)',
+  );
+  late final Index playlistsLocalSeq = Index(
+    'playlists_local_seq',
+    'CREATE INDEX playlists_local_seq ON playlists (local_seq)',
+  );
   late final Index playlistEntriesPlaylistPosition = Index(
     'playlist_entries_playlist_position',
     'CREATE INDEX playlist_entries_playlist_position ON playlist_entries (playlist_id, position)',
   );
+  late final Index playlistEntriesLocalSeq = Index(
+    'playlist_entries_local_seq',
+    'CREATE INDEX playlist_entries_local_seq ON playlist_entries (local_seq)',
+  );
+  late final Index ytSeenLocalSeq = Index(
+    'yt_seen_local_seq',
+    'CREATE INDEX yt_seen_local_seq ON yt_seen (local_seq)',
+  );
+  late final Index themesLocalSeq = Index(
+    'themes_local_seq',
+    'CREATE INDEX themes_local_seq ON themes (local_seq)',
+  );
+  late final Index fontsLocalSeq = Index(
+    'fonts_local_seq',
+    'CREATE INDEX fonts_local_seq ON fonts (local_seq)',
+  );
+  late final Index lyricsLocalSeq = Index(
+    'lyrics_local_seq',
+    'CREATE INDEX lyrics_local_seq ON lyrics (local_seq)',
+  );
   late final Index listensStartedAt = Index(
     'listens_started_at',
     'CREATE INDEX listens_started_at ON listens (started_at)',
+  );
+  late final Index listensLocalSeq = Index(
+    'listens_local_seq',
+    'CREATE INDEX listens_local_seq ON listens (local_seq)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -6467,8 +7183,17 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     fonts,
     lyrics,
     listens,
+    peers,
+    tracksLocalSeq,
+    playlistsLocalSeq,
     playlistEntriesPlaylistPosition,
+    playlistEntriesLocalSeq,
+    ytSeenLocalSeq,
+    themesLocalSeq,
+    fontsLocalSeq,
+    lyricsLocalSeq,
     listensStartedAt,
+    listensLocalSeq,
   ];
 }
 
@@ -6488,6 +7213,7 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   Value<String?> fileHash,
   Value<bool> unavailable,
   required String searchText,
+  Value<String?> mergedInto,
   Value<int> rowid,
 });
 typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
@@ -6506,6 +7232,7 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<String?> fileHash,
   Value<bool> unavailable,
   Value<String> searchText,
+  Value<String?> mergedInto,
   Value<int> rowid,
 });
 
@@ -6590,6 +7317,11 @@ class $$TracksTableFilterComposer
 
   ColumnFilters<String> get searchText => $composableBuilder(
     column: $table.searchText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mergedInto => $composableBuilder(
+    column: $table.mergedInto,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -6677,6 +7409,11 @@ class $$TracksTableOrderingComposer
     column: $table.searchText,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get mergedInto => $composableBuilder(
+    column: $table.mergedInto,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$TracksTableAnnotationComposer
@@ -6742,6 +7479,11 @@ class $$TracksTableAnnotationComposer
     column: $table.searchText,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get mergedInto => $composableBuilder(
+    column: $table.mergedInto,
+    builder: (column) => column,
+  );
 }
 
 class $$TracksTableTableManager
@@ -6787,6 +7529,7 @@ class $$TracksTableTableManager
                 Value<String?> fileHash = const Value.absent(),
                 Value<bool> unavailable = const Value.absent(),
                 Value<String> searchText = const Value.absent(),
+                Value<String?> mergedInto = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TracksCompanion(
                 id: id,
@@ -6804,6 +7547,7 @@ class $$TracksTableTableManager
                 fileHash: fileHash,
                 unavailable: unavailable,
                 searchText: searchText,
+                mergedInto: mergedInto,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -6823,6 +7567,7 @@ class $$TracksTableTableManager
                 Value<String?> fileHash = const Value.absent(),
                 Value<bool> unavailable = const Value.absent(),
                 required String searchText,
+                Value<String?> mergedInto = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TracksCompanion.insert(
                 id: id,
@@ -6840,6 +7585,7 @@ class $$TracksTableTableManager
                 fileHash: fileHash,
                 unavailable: unavailable,
                 searchText: searchText,
+                mergedInto: mergedInto,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -6884,6 +7630,7 @@ typedef $$PlaylistsTableCreateCompanionBuilder = PlaylistsCompanion Function({
   required String source,
   Value<String?> ytPlaylistUrl,
   Value<DateTime?> lastYtSyncAt,
+  Value<String?> mergedInto,
   Value<int> rowid,
 });
 typedef $$PlaylistsTableUpdateCompanionBuilder = PlaylistsCompanion Function({
@@ -6897,6 +7644,7 @@ typedef $$PlaylistsTableUpdateCompanionBuilder = PlaylistsCompanion Function({
   Value<String> source,
   Value<String?> ytPlaylistUrl,
   Value<DateTime?> lastYtSyncAt,
+  Value<String?> mergedInto,
   Value<int> rowid,
 });
 
@@ -6956,6 +7704,11 @@ class $$PlaylistsTableFilterComposer
 
   ColumnFilters<DateTime> get lastYtSyncAt => $composableBuilder(
     column: $table.lastYtSyncAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mergedInto => $composableBuilder(
+    column: $table.mergedInto,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -7018,6 +7771,11 @@ class $$PlaylistsTableOrderingComposer
     column: $table.lastYtSyncAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get mergedInto => $composableBuilder(
+    column: $table.mergedInto,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PlaylistsTableAnnotationComposer
@@ -7064,6 +7822,11 @@ class $$PlaylistsTableAnnotationComposer
     column: $table.lastYtSyncAt,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get mergedInto => $composableBuilder(
+    column: $table.mergedInto,
+    builder: (column) => column,
+  );
 }
 
 class $$PlaylistsTableTableManager
@@ -7104,6 +7867,7 @@ class $$PlaylistsTableTableManager
                 Value<String> source = const Value.absent(),
                 Value<String?> ytPlaylistUrl = const Value.absent(),
                 Value<DateTime?> lastYtSyncAt = const Value.absent(),
+                Value<String?> mergedInto = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PlaylistsCompanion(
                 id: id,
@@ -7116,6 +7880,7 @@ class $$PlaylistsTableTableManager
                 source: source,
                 ytPlaylistUrl: ytPlaylistUrl,
                 lastYtSyncAt: lastYtSyncAt,
+                mergedInto: mergedInto,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -7130,6 +7895,7 @@ class $$PlaylistsTableTableManager
                 required String source,
                 Value<String?> ytPlaylistUrl = const Value.absent(),
                 Value<DateTime?> lastYtSyncAt = const Value.absent(),
+                Value<String?> mergedInto = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PlaylistsCompanion.insert(
                 id: id,
@@ -7142,6 +7908,7 @@ class $$PlaylistsTableTableManager
                 source: source,
                 ytPlaylistUrl: ytPlaylistUrl,
                 lastYtSyncAt: lastYtSyncAt,
+                mergedInto: mergedInto,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -9802,6 +10569,290 @@ typedef $$ListensTableProcessedTableManager =
       ListenRow,
       PrefetchHooks Function()
     >;
+typedef $$PeersTableCreateCompanionBuilder = PeersCompanion Function({
+  required String deviceId,
+  required String name,
+  required String certFingerprint,
+  required String pairKey,
+  Value<String?> host,
+  Value<int?> port,
+  Value<int> lastSentSeq,
+  Value<int> lastReceivedSeq,
+  Value<DateTime?> lastSyncAt,
+  Value<int> rowid,
+});
+typedef $$PeersTableUpdateCompanionBuilder = PeersCompanion Function({
+  Value<String> deviceId,
+  Value<String> name,
+  Value<String> certFingerprint,
+  Value<String> pairKey,
+  Value<String?> host,
+  Value<int?> port,
+  Value<int> lastSentSeq,
+  Value<int> lastReceivedSeq,
+  Value<DateTime?> lastSyncAt,
+  Value<int> rowid,
+});
+
+class $$PeersTableFilterComposer extends Composer<_$AppDatabase, $PeersTable> {
+  $$PeersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get certFingerprint => $composableBuilder(
+    column: $table.certFingerprint,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pairKey => $composableBuilder(
+    column: $table.pairKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get host => $composableBuilder(
+    column: $table.host,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get port => $composableBuilder(
+    column: $table.port,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastSentSeq => $composableBuilder(
+    column: $table.lastSentSeq,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastReceivedSeq => $composableBuilder(
+    column: $table.lastReceivedSeq,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PeersTableOrderingComposer
+    extends Composer<_$AppDatabase, $PeersTable> {
+  $$PeersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get certFingerprint => $composableBuilder(
+    column: $table.certFingerprint,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pairKey => $composableBuilder(
+    column: $table.pairKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get host => $composableBuilder(
+    column: $table.host,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get port => $composableBuilder(
+    column: $table.port,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastSentSeq => $composableBuilder(
+    column: $table.lastSentSeq,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastReceivedSeq => $composableBuilder(
+    column: $table.lastReceivedSeq,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PeersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PeersTable> {
+  $$PeersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get certFingerprint => $composableBuilder(
+    column: $table.certFingerprint,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get pairKey =>
+      $composableBuilder(column: $table.pairKey, builder: (column) => column);
+
+  GeneratedColumn<String> get host =>
+      $composableBuilder(column: $table.host, builder: (column) => column);
+
+  GeneratedColumn<int> get port =>
+      $composableBuilder(column: $table.port, builder: (column) => column);
+
+  GeneratedColumn<int> get lastSentSeq => $composableBuilder(
+    column: $table.lastSentSeq,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastReceivedSeq => $composableBuilder(
+    column: $table.lastReceivedSeq,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => column,
+  );
+}
+
+class $$PeersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PeersTable,
+          PeerRow,
+          $$PeersTableFilterComposer,
+          $$PeersTableOrderingComposer,
+          $$PeersTableAnnotationComposer,
+          $$PeersTableCreateCompanionBuilder,
+          $$PeersTableUpdateCompanionBuilder,
+          (PeerRow, BaseReferences<_$AppDatabase, $PeersTable, PeerRow>),
+          PeerRow,
+          PrefetchHooks Function()
+        > {
+  $$PeersTableTableManager(_$AppDatabase db, $PeersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PeersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PeersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PeersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> deviceId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> certFingerprint = const Value.absent(),
+                Value<String> pairKey = const Value.absent(),
+                Value<String?> host = const Value.absent(),
+                Value<int?> port = const Value.absent(),
+                Value<int> lastSentSeq = const Value.absent(),
+                Value<int> lastReceivedSeq = const Value.absent(),
+                Value<DateTime?> lastSyncAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PeersCompanion(
+                deviceId: deviceId,
+                name: name,
+                certFingerprint: certFingerprint,
+                pairKey: pairKey,
+                host: host,
+                port: port,
+                lastSentSeq: lastSentSeq,
+                lastReceivedSeq: lastReceivedSeq,
+                lastSyncAt: lastSyncAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String deviceId,
+                required String name,
+                required String certFingerprint,
+                required String pairKey,
+                Value<String?> host = const Value.absent(),
+                Value<int?> port = const Value.absent(),
+                Value<int> lastSentSeq = const Value.absent(),
+                Value<int> lastReceivedSeq = const Value.absent(),
+                Value<DateTime?> lastSyncAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PeersCompanion.insert(
+                deviceId: deviceId,
+                name: name,
+                certFingerprint: certFingerprint,
+                pairKey: pairKey,
+                host: host,
+                port: port,
+                lastSentSeq: lastSentSeq,
+                lastReceivedSeq: lastReceivedSeq,
+                lastSyncAt: lastSyncAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$PeersTable, PeerRow>(table),
+                  BaseReferences<_$AppDatabase, $PeersTable, PeerRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PeersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PeersTable,
+      PeerRow,
+      $$PeersTableFilterComposer,
+      $$PeersTableOrderingComposer,
+      $$PeersTableAnnotationComposer,
+      $$PeersTableCreateCompanionBuilder,
+      $$PeersTableUpdateCompanionBuilder,
+      (PeerRow, BaseReferences<_$AppDatabase, $PeersTable, PeerRow>),
+      PeerRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -9832,4 +10883,6 @@ class $AppDatabaseManager {
       $$LyricsTableTableManager(_db, _db.lyrics);
   $$ListensTableTableManager get listens =>
       $$ListensTableTableManager(_db, _db.listens);
+  $$PeersTableTableManager get peers =>
+      $$PeersTableTableManager(_db, _db.peers);
 }

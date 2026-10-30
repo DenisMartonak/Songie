@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:songies/core/hlc.dart';
 import 'package:songies/data/sync_stamp.dart';
 
 import '../helpers/test_db.dart';
@@ -26,6 +27,28 @@ void main() {
     final c = await s.next();
     expect(c.localSeq, b.localSeq + 1);
     expect(c.clock.compareTo(b.clock) > 0, isTrue);
+  });
+
+  test('reserve advances seq and observes the clock', () async {
+    final db = testDb();
+    addTearDown(db.close);
+    var s = await SyncStamp.load(db, nowMs: () => 1000);
+    final start = (await s.next()).localSeq;
+    final observed = const Hlc(
+      wallMs: 1000 + 3600000,
+      counter: 7,
+      deviceId: 'other',
+    ).pack();
+    final seqs = await s.reserve(3, observedClock: observed);
+    expect(seqs, [start + 1, start + 2, start + 3]);
+    final after = await s.next();
+    expect(after.clock.compareTo(observed) > 0, isTrue);
+    expect(after.localSeq, start + 4);
+
+    s = await SyncStamp.load(db, nowMs: () => 1000);
+    final reloaded = await s.next();
+    expect(reloaded.localSeq, start + 5);
+    expect(reloaded.clock.compareTo(after.clock) > 0, isTrue);
   });
 
   test(
