@@ -57,7 +57,10 @@ class HostRun {
 /// One sync at a time per device: a local run is refused while a peer has a
 /// session open here, and a peer is refused (`busy`) while a local run is in
 /// progress. With [stopWhenPaused] (Android) the host stops while the app is
-/// paused and starts again on resume; a run in progress then finishes first.
+/// paused and starts again on resume. A run in progress then finishes first,
+/// and a pairing code showing keeps the host serving until it expires or is
+/// hidden (the screen locks on the walk to the other device), and for
+/// [pairedGrace] after it pairs, so the other device's first sync can start.
 class SyncHost {
   SyncHost({
     required this._db,
@@ -71,6 +74,8 @@ class SyncHost {
     this._preferredPort = 47823,
     this._bindAddress,
     this._findTimeout = findTimeout,
+    this._codeLifetime = PairingCode.lifetime,
+    this._pairedGrace = pairedGrace,
     bool stopWhenPaused = false,
   }) : _newDiscovery = discovery {
     _runner = SyncRunner(
@@ -97,6 +102,11 @@ class SyncHost {
   /// How long [pairByCode] looks for the device showing the code.
   static const findTimeout = Duration(seconds: 10);
 
+  /// How long a paused host keeps serving after its code paired, for the
+  /// other device's first sync to begin (it then keeps serving until that
+  /// sync ends).
+  static const pairedGrace = Duration(seconds: 30);
+
   final AppDatabase _db;
   final SyncStamp _stamp;
   final PeerRepository _peers;
@@ -108,6 +118,8 @@ class SyncHost {
   final int _preferredPort;
   final InternetAddress? _bindAddress;
   final Duration _findTimeout;
+  final Duration _codeLifetime;
+  final Duration _pairedGrace;
 
   late final SyncRunner _runner;
   late final StreamSubscription<List<PeerRow>> _peerSub;
@@ -121,6 +133,7 @@ class SyncHost {
   final _subs = <StreamSubscription<Object?>>[];
   bool _codeShowing = false;
   Timer? _codeExpiry;
+  Timer? _afterPairing;
 
   /// Serialises start and stop.
   Future<void> _lifecycleQueue = Future.value();
@@ -147,6 +160,7 @@ class SyncHost {
   final _responderOut = StreamController<ResponderState>.broadcast();
   // Sync: a run is announced before pairByCode or pairByAddress returns.
   final _runsOut = StreamController<HostRun>.broadcast(sync: true);
+  final _codeLostOut = StreamController<void>.broadcast();
 
   /// Asked about playlist clashes in runs the host starts itself ([runs]).
   /// While null, such a run leaves at the first clash (cancelled).
@@ -177,8 +191,19 @@ class SyncHost {
   /// address).
   Stream<HostRun> get runs => _runsOut.stream;
 
+  /// Fires when the host stops while a code is showing: that code no longer
+  /// pairs, and a new one is needed.
+  Stream<void> get codeLost => _codeLostOut.stream;
+
   bool get _busy =>
       _localRuns > 0 || _runner.running || (_responder?.inSession ?? false);
+
+  /// Whether a paused host keeps serving: a sync in progress, a code showing,
+  /// or a device that just paired here about to start its first sync.
+  bool get _keepServing =>
+      _busy ||
+      (_pairing?.codeShowing ?? false) ||
+      (_afterPairing?.isActive ?? false);
 
   // --- Start and stop -------------------------------------------------------
 
@@ -212,6 +237,7 @@ class SyncHost {
     await _devicesOut.close();
     await _responderOut.close();
     await _runsOut.close();
+    await _codeLostOut.close();
   }
 
   Future<void> _serial(Future<void> Function() step) {
@@ -273,7 +299,10 @@ class SyncHost {
     final server = _server;
     if (server == null) return;
     _server = null;
+    if (_pairing?.codeShowing ?? false) _codeLostOut.add(null);
     _hideCode();
+    _afterPairing?.cancel();
+    _afterPairing = null;
     final subs = [..._subs];
     _subs.clear();
     final discovery = _discovery;
@@ -317,13 +346,14 @@ class SyncHost {
   }
 
   /// Stops on `paused` and starts again on `resumed` (Android). A run in
-  /// progress finishes first; the host then stops.
+  /// progress, or a code showing, keeps it serving for now; it stops once
+  /// that ends ([_keepServing]).
   @visibleForTesting
   Future<void> onLifecycle(AppLifecycleState state) async {
     switch (state) {
       case AppLifecycleState.paused:
         _paused = true;
-        if (!_busy) await _serial(_stopServing);
+        if (!_keepServing) await _serial(_stopServing);
       case AppLifecycleState.resumed:
         _paused = false;
         if (_wanted) await _serial(_startServing);
@@ -333,7 +363,7 @@ class SyncHost {
   }
 
   void _stopIfPausedAndIdle() {
-    if (_paused && !_busy && _server != null) {
+    if (_paused && !_keepServing && _server != null) {
       unawaited(_serial(_stopServing));
     }
   }
@@ -434,8 +464,9 @@ class SyncHost {
     final code = pairing.showCode();
     _codeShowing = true;
     _codeExpiry?.cancel();
-    _codeExpiry = Timer(PairingCode.lifetime, () {
-      if (_codeShowing) hideCode();
+    _codeExpiry = Timer(_codeLifetime, () {
+      hideCode();
+      _stopIfPausedAndIdle();
     });
     unawaited(_advertise());
     return code;
@@ -445,6 +476,7 @@ class SyncHost {
     final was = _codeShowing;
     _hideCode();
     if (was) unawaited(_advertise());
+    _stopIfPausedAndIdle();
   }
 
   void _hideCode() {
@@ -463,6 +495,9 @@ class SyncHost {
   }
 
   void _onPaired(PeerRow peer) {
+    // The other device starts its first sync now: a paused host waits for it.
+    _afterPairing?.cancel();
+    _afterPairing = Timer(_pairedGrace, _stopIfPausedAndIdle);
     // The code pairs once: when it was ours, stop advertising pairing.
     if (_codeShowing && !(_pairing?.codeShowing ?? false)) hideCode();
   }

@@ -48,6 +48,7 @@ class _FakeHost implements SyncHost {
   final _devices = StreamController<List<SyncDeviceView>>.broadcast();
   final _responder = StreamController<ResponderState>.broadcast();
   final _runs = StreamController<HostRun>.broadcast(sync: true);
+  final _codeLost = StreamController<void>.broadcast();
   List<SyncDeviceView> current = const [];
 
   int starts = 0;
@@ -88,6 +89,11 @@ class _FakeHost implements SyncHost {
   Stream<HostRun> get runs => _runs.stream;
 
   @override
+  Stream<void> get codeLost => _codeLost.stream;
+
+  int codesShown = 0;
+
+  @override
   Future<void> start() async {
     starts++;
     serving = true;
@@ -105,6 +111,7 @@ class _FakeHost implements SyncHost {
   @override
   PairingCode showCode() {
     codeShowing = true;
+    codesShown++;
     return PairingCode(random: _FixedRandom(42));
   }
 
@@ -324,6 +331,25 @@ void main() {
     await settle(tester);
     expect(find.text('000042'), findsNothing);
     expect(host.codeShowing, isFalse);
+  });
+
+  uiTest('a code lost when the host stopped shows as expired', (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.text('Show a code'));
+    await settle(tester);
+    expect(find.textContaining('5:00'), findsOneWidget);
+
+    host._codeLost.add(null);
+    await settle(tester);
+    expect(find.textContaining('Expires in'), findsNothing);
+    final shown = tester.widget<Text>(find.byKey(const Key('sync.code.shown')));
+    expect(shown.style?.decoration, TextDecoration.lineThrough);
+
+    await tester.tap(find.byKey(const Key('sync.code.again')));
+    await settle(tester);
+    expect(host.codesShown, 2);
+    expect(find.textContaining('5:00'), findsOneWidget);
+    expect(find.byKey(const Key('sync.code.again')), findsNothing);
   });
 
   uiTest('enter code success starts a sync and shows the summary', (

@@ -13,6 +13,7 @@ import 'package:songies/downloads/download_repository.dart';
 import 'package:songies/sync/device_identity.dart';
 import 'package:songies/sync/discovery.dart';
 import 'package:songies/sync/merger.dart';
+import 'package:songies/sync/pairing_code.dart';
 import 'package:songies/sync/pairing_service.dart';
 import 'package:songies/sync/peer_repository.dart';
 import 'package:songies/sync/sync_client.dart';
@@ -108,6 +109,8 @@ class _Dev {
     Directory root,
     String name, {
     Duration findTimeout = SyncHost.findTimeout,
+    Duration codeLifetime = PairingCode.lifetime,
+    Duration pairedGrace = SyncHost.pairedGrace,
     void Function(FakeDiscovery)? configure,
   }) async {
     final db = testDb();
@@ -134,6 +137,8 @@ class _Dev {
       preferredPort: 0,
       bindAddress: InternetAddress.loopbackIPv4,
       findTimeout: findTimeout,
+      codeLifetime: codeLifetime,
+      pairedGrace: pairedGrace,
     );
     await d.host.start();
     return d;
@@ -220,12 +225,16 @@ void main() {
   Future<_Dev> dev(
     String name, {
     Duration? findTimeout,
+    Duration codeLifetime = PairingCode.lifetime,
+    Duration pairedGrace = SyncHost.pairedGrace,
     void Function(FakeDiscovery)? configure,
   }) async {
     final d = await _Dev.create(
       root(),
       name,
       findTimeout: findTimeout ?? SyncHost.findTimeout,
+      codeLifetime: codeLifetime,
+      pairedGrace: pairedGrace,
       configure: configure,
     );
     devs.add(d);
@@ -541,6 +550,66 @@ void main() {
     await run;
     await _settle();
     expect(a.host.port, isNull);
+  });
+
+  group('a code showing through a pause', () {
+    test('keeps serving; the code pairs and the first sync runs', () async {
+      final a = await dev('A', pairedGrace: const Duration(milliseconds: 300));
+      final b = await dev('B');
+      final code = a.host.showCode().code;
+      await a.host.onLifecycle(AppLifecycleState.paused);
+      expect(a.host.port, isNotNull);
+      expect(a.discovery.advertising, isTrue);
+      expect(a.discovery.last.pairing, isTrue);
+
+      final runs = <HostRun>[];
+      b.host.runs.listen(runs.add);
+      expect(
+        await b.host.pairByAddress('127.0.0.1', a.port, code),
+        PairOutcome.paired,
+      );
+      expect((await runs.single.progress.toList()).last, isA<SyncDone>());
+      expect(a.host.port, isNotNull, reason: 'within the grace after pairing');
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(a.host.port, isNull);
+    });
+
+    test('stops once the code is hidden', () async {
+      final a = await dev('A');
+      a.host.showCode();
+      await a.host.onLifecycle(AppLifecycleState.paused);
+      expect(a.host.port, isNotNull);
+      a.host.hideCode();
+      await _settle();
+      expect(a.host.port, isNull);
+    });
+
+    test('stops once the code expires', () async {
+      final a = await dev('A', codeLifetime: const Duration(milliseconds: 200));
+      a.host.showCode();
+      await a.host.onLifecycle(AppLifecycleState.paused);
+      expect(a.host.port, isNotNull);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(a.host.port, isNull);
+
+      await a.host.onLifecycle(AppLifecycleState.resumed);
+      expect(a.host.port, isNotNull);
+      expect(a.discovery.last.pairing, isFalse);
+    });
+
+    test('stopping while a code shows reports it lost', () async {
+      final a = await dev('A');
+      var lost = 0;
+      a.host.codeLost.listen((_) => lost++);
+      await a.host.stop();
+      await a.host.start();
+      expect(lost, 0, reason: 'no code was showing');
+      a.host.showCode();
+      await a.host.stop();
+      await _settle();
+      expect(lost, 1);
+    });
   });
 
   test('localAddresses lists no loopback address', () async {

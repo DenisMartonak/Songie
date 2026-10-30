@@ -86,6 +86,10 @@ class _ShowCodeSheetState extends State<_ShowCodeSheet> {
   Timer? _tick;
   Set<String>? _known;
   StreamSubscription<List<SyncDeviceView>>? _devicesSub;
+  StreamSubscription<void>? _lostSub;
+
+  /// The host stopped while the code showed, so it no longer pairs.
+  bool _lost = false;
   late final Future<List<String>> _addresses = widget.host
       .localAddresses()
       .catchError((Object _) => const <String>[]);
@@ -95,12 +99,17 @@ class _ShowCodeSheetState extends State<_ShowCodeSheet> {
     super.initState();
     _newCode();
     _devicesSub = widget.host.devices.listen(_onDevices);
+    _lostSub = widget.host.codeLost.listen((_) {
+      _tick?.cancel();
+      if (mounted) setState(() => _lost = true);
+    });
   }
 
   void _newCode() {
     try {
       _code = widget.host.showCode();
       _failed = false;
+      _lost = false;
     } on StateError {
       _code = null;
       _failed = true;
@@ -135,6 +144,7 @@ class _ShowCodeSheetState extends State<_ShowCodeSheet> {
   void dispose() {
     _tick?.cancel();
     unawaited(_devicesSub?.cancel());
+    unawaited(_lostSub?.cancel());
     widget.host.hideCode();
     super.dispose();
   }
@@ -148,7 +158,7 @@ class _ShowCodeSheetState extends State<_ShowCodeSheet> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final code = _code;
-    final expired = _left == Duration.zero;
+    final expired = _left == Duration.zero || _lost;
     final muted = TextStyle(color: colors.mutedText);
     return Column(
       mainAxisSize: MainAxisSize.min,
