@@ -1,6 +1,12 @@
 # Songies — Progress
 
-_Last updated: 2026-10-29_
+_Last updated: 2026-10-30_
+
+## Plan 10 (device sync) — in progress, paused at Task 9 of 12
+
+- **Branch:** `plan-10-device-sync` (from `plan-9-stats`). Spec: [device sync design](superpowers/specs/2026-10-30-songies-device-sync-design.md). Plan: [Plan 10](superpowers/plans/2026-10-30-songies-plan-10-device-sync.md). Session log: [plan-10-session-log.md](plan-10-session-log.md). Nothing is pushed or merged.
+- **Status:** Tasks 1–8 are done, and each was reviewed (sync data layer, merge rules, device identity, SPAKE2 pairing, HTTPS transport, the two-way sync run). Tests: 1,880 passing, `flutter analyze` clean. Task 9 (file transfer) was stopped before any commit. Tasks 10–12 and the whole-branch review remain. No UI yet, and nothing has been run on a device.
+- **Next:** resume Task 9 (see the session log for the resume prompt).
 
 ## Plan 9 (listening statistics) — done, reviewed, final review fixed
 
