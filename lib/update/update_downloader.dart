@@ -29,12 +29,23 @@ class DownloadFailed extends DownloadProgress {
 class UpdateCancel {
   bool _cancelled = false;
   bool get isCancelled => _cancelled;
-  void cancel() => _cancelled = true;
+  void Function()? _onCancel;
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    _onCancel?.call();
+  }
 }
 
 class UpdateDownloader {
-  UpdateDownloader({required this.dir, HttpClient Function()? client})
-    : _client = client ?? HttpClient.new;
+  UpdateDownloader({
+    required this.dir,
+    HttpClient Function()? client,
+    this.idleTimeout = const Duration(seconds: 30),
+  }) : _client = client ?? HttpClient.new;
+
+  /// How long a body may stay silent before the download fails as network.
+  final Duration idleTimeout;
 
   final Directory dir;
   final HttpClient Function() _client;
@@ -52,6 +63,8 @@ class UpdateDownloader {
       return;
     }
     final client = _client();
+    // Cancelling aborts any pending connect or body read straight away.
+    cancel?._onCancel = () => client.close(force: true);
     final part = File(p.join(dir.path, '${a.name}.part'));
     final target = File(p.join(dir.path, a.name));
     var received = 0;
@@ -73,7 +86,7 @@ class UpdateDownloader {
           failure = DownloadError.network;
           text = '';
         } else {
-          text = await res.transform(utf8.decoder).join();
+          text = await res.transform(utf8.decoder).timeout(idleTimeout).join();
         }
       } on Object {
         failure = DownloadError.network;
@@ -87,6 +100,7 @@ class UpdateDownloader {
         }
       }
       if (failure != null) {
+        if (cancel?.isCancelled ?? false) failure = DownloadError.cancelled;
         yield DownloadFailed(failure);
         return;
       }
@@ -102,7 +116,7 @@ class UpdateDownloader {
           failure = DownloadError.network;
         } else {
           if (res.contentLength > 0) total = res.contentLength;
-          await for (final chunk in res) {
+          await for (final chunk in res.timeout(idleTimeout)) {
             if (cancel?.isCancelled ?? false) {
               failure = DownloadError.cancelled;
               break;
@@ -133,6 +147,7 @@ class UpdateDownloader {
         failure = DownloadError.checksumMismatch;
       }
       if (failure != null) {
+        if (cancel?.isCancelled ?? false) failure = DownloadError.cancelled;
         yield DownloadFailed(failure, received, total);
         return;
       }
@@ -140,6 +155,7 @@ class UpdateDownloader {
       await part.rename(target.path);
       yield DownloadDone(target, received);
     } finally {
+      cancel?._onCancel = null;
       client.close(force: true);
       try {
         if (await part.exists()) await part.delete();

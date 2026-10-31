@@ -15,6 +15,7 @@ void main() {
   var sums = '';
   var serveSums = true;
   var cutAt = -1;
+  var stall = false;
   Completer<void>? hold;
 
   Release release() => Release(
@@ -47,6 +48,7 @@ void main() {
     sums = '${sha256.convert(payload)}  songies-1.1.0.apk\n';
     serveSums = true;
     cutAt = -1;
+    stall = false;
     hold = null;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     base = 'http://127.0.0.1:${server.port}';
@@ -75,6 +77,11 @@ void main() {
         return;
       }
       res.contentLength = payload.length;
+      if (stall) {
+        res.add(payload.sublist(0, 20000));
+        await res.flush();
+        return; // goes silent, connection stays open
+      }
       if (hold != null) {
         res.add(payload.sublist(0, 20000));
         await res.flush();
@@ -146,6 +153,34 @@ void main() {
         .asFuture<void>();
     await done;
     expect((events.last as DownloadFailed).kind, DownloadError.cancelled);
+    expect(files(), isEmpty);
+  });
+
+  test('cancel interrupts a stalled body promptly', () async {
+    stall = true;
+    final cancel = UpdateCancel();
+    final r = release();
+    final events = <DownloadProgress>[];
+    final done = UpdateDownloader(dir: dir)
+        .download(r, r.pickAsset(UpdatePlatform.android)!, cancel: cancel)
+        .listen((e) {
+          events.add(e);
+          if (e is! DownloadFailed) cancel.cancel();
+        })
+        .asFuture<void>();
+    await done.timeout(const Duration(seconds: 5));
+    expect((events.last as DownloadFailed).kind, DownloadError.cancelled);
+    expect(files(), isEmpty);
+  });
+
+  test('a stalled body fails as network after the idle timeout', () async {
+    stall = true;
+    final r = release();
+    final events = await UpdateDownloader(
+      dir: dir,
+      idleTimeout: const Duration(milliseconds: 200),
+    ).download(r, r.pickAsset(UpdatePlatform.android)!).toList();
+    expect((events.last as DownloadFailed).kind, DownloadError.network);
     expect(files(), isEmpty);
   });
 }
