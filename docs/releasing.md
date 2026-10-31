@@ -101,7 +101,7 @@ The installer is not signed with a paid certificate, so Windows may say "Windows
 
 ## 8. Linux
 
-1. Make the AppImage executable: `chmod +x songies-X.Y.Z-x86_64.AppImage`, then run it. Keep it in a folder you can write to, so in-app updates can replace it. If it cannot be replaced, the app offers "Open download page" instead.
+1. Make the AppImage executable: `chmod +x songies-X.Y.Z-x86_64.AppImage`, then run it. Keep it in a folder you can write to, so in-app updates can replace it. If it cannot be replaced, the app offers "Open download page" instead. An in-app update swaps the new version in under the old file name, so `songies-1.0.0-x86_64.AppImage` may hold 1.1.0 afterwards; Settings → About shows the real version.
 2. Device sync still needs the firewall opened and Avahi running, exactly as described for device sync (the AppImage cannot change that). On Fedora/Nobara, allow the sync port (TCP 47823) and mDNS (UDP 5353, for discovery) in firewalld, for example `sudo firewall-cmd --add-port=47823/tcp --add-service=mdns` (add `--permanent` to keep it), and make sure `avahi-daemon` is enabled.
 
 ## 9. Before making the repo public
