@@ -109,6 +109,14 @@ void main() {
     expect(events.whereType<DownloadDone>(), hasLength(1));
   });
 
+  test('a new download removes older installers from the folder', () async {
+    File('${dir.path}/songies-1.0.0.apk').writeAsStringSync('old');
+    File('${dir.path}/songies-1.0.5.apk.part').writeAsStringSync('cut');
+    final events = await run();
+    expect(events.last, isA<DownloadDone>());
+    expect(files(), ['songies-1.1.0.apk']);
+  });
+
   test('checksum mismatch deletes the file', () async {
     sums = '${'0' * 64}  songies-1.1.0.apk\n';
     final last = (await run()).last as DownloadFailed;

@@ -72,6 +72,7 @@ class UpdateDownloader {
     DownloadError? failure;
     try {
       await dir.create(recursive: true);
+      await _removeOthers(keep: target.path);
       if (await part.exists()) await part.delete();
 
       String text;
@@ -162,6 +163,23 @@ class UpdateDownloader {
       } on Object {
         // Nothing more to do; the next attempt removes it first.
       }
+    }
+  }
+
+  /// Deletes older installers and stale part files so they don't pile up.
+  /// Runs only when the user starts a download, so it is not idle work.
+  Future<void> _removeOthers({required String keep}) async {
+    try {
+      await for (final e in dir.list(followLinks: false)) {
+        if (e is! File || e.path == keep) continue;
+        try {
+          await e.delete();
+        } on Object {
+          // In use or locked; try again on the next download.
+        }
+      }
+    } on Object {
+      // The folder can't be listed; the download itself still proceeds.
     }
   }
 
