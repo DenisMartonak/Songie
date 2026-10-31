@@ -9,10 +9,11 @@ import '../motion/pressable.dart';
 import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
 
-/// The playing order as a reorderable list: drag a handle to move a song
-/// (the row lifts with a shadow), swipe a row away to remove it, tap one to
-/// play it, long-press or right-click one for the song menu. The playing row
-/// shows [EqualizerBars].
+/// What plays next: the playing song at the top, then the songs after it as
+/// a reorderable list. Drag a handle to move a song (the row lifts with a
+/// shadow), swipe a row away to remove it, tap one to play it, long-press or
+/// right-click one for the song menu. The playing row shows [EqualizerBars].
+/// Songs that already played are not shown.
 class NowPlayingQueue extends ConsumerWidget {
   const NowPlayingQueue({super.key});
 
@@ -44,33 +45,63 @@ class NowPlayingQueue extends ConsumerWidget {
     final player = ref.read(playerServiceProvider);
     final keys = _slotKeys(queue);
     final bottom = MediaQuery.paddingOf(context).bottom;
+    // Upcoming rows start after the playing one; row i is queue[first + i].
+    final first = playingIndex < 0 ? 0 : playingIndex + 1;
+    final upcoming = queue.length - first;
 
-    return ReorderableListView.builder(
-      buildDefaultDragHandles: false,
-      padding: EdgeInsets.only(bottom: bottom + 16),
-      itemCount: queue.length,
-      onReorderItem: player.move,
-      proxyDecorator: (child, _, animation) =>
-          _LiftedRow(animation: animation, child: child),
-      itemBuilder: (context, i) => Dismissible(
-        key: keys[i],
-        direction: DismissDirection.endToStart,
-        onDismissed: (_) => player.removeAt(i),
-        background: Container(
-          color: colors.text.withAlpha(30),
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 24),
-          child: Icon(Icons.delete_outline_rounded, color: colors.text),
-        ),
-        child: _QueueRow(
-          index: i,
-          track: queue[i],
-          current: i == playingIndex,
-          playing: playing,
-          onTap: () => player.playAt(i),
-          menu: songMenuOpeners(context, ref, MenuSong.track(queue[i])),
-        ),
-      ),
+    return CustomScrollView(
+      slivers: [
+        if (playingIndex >= 0) ...[
+          const SliverToBoxAdapter(child: _SectionLabel('Now playing')),
+          SliverToBoxAdapter(
+            child: _QueueRow(
+              index: playingIndex,
+              track: queue[playingIndex],
+              current: true,
+              playing: playing,
+              onTap: () => player.playAt(playingIndex),
+              menu: songMenuOpeners(
+                context,
+                ref,
+                MenuSong.track(queue[playingIndex]),
+              ),
+            ),
+          ),
+        ],
+        if (upcoming > 0) ...[
+          const SliverToBoxAdapter(child: _SectionLabel('Next up')),
+          SliverReorderableList(
+            itemCount: upcoming,
+            onReorderItem: (from, to) => player.move(first + from, first + to),
+            proxyDecorator: (child, _, animation) =>
+                _LiftedRow(animation: animation, child: child),
+            itemBuilder: (context, i) {
+              final q = first + i;
+              return Dismissible(
+                key: keys[q],
+                direction: DismissDirection.endToStart,
+                onDismissed: (_) => player.removeAt(q),
+                background: Container(
+                  color: colors.text.withAlpha(30),
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 24),
+                  child: Icon(Icons.delete_outline_rounded, color: colors.text),
+                ),
+                child: _QueueRow(
+                  index: q,
+                  dragIndex: i,
+                  track: queue[q],
+                  current: false,
+                  playing: playing,
+                  onTap: () => player.playAt(q),
+                  menu: songMenuOpeners(context, ref, MenuSong.track(queue[q])),
+                ),
+              );
+            },
+          ),
+        ],
+        SliverToBoxAdapter(child: SizedBox(height: bottom + 16)),
+      ],
     );
   }
 
@@ -87,9 +118,32 @@ class NowPlayingQueue extends ConsumerWidget {
   }
 }
 
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: colors.mutedText,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
 class _QueueRow extends StatelessWidget {
   const _QueueRow({
     required this.index,
+    this.dragIndex,
     required this.track,
     required this.current,
     required this.playing,
@@ -97,7 +151,12 @@ class _QueueRow extends StatelessWidget {
     required this.menu,
   });
 
+  /// Position in the queue.
   final int index;
+
+  /// Position in the reorderable list; null for the playing row, which has no
+  /// drag handle.
+  final int? dragIndex;
   final Track track;
   final bool current;
 
@@ -163,18 +222,21 @@ class _QueueRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                ReorderableDragStartListener(
-                  key: Key('queue.handle.$index'),
-                  index: index,
-                  child: SizedBox(
-                    width: 56,
-                    height: NowPlayingQueue.rowHeight,
-                    child: Icon(
-                      Icons.drag_handle_rounded,
-                      color: colors.text.withAlpha(153),
+                if (dragIndex case final dragIndex?)
+                  ReorderableDragStartListener(
+                    key: Key('queue.handle.$index'),
+                    index: dragIndex,
+                    child: SizedBox(
+                      width: 56,
+                      height: NowPlayingQueue.rowHeight,
+                      child: Icon(
+                        Icons.drag_handle_rounded,
+                        color: colors.text.withAlpha(153),
+                      ),
                     ),
-                  ),
-                ),
+                  )
+                else
+                  const SizedBox(width: 56),
               ],
             ),
           ),

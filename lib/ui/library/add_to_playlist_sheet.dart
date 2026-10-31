@@ -23,6 +23,7 @@ Future<void> showAddToPlaylistSheet(
   final snacks = PageSnackBars.of(context);
   final choice = await showModalBottomSheet<_Choice>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     useSafeArea: true,
     constraints: const BoxConstraints(maxWidth: 640),

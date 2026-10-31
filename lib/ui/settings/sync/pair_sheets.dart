@@ -20,6 +20,7 @@ Future<void> _showSheet(BuildContext context, Widget sheet) {
   final colors = Theme.of(context).extension<SongiesColors>()!;
   return showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: colors.background,
     constraints: const BoxConstraints(maxWidth: 560),

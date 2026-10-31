@@ -304,6 +304,7 @@ Future<SongMenuAction?> _sheet(
 ) {
   return showModalBottomSheet<SongMenuAction>(
     context: context,
+    useRootNavigator: true,
     useSafeArea: true,
     constraints: const BoxConstraints(maxWidth: 640),
     sheetAnimationStyle: _animation(context),
@@ -362,13 +363,18 @@ Future<SongMenuAction?> _popup(
 ) {
   final colors = Theme.of(context).extension<SongiesColors>()!;
   final overlay =
-      Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
+      Navigator.of(
+            context,
+            rootNavigator: true,
+          ).overlay!.context.findRenderObject()!
+          as RenderBox;
   final local = Rect.fromPoints(
     overlay.globalToLocal(anchor.topLeft),
     overlay.globalToLocal(anchor.bottomRight),
   );
   return showMenu<SongMenuAction>(
     context: context,
+    useRootNavigator: true,
     position: RelativeRect.fromRect(local, Offset.zero & overlay.size),
     color: colors.surface,
     popUpAnimationStyle: _animation(context),

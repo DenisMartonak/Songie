@@ -131,6 +131,20 @@ void main() {
     expect(find.text('Song t2'), findsOneWidget);
   });
 
+  uiTest('swiping a row right adds it to the queue and keeps it', (
+    tester,
+  ) async {
+    final id = await threeSongs(tester);
+    await pumpPage(tester, id);
+
+    await tester.drag(find.text('Song t2'), const Offset(700, 0));
+    await settle(tester);
+    expect(find.text('Song t2'), findsOneWidget);
+    expect(await order(tester, id), ['t1', 't2', 't3']);
+    expect(find.text('Added to queue'), findsOneWidget);
+    expect([for (final t in h.player.state.queue) t.id], ['t2']);
+  });
+
   uiTest('undo restores the first and the last row too', (tester) async {
     final id = await threeSongs(tester);
     await pumpPage(tester, id);

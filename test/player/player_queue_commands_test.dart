@@ -142,12 +142,50 @@ void main() {
   });
 
   group('addToQueue', () {
-    test('appends to the end', () async {
+    test('inserts right after the current song', () async {
       await player.playQueue(ten, startIndex: 3);
       await player.addToQueue([x, y]);
       expect(player.state.queue, hasLength(12));
-      expect(ids(player.state.queue).sublist(10), ['x', 'y']);
+      expect(ids(player.state.queue).sublist(3, 7), ['t3', 'x', 'y', 't4']);
       expect(player.state.index, 3);
+    });
+
+    test('songs added one by one play in the order they were added', () async {
+      await player.playQueue(ten, startIndex: 3);
+      await player.addToQueue([x]);
+      await player.addToQueue([y]);
+      expect(ids(player.state.queue).sublist(3, 7), ['t3', 'x', 'y', 't4']);
+
+      backend.clearCalls();
+      await player.next();
+      await player.next();
+      await player.next();
+      expect(backend.sources, ['/music/x.mp3', '/music/y.mp3', '/music/t4.mp3']);
+    });
+
+    test('a song queued while a queued one plays goes after the rest of the '
+        'queued songs', () async {
+      final z = track('z');
+      await player.playQueue(ten, startIndex: 3);
+      await player.addToQueue([x, y]);
+      await player.next();
+      expect(player.state.current, x);
+      await player.addToQueue([z]);
+      expect(ids(player.state.queue).sublist(4, 8), ['x', 'y', 'z', 't4']);
+    });
+
+    test('play next goes ahead of songs already queued', () async {
+      await player.playQueue(ten, startIndex: 3);
+      await player.addToQueue([x]);
+      await player.playNext([y]);
+      expect(ids(player.state.queue).sublist(3, 7), ['t3', 'y', 'x', 't4']);
+    });
+
+    test('turning shuffle on keeps queued songs next', () async {
+      await player.playQueue(ten, startIndex: 3);
+      await player.addToQueue([x, y]);
+      player.setShuffle(true);
+      expect(ids(player.state.queue).sublist(0, 3), ['t3', 'x', 'y']);
     });
 
     test('with shuffle on, the new songs come after the current one', () async {
@@ -161,7 +199,7 @@ void main() {
       expect(player.state.current, ten[5]);
 
       player.setShuffle(false);
-      expect(ids(player.state.queue).sublist(10), ['x', 'y']);
+      expect(ids(player.state.queue).sublist(5, 8), ['t5', 'x', 'y']);
       expect(player.state.current, ten[5]);
     });
 

@@ -196,10 +196,15 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
                 final row = list[i];
                 return Dismissible(
                   key: ValueKey(row.entryId),
-                  background: const _SwipeBackground(Alignment.centerLeft),
-                  secondaryBackground: const _SwipeBackground(
-                    Alignment.centerRight,
-                  ),
+                  // Swiping right queues the song and springs back; swiping
+                  // left removes it.
+                  background: const _SwipeBackground.queue(),
+                  secondaryBackground: const _SwipeBackground.remove(),
+                  confirmDismiss: (direction) async {
+                    if (direction == DismissDirection.endToStart) return true;
+                    _queue(row);
+                    return false;
+                  },
                   onDismissed: (_) => _remove(list, i),
                   child: _TrackRow(
                     key: ValueKey('row.${row.entryId}'),
@@ -286,6 +291,14 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
       _say('Couldn\'t move that song');
     }
   }
+
+  void _queue(PlaylistTrack row) {
+    ref.read(playerServiceProvider).addToQueue([row.track]);
+    PageSnackBars.of(context)
+        .show(content: const Text('Added to queue'), duration: _queuedSnack);
+  }
+
+  static const Duration _queuedSnack = Duration(seconds: 2);
 
   Future<void> _remove(List<PlaylistTrack> rows, int index) async {
     final removed = rows[index];
@@ -469,6 +482,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
 
   Future<void> _addSongs() => showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     useSafeArea: true,
     constraints: const BoxConstraints(maxWidth: 640),
@@ -1132,17 +1146,27 @@ class _MissingTag extends StatelessWidget {
 }
 
 class _SwipeBackground extends StatelessWidget {
-  const _SwipeBackground(this.alignment);
+  const _SwipeBackground.queue() : _remove = false;
+  const _SwipeBackground.remove() : _remove = true;
 
-  final Alignment alignment;
+  final bool _remove;
 
   @override
   Widget build(BuildContext context) {
+    if (_remove) {
+      return Container(
+        color: Theme.of(context).colorScheme.error,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: const Icon(Icons.delete_outline, color: Colors.white),
+      );
+    }
+    final scheme = Theme.of(context).colorScheme;
     return Container(
-      color: Theme.of(context).colorScheme.error,
-      alignment: alignment,
+      color: scheme.primary,
+      alignment: Alignment.centerLeft,
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: const Icon(Icons.delete_outline, color: Colors.white),
+      child: Icon(Icons.queue_music, color: scheme.onPrimary),
     );
   }
 }

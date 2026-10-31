@@ -133,6 +133,10 @@ class _Entry {
 
   /// Whether the engine-error retry (fresh stream URL) was already used.
   bool engineRetried = false;
+
+  /// Added by [PlayerService.addToQueue] or [PlayerService.playNext] rather
+  /// than being part of the queue that was played.
+  bool queued = false;
 }
 
 /// The single source of truth for what is playing. Platform-agnostic: audio
@@ -176,8 +180,9 @@ class PlayerService {
   final Future<void> Function(Track track, String? playlistId)? _onTrackStarted;
   final Future<void> Function(String trackId)? _onUnavailable;
 
-  /// While it reports offline, YouTube songs without a downloaded file are
-  /// skipped quietly instead of stopping playback.
+  /// While it reports offline, YouTube songs without a downloaded file that
+  /// the user picks are skipped quietly; when the player moves on by itself,
+  /// playback stops instead.
   final NetworkStatus? _network;
   final Random _random;
 
@@ -241,6 +246,11 @@ class PlayerService {
   /// True while [_tryStart] resolves a stream for an entry that was already
   /// shown as current; the old track's position ticks are ignored meanwhile.
   bool _resolving = false;
+
+  /// True while the player moves on by itself (a song ended or failed while
+  /// playing). Going offline then stops playback instead of skipping songs
+  /// that need the network.
+  bool _automatic = false;
 
   /// The entry whose successor was already prefetched.
   _Entry? _prefetchedFor;
@@ -318,38 +328,44 @@ class PlayerService {
     await _startFirstPlayable(_candidates(start, wrap: _wraps));
   });
 
-  /// Inserts [tracks] right after the current song, in both the playing
-  /// order and the unshuffled one, so they play next whether or not shuffle is
-  /// on (or is turned off later). On an empty queue they become the queue,
-  /// with the first one current but not started.
-  Future<void> playNext(List<Track> tracks) => _locked(() async {
-    if (tracks.isEmpty) return;
-    final entries = [for (final t in tracks) _Entry(t)];
-    final current = _currentEntry;
-    if (current == null) {
-      _becomeQueue(entries);
-      return;
-    }
-    _queue.insertAll(_state.index + 1, entries);
-    final o = _original.indexOf(current);
-    _original.insertAll(o < 0 ? _original.length : o + 1, entries);
-    _queueEdited();
-  });
+  /// Inserts [tracks] right after the current song, ahead of anything queued
+  /// earlier. On an empty queue they become the queue, with the first one
+  /// current but not started.
+  Future<void> playNext(List<Track> tracks) =>
+      _locked(() async => _insertQueued(tracks, _state.index + 1));
 
-  /// Appends [tracks] to both orders; with shuffle on they still come after
-  /// the current song. On an empty queue they become the queue, with the
+  /// Queues [tracks] after the current song and the songs queued before them,
+  /// so they play next, in the order they were added, before the rest of the
+  /// queue that was played. On an empty queue they become the queue, with the
   /// first one current but not started.
-  Future<void> addToQueue(List<Track> tracks) => _locked(() async {
+  Future<void> addToQueue(List<Track> tracks) => _locked(
+    () async => _insertQueued(tracks, _state.index + 1 + _queuedAhead),
+  );
+
+  /// Songs queued with [addToQueue] or [playNext] waiting right after the
+  /// current one.
+  int get _queuedAhead {
+    var n = 0;
+    for (var i = _state.index + 1; i < _queue.length && _queue[i].queued; i++) {
+      n++;
+    }
+    return n;
+  }
+
+  /// Inserts [tracks] at [at] in the playing order, and after the same song in
+  /// the unshuffled one, so they keep their place if shuffle is turned off.
+  void _insertQueued(List<Track> tracks, int at) {
     if (tracks.isEmpty) return;
-    final entries = [for (final t in tracks) _Entry(t)];
+    final entries = [for (final t in tracks) _Entry(t)..queued = true];
     if (_currentEntry == null) {
       _becomeQueue(entries);
       return;
     }
-    _queue.addAll(entries);
-    _original.addAll(entries);
+    final o = _original.indexOf(_queue[at - 1]);
+    _queue.insertAll(at, entries);
+    _original.insertAll(o < 0 ? _original.length : o + 1, entries);
     _queueEdited();
-  });
+  }
 
   void _becomeQueue(List<_Entry> entries) {
     _queue
@@ -516,10 +532,16 @@ class PlayerService {
         ..clear()
         ..addAll(_queue);
       if (current != null) {
-        final rest = _shuffled(_queue.where((e) => !identical(e, current)));
+        // Songs queued to play next stay next.
+        final i = _state.index;
+        final ahead = _queue.sublist(i + 1, i + 1 + _queuedAhead);
+        final rest = _shuffled(
+          _queue.where((e) => !identical(e, current) && !ahead.contains(e)),
+        );
         _queue
           ..clear()
           ..add(current)
+          ..addAll(ahead)
           ..addAll(rest);
       }
     } else {
@@ -765,10 +787,12 @@ class PlayerService {
             track.source != 'yt' && failure.kind == FailureKind.notFound
             ? fileMissingReason
             : failure.message;
-        if (track.source == 'yt' &&
+        if (!_automatic &&
+            track.source == 'yt' &&
             failure.kind == FailureKind.network &&
             await _isOffline()) {
-          // Offline and not downloaded: later songs may be downloaded.
+          // The user picked it while offline and it is not downloaded: later
+          // songs may be downloaded.
           _skipQuietly = true;
         } else if (failure.kind == FailureKind.network ||
             (track.source == 'yt' && _haltsQueue(failure))) {
@@ -1034,40 +1058,42 @@ class PlayerService {
     if (entry == null) return;
     // An error from a source that was replaced since is not this track's.
     final generation = _generation;
-    _locked(() async {
-      // Stopped, or the user already moved on since this was reported.
-      if (generation != _generation ||
-          !_loaded ||
-          !identical(_currentEntry, entry)) {
-        return;
-      }
-      AppLog.w('Playback of ${entry.track.id} failed: $error');
-      var reason = playbackFailedError;
-      if (entry.track.source == 'yt' && !entry.engineRetried) {
-        // The stream URL may have expired: fetch a fresh one, once per entry.
-        if (await _retryWithFreshStream(entry, report: false)) return;
-        if (await _haltOnNetworkFailure()) return;
-        reason = _lastFailureReason ?? reason;
-        _failedStarts++;
-      }
-      AppLog.w('Skipping ${entry.track.id}: $reason');
-      final notice = PlayerNotice(
-        trackTitle: entry.track.title,
-        reason: reason,
-      );
-      if (++_engineFailures >= _queue.length) {
-        await _stopBackend();
-        _markStopped();
-        _noticeFresh = true;
-        _emit(_state.copyWith(error: engineFailedError, notice: notice));
-        return;
-      }
-      _publishNotice(notice);
-      await _advance();
-      if (!_state.playing && _state.error == null) {
-        _emit(_state.copyWith(error: playbackFailedError));
-      }
-    }).catchError((Object e, StackTrace st) {
+    _locked(
+      () => _whileAutomatic(() async {
+        // Stopped, or the user already moved on since this was reported.
+        if (generation != _generation ||
+            !_loaded ||
+            !identical(_currentEntry, entry)) {
+          return;
+        }
+        AppLog.w('Playback of ${entry.track.id} failed: $error');
+        var reason = playbackFailedError;
+        if (entry.track.source == 'yt' && !entry.engineRetried) {
+          // The stream URL may have expired: fetch a fresh one, once per entry.
+          if (await _retryWithFreshStream(entry, report: false)) return;
+          if (await _haltOnNetworkFailure()) return;
+          reason = _lastFailureReason ?? reason;
+          _failedStarts++;
+        }
+        AppLog.w('Skipping ${entry.track.id}: $reason');
+        final notice = PlayerNotice(
+          trackTitle: entry.track.title,
+          reason: reason,
+        );
+        if (++_engineFailures >= _queue.length) {
+          await _stopBackend();
+          _markStopped();
+          _noticeFresh = true;
+          _emit(_state.copyWith(error: engineFailedError, notice: notice));
+          return;
+        }
+        _publishNotice(notice);
+        await _advance();
+        if (!_state.playing && _state.error == null) {
+          _emit(_state.copyWith(error: playbackFailedError));
+        }
+      }),
+    ).catchError((Object e, StackTrace st) {
       AppLog.e('Handling a playback error failed', e, st);
     });
   }
@@ -1086,6 +1112,15 @@ class PlayerService {
       await _reportStarted(track);
       return;
     }
-    await _advance();
+    await _whileAutomatic(_advance);
+  }
+
+  Future<void> _whileAutomatic(Future<void> Function() body) async {
+    _automatic = true;
+    try {
+      await body();
+    } finally {
+      _automatic = false;
+    }
   }
 }

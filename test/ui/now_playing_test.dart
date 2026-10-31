@@ -303,7 +303,7 @@ void main() {
       expect(queueIds(), ['t1', 't2', 't3']);
 
       final gesture = await tester.startGesture(
-        tester.getCenter(find.byKey(const Key('queue.handle.0'))),
+        tester.getCenter(find.byKey(const Key('queue.handle.1'))),
       );
       await tester.pump(const Duration(milliseconds: 50));
       for (var i = 0; i < 8; i++) {
@@ -312,7 +312,7 @@ void main() {
       }
       await gesture.up();
       await settle(tester);
-      expect(queueIds(), ['t2', 't1', 't3']);
+      expect(queueIds(), ['t1', 't3', 't2']);
       // The playing track kept playing; its index followed it.
       expect(h.player.state.current?.id, 't1');
     });
@@ -328,16 +328,42 @@ void main() {
       expect(find.text('Song two'), findsNothing);
     });
 
+    uiTest('the playing song has no drag handle', (tester) async {
+      await pumpApp(tester, disableAnimations: true);
+      await playThree(tester);
+      await openQueue(tester);
+      expect(find.byKey(const Key('queue.handle.0')), findsNothing);
+      expect(find.byKey(const Key('queue.handle.1')), findsOneWidget);
+    });
+
+    uiTest('shows the playing song first and hides songs already played', (
+      tester,
+    ) async {
+      await pumpApp(tester, disableAnimations: true);
+      await playThree(tester);
+      await openQueue(tester);
+      expect(find.byKey(const Key('queue.row.0')), findsOneWidget);
+      await tester.tap(find.text('Song two'));
+      await settle(tester);
+      expect(h.player.state.index, 1);
+      expect(find.byKey(const Key('queue.row.0')), findsNothing);
+      expect(find.text('Next up'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byKey(const Key('queue.row.1'))).dy,
+        lessThan(tester.getTopLeft(find.byKey(const Key('queue.row.2'))).dy),
+      );
+    });
+
     uiTest('a position tick does not rebuild the list', (tester) async {
       await pumpApp(tester, disableAnimations: true);
       await playThree(tester);
       await openQueue(tester);
 
-      final before = tester.widget(find.byType(ReorderableListView));
+      final before = tester.widget(find.byType(SliverReorderableList));
       h.backend.setPosition(const Duration(seconds: 5));
       await flush(tester);
       expect(h.player.state.position, const Duration(seconds: 5));
-      expect(tester.widget(find.byType(ReorderableListView)), same(before));
+      expect(tester.widget(find.byType(SliverReorderableList)), same(before));
     });
 
     uiTest('swiping a row away while the position ticks does not throw', (

@@ -956,23 +956,43 @@ void main() {
       },
     );
 
-    test('auto-advance passes undownloaded songs, local MP3s play', () async {
-      final ys = [for (var i = 1; i <= 4; i++) ytTrack('y$i')];
-      notDownloaded(['y1', 'y2', 'y3', 'y4']);
-      final d = ytTrack('d');
-      await player.playQueue([a, ...ys, d, b]);
+    test('when a song ends offline, an undownloaded next song stops playback '
+        'instead of being skipped', () async {
+      final ys = [for (var i = 1; i <= 2; i++) ytTrack('y$i')];
+      notDownloaded(['y1', 'y2']);
+      await player.playQueue([a, ...ys, b]);
       expect(player.state.current, a);
 
       backend.complete();
       await settle();
-      expect(player.state.current, d);
-      expect(player.state.playing, isTrue);
-      expect(player.state.notice, isNull);
+      expect(resolver.resolved.where((id) => id.startsWith('y')), ['y1']);
+      expect(player.state.current, ys[0]);
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, "You're offline");
+      expect(backend.sources, ['/music/a.mp3']);
+    });
 
+    test('when a song ends offline, a downloaded next song plays', () async {
+      final d = ytTrack('d');
+      await player.playQueue([a, d]);
       backend.complete();
       await settle();
-      expect(player.state.current, b);
-      expect(backend.sources, ['/music/a.mp3', '/music/d.mp3', '/music/b.mp3']);
+      expect(player.state.current, d);
+      expect(player.state.playing, isTrue);
+    });
+
+    test('a stream that dies offline stops on that song', () async {
+      final y = ytTrack('y');
+      await player.playQueue([y, ytTrack('z'), b]);
+      expect(player.state.playing, isTrue);
+      notDownloaded(['y', 'z']);
+
+      backend.emitError();
+      await settle();
+      expect(player.state.current, y);
+      expect(player.state.playing, isFalse);
+      expect(player.state.error, "You're offline");
+      expect(backend.sources, ['/music/y.mp3']);
     });
 
     test('quiet skips do not count toward the 3-in-a-row cap', () async {

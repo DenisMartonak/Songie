@@ -24,6 +24,7 @@ double _runFraction(DownloadSnapshot s) {
 Future<void> showDownloadsSheet(BuildContext context) =>
     showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       useSafeArea: true,
       constraints: const BoxConstraints(maxWidth: 640),
       builder: (_) => const DownloadsSheet(),
