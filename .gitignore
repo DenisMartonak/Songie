@@ -41,3 +41,8 @@ app.*.map.json
 # Project specific
 .superpowers/
 test/native/
+
+# Android release signing (never commit keys)
+android/key.properties
+*.jks
+*.keystore

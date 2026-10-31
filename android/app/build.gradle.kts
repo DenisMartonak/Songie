@@ -1,8 +1,31 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Release signing: android/key.properties first, then the SONGIES_* environment
+// variables. If neither gives a complete set, the release build falls back to the
+// debug key (with a warning). Secrets are never printed.
+val keyProps = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun signingValue(propName: String, envName: String): String? =
+    (keyProps.getProperty(propName)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(envName)?.takeIf { it.isNotBlank() })
+val releaseStoreFile: File? = run {
+    val fromProps = keyProps.getProperty("storeFile")?.takeIf { it.isNotBlank() }
+    if (fromProps != null) rootProject.file(fromProps)
+    else System.getenv("SONGIES_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }?.let { File(it) }
+}
+val releaseStorePassword = signingValue("storePassword", "SONGIES_KEYSTORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "SONGIES_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "SONGIES_KEY_PASSWORD")
+val hasReleaseKey = releaseStoreFile != null && releaseStoreFile.exists() &&
+    releaseStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null
 
 android {
     namespace = "com.songies.songies"
@@ -39,11 +62,28 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // No minifyEnabled: the yt-dlp/Python natives must keep working.
+            if (hasReleaseKey) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                logger.warn(
+                    "Release build signed with the DEBUG key: it cannot update a release install"
+                )
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 }
