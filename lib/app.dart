@@ -1,18 +1,81 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/log.dart';
 import 'providers.dart';
 import 'theme/theme_service.dart';
 import 'ui/motion/motion.dart';
+import 'ui/update/update_dialog.dart';
+import 'update/update_controller.dart';
 
-class SongiesApp extends ConsumerWidget {
-  const SongiesApp({required this.router, super.key});
+class SongiesApp extends ConsumerStatefulWidget {
+  const SongiesApp({
+    required this.router,
+    this.checkForUpdates = false,
+    super.key,
+  });
 
   final GoRouter router;
 
+  /// Runs the once-per-run update check 3 s after the first frame (`main()`
+  /// turns it on; tests leave it off so nothing reaches the network).
+  final bool checkForUpdates;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SongiesApp> createState() => _SongiesAppState();
+}
+
+class _SongiesAppState extends ConsumerState<SongiesApp> {
+  static const _startupDelay = Duration(seconds: 3);
+  Timer? _startupTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.checkForUpdates) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _startupTimer = Timer(_startupDelay, _startupCheck);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _startupTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Silent unless an update is available; never throws.
+  Future<void> _startupCheck() async {
+    try {
+      await ref.read(updateControllerProvider.notifier).startup();
+      if (!mounted) return;
+      if (ref.read(updateControllerProvider) case Available() || ManualOnly()) {
+        _showUpdateDialog();
+      }
+    } on Object catch (e, s) {
+      AppLog.e('update: startup check failed', e, s);
+    }
+  }
+
+  void _showUpdateDialog() {
+    final context = widget.router.routerDelegate.navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    showUpdateDialog(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // A download the user hid: ask to install once it is ready.
+    ref.listen(updateControllerProvider, (prev, next) {
+      if (next is ReadyToInstall && prev is! ReadyToInstall) {
+        if (!updateDialogOpen) _showUpdateDialog();
+      }
+    });
     final theme = ref.watch(songiesThemeProvider);
     return MaterialApp.router(
       title: 'Songies',
@@ -21,7 +84,7 @@ class SongiesApp extends ConsumerWidget {
       // The builder's AnimatedTheme below does the animating, where
       // MediaQuery (for reduced motion) is available.
       themeAnimationStyle: AnimationStyle.noAnimation,
-      routerConfig: router,
+      routerConfig: widget.router,
       builder: (context, child) => MotionScope(
         child: _ThemeScope(theme: theme, child: child!),
       ),

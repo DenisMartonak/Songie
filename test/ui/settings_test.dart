@@ -17,7 +17,11 @@ import 'package:songies/theme/theme_repository.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
+import 'package:songies/update/update_checker.dart';
+import 'package:songies/update/update_installer.dart'
+    show updateInstallerProvider;
 
+import '../helpers/fake_updater.dart';
 import '../helpers/ui_harness.dart';
 
 void main() {
@@ -466,6 +470,79 @@ void main() {
       final id = h.stamp.deviceId;
       expect(find.text(id.substring(0, 8)), findsOneWidget);
       expect(find.text(id), findsNothing);
+    });
+
+    group('settings button shows No updates found / connection error', () {
+      late FakeUpdateChecker checker;
+
+      setUp(() => checker = FakeUpdateChecker());
+
+      Future<void> pumpWithUpdater(WidgetTester tester) async {
+        tester.view.physicalSize = const Size(800, 1600);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          h.app(
+            initialLocation: '/settings',
+            extraOverrides: [
+              storageUsageProvider.overrideWith(
+                (ref) async =>
+                    const StorageUsage(artBytes: 0, databaseBytes: 0),
+              ),
+              updateCheckerProvider.overrideWithValue(checker),
+              updateDownloaderProvider.overrideWithValue(
+                FakeUpdateDownloader(),
+              ),
+              updateInstallerProvider.overrideWithValue(FakeUpdateInstaller()),
+            ],
+            routes: [
+              GoRoute(
+                path: '/settings',
+                builder: (_, _) => const Scaffold(body: SettingsPage()),
+              ),
+            ],
+          ),
+        );
+        await settle(tester);
+        await tester.scrollUntilVisible(
+          find.text('Check for updates'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+      }
+
+      uiTest('Checking…, then No updates found.', (tester) async {
+        final answer = Completer<UpdateCheck>();
+        checker.onNow = () => answer.future;
+        await pumpWithUpdater(tester);
+        await tester.tap(find.text('Check for updates'));
+        await tester.pump();
+        expect(find.text('Checking…'), findsOneWidget);
+        answer.complete(const UpToDate());
+        await settle(tester);
+        expect(find.text('Checking…'), findsNothing);
+        expect(find.text('No updates found.'), findsOneWidget);
+      });
+
+      uiTest('a failed check asks to check the connection', (tester) async {
+        checker.onNow = () async => CheckFailed(const SocketException('x'));
+        await pumpWithUpdater(tester);
+        await tester.tap(find.text('Check for updates'));
+        await settle(tester);
+        expect(
+          find.text("Couldn't check for updates. Check your connection."),
+          findsOneWidget,
+        );
+      });
+
+      uiTest('an available update opens the dialog', (tester) async {
+        checker.onNow = () async => availableFor(testRelease);
+        await pumpWithUpdater(tester);
+        await tester.tap(find.text('Check for updates'));
+        await settle(tester);
+        expect(find.text('Songies 1.1.0 is available'), findsOneWidget);
+        expect(find.text('No updates found.'), findsNothing);
+      });
     });
 
     test('appVersion matches pubspec.yaml', () {

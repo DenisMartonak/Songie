@@ -5,6 +5,7 @@ import 'package:flutter/material.dart'
     show ImageProvider, NetworkImage, ResizeImage, ThemeData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/app_version.dart';
 import 'core/connectivity.dart';
 import 'core/log.dart';
 import 'innertube/yt_session_store.dart';
@@ -45,6 +46,10 @@ import 'sync/sync_host.dart';
 import 'theme/theme_service.dart';
 import 'theme/theme_spec.dart';
 import 'ui/shell/window_controls.dart';
+import 'update/release.dart';
+import 'update/update_checker.dart';
+import 'update/update_controller.dart';
+import 'update/update_downloader.dart';
 import 'youtube/yt_import_service.dart';
 import 'youtube/ytdlp_runner.dart';
 
@@ -823,3 +828,33 @@ class SelectedStatsPeriod extends Notifier<StatsPeriod> {
 final statsPeriodProvider = NotifierProvider<SelectedStatsPeriod, StatsPeriod>(
   SelectedStatsPeriod.new,
 );
+
+/// The platform whose release file this build installs; null where Songies
+/// has no updates.
+final updatePlatformProvider = Provider<UpdatePlatform?>((ref) {
+  if (ref.watch(isAndroidProvider)) return UpdatePlatform.android;
+  if (ref.watch(isWindowsProvider)) return UpdatePlatform.windows;
+  if (ref.watch(isLinuxProvider)) return UpdatePlatform.linux;
+  return null;
+});
+
+/// Checks GitHub for a newer release; null where Songies has no updates.
+final updateCheckerProvider = Provider<UpdateChecker?>((ref) {
+  final platform = ref.watch(updatePlatformProvider);
+  final current = AppVersion.tryParse(appVersion);
+  if (platform == null || current == null) return null;
+  return UpdateChecker(
+    settings: ref.watch(settingsRepositoryProvider),
+    current: current,
+    platform: platform,
+  );
+});
+
+/// Downloads and verifies update files into the app's `updates` folder.
+final updateDownloaderProvider = Provider<UpdateDownloader>(
+  (ref) => UpdateDownloader(dir: ref.watch(appPathsProvider).updates),
+);
+
+/// The in-app update flow behind the update dialog and Settings → About.
+final updateControllerProvider =
+    NotifierProvider<UpdateController, UpdateState>(UpdateController.new);

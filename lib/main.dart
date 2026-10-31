@@ -278,7 +278,7 @@ Future<void> main() async {
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: SongiesApp(router: router),
+      child: SongiesApp(router: router, checkForUpdates: true),
     ),
   );
 

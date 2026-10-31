@@ -13,8 +13,10 @@ import '../../data/settings_repository.dart';
 import '../../library/library_scanner.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../../update/update_controller.dart';
 import '../library/add_folder_flow.dart';
 import '../motion/motion.dart';
+import '../update/update_dialog.dart';
 import '../widgets/page_snack_bar.dart';
 import 'downloads_settings.dart';
 import 'storage_usage.dart';
@@ -500,6 +502,72 @@ class _AboutSection extends ConsumerWidget {
         const SettingsSectionTitle('About'),
         const _InfoRow('Version', appVersion),
         _InfoRow('Device ID', shortId),
+        const _CheckForUpdates(),
+      ],
+    );
+  }
+}
+
+/// "Check for updates", with the result below it; an update opens the
+/// update dialog.
+class _CheckForUpdates extends ConsumerStatefulWidget {
+  const _CheckForUpdates();
+
+  @override
+  ConsumerState<_CheckForUpdates> createState() => _CheckForUpdatesState();
+}
+
+class _CheckForUpdatesState extends ConsumerState<_CheckForUpdates> {
+  /// The result shows only after a tap on this page.
+  bool _asked = false;
+
+  Future<void> _check() async {
+    setState(() => _asked = true);
+    final ctl = ref.read(updateControllerProvider.notifier);
+    await ctl.checkNow();
+    if (!mounted) return;
+    switch (ref.read(updateControllerProvider)) {
+      case Idle() || Checking() || NoUpdate() || CheckError():
+        break;
+      default:
+        await showUpdateDialog(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final state = ref.watch(updateControllerProvider);
+    final checking = state is Checking;
+    final result = !_asked
+        ? null
+        : switch (state) {
+            Checking() => 'Checking…',
+            NoUpdate() => 'No updates found.',
+            CheckError() =>
+              "Couldn't check for updates. Check your connection.",
+            _ => null,
+          };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: TextButton.icon(
+            key: const Key('settings.checkForUpdates'),
+            onPressed: checking ? null : _check,
+            icon: const Icon(Icons.system_update_alt_rounded),
+            label: const Text('Check for updates'),
+          ),
+        ),
+        if (result != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              result,
+              style: TextStyle(color: colors.mutedText, fontSize: 12),
+            ),
+          ),
       ],
     );
   }
