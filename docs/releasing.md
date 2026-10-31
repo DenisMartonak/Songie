@@ -93,7 +93,7 @@ Until now Windows ran from a loose build folder.
 2. Your data lives in `%APPDATA%\Songies`, which is unchanged, so the installed app finds it.
 3. Check that everything is there, then delete the old loose folder.
 
-Uninstalling keeps your data unless you tick the box to remove it.
+Uninstalling asks "Also delete your Songies library, downloads, settings and sign-in?". The default is No, which keeps your data for a later reinstall; Yes deletes `%APPDATA%\Songies`.
 
 ## 7. Windows SmartScreen
 

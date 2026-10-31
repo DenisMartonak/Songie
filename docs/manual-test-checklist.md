@@ -248,15 +248,16 @@ Needs a GitHub repo (public, or a public test repo for the test-build item) and 
 - [ ] The AppImage runs on Linux after `chmod +x`.
 - [ ] First-time phone switch from the debug build: sync to a PC first, uninstall the debug build, install the release APK, pair again and sync back. The library returns; downloads, sign-in and settings need redoing, as the guide says.
 - [ ] First-time Windows switch: install the setup exe over a machine that used the loose build folder. The installed app finds the library in `%APPDATA%\Songies`.
-- [ ] Update, Android: with release 1.0.0 installed, publish 1.1.0 (higher build number). The app offers it, downloads it, and installs over the top. The library, playlists and settings are still there.
+- [ ] On mobile data with downloads set to Wi-Fi only: the dialog says "You're on mobile data, and downloads are set to Wi-Fi only." with "Close" and "Download anyway".
+- [ ] Update, Android: with release 1.0.0 installed, publish 1.1.0 (higher build number). The app shows "Songies 1.1.0 is available" with "Update now" and "Not now"; Update now downloads it, then "Install now" installs it over the top. The library, playlists and settings are still there.
 - [ ] Update, Windows: same check. The installer closes the app, installs silently, and the new version opens by itself. The library is intact.
 - [ ] Update, Linux: same check with the AppImage in a writable folder. The app replaces itself and relaunches as the new version. The library is intact.
-- [ ] "Not now": decline the offered update. The next start stays quiet about that version. Publish a newer one and the app asks again.
-- [ ] Offline start: with no network, starting the app shows nothing about updates. Settings, Check for updates then shows a short "couldn't check" style message.
-- [ ] Settings, Check for updates when already current: it says you are up to date.
-- [ ] Android: back out of the system install screen. The app does not hang; you can close the dialog and try the update again (a known rough edge: it may need the download repeated).
+- [ ] "Not now": on "Songies X.Y.Z is available", tap "Not now". The next start stays quiet about that version. Publish a newer one and the app asks again.
+- [ ] Offline start: with no network, starting the app shows nothing about updates. Settings, Check for updates then shows "Couldn't check for updates. Check your connection."
+- [ ] Settings, Check for updates when already current: it shows "No updates found."
+- [ ] Android: back out of the system install screen. The app does not hang; the dialog still says "Finish installing on the Android screen." with a "Close" button, and you can close it and try the update again (a known rough edge: it may need the download repeated).
 - [ ] Windows SmartScreen: the first run of the setup exe may say "Windows protected your PC". More info, then Run anyway, works. The same may appear for an in-app update.
-- [ ] Windows uninstall: Uninstall asks whether to delete your data. Answering "No" keeps `%APPDATA%\Songies`. Answering "Yes, delete data" removes it. (The YouTube sign-in browser profile in `%APPDATA%\com.songies\Songies` may remain; that is a known gap.)
+- [ ] Windows uninstall: Uninstall asks "Also delete your Songies library, downloads, settings and sign-in?" (default No). Answering No keeps `%APPDATA%\Songies`. Answering Yes deletes it. (The YouTube sign-in browser profile in `%APPDATA%\com.songies\Songies` may remain; that is a known gap.)
 - [ ] The AppImage on a clean Fedora/Nobara (or one without libmpv installed): it starts and plays music, so libmpv is bundled correctly.
 - [ ] AppImage in a read-only folder (for example `chmod a-w` on the folder): an update offers "Open download page" instead of replacing itself.
 - [ ] Test build against a public test repo: build with `--dart-define=SONGIES_UPDATE_REPO=<you>/<test-repo>`, put a release with higher version there, and check the app finds and offers it. (A normal build looks at `DenisMartonak/Songie`.)
