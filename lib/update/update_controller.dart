@@ -112,6 +112,7 @@ class UpdateController extends Notifier<UpdateState> {
   ReleaseAsset? _asset;
   File? _file;
   UpdateCancel? _cancel;
+  bool _installRunning = false;
 
   /// Bumped by every check, so a slow startup answer can't override a newer
   /// manual one.
@@ -205,9 +206,9 @@ class UpdateController extends Notifier<UpdateState> {
   Future<void> downloadAnyway() => _download();
 
   Future<bool> _mustWaitForWifi() async {
+    final isAndroid = ref.read(isAndroidProvider);
+    if (!isAndroid) return false;
     try {
-      final isAndroid = ref.read(isAndroidProvider);
-      if (!isAndroid) return false;
       final wifiOnly = await ref
           .read(settingsRepositoryProvider)
           .getBool(kWifiOnly, fallback: wifiOnlyDefault(isAndroid: isAndroid));
@@ -215,8 +216,9 @@ class UpdateController extends Notifier<UpdateState> {
       return await ref.read(networkStatusProvider).current() ==
           NetworkKind.mobile;
     } on Object catch (e) {
+      // Fail closed: ask, as if on mobile data with Wi-Fi only on.
       AppLog.w('update: cannot read the network: $e');
-      return false;
+      return true;
     }
   }
 
@@ -267,18 +269,26 @@ class UpdateController extends Notifier<UpdateState> {
     state = r != null && a != null ? Available(r, a) : const Idle();
   }
 
-  /// Install now: hands the verified file to the platform installer.
+  /// Install now: hands the verified file to the platform installer. On
+  /// Android it also works from [Installing], since the user may have backed
+  /// out of the system install screen.
   Future<void> installNow() async {
     final file = _file;
-    if (file == null) return;
-    if (state is! ReadyToInstall && state is! NeedsPermission) return;
+    if (file == null || _installRunning) return;
+    final retry = state is Installing && ref.read(isAndroidProvider);
+    if (state is! ReadyToInstall && state is! NeedsPermission && !retry) {
+      return;
+    }
     // Desktop installers quit the app and never return.
     state = const Installing();
     inst.InstallOutcome outcome;
+    _installRunning = true;
     try {
       outcome = await ref.read(inst.updateInstallerProvider).install(file);
     } on Object catch (e) {
       outcome = inst.InstallFailed(e);
+    } finally {
+      _installRunning = false;
     }
     switch (outcome) {
       case inst.Installing():

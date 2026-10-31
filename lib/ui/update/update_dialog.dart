@@ -163,7 +163,15 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
               ? 'Finish installing on the Android screen.'
               : 'Installing the update…',
         ),
-        [TextButton(onPressed: close, child: const Text('Close'))],
+        [
+          TextButton(onPressed: close, child: const Text('Close')),
+          // Backing out of Android's install screen leaves the file ready.
+          if (isAndroid)
+            FilledButton(
+              onPressed: ctl.installNow,
+              child: const Text('Install now'),
+            ),
+        ],
       ),
       NeedsPermission() => (
         const Text(

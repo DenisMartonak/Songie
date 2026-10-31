@@ -216,4 +216,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(installer.permissionOpens, 1);
   });
+
+  testWidgets('Android Installing offers Install now again after backing out', (
+    tester,
+  ) async {
+    await pumpDialog(tester, isAndroid: true);
+    await tester.tap(find.text('Update now'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Install now'));
+    await tester.pumpAndSettle();
+    expect(state(), isA<Installing>());
+    expect(find.text('Close'), findsOneWidget);
+    await tester.tap(find.text('Install now'));
+    await tester.pumpAndSettle();
+    expect(installer.installs, [downloader.file, downloader.file]);
+  });
+
+  testWidgets('desktop Installing shows only Close', (tester) async {
+    await pumpDialog(tester);
+    await tester.tap(find.text('Update now'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Install now'));
+    await tester.pumpAndSettle();
+    expect(state(), isA<Installing>());
+    expect(find.text('Install now'), findsNothing);
+    expect(find.text('Close'), findsOneWidget);
+  });
 }

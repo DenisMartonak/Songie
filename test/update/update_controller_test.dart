@@ -330,6 +330,25 @@ void main() {
         }
       });
 
+      test('Android: backing out of the system installer can retry', () async {
+        final c = make(isAndroid: true);
+        checker.onNow = () async => availableFor(testRelease);
+        await ctl(c).checkNow();
+        await ctl(c).accept();
+        await ctl(c).installNow();
+        expect(c.read(updateControllerProvider), isA<Installing>());
+        // The user backed out; the verified file is still there.
+        await ctl(c).installNow();
+        expect(installer.installs, [downloader.file, downloader.file]);
+      });
+
+      test('desktop: Installing does not start a second install', () async {
+        final c = await ready(const inst.Installing());
+        expect(c.read(updateControllerProvider), isA<Installing>());
+        await ctl(c).installNow();
+        expect(installer.installs, [downloader.file]);
+      });
+
       test('CannotReplace offers the download page', () async {
         final c = await ready(const inst.CannotReplace());
         final s = c.read(updateControllerProvider);
@@ -350,6 +369,16 @@ void main() {
         await ctl(c).downloadAnyway();
         expect(downloader.calls, 1);
         expect(c.read(updateControllerProvider), isA<ReadyToInstall>());
+      });
+
+      test('when the network cannot be read, as if on mobile data', () async {
+        final c = make(isAndroid: true);
+        network.currentError = StateError('no connectivity channel');
+        checker.onNow = () async => availableFor(testRelease);
+        await ctl(c).checkNow();
+        await ctl(c).accept();
+        expect(c.read(updateControllerProvider), isA<WaitingForWifi>());
+        expect(downloader.calls, 0);
       });
 
       test('not when Wi-Fi only is off', () async {
