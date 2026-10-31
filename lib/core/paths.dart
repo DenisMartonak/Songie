@@ -13,6 +13,7 @@ class AppPaths {
       bin = Directory(p.join(root.path, 'bin')),
       logs = Directory(p.join(root.path, 'logs')),
       sync = Directory(p.join(root.path, 'sync')),
+      updates = Directory(p.join(root.path, 'updates')),
       db = File(p.join(root.path, 'songies.db'));
 
   final Directory root;
@@ -23,6 +24,7 @@ class AppPaths {
   final Directory bin;
   final Directory logs;
   final Directory sync;
+  final Directory updates;
   final File db;
 
   /// Paths rooted at an explicit directory (tests).
@@ -67,6 +69,7 @@ class AppPaths {
       bin,
       logs,
       sync,
+      updates,
     ]) {
       await d.create(recursive: true);
     }

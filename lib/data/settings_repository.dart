@@ -10,6 +10,12 @@ const kWifiOnly = 'wifi_only';
 /// Wi-Fi only streaming: refuse to stream on mobile data. Device-local,
 /// off by default on every platform.
 const kWifiOnlyStreaming = 'wifi_only_streaming';
+
+/// When the update check last ran, in milliseconds since the epoch.
+const kUpdateLastCheckMs = 'update_last_check_ms';
+
+/// The version the user chose "Not now" for.
+const kUpdateSkippedVersion = 'update_skipped_version';
 const kYtdlpUseSystem = 'ytdlp_use_system';
 const kReduceMotion = 'reduce_motion';
 
