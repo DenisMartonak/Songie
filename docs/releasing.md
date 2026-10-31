@@ -93,7 +93,7 @@ Until now Windows ran from a loose build folder.
 2. Your data lives in `%APPDATA%\Songies`, which is unchanged, so the installed app finds it.
 3. Check that everything is there, then delete the old loose folder.
 
-Uninstalling asks "Also delete your Songies library, downloads, settings and sign-in?". The default is No, which keeps your data for a later reinstall; Yes deletes `%APPDATA%\Songies`.
+Uninstalling asks "Also delete your Songies library, downloads, settings and sign-in?". The default is No, which keeps your data for a later reinstall; Yes deletes `%APPDATA%\Songies` and the sign-in folder `%APPDATA%\com.songies\Songies` (the stored sign-in and the YouTube sign-in browser profile). A Songies entry may remain in Windows Credential Manager; it only held the key for the deleted sign-in, so it is useless and safe to remove by hand.
 
 ## 7. Windows SmartScreen
 

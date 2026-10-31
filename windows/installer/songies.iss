@@ -82,21 +82,29 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; F
 [Code]
 // Uninstalling keeps the library, downloads, settings and sign-in in
 // %APPDATA%\Songies unless the user says Yes (the default button is No).
-// A silent uninstall never deletes them.
+// The sign-in itself (flutter_secure_storage's encrypted files and the
+// WebView2 profile) lives in the application-support folder
+// %APPDATA%\com.songies\Songies (Runner.rc CompanyName\ProductName), so Yes
+// deletes that too. A silent uninstall never deletes either.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataDir: String;
+  SupportDir: String;
 begin
   if CurUninstallStep = usPostUninstall then
   begin
     DataDir := ExpandConstant('{userappdata}\Songies');
-    if DirExists(DataDir) and (not UninstallSilent) then
+    SupportDir := ExpandConstant('{userappdata}\com.songies\Songies');
+    if (DirExists(DataDir) or DirExists(SupportDir)) and (not UninstallSilent) then
     begin
       if MsgBox('Also delete your Songies library, downloads, settings and sign-in?' + #13#10#13#10 +
                 'They are kept in ' + DataDir + '.' + #13#10#13#10 +
                 'Choose No to keep them for a later reinstall.',
                 mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      begin
         DelTree(DataDir, True, True, True);
+        DelTree(SupportDir, True, True, True);
+      end;
     end;
   end;
 end;

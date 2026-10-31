@@ -80,6 +80,12 @@ void main() {
       expect(iss, contains('MB_DEFBUTTON2'));
       expect(iss, contains('UninstallSilent'));
     });
+
+    test('Yes also deletes the sign-in folder %APPDATA%\\com.songies\\Songies',
+        () {
+      expect(iss, contains(r"ExpandConstant('{userappdata}\com.songies\Songies')"));
+      expect(iss, contains('DelTree(SupportDir, True, True, True)'));
+    });
   });
 
   group('linux packaging', () {
