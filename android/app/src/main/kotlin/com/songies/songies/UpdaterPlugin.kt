@@ -40,7 +40,8 @@ class UpdaterPlugin(private val activity: Activity, messenger: BinaryMessenger) 
                         Thread {
                             val answer = try {
                                 inspect(path)
-                            } catch (e: Exception) {
+                            } catch (e: Throwable) {
+                                // Even an OOM on this worker must not crash the app.
                                 failClosed()
                             }
                             main.post { result.success(answer) }
