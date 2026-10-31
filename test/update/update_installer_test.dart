@@ -13,7 +13,7 @@ class _FakeLauncher implements UpdateProcessLauncher {
   final calls = <String>[];
 
   /// Called on each `run`, before it is recorded.
-  void Function(String exe, List<String> args)? onRun;
+  Future<void> Function(String exe, List<String> args)? onRun;
 
   @override
   Future<void> startDetached(String exe, List<String> args) async {
@@ -22,7 +22,7 @@ class _FakeLauncher implements UpdateProcessLauncher {
 
   @override
   Future<int> run(String exe, List<String> args) async {
-    onRun?.call(exe, args);
+    await onRun?.call(exe, args);
     calls.add('run $exe ${args.join(' ')}'.trim());
     return 0;
   }
@@ -76,7 +76,7 @@ void main() {
         ..writeAsStringSync('old');
       final download = write('songies-1.1.0-x86_64.AppImage', 'new');
       final part = p.join(appDir.path, '.Songies.AppImage.part');
-      launcher.onRun = (exe, args) {
+      launcher.onRun = (exe, args) async {
         // chmod runs on the staged copy, before the rename.
         expect(File(part).readAsStringSync(), 'new');
         expect(current.readAsStringSync(), 'old');
@@ -94,6 +94,33 @@ void main() {
       expect(File(part).existsSync(), isFalse);
       expect(quits, 1);
     });
+
+    test(
+      'linux re-check during an install leaves the staged copy intact',
+      () async {
+        final appDir = Directory(p.join(dir.path, 'apps'))..createSync();
+        final current = File(p.join(appDir.path, 'Songies.AppImage'))
+          ..writeAsStringSync('old');
+        final download = write('songies-1.1.0-x86_64.AppImage', 'new');
+        final part = p.join(appDir.path, '.Songies.AppImage.part');
+        final installer = LinuxUpdateInstaller(
+          env: {'APPIMAGE': current.path},
+          quit: quit,
+          launcher: launcher,
+        );
+        launcher.onRun = (exe, args) async {
+          // A UI re-check lands between chmod and the rename.
+          expect(await installer.canSelfUpdate(), isTrue);
+          expect(File(part).readAsStringSync(), 'new');
+        };
+
+        await expectLater(installer.install(download), throwsA(isA<_Quit>()));
+        expect(current.readAsStringSync(), 'new');
+        expect(appDir.listSync().map((e) => p.basename(e.path)), [
+          'Songies.AppImage',
+        ]);
+      },
+    );
 
     test('linux without APPIMAGE cannot self update', () async {
       final download = write('songies-1.1.0-x86_64.AppImage', 'new');

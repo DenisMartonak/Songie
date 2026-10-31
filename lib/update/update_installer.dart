@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -134,16 +135,22 @@ class LinuxUpdateInstaller implements UpdateInstaller {
   Future<bool> canSelfUpdate() async {
     final appImage = _appImage;
     if (appImage == null) return false;
-    // Writability is only known by trying.
-    final probe = File(_partPath(appImage));
+    // Writability is only known by trying. The probe has its own unique
+    // name, so a re-check never touches a staged copy of a running install.
+    final name = p.basename(appImage.path);
+    final probe = File(
+      p.join(
+        p.dirname(appImage.path),
+        '.$name.probe-$pid-${Random().nextInt(1 << 32)}',
+      ),
+    );
     try {
-      await probe.writeAsBytes(const [], flush: true);
-      return true;
+      await probe.create(exclusive: true);
     } on FileSystemException {
       return false;
-    } finally {
-      await _deleteQuietly(probe);
     }
+    await _deleteQuietly(probe);
+    return true;
   }
 
   @override
