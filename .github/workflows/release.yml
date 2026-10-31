@@ -86,7 +86,7 @@ jobs:
           if [[ -f "$RUNNER_TEMP/previous/version.json" ]]; then
             args+=(--previous "$RUNNER_TEMP/previous/version.json")
           fi
-          dart run tool/check_release_version.dart "${args[@]}" >> "$GITHUB_OUTPUT"
+          dart tool/check_release_version.dart "${args[@]}" >> "$GITHUB_OUTPUT"
           cat "$RUNNER_TEMP/release/version.json"
 
       - uses: actions/upload-artifact@v4

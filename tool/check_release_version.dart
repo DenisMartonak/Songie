@@ -1,6 +1,6 @@
 // Release version check, run by .github/workflows/release.yml (Plan 11).
 //
-//   dart run tool/check_release_version.dart [--tag vX.Y.Z]
+//   dart tool/check_release_version.dart [--tag vX.Y.Z]
 //       [--pubspec pubspec.yaml] [--app-version lib/core/app_version.dart]
 //       [--previous version.json] [--write version.json]
 //
@@ -127,7 +127,7 @@ ReleaseInfo _parsePrevious(String source) {
 }
 
 const _usage =
-    'usage: dart run tool/check_release_version.dart [--tag vX.Y.Z] '
+    'usage: dart tool/check_release_version.dart [--tag vX.Y.Z] '
     '[--pubspec pubspec.yaml] [--app-version lib/core/app_version.dart] '
     '[--previous version.json] [--write version.json]';
 
