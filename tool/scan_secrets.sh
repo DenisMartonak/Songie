@@ -15,6 +15,7 @@
 #  - `[-]----BEGIN` is the same as five dashes; it only avoids a self-hit.
 #  - ghp_ / github_pat_ need 20+ token characters after the prefix, so the bare
 #    word "ghp_" in prose does not match.
+#  - password is matched in any case (password=, PASSWORD=, Password:).
 #  - password matches whose value starts with `<` (a doc placeholder), starts
 #    with `$` (a variable or CI expression) or is "your-password" /
 #    "your_password" are counted and skipped. The skipped count is printed.
@@ -41,7 +42,7 @@ patterns=(
   $'github-pat\tgithub_pat_[A-Za-z0-9_]{20,}'
   $'aws-access-key\tAKIA[0-9A-Z]{16}'
   $'google-cookie\t(SAPISID|__Secure-3PSID)\\s*=\\s*[A-Za-z0-9._/%+-]{20,}'
-  $'password\tpassword\\s*[:=]\\s*\\S{6,}'
+  $'password\t(?i:password)\\s*[:=]\\s*\\S{6,}'
 )
 
 redact() { printf '%s…' "${1:0:4}"; }
