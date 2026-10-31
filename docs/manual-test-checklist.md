@@ -239,6 +239,29 @@ Phone (Android), desktop Linux and Windows. Open Settings and then Sync devices 
 - [ ] Android: with the app paused (switched away) or the tab hidden, the page stops serving, so another device can't connect; coming back makes it available again. A sync that is running keeps going.
 - [ ] Leaving the Sync devices page on any device stops it serving (the other device then says it can't find it).
 
+## Plan 11: packaging and in-app updates
+
+Needs a GitHub repo (public, or a public test repo for the test-build item) and two released versions to update between. Version numbers below are examples. See [releasing.md](releasing.md) for how to make a release.
+- [ ] The first tagged release: push `v1.0.0`. The workflow run goes green and the Releases page shows five assets: the APK, the Windows setup exe, the AppImage, `SHA256SUMS` and `version.json`.
+- [ ] The release APK, installed on a phone from the release page, opens and plays music.
+- [ ] The Windows setup exe installs for the current user (no administrator prompt), and Songies starts from the Start menu.
+- [ ] The AppImage runs on Linux after `chmod +x`.
+- [ ] First-time phone switch from the debug build: sync to a PC first, uninstall the debug build, install the release APK, pair again and sync back. The library returns; downloads, sign-in and settings need redoing, as the guide says.
+- [ ] First-time Windows switch: install the setup exe over a machine that used the loose build folder. The installed app finds the library in `%APPDATA%\Songies`.
+- [ ] Update, Android: with release 1.0.0 installed, publish 1.1.0 (higher build number). The app offers it, downloads it, and installs over the top. The library, playlists and settings are still there.
+- [ ] Update, Windows: same check. The installer closes the app, installs silently, and the new version opens by itself. The library is intact.
+- [ ] Update, Linux: same check with the AppImage in a writable folder. The app replaces itself and relaunches as the new version. The library is intact.
+- [ ] "Not now": decline the offered update. The next start stays quiet about that version. Publish a newer one and the app asks again.
+- [ ] Offline start: with no network, starting the app shows nothing about updates. Settings, Check for updates then shows a short "couldn't check" style message.
+- [ ] Settings, Check for updates when already current: it says you are up to date.
+- [ ] Android: back out of the system install screen. The app does not hang; you can close the dialog and try the update again (a known rough edge: it may need the download repeated).
+- [ ] Windows SmartScreen: the first run of the setup exe may say "Windows protected your PC". More info, then Run anyway, works. The same may appear for an in-app update.
+- [ ] Windows uninstall: Uninstall asks whether to delete your data. Answering "No" keeps `%APPDATA%\Songies`. Answering "Yes, delete data" removes it. (The YouTube sign-in browser profile in `%APPDATA%\com.songies\Songies` may remain; that is a known gap.)
+- [ ] The AppImage on a clean Fedora/Nobara (or one without libmpv installed): it starts and plays music, so libmpv is bundled correctly.
+- [ ] AppImage in a read-only folder (for example `chmod a-w` on the folder): an update offers "Open download page" instead of replacing itself.
+- [ ] Test build against a public test repo: build with `--dart-define=SONGIES_UPDATE_REPO=<you>/<test-repo>`, put a release with higher version there, and check the app finds and offers it. (A normal build looks at `DenisMartonak/Songie`.)
+- [ ] The secret scan before going public: run `tool/scan_secrets.sh` and read every finding. Today it reports 2 known false positives (the plan doc quoting the key pattern, and Chromium's `'peanuts'` constant in `test/innertube/browser_cookies_test.dart`). Anything else is new. Then work through the list in releasing.md section 9.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.

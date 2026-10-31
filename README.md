@@ -21,6 +21,17 @@ Avahi installed so devices can find each other; without Avahi you can still use
 Connect by address. On Windows you may be asked to allow private networks. On
 Android, sync is available only while the app is open on that page.
 
+## Installing and updating
+
+Download the latest release from the GitHub Releases page: an APK for Android,
+a setup exe for Windows and an AppImage for Linux (`chmod +x` it, and keep it in
+a folder you can write to). Songies checks for a newer version when it starts
+and under Settings, Check for updates; it asks before downloading, checks the
+download against the published checksum, and installs it over the top, keeping
+your library. Windows may show a SmartScreen warning because the installer is
+not signed with a paid certificate (More info, then Run anyway). To make a
+release, see `docs/releasing.md`.
+
 ## Development
 
 ```

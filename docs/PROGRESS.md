@@ -1,6 +1,13 @@
 # Songies — Progress
 
-_Last updated: 2026-10-30_
+_Last updated: 2026-10-31_
+
+## Plan 11 (packaging and in-app updates) — done, reviewed
+
+- **Branch:** `plan-11-packaging`. Spec: [packaging design](superpowers/specs/2026-10-31-songies-packaging-design.md). Plan: [Plan 11](superpowers/plans/2026-10-31-songies-plan-11-packaging.md). Session log: [plan-11-session-log.md](plan-11-session-log.md). Guide: [releasing.md](releasing.md). Nothing is pushed or merged.
+- **Status:** Tasks 1–9 are done, and each was reviewed. Tests: 2,057 passing, `flutter analyze` clean. Release builds succeeded (APK 83.3 MB, Linux bundle 36 MB, AppImage 115 MB). **Unverified:** the release workflow on GitHub, the Windows installer build and its silent update, and installs and updates on real devices.
+- **What it does:** the app checks GitHub Releases at start-up and under Settings, Check for updates, asks before downloading, verifies the download against `SHA256SUMS`, and installs over the top (Android APK, Windows silent installer, Linux AppImage replaces itself). Pushing a `vX.Y.Z` tag builds and publishes all three. `tool/scan_secrets.sh` scans the whole history before the repo goes public.
+- **Next:** the Plan 11 section of the [manual checklist](manual-test-checklist.md): a manual workflow run, a throwaway tag, then the first release. Create the signing key and GitHub secrets first (releasing.md). Run the secret scan before making the repo public. No Songies app icon exists yet.
 
 ## Plan 10 (device sync) — done, reviewed, final review fixed
 

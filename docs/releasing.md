@@ -68,6 +68,12 @@ With neither, `flutter build apk --release` still works but signs with the debug
    ```
 6. GitHub builds the APK, the Windows installer and the Linux AppImage, then publishes them on the Releases page. If the tag and `pubspec.yaml` disagree, the workflow fails on purpose; fix the version and tag again.
 
+### When something goes wrong
+
+- **First-ever run:** do a manual build first (Actions tab, the release workflow, Run workflow). It builds everything without publishing. Once that is green, push a throwaway tag (for example `v0.0.1-test`, then delete the release and tag afterwards) before the real one.
+- **A test fails in CI:** the listening-stats timing test is flaky. If it is the only failure, re-run the failed job.
+- **`publish` fails after the release was created:** delete that release on the Releases page (keep the tag), then re-run the workflow. A half-made release blocks the re-run.
+
 ## 5. First-time switch on the phone
 
 Your current phone app is signed with a debug key, so it cannot be updated by the release APK. Do this once:
@@ -96,13 +102,14 @@ The installer is not signed with a paid certificate, so Windows may say "Windows
 ## 8. Linux
 
 1. Make the AppImage executable: `chmod +x songies-X.Y.Z-x86_64.AppImage`, then run it. Keep it in a folder you can write to, so in-app updates can replace it. If it cannot be replaced, the app offers "Open download page" instead.
-2. Device sync still needs the firewall opened and Avahi running, exactly as described for device sync (the AppImage cannot change that). On Fedora/Nobara, allow the sync port in firewalld and make sure `avahi-daemon` is enabled.
+2. Device sync still needs the firewall opened and Avahi running, exactly as described for device sync (the AppImage cannot change that). On Fedora/Nobara, allow the sync port (TCP 47823) and mDNS (UDP 5353, for discovery) in firewalld, for example `sudo firewall-cmd --add-port=47823/tcp --add-service=mdns` (add `--permanent` to keep it), and make sure `avahi-daemon` is enabled.
 
 ## 9. Before making the repo public
 
 The in-app update check needs a public repo, and a public repo shows the whole git history. So first:
 
-- [ ] Run the history scan script in `tool/` (added in Task 8 of this plan) and read every finding. Nothing is rewritten automatically; you decide.
+- [ ] Run the history scan: `tool/scan_secrets.sh` (from anywhere inside the repo; it needs bash and GNU grep). It reads the whole git history and prints each finding as a commit, a path and a pattern name, with only the first 4 characters of any match. It exits 0 when clean and 1 when it found something. Nothing is rewritten automatically; you decide.
+- [ ] Expect exactly 2 known false positives at the moment: the plan document quotes the private-key pattern, and Chromium's public `'peanuts'` cookie constant appears in `test/innertube/browser_cookies_test.dart`. Anything else is new and needs a look.
 - [ ] Confirm no `*.jks`, `*.keystore`, `key.properties`, `.env` files, tokens, cookies or passwords appear in any commit.
 - [ ] Confirm the four GitHub secrets exist only as secrets, not in any file.
 - [ ] Check for personal data you do not want published (names, emails, paths, device names).
