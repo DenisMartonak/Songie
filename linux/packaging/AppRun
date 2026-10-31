@@ -1,0 +1,35 @@
+#!/bin/sh
+# AppRun for the Songies AppImage.
+#
+# Layout (made by tool/build_appimage.sh):
+#   $APPDIR/opt/songies/   the Flutter release bundle, unchanged
+#   $APPDIR/usr/lib/       libmpv and its media libraries (linuxdeploy)
+#
+# Every library linuxdeploy bundles carries RUNPATH=$ORIGIN, so libmpv finds
+# its own dependencies without LD_LIBRARY_PATH. That keeps the bundled
+# libraries out of GTK's way and out of child processes.
+#
+# media_kit dlopen()s libmpv. LIBMPV_LIBRARY_PATH is always SET here, never
+# inherited: the in-app updater starts the new AppImage from inside the old
+# process, so the old value (pointing into the old, soon-unmounted mount)
+# would otherwise leak into the new version.
+set -e
+
+if [ -z "${APPDIR:-}" ]; then
+  APPDIR="$(dirname "$(readlink -f "$0")")"
+fi
+
+LIBMPV_LIBRARY_PATH=""
+for name in libmpv.so.2 libmpv.so.1; do
+  if [ -e "$APPDIR/usr/lib/$name" ]; then
+    LIBMPV_LIBRARY_PATH="$APPDIR/usr/lib/$name"
+    break
+  fi
+done
+if [ -n "$LIBMPV_LIBRARY_PATH" ]; then
+  export LIBMPV_LIBRARY_PATH
+else
+  unset LIBMPV_LIBRARY_PATH
+fi
+
+exec "$APPDIR/opt/songies/songies" "$@"

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Songies
+GenericName=Music Player
+Comment=Play your music library and YouTube Music
+Exec=songies
+Icon=songies
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+StartupWMClass=com.songies.songies
