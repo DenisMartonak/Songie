@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Update APKs handed to the system installer (UpdaterPlugin): AppPaths.updates
+     lives under the external files dir, or the internal one as a fallback. -->
+<paths>
+    <external-files-path name="updates" path="updates/"/>
+    <files-path name="updates_internal" path="updates/"/>
+</paths>
