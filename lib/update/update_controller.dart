@@ -322,7 +322,8 @@ class UpdateController extends Notifier<UpdateState> {
       ManualOnly(:final htmlUrl) => htmlUrl,
       _ => release?.htmlUrl,
     };
-    if (url == null) return;
+    // A release without a usable https page link opens nothing.
+    if (url == null || url.scheme != 'https') return;
     try {
       await ref.read(openDownloadPageProvider)(url);
     } on Object catch (e) {

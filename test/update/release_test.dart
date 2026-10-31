@@ -90,6 +90,26 @@ void main() {
     expect(partial.checksums, isNull);
   });
 
+  test('fromGitHubJson drops asset and page links that are not https', () {
+    final json = _json(assets: ['songies-1.2.3.apk', 'SHA256SUMS']);
+    final raw = json['assets']! as List;
+    (raw[0] as Map)['browser_download_url'] =
+        'http://example.test/dl/songies-1.2.3.apk';
+    (raw[1] as Map)['browser_download_url'] = 'file:///etc/SHA256SUMS';
+    json['html_url'] = 'javascript:alert(1)';
+    final r = Release.fromGitHubJson(json)!;
+    expect(r.pickAsset(UpdatePlatform.android), isNull);
+    expect(r.checksums, isNull);
+    expect(r.htmlUrl.scheme, isNot('javascript'));
+    expect(r.htmlUrl, Uri());
+
+    json['html_url'] = 'http://github.com/DenisMartonak/Songie/releases';
+    expect(Release.fromGitHubJson(json)!.htmlUrl, Uri());
+    final ok = Release.fromGitHubJson(_json(assets: ['songies-1.2.3.apk']))!;
+    expect(ok.htmlUrl.scheme, 'https');
+    expect(ok.pickAsset(UpdatePlatform.android)!.url.scheme, 'https');
+  });
+
   test('parseSha256Sums reads sha256sum output and skips junk lines', () {
     final h1 = 'A' * 64;
     final h2 = 'b' * 64;

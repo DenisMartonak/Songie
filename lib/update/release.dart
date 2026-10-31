@@ -90,15 +90,15 @@ class Release {
     final version = AppVersion.tryParse(tag);
     if (version == null) return null;
     final body = json['body'];
-    final htmlUrl = Uri.tryParse(json['html_url'] as String? ?? '');
+    final htmlUrl = _https(json['html_url'] as String?);
     final assets = <ReleaseAsset>[];
     final raw = json['assets'];
     if (raw is List) {
       for (final a in raw) {
         if (a is! Map) continue;
         final name = a['name'];
-        final url = Uri.tryParse(a['browser_download_url'] as String? ?? '');
-        if (name is! String || url == null || !url.hasScheme) continue;
+        final url = _https(a['browser_download_url'] as String?);
+        if (name is! String || url == null) continue;
         final size = a['size'];
         assets.add(
           ReleaseAsset(name: name, url: url, size: size is int ? size : 0),
@@ -136,4 +136,12 @@ Map<String, String> parseSha256Sums(String text) {
     out[m.group(2)!] = m.group(1)!.toLowerCase();
   }
   return out;
+}
+
+/// [v] as a URL, only when it is an https link with a host.
+Uri? _https(String? v) {
+  if (v == null) return null;
+  final u = Uri.tryParse(v);
+  if (u == null || u.scheme != 'https' || u.host.isEmpty) return null;
+  return u;
 }

@@ -14,6 +14,7 @@ import 'package:songies/player/player_service.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/motion/motion.dart';
+import 'package:songies/update/release.dart';
 import 'package:songies/update/update_checker.dart';
 import 'package:songies/update/update_controller.dart';
 import 'package:songies/update/update_downloader.dart';
@@ -204,6 +205,22 @@ void main() {
       await ctl(c).openDownloadPage();
       expect(opened, [testRelease.htmlUrl]);
       expect(downloader.calls, 0);
+    });
+
+    test('a release without an https page link opens nothing', () async {
+      final c = make();
+      installer.selfUpdate = false;
+      final r = Release(
+        version: testRelease.version,
+        notes: '',
+        htmlUrl: Uri(),
+        assets: testRelease.assets,
+      );
+      checker.onNow = () async => availableFor(r);
+      await ctl(c).checkNow();
+      expect(c.read(updateControllerProvider), isA<ManualOnly>());
+      await ctl(c).openDownloadPage();
+      expect(opened, isEmpty);
     });
 
     test('accept downloads then installs', () async {
