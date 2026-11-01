@@ -110,7 +110,7 @@ class FakeStore implements YtTrackStore {
 
 List<String> ids(List<Track> q) => [for (final t in q) t.id];
 
-/// A player whose [addToQueue] waits for [addGate] when set, to hold the
+/// A player whose [appendToQueue] waits for [addGate] when set, to hold the
 /// radio's append window open.
 class _GatedPlayer extends PlayerService {
   _GatedPlayer(super.backend, super.resolver, {super.random});
@@ -118,10 +118,10 @@ class _GatedPlayer extends PlayerService {
   Completer<void>? addGate;
 
   @override
-  Future<void> addToQueue(List<Track> tracks) async {
+  Future<void> appendToQueue(List<Track> tracks) async {
     final g = addGate;
     if (g != null) await g.future;
-    return super.addToQueue(tracks);
+    return super.appendToQueue(tracks);
   }
 }
 
@@ -180,6 +180,15 @@ void main() {
         expect(player.state.index, 0);
       },
     );
+
+    test('a song added to the queue goes before the radio\'s songs', () async {
+      ytm.answers['s'] = Ok(page(['r1', 'r2']));
+      await radio.playWithRadio(song('s'));
+      await player.addToQueue([localTrack('u')]);
+      expect(ids(player.state.queue), ['id-s', 'u', 'id-r1', 'id-r2']);
+      await player.addToQueue([localTrack('v')]);
+      expect(ids(player.state.queue), ['id-s', 'u', 'v', 'id-r1', 'id-r2']);
+    });
 
     test('upgrades the seed from the radio\'s current song', () async {
       final rich = song('s');

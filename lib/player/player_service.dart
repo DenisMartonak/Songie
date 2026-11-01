@@ -353,6 +353,21 @@ class PlayerService {
     _queueEdited();
   });
 
+  /// Adds [tracks] at the end of the queue as ordinary queue songs (a
+  /// radio's next page), not as songs the user queued: a later [addToQueue]
+  /// still goes right after the current song, ahead of them.
+  Future<void> appendToQueue(List<Track> tracks) => _locked(() async {
+    if (tracks.isEmpty) return;
+    final entries = [for (final t in tracks) _Entry(t)];
+    if (_currentEntry == null) {
+      _becomeQueue(entries);
+      return;
+    }
+    _queue.addAll(entries);
+    _original.addAll(entries);
+    _queueEdited();
+  });
+
   /// Songs queued with [addToQueue] waiting right after the current one.
   int get _queuedAhead {
     var n = 0;

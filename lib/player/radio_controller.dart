@@ -101,7 +101,7 @@ class RadioController {
 
   Future<void> _append(YtmRadio page, int epoch) async {
     final tracks = await _store.upsertAll(page.songs);
-    // No await between this check and addToQueue: a later playQueue would
+    // No await between this check and appendToQueue: a later playQueue would
     // otherwise be overtaken by this append.
     if (_player.queueEpoch != epoch || _epoch != epoch) return;
     final fresh = [
@@ -114,7 +114,7 @@ class RadioController {
       return;
     }
     try {
-      await _player.addToQueue(fresh);
+      await _player.appendToQueue(fresh);
     } catch (e, st) {
       AppLog.w('Radio: queueing failed', e, st);
       return;
