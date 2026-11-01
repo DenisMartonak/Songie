@@ -1,0 +1,36 @@
+Songies Educational Use License
+
+Copyright (c) 2026 Denis Martoňák
+
+This software and its source code (the "Software") are provided for
+educational and personal, non-commercial use only.
+
+1. Permitted use. You may view, study, run, compile and modify the Software,
+   and share copies of it (modified or not), for educational, research or
+   personal purposes, provided that you do not charge for it and that every
+   copy keeps this license and the copyright notice above.
+
+2. No commercial use. You may not sell the Software, offer it as a paid
+   product or service, bundle it with something sold, or use it to make money
+   in any other way, without prior written permission from the copyright
+   holder.
+
+3. Third-party services. The Software can talk to services run by others,
+   such as YouTube, YouTube Music, LRCLIB and Discord. It is not affiliated
+   with, endorsed by or sponsored by any of them. You alone are responsible
+   for following their terms of service and the copyright laws that apply to
+   you, including for any content you stream, download or keep.
+
+4. Third-party components. Libraries and tools the Software uses (for
+   example Flutter packages and yt-dlp) remain under their own licenses.
+
+5. No warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+   KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+   NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+   DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+   OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+   USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Any use outside these terms needs written permission from the copyright
+holder.
