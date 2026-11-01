@@ -33,6 +33,7 @@ import 'innertube/play_reporter.dart';
 import 'innertube/player_stream_source.dart';
 import 'innertube/transport.dart';
 import 'innertube/ytm_service.dart';
+import 'library/favorites.dart';
 import 'library/art_cache.dart';
 import 'library/library_repository.dart';
 import 'library/library_scanner.dart';
@@ -94,6 +95,10 @@ Future<void> main() async {
   if (Platform.isWindows || Platform.isLinux) await _initDesktopWindow();
 
   final library = LibraryRepository(db, stamp);
+  // The built-in Favorites exists from the first start, so a star always
+  // has somewhere to go.
+  final favorites = FavoritesRepository(db, stamp);
+  await favorites.ensureFavorites();
   final search = SearchRepository(db);
   final history = PlayHistoryRepository(db);
   final artCache = ArtCache(paths.art);
@@ -273,6 +278,7 @@ Future<void> main() async {
       databaseProvider.overrideWithValue(db),
       syncStampProvider.overrideWithValue(stamp),
       libraryRepositoryProvider.overrideWithValue(library),
+      favoritesRepositoryProvider.overrideWithValue(favorites),
       searchRepositoryProvider.overrideWithValue(search),
       playHistoryRepositoryProvider.overrideWithValue(history),
       libraryScannerProvider.overrideWithValue(scanner),

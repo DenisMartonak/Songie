@@ -13,6 +13,7 @@ import 'package:songies/data/settings_repository.dart';
 import 'package:songies/data/sync_stamp.dart';
 import 'package:songies/downloads/download_repository.dart';
 import 'package:songies/downloads/download_service.dart';
+import 'package:songies/library/favorites.dart';
 import 'package:songies/library/library_repository.dart';
 import 'package:songies/library/library_scanner.dart';
 import 'package:songies/library/play_history_repository.dart';
@@ -270,6 +271,9 @@ class UiHarness {
     syncStampProvider.overrideWithValue(stamp),
     if (paths case final paths?) appPathsProvider.overrideWithValue(paths),
     libraryRepositoryProvider.overrideWithValue(repo),
+    favoritesRepositoryProvider.overrideWithValue(
+      FavoritesRepository(db, stamp),
+    ),
     statsRepositoryProvider.overrideWithValue(stats),
     searchRepositoryProvider.overrideWithValue(search),
     playHistoryRepositoryProvider.overrideWithValue(history),

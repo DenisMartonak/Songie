@@ -6,6 +6,7 @@ import '../core/text_normalize.dart';
 import '../data/database.dart';
 import '../data/db_guard.dart';
 import '../data/sync_stamp.dart';
+import 'favorites.dart';
 
 /// The longest playlist name, in UTF-16 code units.
 const maxPlaylistNameLength = 100;
@@ -87,6 +88,11 @@ Stream<List<PlaylistSummary>> watchPlaylistSummaries(AppDatabase db) {
         ),
     ];
     list.sort((a, b) {
+      // The built-in Favorites is always first.
+      final fav = (b.id == kFavoritesPlaylistId ? 1 : 0).compareTo(
+        a.id == kFavoritesPlaylistId ? 1 : 0,
+      );
+      if (fav != 0) return fav;
       final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
       return byName != 0 ? byName : a.id.compareTo(b.id);
     });
@@ -154,6 +160,10 @@ class LibraryRepository {
     });
   }
 
+  static Result<T> _builtIn<T>() => const Err(
+    Failure(FailureKind.invalidInput, "Favorites can't be renamed or deleted"),
+  );
+
   Future<Result<String>> createPlaylist(String name) async {
     final clean = _cleanName(name);
     if (clean == null) return _badName<String>();
@@ -176,6 +186,7 @@ class LibraryRepository {
   }
 
   Future<Result<void>> renamePlaylist(String id, String name) async {
+    if (id == kFavoritesPlaylistId) return _builtIn<void>();
     final clean = _cleanName(name);
     if (clean == null) return _badName<void>();
     return guardDb(_db, () async {
@@ -213,6 +224,7 @@ class LibraryRepository {
 
   /// Tombstones the playlist and all its live entries, each with its own stamp.
   Future<Result<void>> deletePlaylist(String id) {
+    if (id == kFavoritesPlaylistId) return Future.value(_builtIn<void>());
     return guardDb(_db, () async {
       if (await _livePlaylist(id) == null) return _notFound('playlist $id');
       final entryIds =

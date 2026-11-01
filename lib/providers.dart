@@ -27,6 +27,7 @@ import 'library/library_scanner.dart';
 import 'library/play_history_repository.dart';
 import 'library/scan_queue.dart';
 import 'library/search_repository.dart';
+import 'library/favorites.dart';
 import 'library/yt_tracks.dart';
 import 'lyrics/lyrics_service.dart';
 import 'player/player_service.dart';
@@ -435,6 +436,16 @@ final settingsRepositoryProvider = Provider<SettingsRepository>(
 
 final ytDlpRunnerProvider = Provider<YtDlpRunner>(
   (ref) => _unwired('ytDlpRunnerProvider'),
+);
+
+/// Stars and un-stars songs (the built-in Favorites playlist).
+final favoritesRepositoryProvider = Provider<FavoritesRepository>(
+  (ref) => _unwired('favoritesRepositoryProvider'),
+);
+
+/// The ids of the songs in Favorites; every star watches it.
+final favoriteIdsProvider = StreamProvider<Set<String>>(
+  (ref) => ref.watch(favoritesRepositoryProvider).watchIds(),
 );
 
 /// Finds yt-dlp's JavaScript runtime (age-restricted songs).
