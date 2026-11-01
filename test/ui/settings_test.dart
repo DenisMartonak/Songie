@@ -15,6 +15,7 @@ import 'package:songies/data/settings_repository.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/theme/theme_repository.dart';
 import 'package:songies/ui/library/pickers.dart';
+import 'package:songies/ui/settings/discord_settings.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 import 'package:songies/update/update_checker.dart';
@@ -54,6 +55,8 @@ void main() {
     WidgetTester tester, {
     StorageUsage usage = const StorageUsage(artBytes: 0, databaseBytes: 0),
     LogSaver? logSaver,
+    bool discordSupported = true,
+    String discordClientId = '123',
   }) async {
     tester.view.physicalSize = const Size(800, 1600);
     tester.view.devicePixelRatio = 1;
@@ -64,6 +67,8 @@ void main() {
         extraOverrides: [
           storageUsageProvider.overrideWith((ref) async => usage),
           if (logSaver != null) logSaverProvider.overrideWithValue(logSaver),
+          discordSupportedProvider.overrideWithValue(discordSupported),
+          discordClientIdProvider.overrideWithValue(discordClientId),
         ],
         routes: [
           GoRoute(
@@ -417,6 +422,46 @@ void main() {
         ),
         isTrue,
       );
+    });
+  });
+
+  group('discord', () {
+    final toggle = find.byKey(const Key('settings.discord'));
+
+    uiTest('is off by default and saves the setting', (tester) async {
+      await pumpSettings(tester);
+      expect(find.text('Discord'), findsOneWidget);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await settle(tester);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      expect(
+        await real(
+          tester,
+          () =>
+              SettingsRepository(h.db)
+                  .getBool(kDiscordPresence, fallback: false),
+        ),
+        isTrue,
+      );
+    });
+
+    uiTest('without an application id it says so and cannot be turned on', (
+      tester,
+    ) async {
+      await pumpSettings(tester, discordClientId: '');
+      expect(tester.widget<SwitchListTile>(toggle).onChanged, isNull);
+      expect(
+        find.text('Not set up in this version of Songies yet'),
+        findsOneWidget,
+      );
+    });
+
+    uiTest('is hidden where Discord status cannot work', (tester) async {
+      await pumpSettings(tester, discordSupported: false);
+      expect(toggle, findsNothing);
+      expect(find.text('Discord'), findsNothing);
     });
   });
 

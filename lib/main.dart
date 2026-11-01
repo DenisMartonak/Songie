@@ -15,6 +15,8 @@ import 'innertube/yt_session_store.dart';
 import 'core/paths.dart';
 import 'data/database.dart';
 import 'data/settings_repository.dart';
+import 'discord/discord_ipc.dart';
+import 'discord/discord_presence.dart';
 import 'data/sync_stamp.dart';
 import 'downloads/android_download_notifier.dart';
 import 'downloads/download_notifier.dart';
@@ -275,6 +277,16 @@ Future<void> main() async {
   );
   // Records listening statistics; reacts to player events only.
   ListenRecorder(player.states, player.trackStarts, listenStore);
+  // Shows the playing song on Discord when the setting is on (desktop, with
+  // the Discord app open); reacts to player and setting changes only.
+  if ((Platform.isWindows || Platform.isLinux) && kDiscordClientId.isNotEmpty) {
+    DiscordPresence(
+      states: player.states,
+      enabled: settings.watchBool(kDiscordPresence, fallback: false),
+      rpc: DiscordRpc(connectToDiscord),
+      clientId: kDiscordClientId,
+    );
+  }
   runApp(
     UncontrolledProviderScope(
       container: container,

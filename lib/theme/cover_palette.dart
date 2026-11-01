@@ -27,18 +27,18 @@ class CoverPalette {
   final bool isFallback;
 
   Map<String, Object?> toJson() => {
-        'dominant': dominant.toARGB32(),
-        'vibrant': vibrant.toARGB32(),
-        'muted': muted.toARGB32(),
-        'isFallback': isFallback,
-      };
+    'dominant': dominant.toARGB32(),
+    'vibrant': vibrant.toARGB32(),
+    'muted': muted.toARGB32(),
+    'isFallback': isFallback,
+  };
 
   factory CoverPalette.fromJson(Map<String, Object?> j) => CoverPalette(
-        dominant: Color(j['dominant']! as int),
-        vibrant: Color(j['vibrant']! as int),
-        muted: Color(j['muted']! as int),
-        isFallback: j['isFallback']! as bool,
-      );
+    dominant: Color(j['dominant']! as int),
+    vibrant: Color(j['vibrant']! as int),
+    muted: Color(j['muted']! as int),
+    isFallback: j['isFallback']! as bool,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -82,21 +82,30 @@ Future<CoverPalette?> extractCoverPaletteFromRgba(
 }
 
 Future<CoverPalette?> _paletteOf(img.Image decoded) async {
-  final small = img.copyResize(decoded,
-      width: 64, height: 64, interpolation: img.Interpolation.average);
+  final small = img.copyResize(
+    decoded,
+    width: 64,
+    height: 64,
+    interpolation: img.Interpolation.average,
+  );
   final pixels = <int>[];
   for (final px in small) {
     if (px.a < 128) continue;
     pixels.add(
-        0xFF000000 | (px.r.toInt() << 16) | (px.g.toInt() << 8) | px.b.toInt());
+      0xFF000000 | (px.r.toInt() << 16) | (px.g.toInt() << 8) | px.b.toInt(),
+    );
   }
   if (pixels.isEmpty) return null;
 
-  final populations = (await QuantizerCelebi().quantize(pixels, 64)).colorToCount;
+  final populations = (await QuantizerCelebi().quantize(
+    pixels,
+    64,
+  )).colorToCount;
   final ranked = Score.score(populations, filter: false);
   final vibrant = ranked.first;
-  final dominant =
-      populations.entries.reduce((a, b) => b.value > a.value ? b : a).key;
+  final dominant = populations.entries
+      .reduce((a, b) => b.value > a.value ? b : a)
+      .key;
   final dh = Hct.fromInt(dominant);
   final muted = Hct.from(dh.hue, dh.chroma * 0.4, dh.tone).toInt();
   return CoverPalette(
@@ -114,10 +123,7 @@ Future<CoverPalette?> _extractInIsolate(Uint8List bytes) =>
 /// Extractions run one at a time: page requests (`supersede: false`) in the
 /// order they came, ahead of the newest current-track request.
 class CoverPaletteService {
-  CoverPaletteService(
-    this._art, {
-    this.extract = _extractInIsolate,
-  });
+  CoverPaletteService(this._art, {this.extract = _extractInIsolate});
 
   final ArtCache _art;
   final Future<CoverPalette?> Function(Uint8List) extract;
@@ -166,16 +172,20 @@ class CoverPaletteService {
     var latest = 0;
     out = StreamController<CoverPalette?>(
       onListen: () {
-        sub = artRefs.listen((ref) {
-          final mine = ++latest;
-          if (ref == null) {
-            out.add(null);
-            return;
-          }
-          paletteFor(ref).then((p) {
-            if (mine == latest && !out.isClosed) out.add(p);
-          });
-        }, onError: out.addError, onDone: out.close);
+        sub = artRefs.listen(
+          (ref) {
+            final mine = ++latest;
+            if (ref == null) {
+              out.add(null);
+              return;
+            }
+            paletteFor(ref).then((p) {
+              if (mine == latest && !out.isClosed) out.add(p);
+            });
+          },
+          onError: out.addError,
+          onDone: out.close,
+        );
       },
       onCancel: () => sub?.cancel(),
     );
@@ -248,7 +258,8 @@ class CoverPaletteService {
     if (!f.existsSync()) return null;
     try {
       return CoverPalette.fromJson(
-          jsonDecode(f.readAsStringSync()) as Map<String, Object?>);
+        jsonDecode(f.readAsStringSync()) as Map<String, Object?>,
+      );
     } catch (e) {
       AppLog.w('Ignoring bad palette cache for $ref', e);
       return null;

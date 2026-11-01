@@ -39,6 +39,10 @@ const kYtAccountName = 'yt_account_name';
 /// keyring entirely. Device-local.
 const kYtSignedIn = 'yt_signed_in';
 
+/// Show the playing song on Discord (desktop only). Device-local, off by
+/// default.
+const kDiscordPresence = 'discord_presence';
+
 /// Default of the Wi-Fi only downloads setting: on for Android (metered data), off on
 /// desktop. [isAndroid] exists so tests don't depend on the host.
 bool wifiOnlyDefault({bool? isAndroid}) => isAndroid ?? Platform.isAndroid;

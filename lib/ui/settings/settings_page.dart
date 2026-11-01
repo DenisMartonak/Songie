@@ -21,6 +21,7 @@ import '../widgets/page_snack_bar.dart';
 import 'downloads_settings.dart';
 import 'storage_usage.dart';
 import 'youtube_settings.dart';
+import 'discord_settings.dart';
 
 export '../../core/app_version.dart';
 
@@ -81,6 +82,7 @@ class SettingsPage extends ConsumerWidget {
           ),
           const _FoldersSection(),
           const _AppearanceSection(),
+          const DiscordSettingsSection(),
           const YouTubeSettingsSection(),
           const DownloadsSettingsSection(),
           const _SyncSection(),

@@ -7,9 +7,8 @@ const Color _white = Color(0xFFFFFFFF);
 const Color _black = Color(0xFF000000);
 
 double _luminance(Color c) {
-  double ch(double v) => v <= 0.03928
-      ? v / 12.92
-      : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+  double ch(double v) =>
+      v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
   return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
 }
 
