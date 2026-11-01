@@ -11,6 +11,8 @@ import '../../innertube/yt_sign_in.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../../youtube/yt_models.dart';
+import '../../youtube/deno_installer.dart';
+import '../../youtube/js_runtime.dart';
 import '../motion/motion.dart';
 import '../widgets/page_snack_bar.dart';
 import 'settings_page.dart';
@@ -55,6 +57,7 @@ class _YouTubeSettingsSectionState
     extends ConsumerState<YouTubeSettingsSection> {
   bool _updating = false;
   bool _signingIn = false;
+  bool _helperBusy = false;
 
   /// The sign-in routes this device can use; null while finding out.
   List<YtSignInRoute>? _routes;
@@ -287,6 +290,80 @@ class _YouTubeSettingsSectionState
     }
   }
 
+  /// Installs or removes Songies' Deno, yt-dlp's runtime for age-restricted
+  /// songs.
+  Future<void> _helper(DenoInstaller deno, {required bool install}) async {
+    if (_helperBusy) return;
+    final snacks = PageSnackBars.of(context);
+    setState(() => _helperBusy = true);
+    try {
+      if (install) {
+        final r = await deno.install();
+        snacks.show(
+          content: Text(switch (r) {
+            Ok() => 'Helper installed',
+            Err(:final failure) => failure.message,
+          }),
+        );
+      } else {
+        await deno.remove();
+      }
+      ref.invalidate(jsRuntimeProvider);
+    } finally {
+      if (mounted) setState(() => _helperBusy = false);
+    }
+  }
+
+  Widget _helperRow(SongiesColors colors) {
+    final deno = ref.watch(denoInstallerProvider);
+    if (deno == null) return const SizedBox.shrink();
+    final runtime = ref.watch(jsRuntimeProvider);
+    final kind = runtime.value?.kind;
+    final state = runtime.isLoading
+        ? '…'
+        : switch (kind) {
+            JsRuntimeKind.songiesDeno => 'installed',
+            JsRuntimeKind.systemDeno => 'using Deno',
+            JsRuntimeKind.systemNode => 'using Node.js',
+            JsRuntimeKind.bundled => 'built in',
+            null => 'not installed',
+          };
+    final busy = _helperBusy || runtime.isLoading;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Text(
+            'Helper for age-restricted songs: $state',
+            style: TextStyle(color: colors.text),
+          ),
+        ),
+        if (kind == JsRuntimeKind.songiesDeno || kind == null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: TextButton.icon(
+              key: const Key('settings.ytHelper'),
+              onPressed: busy
+                  ? null
+                  : () => _helper(deno, install: kind == null),
+              icon: _helperBusy
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      kind == null
+                          ? Icons.download_rounded
+                          : Icons.delete_outline_rounded,
+                    ),
+              label: Text(kind == null ? 'Install helper' : 'Remove'),
+            ),
+          ),
+      ],
+    );
+  }
+
   /// Forgets YouTube's anonymous visitor id (after asking), so the feed
   /// starts fresh, and reloads the feed.
   Future<void> _resetRecommendations() async {
@@ -358,6 +435,7 @@ class _YouTubeSettingsSectionState
             label: Text(install ? 'Install yt-dlp' : 'Update yt-dlp'),
           ),
         ),
+        _helperRow(colors),
         if (isLinux)
           SwitchListTile(
             title: Text(

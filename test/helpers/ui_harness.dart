@@ -30,6 +30,8 @@ import 'package:songies/youtube/ytdlp_client.dart';
 import 'fake_audio_backend.dart';
 
 import 'package:songies/innertube/yt_sign_in.dart';
+import 'package:songies/youtube/deno_installer.dart';
+import 'package:songies/youtube/js_runtime.dart';
 
 import 'fake_import_service.dart';
 import 'fake_network_status.dart';
@@ -257,6 +259,12 @@ class UiHarness {
     await db.close();
   }
 
+  /// What yt-dlp would use for age-restricted songs (Settings shows it).
+  JsRuntime? jsRuntime;
+
+  /// Songies' Deno installer; null as on Android.
+  DenoInstaller? denoInstaller;
+
   List<Override> get overrides => [
     databaseProvider.overrideWithValue(db),
     syncStampProvider.overrideWithValue(stamp),
@@ -291,6 +299,8 @@ class UiHarness {
     if (ytmImages case final images?)
       ytmImageProvider.overrideWithValue(images),
     networkStatusProvider.overrideWithValue(network),
+    jsRuntimeProvider.overrideWith((ref) async => jsRuntime),
+    denoInstallerProvider.overrideWithValue(denoInstaller),
   ];
 
   /// An app showing [routes], starting at [initialLocation]; with

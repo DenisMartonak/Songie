@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/result.dart';
 import '../../player/player_service.dart';
 import '../../providers.dart';
 import '../../youtube/yt_models.dart';
@@ -33,6 +35,14 @@ String skipReasonMessage(String reason) => switch (reason) {
 String playerNoticeMessage(PlayerNotice notice) =>
     "Skipped '${notice.trackTitle}' — ${skipReasonMessage(notice.reason)}";
 
+/// Whether [reason] is an age-restricted song that signing in (again) can
+/// make playable.
+bool _needsSignIn(String reason) =>
+    switch (ytErrorKindOf(Failure(FailureKind.unknown, reason))) {
+      YtErrorKind.ageRestricted || YtErrorKind.ageRestrictedAccount => true,
+      _ => false,
+    };
+
 /// Shows a snack bar whenever the player reports a new error or skips a song.
 /// Wraps the page area of a shell, so the bar clears the shell's own bottom
 /// overlays.
@@ -50,16 +60,27 @@ class PlayerErrorSnacks extends ConsumerWidget {
       (previous, next) {
         final (error, notice) = next;
         final String message;
+        final String reason;
         if (error != null && error != previous?.$1) {
           message = playerErrorMessage(error, notice: notice);
+          reason = error;
         } else if (notice != null && !identical(notice, previous?.$2)) {
           message = playerNoticeMessage(notice);
+          reason = notice.reason;
         } else {
           return;
         }
         PageSnackBars.of(context)
           ..clear()
-          ..show(content: Text(message));
+          ..show(
+            content: Text(message),
+            action: _needsSignIn(reason)
+                ? SnackBarAction(
+                    label: 'Sign in',
+                    onPressed: () => GoRouter.of(context).go('/settings'),
+                  )
+                : null,
+          );
       },
     );
     return child;

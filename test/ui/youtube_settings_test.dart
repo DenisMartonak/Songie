@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -13,6 +15,8 @@ import 'package:songies/providers.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 import 'package:songies/ui/settings/youtube_settings.dart';
+import 'package:songies/youtube/deno_installer.dart';
+import 'package:songies/youtube/js_runtime.dart';
 
 import '../helpers/ui_harness.dart';
 
@@ -110,6 +114,50 @@ void main() {
     expect(find.text('yt-dlp version: 2026.10.21'), findsOneWidget);
     expect(find.text('Update yt-dlp'), findsOneWidget);
     expect(find.text('Install yt-dlp'), findsNothing);
+  });
+
+  group('age-restricted helper', () {
+    uiTest("Songies' Deno shows as installed, with Remove", (tester) async {
+      final deno = _FakeDeno();
+      h
+        ..denoInstaller = deno
+        ..jsRuntime = const JsRuntime(JsRuntimeKind.songiesDeno, []);
+      await pumpSection(tester);
+      expect(
+        find.text('Helper for age-restricted songs: installed'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Remove'));
+      await settle(tester);
+      expect(deno.removed, 1);
+    });
+
+    uiTest('Node on the system is used, no Remove', (tester) async {
+      h
+        ..denoInstaller = _FakeDeno()
+        ..jsRuntime = const JsRuntime(JsRuntimeKind.systemNode, []);
+      await pumpSection(tester);
+      expect(
+        find.text('Helper for age-restricted songs: using Node.js'),
+        findsOneWidget,
+      );
+      expect(find.text('Remove'), findsNothing);
+    });
+
+    uiTest('none installed offers Install', (tester) async {
+      h.denoInstaller = _FakeDeno();
+      await pumpSection(tester);
+      expect(
+        find.text('Helper for age-restricted songs: not installed'),
+        findsOneWidget,
+      );
+      expect(find.text('Install helper'), findsOneWidget);
+    });
+
+    uiTest('hidden without an installer (Android)', (tester) async {
+      await pumpSection(tester);
+      expect(find.textContaining('Helper for age-restricted'), findsNothing);
+    });
   });
 
   uiTest('desktop without yt-dlp offers Install', (tester) async {
@@ -474,4 +522,18 @@ void main() {
       expect(find.text('Sign in to YouTube'), findsNothing);
     });
   });
+}
+
+class _FakeDeno extends DenoInstaller {
+  _FakeDeno()
+    : super(
+        Directory.systemTemp,
+        download: (uri, {onProgress}) async => [],
+        isWindows: false,
+      );
+
+  int removed = 0;
+
+  @override
+  Future<void> remove() async => removed++;
 }
