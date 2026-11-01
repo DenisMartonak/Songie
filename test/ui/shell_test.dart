@@ -646,6 +646,28 @@ void main() {
       expect(editable.widget.focusNode.hasFocus, isTrue);
     });
 
+    testWidgets(
+      'taking focus back after the first letter leaves the caret after it',
+      (tester) async {
+        await pumpApp(tester, desktop);
+        final field = find.byKey(const Key('shell.search'));
+        await tester.tap(field);
+        await tester.pump();
+        await tester.enterText(field, 'b');
+        await tester.pumpAndSettle();
+        final editable = tester.state<EditableTextState>(
+          find.descendant(of: field, matching: find.byType(EditableText)),
+        );
+        // Desktop fields select all on focus; the next letter would replace
+        // the first.
+        expect(
+          editable.widget.controller.selection,
+          const TextSelection.collapsed(offset: 1),
+        );
+      },
+      variant: TargetPlatformVariant.desktop(),
+    );
+
     testWidgets('without a custom title bar (wide Android) there is no title '
         'bar, no window plugin use, and search moves to the main pane', (
       tester,

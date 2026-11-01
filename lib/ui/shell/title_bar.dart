@@ -117,6 +117,9 @@ class ShellSearchField extends StatelessWidget {
         key: const Key('shell.search'),
         controller: controller,
         focusNode: focusNode,
+        // The shell hands focus back while Search opens; selecting all then
+        // would let the next letter replace the first. Ctrl+K selects itself.
+        selectAllOnFocus: false,
         onChanged: onChanged,
         onSubmitted: onSubmitted,
         onTapOutside: (_) => onTapOutside(),
