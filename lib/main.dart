@@ -16,6 +16,7 @@ import 'player/age_restricted_stream_source.dart';
 import 'youtube/js_runtime.dart';
 import 'innertube/yt_session_store.dart';
 import 'core/paths.dart';
+import 'core/result.dart';
 import 'data/database.dart';
 import 'data/settings_repository.dart';
 import 'discord/discord_ipc.dart';
@@ -286,6 +287,7 @@ Future<void> main() async {
   // Awaited, so the first Home load already knows whether to go signed in.
   await container.read(ytAuthProvider.notifier).load();
   loadSession = container.read(ytAuthProvider.notifier).ensureSession;
+  await _recheckUnavailableOnce(library, settings);
   // Reports songs heard for 30 s to YouTube (to the account's history when
   // signed in); reacts to player state only.
   PlayReporter(
@@ -346,6 +348,24 @@ Future<YtDlpRunner> _ytDlpRunner(
     installer: installer,
     systemBinary: useSystem ? 'yt-dlp' : null,
   );
+}
+
+/// Unflags YouTube songs marked unavailable before age-restricted songs had
+/// their own error, once per device, so each gets one more try.
+Future<void> _recheckUnavailableOnce(
+  LibraryRepository library,
+  SettingsRepository settings,
+) async {
+  if (await settings.getBool(kUnavailableRecheckDone, fallback: false)) {
+    return;
+  }
+  switch (await library.clearUnavailableYtTracks()) {
+    case Ok(:final value):
+      AppLog.i('Unflagged $value unavailable YouTube songs for a re-check');
+      await settings.setBool(kUnavailableRecheckDone, true);
+    case Err(:final failure):
+      AppLog.w('Unavailable re-check failed: ${failure.message}');
+  }
 }
 
 /// Deletes cookies files a crashed signed-in yt-dlp run left behind.

@@ -658,6 +658,41 @@ void main() {
     });
   });
 
+  group('clearUnavailableYtTracks', () {
+    Future<Track> row(String id) =>
+        (db.select(db.tracks)..where((t) => t.id.equals(id))).getSingle();
+
+    test('unflags YouTube tracks only, stamped; then a no-op', () async {
+      for (final (id, source) in [
+        ('y1', 'yt'),
+        ('y2', 'yt'),
+        ('l1', 'local'),
+      ]) {
+        await db
+            .into(db.tracks)
+            .insert(
+              trackRow(
+                id: id,
+                source: source,
+                localSeq: 99,
+              ).copyWith(unavailable: const Value(true)),
+            );
+      }
+      final before = await row('y1');
+
+      expect(await repo.clearUnavailableYtTracks(), _okCount(2));
+      final y1 = await row('y1');
+      expect(y1.unavailable, isFalse);
+      expect(y1.clock, isNot(before.clock));
+      expect(y1.originDevice, stamp.deviceId);
+      expect((await row('y2')).unavailable, isFalse);
+      expect((await row('l1')).unavailable, isTrue);
+
+      expect(await repo.clearUnavailableYtTracks(), _okCount(0));
+      expect((await row('y1')).clock, y1.clock);
+    });
+  });
+
   group('updateTrackMetadata', () {
     Future<Track> row(String id) =>
         (db.select(db.tracks)..where((t) => t.id.equals(id))).getSingle();
@@ -740,3 +775,5 @@ void main() {
     expect((await tracksOf(p)).single.fileMissing, isFalse);
   });
 }
+
+Matcher _okCount(int n) => isA<Ok<int>>().having((r) => r.value, 'value', n);

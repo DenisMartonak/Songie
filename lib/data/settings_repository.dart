@@ -43,6 +43,10 @@ const kYtSignedIn = 'yt_signed_in';
 /// default.
 const kDiscordPresence = 'discord_presence';
 
+/// Set once YouTube songs flagged unavailable before age-restricted songs had
+/// their own error were unflagged for one more check. Device-local.
+const kUnavailableRecheckDone = 'unavailable_recheck_done';
+
 /// Default of the Wi-Fi only downloads setting: on for Android (metered data), off on
 /// desktop. [isAndroid] exists so tests don't depend on the host.
 bool wifiOnlyDefault({bool? isAndroid}) => isAndroid ?? Platform.isAndroid;

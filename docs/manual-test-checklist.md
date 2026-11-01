@@ -263,6 +263,19 @@ Needs a GitHub repo (public, or a public test repo for the test-build item) and 
 - [ ] Test build against a public test repo: build with `--dart-define=SONGIES_UPDATE_REPO=<you>/<test-repo>`, put a release with higher version there, and check the app finds and offers it. (A normal build looks at `DenisMartonak/Songie`.)
 - [ ] The secret scan before going public: run `tool/scan_secrets.sh` and read every finding. Today it reports 2 known false positives (the plan doc quoting the key pattern, and Chromium's `'peanuts'` constant in `test/innertube/browser_cookies_test.dart`). Anything else is new. Then work through the list in releasing.md section 9.
 
+## Age-restricted songs
+
+Use `S4-2QqwHf5c` ("HOMOŠLERKY (Full Song)").
+
+- [ ] Signed out: playing it skips with "Age-restricted — sign in to YouTube to play it" and a Sign in action; the song is not marked unavailable.
+- [ ] Desktop, signed in, Node or Deno on PATH: it plays (log: `stream S4-2QqwHf5c via innertube>yt-dlp+age`).
+- [ ] Desktop, signed in, no runtime: picking it asks to download the helper (about 45 MB); Download installs Deno and plays it; Not now skips it. Reaching it by queue advance never asks.
+- [ ] Settings shows the helper's state; Remove deletes Songies' Deno.
+- [ ] Android, signed in (in-app sign-in): it plays, no prompt.
+- [ ] Signed in with an account that can't watch it: "This YouTube account isn't valid for age-restricted songs".
+- [ ] Download it (signed in): the download completes.
+- [ ] After upgrading, songs previously marked unavailable get one more try (log: `Unflagged N unavailable YouTube songs`).
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.

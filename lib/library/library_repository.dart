@@ -495,6 +495,32 @@ class LibraryRepository {
     });
   }
 
+  /// Unflags every YouTube track marked unavailable, each stamped like
+  /// [markUnavailable], so each is checked once more on its next play (songs
+  /// flagged before age-restricted ones had their own error). Returns how
+  /// many were unflagged.
+  Future<Result<int>> clearUnavailableYtTracks() {
+    return guardDb(_db, () async {
+      final flagged =
+          await (_db.select(_db.tracks)..where(
+                (t) => t.source.equals('yt') & t.unavailable.equals(true),
+              ))
+              .get();
+      for (final t in flagged) {
+        final stamp = await _stamp.next(id: t.id);
+        await (_db.update(_db.tracks)..where((r) => r.id.equals(t.id))).write(
+          TracksCompanion(
+            unavailable: const Value(false),
+            clock: Value(stamp.clock),
+            originDevice: Value(stamp.originDevice),
+            localSeq: Value(stamp.localSeq),
+          ),
+        );
+      }
+      return Ok(flagged.length);
+    });
+  }
+
   /// The ids of the tracks [playlistId] holds now (removed entries left out).
   Future<Set<String>> trackIdsIn(String playlistId) async {
     final rows =
