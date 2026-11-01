@@ -154,6 +154,7 @@ class PlayerService {
     this._onTrackStarted,
     this._onUnavailable,
     this._network,
+    this._onNeedsRuntime,
     Random? random,
   }) : _random = random ?? Random() {
     _sub = _backend.states.listen(_onBackendState);
@@ -179,6 +180,10 @@ class PlayerService {
   final Future<void> Function(String trackId)? _onMissing;
   final Future<void> Function(Track track, String? playlistId)? _onTrackStarted;
   final Future<void> Function(String trackId)? _onUnavailable;
+
+  /// Asks the user to install a JavaScript runtime for an age-restricted
+  /// song; true once one is installed. Desktop only.
+  final Future<bool> Function()? _onNeedsRuntime;
 
   /// While it reports offline, YouTube songs without a downloaded file that
   /// the user picks are skipped quietly; when the player moves on by itself,
@@ -760,10 +765,13 @@ class PlayerService {
         );
       }
     }
-    final Result<AudioSourceRef> resolved;
+    Result<AudioSourceRef> resolved;
     _resolving = true;
     try {
       resolved = await _resolver.resolve(track);
+      if (await _installedRuntimeFor(track, resolved)) {
+        resolved = await _resolver.resolve(track);
+      }
     } catch (e, s) {
       AppLog.w('Resolving ${track.id} failed', e, s);
       _lastFailureReason = playbackFailedError;
@@ -877,6 +885,28 @@ class PlayerService {
       await _onMissing?.call(trackId);
     } catch (e, s) {
       AppLog.e('onMissing failed for $trackId', e, s);
+    }
+  }
+
+  /// For a song the user picked that needs yt-dlp's JavaScript runtime:
+  /// whether they had it installed just now (so it is worth one more try).
+  /// Songs reached by queue advance never ask.
+  Future<bool> _installedRuntimeFor(
+    Track track,
+    Result<AudioSourceRef> resolved,
+  ) async {
+    final ask = _onNeedsRuntime;
+    if (ask == null || _automatic || resolved is! Err<AudioSourceRef>) {
+      return false;
+    }
+    if (ytErrorKindOf(resolved.failure) != YtErrorKind.needsRuntime) {
+      return false;
+    }
+    try {
+      return await ask();
+    } catch (e, s) {
+      AppLog.e('Asking to install the runtime failed for ${track.id}', e, s);
+      return false;
     }
   }
 

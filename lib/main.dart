@@ -13,6 +13,8 @@ import 'core/app_version.dart';
 import 'core/connectivity.dart';
 import 'core/log.dart';
 import 'player/age_restricted_stream_source.dart';
+import 'player/runtime_prompter.dart';
+import 'youtube/deno_installer.dart';
 import 'youtube/js_runtime.dart';
 import 'innertube/yt_session_store.dart';
 import 'core/paths.dart';
@@ -139,6 +141,15 @@ Future<void> main() async {
     isWindows: Platform.isWindows,
   );
   final ageAuth = AgeRestrictedAuth(() => loadSession(), runtimes);
+  final denoInstaller = Platform.isAndroid
+      ? null
+      : DenoInstaller(
+          paths.bin,
+          download: (uri, {onProgress}) =>
+              httpDownload(uri, onProgress: onProgress),
+          isWindows: Platform.isWindows,
+        );
+  final runtimePrompter = RuntimePrompter();
   final streams = StreamResolver(
     AgeRestrictedStreamSource(
       FallbackStreamSource(
@@ -211,6 +222,7 @@ Future<void> main() async {
     onTrackStarted: (track, playlistId) => history.record(track.id, playlistId),
     onUnavailable: library.markUnavailable,
     network: network,
+    onNeedsRuntime: denoInstaller == null ? null : runtimePrompter.ask,
   );
   // A cover or details that land after a song was queued reach the player.
   ytTracks.changes.listen(player.updateTrack);
@@ -268,6 +280,9 @@ Future<void> main() async {
       playerServiceProvider.overrideWithValue(player),
       settingsRepositoryProvider.overrideWithValue(settings),
       ytDlpRunnerProvider.overrideWithValue(runner),
+      jsRuntimeFinderProvider.overrideWithValue(runtimes),
+      denoInstallerProvider.overrideWithValue(denoInstaller),
+      runtimePrompterProvider.overrideWithValue(runtimePrompter),
       ytImportServiceProvider.overrideWithValue(ytImport),
       ytTrackStoreProvider.overrideWithValue(ytTracks),
       innertubeClientProvider.overrideWithValue(innertube),

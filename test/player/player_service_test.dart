@@ -1128,6 +1128,52 @@ void main() {
     });
   });
 
+  group('needsRuntime', () {
+    late int asked;
+    late bool answer;
+    late PlayerService p;
+    final y = ytTrack('y');
+
+    setUp(() {
+      asked = 0;
+      answer = true;
+      resolver.failures['y'] = ytFailure(YtErrorKind.needsRuntime, 'x');
+      p = PlayerService(
+        backend,
+        resolver,
+        onUnavailable: (id) async => unavailable.add(id),
+        onNeedsRuntime: () async {
+          asked++;
+          if (answer) resolver.failures.remove('y');
+          return answer;
+        },
+      );
+    });
+
+    test('a picked song asks, then plays once installed', () async {
+      await p.playQueue([y, b]);
+      expect(asked, 1);
+      expect(p.state.current, y);
+      expect(p.state.playing, isTrue);
+    });
+
+    test('Not now skips it with the needsRuntime reason', () async {
+      answer = false;
+      await p.playQueue([y, b]);
+      expect(asked, 1);
+      expect(p.state.current, b);
+      expect(p.state.notice!.reason, startsWith('ytdlp:needsRuntime:'));
+    });
+
+    test('reaching it by queue advance never asks', () async {
+      await p.playQueue([a, y, b]);
+      backend.complete();
+      await settle();
+      expect(asked, 0);
+      expect(p.state.current, b);
+    });
+  });
+
   group('yt engine retry', () {
     test('first engine error re-resolves the same entry once', () async {
       final y = ytTrack('y');

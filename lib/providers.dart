@@ -31,6 +31,7 @@ import 'library/yt_tracks.dart';
 import 'lyrics/lyrics_service.dart';
 import 'player/player_service.dart';
 import 'player/radio_controller.dart';
+import 'player/runtime_prompter.dart';
 import 'stats/stats_models.dart';
 import 'stats/stats_repository.dart';
 import 'theme/app_theme.dart';
@@ -50,6 +51,8 @@ import 'update/release.dart';
 import 'update/update_checker.dart';
 import 'update/update_controller.dart';
 import 'update/update_downloader.dart';
+import 'youtube/deno_installer.dart';
+import 'youtube/js_runtime.dart';
 import 'youtube/yt_import_service.dart';
 import 'youtube/ytdlp_runner.dart';
 
@@ -432,6 +435,25 @@ final settingsRepositoryProvider = Provider<SettingsRepository>(
 
 final ytDlpRunnerProvider = Provider<YtDlpRunner>(
   (ref) => _unwired('ytDlpRunnerProvider'),
+);
+
+/// Finds yt-dlp's JavaScript runtime (age-restricted songs).
+final jsRuntimeFinderProvider = Provider<JsRuntimeFinder>(
+  (ref) => _unwired('jsRuntimeFinderProvider'),
+);
+
+/// The runtime yt-dlp would use now; refreshed after an install or removal.
+final jsRuntimeProvider = FutureProvider.autoDispose<JsRuntime?>(
+  (ref) => ref.watch(jsRuntimeFinderProvider).find(),
+);
+
+/// Installs Deno as that runtime; desktop only, null on Android.
+final denoInstallerProvider = Provider<DenoInstaller?>((ref) => null);
+
+/// Lets the player ask the user to install the runtime; the desktop shell
+/// answers with a dialog.
+final runtimePrompterProvider = Provider<RuntimePrompter>(
+  (ref) => RuntimePrompter(),
 );
 
 final ytImportServiceProvider = Provider<YtImportService>(

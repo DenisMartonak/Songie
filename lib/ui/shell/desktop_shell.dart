@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../player/runtime_prompter.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../downloads/downloads_banner.dart';
@@ -10,6 +11,7 @@ import '../lyrics/lyrics_panel.dart';
 import 'go_tab.dart';
 import 'player_bar.dart';
 import 'player_error_snacks.dart';
+import 'runtime_prompt.dart';
 import 'sidebar.dart';
 import 'title_bar.dart';
 
@@ -92,11 +94,27 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   void initState() {
     super.initState();
     FocusManager.instance.addListener(_onFocusChanged);
+    _prompter = ref.read(runtimePrompterProvider)..handler = _askForRuntime;
+  }
+
+  late final RuntimePrompter _prompter;
+
+  /// Asks to install Deno for an age-restricted song (desktop only).
+  Future<bool> _askForRuntime() async {
+    final installer = ref.read(denoInstallerProvider);
+    if (installer == null || !mounted) return false;
+    final installed = await showRuntimePrompt(
+      context,
+      install: (onProgress) => installer.install(onProgress: onProgress),
+    );
+    if (installed) ref.invalidate(jsRuntimeProvider);
+    return installed;
   }
 
   @override
   void dispose() {
     FocusManager.instance.removeListener(_onFocusChanged);
+    if (_prompter.handler == _askForRuntime) _prompter.handler = null;
     _searchController.dispose();
     _searchFocus.dispose();
     _rootFocus.dispose();
