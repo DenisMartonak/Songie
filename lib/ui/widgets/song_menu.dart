@@ -48,6 +48,7 @@ class MenuSong {
 enum SongMenuAction {
   addToQueue,
   addToPlaylist,
+  favorite,
   startRadio,
   goToArtist,
   goToAlbum,
@@ -160,6 +161,7 @@ Future<void> showSongMenu(
   final player = ref.read(playerServiceProvider);
   final radio = ref.read(radioControllerProvider);
   final askPermission = ref.read(notificationPermissionProvider);
+  final favorites = ref.read(favoritesRepositoryProvider);
   final snacks = PageSnackBars.of(context);
   final playable = song.isYouTube && !song.unavailable;
   // Only Remove download needs it. Null where the app paths are not set up
@@ -172,6 +174,18 @@ Future<void> showSongMenu(
       AppLog.w('Song menu: no app paths for downloads', e, s);
     }
   }
+
+  var favorite = false;
+  try {
+    final known = song.track ?? await store.find(song.ytm!.videoId);
+    if (known != null) {
+      favorite = (await favorites.watchIds().first).contains(known.id);
+    }
+  } catch (e, s) {
+    // The menu still opens; it offers Add to Favorites.
+    AppLog.w('Song menu: reading Favorites failed', e, s);
+  }
+  if (!context.mounted) return;
 
   var downloaded = false;
   if (playable) {
@@ -190,6 +204,13 @@ Future<void> showSongMenu(
   final entries = <(SongMenuAction, IconData, String)>[
     (SongMenuAction.addToQueue, Icons.queue_music, 'Add to queue'),
     (SongMenuAction.addToPlaylist, Icons.playlist_add, 'Add to playlist'),
+    favorite
+        ? (SongMenuAction.favorite, Icons.star_rounded, 'Remove from Favorites')
+        : (
+            SongMenuAction.favorite,
+            Icons.star_outline_rounded,
+            'Add to Favorites',
+          ),
     if (playable)
       (SongMenuAction.startRadio, Icons.radio_outlined, 'Start radio'),
     if (song.artistId != null)
@@ -242,6 +263,8 @@ Future<void> showSongMenu(
       if (t != null && context.mounted) {
         await showAddToPlaylistSheet(context, ref, [t.id]);
       }
+    case SongMenuAction.favorite:
+      if (await track() case final t?) await favorites.toggle(t.id);
     case SongMenuAction.startRadio:
       if (song.ytm case final s?) {
         await radio.playWithRadio(s);

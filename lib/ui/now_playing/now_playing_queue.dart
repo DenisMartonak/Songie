@@ -8,6 +8,7 @@ import '../motion/equalizer_bars.dart';
 import '../motion/pressable.dart';
 import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
+import '../widgets/favorite_star.dart';
 
 /// What plays next: the playing song at the top, then the songs after it as
 /// a reorderable list. Drag a handle to move a song (the row lifts with a
@@ -222,6 +223,7 @@ class _QueueRow extends StatelessWidget {
                     ],
                   ),
                 ),
+                FavoriteStar(song: MenuSong.track(track)),
                 if (dragIndex case final dragIndex?)
                   ReorderableDragStartListener(
                     key: Key('queue.handle.$index'),

@@ -18,6 +18,7 @@ import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
 import '../ytm/ytm_result_tiles.dart';
 import '../ytm/ytm_song_row.dart';
+import '../widgets/favorite_star.dart';
 
 /// How long the query must stay unchanged before the library and YouTube
 /// Music are searched.
@@ -499,6 +500,7 @@ class _ResultRow extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.onSecondaryTapUp,
+    this.trailing,
   });
 
   final Key rowKey;
@@ -511,6 +513,9 @@ class _ResultRow extends StatelessWidget {
   /// Long-press and right-click (a song's menu).
   final VoidCallback? onLongPress;
   final GestureTapUpCallback? onSecondaryTapUp;
+
+  /// After the text (a song row's star).
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -549,6 +554,7 @@ class _ResultRow extends StatelessWidget {
                 ],
               ),
             ),
+            ?trailing,
           ],
         ),
       ),
@@ -573,6 +579,7 @@ class _SongRow extends ConsumerWidget {
       onTap: () => ref.read(playerServiceProvider).playQueue([track]),
       onLongPress: menu.onLongPress,
       onSecondaryTapUp: menu.onSecondaryTapUp,
+      trailing: FavoriteStar(song: MenuSong.track(track)),
     );
   }
 }

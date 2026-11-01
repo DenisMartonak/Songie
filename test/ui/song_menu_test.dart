@@ -12,6 +12,8 @@ import 'package:songies/ui/home/home_page.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/search/search_page.dart';
+import 'package:songies/library/favorites.dart';
+import 'package:songies/ui/widgets/favorite_star.dart';
 
 import '../helpers/test_db.dart';
 import '../helpers/ui_harness.dart';
@@ -612,6 +614,105 @@ void main() {
       // Opening the menu writes nothing: the song is stored only by an action.
       expect(h.ytStore.upserted, isEmpty);
       expect(await real(tester, () => h.db.select(h.db.tracks).get()), isEmpty);
+    });
+  });
+
+  group('Favorites', () {
+    Finder starIn(Finder row) =>
+        find.descendant(of: row, matching: find.byType(FavoriteStar));
+
+    Future<Set<String>> favIds(WidgetTester tester) =>
+        real(tester, () => FavoritesRepository(h.db, h.stamp).watchIds().first);
+
+    setUp(() async {
+      await FavoritesRepository(h.db, h.stamp).ensureFavorites();
+    });
+
+    uiTest('playlist rows have a star', (tester) async {
+      final pid = await real(tester, () async {
+        await h.addTrack('t1');
+        await h.addTrack('t2');
+        return h.addPlaylist('Road trip', ['t1', 't2']);
+      });
+      await pumpPlaylist(tester, pid);
+      expect(find.byType(FavoriteStar), findsNWidgets(2));
+    });
+
+    uiTest('search rows have a star, library and YouTube Music', (
+      tester,
+    ) async {
+      await real(tester, () async {
+        await h.addTrack('t1', title: 'One More Time', artist: 'Daft Punk');
+      });
+      await pumpSearch(tester, 'daft');
+      expect(starIn(find.byKey(const Key('search.song.t1'))), findsOneWidget);
+      h.ytm.answer('lucky', YtmSearchKind.songs, [_lucky]);
+      await pumpSearch(tester, 'lucky');
+      expect(starIn(find.byKey(const Key('ytm.song.v1'))), findsOneWidget);
+    });
+
+    uiTest('Home recents and queue rows have a star', (tester) async {
+      await recents(tester);
+      h.ytm.homeAnswer = const Ok(YtmHome([], null));
+      await pumpHome(tester);
+      expect(starIn(recentRow), findsOneWidget);
+
+      await pumpNowPlaying(tester, still: true);
+      final tracks = await real(tester, () => h.db.select(h.db.tracks).get());
+      await real(tester, () => h.player.playQueue(tracks));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('nowPlaying.tab.queue')));
+      await settle(tester);
+      expect(starIn(find.byKey(const Key('queue.row.1'))), findsOneWidget);
+    });
+
+    uiTest('the menu adds and removes Favorites', (tester) async {
+      await recents(tester);
+      h.ytm.homeAnswer = const Ok(YtmHome([], null));
+      await pumpHome(tester);
+      await longPress(tester, recentRow);
+      expect(find.text('Add to Favorites'), findsOneWidget);
+      await choose(tester, 'favorite');
+      expect(await favIds(tester), {'t1'});
+      await longPress(tester, recentRow);
+      expect(find.text('Remove from Favorites'), findsOneWidget);
+      await choose(tester, 'favorite');
+      expect(await favIds(tester), isEmpty);
+    });
+
+    uiTest('starring a song that fails to store changes nothing', (
+      tester,
+    ) async {
+      h.ytStore.failUpsert = const Failure(FailureKind.network, 'down');
+      h.ytm.answer('lucky', YtmSearchKind.songs, [_lucky]);
+      await pumpSearch(tester, 'lucky');
+      await tester.tap(starIn(find.byKey(const Key('ytm.song.v1'))));
+      await settle(tester);
+      expect(find.text("Couldn't add that song"), findsOneWidget);
+      expect(find.byIcon(Icons.star_rounded), findsNothing);
+      expect(await favIds(tester), isEmpty);
+    });
+
+    uiTest('un-starring on the Favorites page removes the row', (tester) async {
+      await real(tester, () async {
+        await h.addTrack('t1');
+        await h.addTrack('t2');
+        final f = FavoritesRepository(h.db, h.stamp);
+        await f.star('t1');
+        await f.star('t2');
+      });
+      await pumpPlaylist(tester, kFavoritesPlaylistId);
+      expect(find.text('Song t1'), findsOneWidget);
+      await tester.tap(
+        starIn(
+          find
+              .ancestor(of: find.text('Song t1'), matching: find.byType(Row))
+              .first,
+        ),
+      );
+      await settle(tester);
+      expect(find.text('Song t1'), findsNothing);
+      expect(find.text('Song t2'), findsOneWidget);
     });
   });
 

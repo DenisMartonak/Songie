@@ -26,6 +26,7 @@ import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../widgets/page_snack_bar.dart';
 import '../widgets/song_menu.dart';
+import '../widgets/favorite_star.dart';
 import 'hero_backdrop.dart';
 import 'yt_playlist_actions.dart';
 
@@ -1149,6 +1150,7 @@ class _TrackRow extends ConsumerWidget {
                     ),
                   ),
                 ),
+                FavoriteStar(song: song),
                 SongMenuButton(
                   key: Key('track.menu.${row.entryId}'),
                   song: song,

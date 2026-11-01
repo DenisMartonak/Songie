@@ -23,6 +23,7 @@ import '../widgets/song_menu.dart';
 import '../ytm/consent_sheet.dart';
 import '../ytm/ytm_result_tiles.dart';
 import '../ytm/ytm_shelf_row.dart';
+import '../widgets/favorite_star.dart';
 
 /// "Good morning" from 05:00, "Good afternoon" from 12:00, "Good evening" from
 /// 18:00 until 05:00.
@@ -582,6 +583,7 @@ class _RecentRow extends ConsumerWidget {
                 ],
               ),
             ),
+            FavoriteStar(song: MenuSong.track(track)),
           ],
         ),
       ),

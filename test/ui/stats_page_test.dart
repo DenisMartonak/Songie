@@ -13,6 +13,7 @@ import 'package:songies/stats/stats_models.dart';
 import 'package:songies/stats/stats_repository.dart';
 import 'package:songies/ui/stats/stats_page.dart';
 import 'package:songies/ui/widgets/page_surface.dart';
+import 'package:songies/ui/widgets/favorite_star.dart';
 
 import '../helpers/ui_harness.dart';
 
@@ -296,6 +297,29 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Artist 1 feat. Guest'), findsNothing);
+  });
+
+  uiTest('a top song in the library has a star; a removed one has none', (
+    tester,
+  ) async {
+    size(tester, const Size(400, 800));
+    await real(tester, () => h.addTrack('s1', title: 'Live title'));
+    await pumpPage(tester);
+    await tester.scrollUntilVisible(find.byKey(const Key('stats.song.1')), 200);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('stats.song.0')),
+        matching: find.byType(FavoriteStar),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('stats.song.1')),
+        matching: find.byType(FavoriteStar),
+      ),
+      findsNothing,
+    );
   });
 
   uiTest('tapping a song plays it; a removed song has no menu or tap', (

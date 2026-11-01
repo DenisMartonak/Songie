@@ -12,6 +12,7 @@ import '../widgets/song_menu.dart';
 import '../ytm/ytm_nav.dart';
 import '../ytm/ytm_page_parts.dart' show YtmSectionTitle;
 import '../ytm/ytm_result_tiles.dart' show YtmTile;
+import '../widgets/favorite_star.dart';
 import 'stats_chart.dart';
 
 /// Rows shown before Show top 10.
@@ -501,12 +502,13 @@ class _SongRow extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _PlayCount(song.plays),
-          if (track != null)
+          if (track != null) ...[
+            FavoriteStar(song: MenuSong.track(track)),
             SongMenuButton(
               key: Key('stats.song.menu.$rank'),
               song: MenuSong.track(track),
-            )
-          else
+            ),
+          ] else
             const SizedBox(width: 8),
         ],
       ),

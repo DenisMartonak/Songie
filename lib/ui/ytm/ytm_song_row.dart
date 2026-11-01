@@ -6,6 +6,7 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../shell/player_bar.dart' show formatDuration;
 import '../widgets/song_menu.dart';
+import '../widgets/favorite_star.dart';
 import 'ytm_result_tiles.dart';
 
 /// A YouTube Music song (or video): art, title, artists and album, duration
@@ -44,6 +45,7 @@ class YtmSongRow extends ConsumerWidget {
               formatDuration(Duration(milliseconds: duration)),
               style: TextStyle(color: colors.mutedText, fontSize: 12),
             ),
+          FavoriteStar(song: MenuSong.ytm(song)),
           SongMenuButton(
             key: Key('ytm.song.menu.${song.videoId}'),
             song: MenuSong.ytm(song),

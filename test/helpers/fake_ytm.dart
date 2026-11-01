@@ -141,9 +141,13 @@ class RecordingYtTrackStore extends YtTrackStore {
 
   final upserted = <String>[];
 
+  /// When set, [upsert] answers it instead of storing the song.
+  Failure? failUpsert;
+
   @override
   Future<Result<Track>> upsert(YtmSong s) {
     upserted.add(s.videoId);
+    if (failUpsert case final f?) return Future.value(Err(f));
     return super.upsert(s);
   }
 }
