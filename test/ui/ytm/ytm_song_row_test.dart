@@ -28,7 +28,6 @@ const _bare = YtmSong(
 );
 
 const _menuItems = [
-  'Play next',
   'Add to queue',
   'Add to playlist',
   'Go to artist',
@@ -129,25 +128,17 @@ void main() {
     await openMenu(tester, _bare);
     expect(find.text('Go to artist'), findsNothing);
     expect(find.text('Go to album'), findsNothing);
-    expect(find.text('Play next'), findsOneWidget);
+    expect(find.text('Add to queue'), findsOneWidget);
     expect(find.text('Start radio'), findsOneWidget);
   });
 
-  uiTest('Play next stores the song and queues it next', (tester) async {
-    await pumpRow(tester, _lucky);
-    await openMenu(tester, _lucky);
-    await choose(tester, 'Play next');
-    expect(h.ytStore.upserted, ['v1']);
-    expect(queueTitles(), ['Get Lucky']);
-    expect(h.radio.played, isEmpty);
-  });
-
-  uiTest('Add to queue stores the song and appends it', (tester) async {
+  uiTest('Add to queue stores the song and queues it', (tester) async {
     await pumpRow(tester, _lucky);
     await openMenu(tester, _lucky);
     await choose(tester, 'Add to queue');
     expect(h.ytStore.upserted, ['v1']);
     expect(queueTitles(), ['Get Lucky']);
+    expect(h.radio.played, isEmpty);
   });
 
   uiTest('Add to playlist stores the song and opens the playlist picker', (

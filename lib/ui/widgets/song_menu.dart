@@ -46,7 +46,6 @@ class MenuSong {
 }
 
 enum SongMenuAction {
-  playNext,
   addToQueue,
   addToPlaylist,
   startRadio,
@@ -139,8 +138,8 @@ class SongMenuButton extends ConsumerWidget {
 }
 
 /// The one song menu, shown for [song] wherever a song is listed. Each item
-/// shows only where it applies: Play next, Add to queue and Add to playlist
-/// always; Start radio and Download / Remove download for a playable
+/// shows only where it applies: Add to queue and Add to playlist always;
+/// Start radio and Download / Remove download for a playable
 /// YouTube song; Go to artist and Go to album when YouTube Music knows their
 /// pages; Remove from this playlist with [onRemoveFromPlaylist] (inside one
 /// of the user's playlists).
@@ -189,7 +188,6 @@ Future<void> showSongMenu(
   }
 
   final entries = <(SongMenuAction, IconData, String)>[
-    (SongMenuAction.playNext, Icons.playlist_play, 'Play next'),
     (SongMenuAction.addToQueue, Icons.queue_music, 'Add to queue'),
     (SongMenuAction.addToPlaylist, Icons.playlist_add, 'Add to playlist'),
     if (playable)
@@ -237,8 +235,6 @@ Future<void> showSongMenu(
   }
 
   switch (action) {
-    case SongMenuAction.playNext:
-      if (await track() case final t?) await player.playNext([t]);
     case SongMenuAction.addToQueue:
       if (await track() case final t?) await player.addToQueue([t]);
     case SongMenuAction.addToPlaylist:

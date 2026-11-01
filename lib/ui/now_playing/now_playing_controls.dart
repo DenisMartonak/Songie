@@ -6,6 +6,7 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
 import '../shell/player_bar.dart' show formatDuration;
+import '../widgets/steady_track_shape.dart';
 
 /// The seek slider with elapsed and remaining time underneath. Dragging
 /// previews the time (both labels follow the finger); the seek happens when
@@ -88,7 +89,7 @@ class _NowPlayingScrubberState extends ConsumerState<NowPlayingScrubber> {
                     pressedElevation: 0,
                   ),
                   overlayShape: SliderComponentShape.noOverlay,
-                  trackShape: const RoundedRectSliderTrackShape(),
+                  trackShape: const SteadyTrackShape(),
                 ),
                 child: slider!,
               ),

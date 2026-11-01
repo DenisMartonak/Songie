@@ -74,7 +74,7 @@ void main() {
   Future<void> expectBothWays(WidgetTester tester, Finder row) async {
     await longPress(tester, row);
     expect(sheet, findsOneWidget);
-    expect(item('playNext'), findsOneWidget);
+    expect(item('addToQueue'), findsOneWidget);
     expect(item('addToPlaylist'), findsOneWidget);
     await dismiss(tester);
     expect(sheet, findsNothing);
@@ -82,10 +82,10 @@ void main() {
     final at = await rightClick(tester, row);
     expect(sheet, findsNothing);
     expect(popup, findsWidgets);
-    expect(item('playNext'), findsOneWidget);
+    expect(item('addToQueue'), findsOneWidget);
     expect(item('addToPlaylist'), findsOneWidget);
     // It opens at the pointer.
-    final top = tester.getTopLeft(item('playNext'));
+    final top = tester.getTopLeft(item('addToQueue'));
     expect((top.dy - at.dy).abs(), lessThan(60));
     expect((top.dx - at.dx).abs(), lessThan(60));
     await dismiss(tester);
@@ -505,7 +505,7 @@ void main() {
       await recents(tester);
       await pumpHome(tester);
       await longPress(tester, recentRow);
-      expect(item('playNext'), findsOneWidget);
+      expect(item('addToQueue'), findsOneWidget);
       expect(item('removeFromPlaylist'), findsNothing);
     });
   });
@@ -534,7 +534,7 @@ void main() {
       await pumpPlaylist(tester, pid);
 
       await longPress(tester, find.text('Song t1'));
-      expect(item('playNext'), findsOneWidget);
+      expect(item('addToQueue'), findsOneWidget);
       expect(item('download'), findsNothing);
       expect(item('removeDownload'), findsNothing);
       expect(item('startRadio'), findsNothing);
@@ -596,7 +596,7 @@ void main() {
       });
       await pumpPlaylist(tester, pid);
       await longPress(tester, find.text('Song y1'));
-      expect(item('playNext'), findsOneWidget);
+      expect(item('addToQueue'), findsOneWidget);
       expect(item('goToArtist'), findsNothing);
       expect(item('goToAlbum'), findsNothing);
     });
@@ -616,16 +616,26 @@ void main() {
   });
 
   group('queue actions on a library song', () {
-    uiTest('Play next and Add to queue use the track as it is', (tester) async {
+    uiTest('Add to queue uses the track as it is, in the order added', (
+      tester,
+    ) async {
       await recents(tester);
       await pumpHome(tester);
       await longPress(tester, recentRow);
       await choose(tester, 'addToQueue');
       expect(queueIds(), ['t1']);
       await longPress(tester, find.byKey(const Key('home.recent.t2')));
-      await choose(tester, 'playNext');
-      expect(queueIds(), contains('t2'));
+      await choose(tester, 'addToQueue');
+      expect(queueIds(), ['t1', 't2']);
       expect(h.ytStore.upserted, isEmpty);
+    });
+
+    uiTest('there is no Play next', (tester) async {
+      await recents(tester);
+      await pumpHome(tester);
+      await longPress(tester, recentRow);
+      expect(find.text('Play next'), findsNothing);
+      expect(item('addToQueue'), findsOneWidget);
     });
   });
 }

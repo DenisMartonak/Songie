@@ -134,8 +134,8 @@ class _Entry {
   /// Whether the engine-error retry (fresh stream URL) was already used.
   bool engineRetried = false;
 
-  /// Added by [PlayerService.addToQueue] or [PlayerService.playNext] rather
-  /// than being part of the queue that was played.
+  /// Added by [PlayerService.addToQueue] rather than being part of the queue
+  /// that was played.
   bool queued = false;
 }
 
@@ -266,8 +266,8 @@ class PlayerService {
   Stream<Track> get trackStarts => _starts.stream;
 
   /// Changes on every [playQueue] call (synchronously, when it is called), and
-  /// never on [playNext], [addToQueue] or other edits. Lets a caller that
-  /// built a queue (radio) tell whether it is still the one playing.
+  /// never on [addToQueue] or other edits. Lets a caller that built a queue
+  /// (radio) tell whether it is still the one playing.
   int get queueEpoch => _queueEpoch;
 
   // --- commands -------------------------------------------------------------
@@ -328,43 +328,33 @@ class PlayerService {
     await _startFirstPlayable(_candidates(start, wrap: _wraps));
   });
 
-  /// Inserts [tracks] right after the current song, ahead of anything queued
-  /// earlier. On an empty queue they become the queue, with the first one
-  /// current but not started.
-  Future<void> playNext(List<Track> tracks) =>
-      _locked(() async => _insertQueued(tracks, _state.index + 1));
-
   /// Queues [tracks] after the current song and the songs queued before them,
   /// so they play next, in the order they were added, before the rest of the
   /// queue that was played. On an empty queue they become the queue, with the
   /// first one current but not started.
-  Future<void> addToQueue(List<Track> tracks) => _locked(
-    () async => _insertQueued(tracks, _state.index + 1 + _queuedAhead),
-  );
-
-  /// Songs queued with [addToQueue] or [playNext] waiting right after the
-  /// current one.
-  int get _queuedAhead {
-    var n = 0;
-    for (var i = _state.index + 1; i < _queue.length && _queue[i].queued; i++) {
-      n++;
-    }
-    return n;
-  }
-
-  /// Inserts [tracks] at [at] in the playing order, and after the same song in
-  /// the unshuffled one, so they keep their place if shuffle is turned off.
-  void _insertQueued(List<Track> tracks, int at) {
+  Future<void> addToQueue(List<Track> tracks) => _locked(() async {
     if (tracks.isEmpty) return;
     final entries = [for (final t in tracks) _Entry(t)..queued = true];
     if (_currentEntry == null) {
       _becomeQueue(entries);
       return;
     }
+    // In the playing order after the queued songs; in the unshuffled order
+    // after the same song, so they keep their place if shuffle is turned off.
+    final at = _state.index + 1 + _queuedAhead;
     final o = _original.indexOf(_queue[at - 1]);
     _queue.insertAll(at, entries);
     _original.insertAll(o < 0 ? _original.length : o + 1, entries);
     _queueEdited();
+  });
+
+  /// Songs queued with [addToQueue] waiting right after the current one.
+  int get _queuedAhead {
+    var n = 0;
+    for (var i = _state.index + 1; i < _queue.length && _queue[i].queued; i++) {
+      n++;
+    }
+    return n;
   }
 
   void _becomeQueue(List<_Entry> entries) {

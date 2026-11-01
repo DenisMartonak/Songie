@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
 import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
 import '../widgets/artwork.dart';
+import '../widgets/steady_track_shape.dart';
 
 /// The desktop's bottom player bar, 72 px high: the current track on the left;
 /// shuffle, previous, play/pause, next, repeat and a scrubber in the middle;
@@ -297,7 +298,6 @@ class _ScrubberState extends ConsumerState<_Scrubber> {
                 disabledThumbColor: Colors.transparent,
                 disabledActiveTrackColor: colors.text.withAlpha(51),
                 disabledInactiveTrackColor: colors.text.withAlpha(51),
-                trackShape: const RoundedRectSliderTrackShape(),
               ),
               value: shown,
               onChanged: seekable ? (v) => setState(() => _drag = v) : null,
@@ -437,6 +437,8 @@ class _HoverSliderState extends State<_HoverSlider> {
               pressedElevation: 0,
             ),
             overlayShape: SliderComponentShape.noOverlay,
+            // The bar keeps its length when the thumb appears.
+            trackShape: const SteadyTrackShape(),
           ),
           child: Slider(
             key: widget.sliderKey,

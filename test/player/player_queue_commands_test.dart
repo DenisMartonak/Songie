@@ -83,64 +83,6 @@ void main() {
     });
   });
 
-  group('playNext', () {
-    test('inserts right after the current song', () async {
-      await player.playQueue(ten, startIndex: 3);
-      await player.playNext([x, y]);
-
-      expect(player.state.queue, hasLength(12));
-      expect(player.state.index, 3);
-      expect(player.state.current, ten[3]);
-      expect(player.state.queue[4], x);
-      expect(player.state.queue[5], y);
-      expect(player.state.queue[6], ten[4]);
-    });
-
-    test('the inserted songs play next', () async {
-      await player.playQueue(ten, startIndex: 3);
-      await player.playNext([x]);
-      backend.clearCalls();
-      await player.next();
-      expect(backend.sources, ['/music/x.mp3']);
-    });
-
-    test('with shuffle on, they still play next and stay next to the '
-        'current song when shuffle is turned off', () async {
-      player.setShuffle(true);
-      await player.playQueue(ten, startIndex: 3);
-      await player.playNext([x, y]);
-      expect(player.state.queue[1], x);
-      expect(player.state.queue[2], y);
-
-      player.setShuffle(false);
-      expect(ids(player.state.queue), [
-        't0', 't1', 't2', 't3', 'x', 'y', 't4', 't5', 't6', 't7', 't8', 't9', //
-      ]);
-      expect(player.state.current, ten[3]);
-    });
-
-    test('runs after an earlier playQueue that is still starting', () async {
-      final f = player.playQueue([ten[0], ten[1]]);
-      final g = player.playNext([x]);
-      await Future.wait([f, g]);
-      expect(ids(player.state.queue), ['t0', 'x', 't1']);
-    });
-
-    test('on an empty queue it becomes the queue without starting', () async {
-      await player.playNext([x, y]);
-      expect(ids(player.state.queue), ['x', 'y']);
-      expect(player.state.index, 0);
-      expect(player.state.playing, isFalse);
-      expect(backend.sources, isEmpty);
-    });
-
-    test('nothing to add is a no-op', () async {
-      await player.playQueue(ten, startIndex: 3);
-      await player.playNext([]);
-      expect(player.state.queue, hasLength(10));
-    });
-  });
-
   group('addToQueue', () {
     test('inserts right after the current song', () async {
       await player.playQueue(ten, startIndex: 3);
@@ -174,11 +116,17 @@ void main() {
       expect(ids(player.state.queue).sublist(4, 8), ['x', 'y', 'z', 't4']);
     });
 
-    test('play next goes ahead of songs already queued', () async {
+    test('runs after an earlier playQueue that is still starting', () async {
+      final f = player.playQueue([ten[0], ten[1]]);
+      final g = player.addToQueue([x]);
+      await Future.wait([f, g]);
+      expect(ids(player.state.queue), ['t0', 'x', 't1']);
+    });
+
+    test('nothing to add is a no-op', () async {
       await player.playQueue(ten, startIndex: 3);
-      await player.addToQueue([x]);
-      await player.playNext([y]);
-      expect(ids(player.state.queue).sublist(3, 7), ['t3', 'y', 'x', 't4']);
+      await player.addToQueue([]);
+      expect(player.state.queue, hasLength(10));
     });
 
     test('turning shuffle on keeps queued songs next', () async {
@@ -218,7 +166,7 @@ void main() {
     expect(e1, isNot(e0));
     await f;
     await player.addToQueue([x]);
-    await player.playNext([y]);
+    await player.addToQueue([y]);
     expect(player.queueEpoch, e1);
   });
 }
