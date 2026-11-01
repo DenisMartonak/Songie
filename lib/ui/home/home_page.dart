@@ -24,6 +24,7 @@ import '../ytm/consent_sheet.dart';
 import '../ytm/ytm_result_tiles.dart';
 import '../ytm/ytm_shelf_row.dart';
 import '../widgets/favorite_star.dart';
+import '../widgets/playlist_art.dart';
 
 /// "Good morning" from 05:00, "Good afternoon" from 12:00, "Good evening" from
 /// 18:00 until 05:00.
@@ -447,11 +448,11 @@ class _QuickTile extends ConsumerWidget {
         onTap: () => context.push('/home/playlist/${playlist.id}'),
         child: Row(
           children: [
-            Artwork(
-              playlist.coverRef,
+            PlaylistArt(
+              playlistId: playlist.id,
+              coverRef: playlist.coverRef,
               size: height,
               radius: 0,
-              seed: playlist.id,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -501,7 +502,11 @@ class _PlaylistCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Artwork(playlist.coverRef, size: art, seed: playlist.id),
+              PlaylistArt(
+                playlistId: playlist.id,
+                coverRef: playlist.coverRef,
+                size: art,
+              ),
               const SizedBox(height: 8),
               Text(
                 playlist.name,

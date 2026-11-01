@@ -10,7 +10,7 @@ import '../downloads/download_ring.dart';
 import '../downloads/downloads_sheet.dart';
 import '../motion/equalizer_bars.dart';
 import '../motion/motion.dart';
-import '../widgets/artwork.dart';
+import '../widgets/playlist_art.dart';
 import 'go_tab.dart';
 
 /// The desktop sidebar: Home / Search / Sync devices, the playlist list and a
@@ -363,7 +363,11 @@ class _PlaylistRow extends ConsumerWidget {
     final playing =
         isSource &&
         ref.watch(playerStateProvider.select((s) => s.value?.playing ?? false));
-    Widget art = Artwork(playlist.coverRef, size: 40, seed: playlist.id);
+    Widget art = PlaylistArt(
+      playlistId: playlist.id,
+      coverRef: playlist.coverRef,
+      size: 40,
+    );
     if (isSource && collapsed) {
       art = Stack(
         children: [
