@@ -6,9 +6,9 @@ Songies shows "Listening to Songies" with the song, artist and a progress bar on
 2. On **General Information**, set the **App Icon** to `linux/packaging/songies.png` (the 512 px app icon).
 3. Open **Rich Presence → Art Assets**, click **Add Image(s)**, choose the same `songies.png` and name it exactly `songies`. Local songs (no public cover) show this picture; YouTube songs show their cover with it as a small badge. Discord can take a few minutes to show a new asset.
 4. Back on **General Information**, copy the **Application ID** (a long number). It is public, not a secret.
-5. Paste it between the quotes of `defaultValue: ''` in `lib/discord/discord_presence.dart` (`kDiscordClientId`), then build or release as usual.
+5. Paste it as `defaultValue` of `kDiscordClientId` in `lib/discord/discord_presence.dart`, then build or release as usual. (Done: the Songies app's id is `1566284629118296066`.)
 
-Until step 5 the switch in Settings says "Not set up in this version of Songies yet".
+Without an id the switch in Settings says "Not set up in this version of Songies yet".
 
 ## Checking it
 

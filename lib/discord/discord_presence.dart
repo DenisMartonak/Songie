@@ -5,13 +5,13 @@ import '../data/database.dart';
 import '../player/player_service.dart';
 import 'discord_ipc.dart';
 
-/// The Discord application whose name shows as "Listening to …". Public
-/// (every Rich Presence client sends it); empty means Discord status is not
-/// set up in this build. Paste the Application ID from
-/// discord.com/developers between the quotes.
+/// The Discord application whose name shows as "Listening to …" (the
+/// "Songies" app at discord.com/developers). Public: every Rich Presence
+/// client sends it. A build can point at another app with
+/// `--dart-define=SONGIES_DISCORD_CLIENT_ID=...`; empty turns it off.
 const String kDiscordClientId = String.fromEnvironment(
   'SONGIES_DISCORD_CLIENT_ID',
-  defaultValue: '',
+  defaultValue: '1566284629118296066',
 );
 
 /// The Rich Presence art asset (uploaded to the Discord application) shown
