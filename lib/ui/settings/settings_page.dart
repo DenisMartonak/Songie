@@ -19,6 +19,7 @@ import '../motion/motion.dart';
 import '../update/update_dialog.dart';
 import '../widgets/page_snack_bar.dart';
 import 'downloads_settings.dart';
+import 'playback_settings.dart';
 import 'storage_usage.dart';
 import 'youtube_settings.dart';
 import 'discord_settings.dart';
@@ -81,6 +82,7 @@ class SettingsPage extends ConsumerWidget {
             ),
           ),
           const _FoldersSection(),
+          const PlaybackSettingsSection(),
           const _AppearanceSection(),
           const DiscordSettingsSection(),
           const YouTubeSettingsSection(),

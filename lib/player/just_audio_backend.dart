@@ -20,7 +20,13 @@ Future<void> initAudioPlatform() async {
 /// [becomingNoisy] and [interruptions] so the player service stays the owner of
 /// the playing flag (see `bindAudioSession`).
 class JustAudioBackend implements AudioBackend {
-  JustAudioBackend() {
+  /// [pipeline] carries Android audio effects (the equalizer).
+  JustAudioBackend({AudioPipeline? pipeline})
+    : _player = AudioPlayer(
+        handleInterruptions: false,
+        useProxyForRequestHeaders: false,
+        audioPipeline: pipeline,
+      ) {
     _subs = [
       _player.playerStateStream.listen((s) {
         _playing = s.playing;
@@ -59,10 +65,7 @@ class JustAudioBackend implements AudioBackend {
   // the default routes them through a cleartext http://127.0.0.1 proxy that
   // Android blocks. ExoPlayer (setDefaultRequestProperties) and media_kit
   // (Media.httpHeaders) both send the headers natively instead.
-  final AudioPlayer _player = AudioPlayer(
-    handleInterruptions: false,
-    useProxyForRequestHeaders: false,
-  );
+  final AudioPlayer _player;
   late final List<StreamSubscription<Object?>> _subs;
   final StreamController<BackendState> _controller =
       StreamController<BackendState>.broadcast();

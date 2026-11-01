@@ -33,6 +33,8 @@ import 'lyrics/lyrics_service.dart';
 import 'player/player_service.dart';
 import 'player/radio_controller.dart';
 import 'player/runtime_prompter.dart';
+import 'player/eq_presets.dart';
+import 'player/equalizer.dart';
 import 'stats/stats_models.dart';
 import 'stats/stats_repository.dart';
 import 'theme/app_theme.dart';
@@ -437,6 +439,31 @@ final settingsRepositoryProvider = Provider<SettingsRepository>(
 final ytDlpRunnerProvider = Provider<YtDlpRunner>(
   (ref) => _unwired('ytDlpRunnerProvider'),
 );
+
+/// The engine's equalizer; none until `main.dart` wires the real one.
+final equalizerProvider = Provider<Equalizer>((ref) => const NoEqualizer());
+
+/// The chosen equalizer preset; picking one stores and applies it.
+final eqPresetProvider = NotifierProvider<EqPresetNotifier, EqPreset>(
+  EqPresetNotifier.new,
+);
+
+/// The stored preset name; no value (Off) where there is no settings store.
+final _storedEqPresetProvider = StreamProvider<String?>(
+  (ref) => ref.watch(settingsRepositoryProvider).watchString(kEqPreset),
+);
+
+class EqPresetNotifier extends Notifier<EqPreset> {
+  @override
+  EqPreset build() =>
+      eqPresetFromName(ref.watch(_storedEqPresetProvider).value);
+
+  Future<void> select(EqPreset p) async {
+    state = p;
+    await ref.read(settingsRepositoryProvider).setString(kEqPreset, p.name);
+    await ref.read(equalizerProvider).apply(p);
+  }
+}
 
 /// Stars and un-stars songs (the built-in Favorites playlist).
 final favoritesRepositoryProvider = Provider<FavoritesRepository>(

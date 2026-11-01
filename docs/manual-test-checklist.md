@@ -286,6 +286,14 @@ Use `S4-2QqwHf5c` ("HOMOŠLERKY (Full Song)").
 - [ ] Favorites has no Rename or Delete; its download switch works.
 - [ ] Two devices: star a song on each, sync, both have both; un-star one on one device, sync, it's gone on both, with no conflict prompt.
 
+## Equalizer
+
+- [ ] Settings → Playback → Equalizer lists Off, Bass boost, Vocal, Rock, Pop, Classical, Electronic, Acoustic.
+- [ ] Linux: picking Rock while a song plays changes the sound at once, with no gap or restart; Off sounds like before.
+- [ ] Windows: same as Linux. If the sound doesn't change, the row should read "Not available on Windows yet" (the bundled libmpv lacks the filter).
+- [ ] Android: same, through the phone's equalizer.
+- [ ] The preset survives a restart and applies to the next song, a YouTube stream and a downloaded file alike.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.

@@ -39,6 +39,9 @@ const kYtAccountName = 'yt_account_name';
 /// keyring entirely. Device-local.
 const kYtSignedIn = 'yt_signed_in';
 
+/// The equalizer preset (an `EqPreset` name). Device-local, Off by default.
+const kEqPreset = 'eq_preset';
+
 /// Show the playing song on Discord (desktop only). Device-local, off by
 /// default.
 const kDiscordPresence = 'discord_presence';

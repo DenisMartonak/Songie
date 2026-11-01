@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:just_audio/just_audio.dart'
+    show AndroidEqualizer, AudioPipeline;
 
 import 'app.dart';
 import 'core/app_version.dart';
@@ -57,6 +59,7 @@ import 'player/player_service.dart';
 import 'player/stream_resolver.dart';
 import 'player/stream_source.dart';
 import 'player/track_resolver.dart';
+import 'player/equalizer.dart';
 import 'providers.dart';
 import 'router.dart';
 import 'sync/device_identity.dart';
@@ -219,7 +222,21 @@ Future<void> main() async {
   );
   unawaited(downloads.start());
 
-  final backend = JustAudioBackend();
+  // The equalizer: Android's system effect in the player's pipeline; mpv's
+  // filter on desktop (hooked before the first mpv player is made).
+  final androidEq = Platform.isAndroid ? AndroidEqualizer() : null;
+  final Equalizer equalizer = androidEq != null
+      ? AndroidEqualizerControl(JustAudioEqualizerPort(androidEq))
+      : MpvEqualizerControl(mpv: MediaKitMpvCommands());
+  final backend = JustAudioBackend(
+    pipeline: androidEq == null
+        ? null
+        : AudioPipeline(androidAudioEffects: [androidEq]),
+  );
+  await applyStoredEqPreset(
+    read: () => settings.getString(kEqPreset),
+    apply: equalizer.apply,
+  );
   final player = PlayerService(
     backend,
     resolver,
@@ -286,6 +303,7 @@ Future<void> main() async {
       playerServiceProvider.overrideWithValue(player),
       settingsRepositoryProvider.overrideWithValue(settings),
       ytDlpRunnerProvider.overrideWithValue(runner),
+      equalizerProvider.overrideWithValue(equalizer),
       jsRuntimeFinderProvider.overrideWithValue(runtimes),
       denoInstallerProvider.overrideWithValue(denoInstaller),
       runtimePrompterProvider.overrideWithValue(runtimePrompter),
