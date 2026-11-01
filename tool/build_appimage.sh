@@ -41,8 +41,8 @@ OUT_DIR="${SONGIES_OUT_DIR:-$REPO_ROOT/build}"
 APPDIR="$WORK_DIR/Songies.AppDir"
 OUTPUT="$OUT_DIR/songies-${VERSION}-x86_64.AppImage"
 PACKAGING="$REPO_ROOT/linux/packaging"
-# The launcher icon (192 px). Replace this file when Songies gets its own icon.
-ICON_SRC="$REPO_ROOT/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+# The app icon, 512 px (made by tool/generate_icons.py).
+ICON_SRC="$PACKAGING/songies.png"
 
 # The CI runners have no FUSE; the tools are AppImages themselves.
 export APPIMAGE_EXTRACT_AND_RUN="${APPIMAGE_EXTRACT_AND_RUN:-1}"

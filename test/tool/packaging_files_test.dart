@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -101,6 +102,16 @@ void main() {
       expect(desktop, contains('\nName=Songies\n'));
       expect(desktop, contains('\nExec=songies'));
       expect(desktop, contains('\nIcon=songies\n'));
+    });
+
+    test('the AppImage uses the 512 px app icon', () {
+      final script = read('tool/build_appimage.sh');
+      expect(script, contains('ICON_SRC="\$PACKAGING/songies.png"'));
+      final png = File('linux/packaging/songies.png').readAsBytesSync();
+      // PNG signature, then the IHDR width and height (big-endian).
+      expect(png.sublist(1, 4), 'PNG'.codeUnits);
+      final size = ByteData.sublistView(png, 16, 24);
+      expect([size.getUint32(0), size.getUint32(4)], [512, 512]);
     });
 
     test('AppRun is executable and never only appends library paths', () {
