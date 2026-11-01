@@ -161,6 +161,20 @@ void main() {
       expect(await httpDownload(url()), [1, 2, 3]);
     });
 
+    test('reports progress with the Content-Length total', () async {
+      handler = (req) async {
+        req.response.contentLength = 4;
+        req.response.add([1, 2]);
+        await req.response.flush();
+        req.response.add([3, 4]);
+        await req.response.close();
+      };
+      final seen = <(int, int?)>[];
+      await httpDownload(url(), onProgress: (a, b) => seen.add((a, b)));
+      expect(seen.last, (4, 4));
+      expect(seen.every((e) => e.$2 == 4), isTrue);
+    });
+
     test('a stalled body hits the idle timeout', () async {
       handler = (req) async {
         req.response.contentLength = 100;

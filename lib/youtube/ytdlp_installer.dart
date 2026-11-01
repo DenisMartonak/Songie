@@ -32,12 +32,14 @@ Future<ProcessResult> _defaultRunProcess(String exe, List<String> args) =>
 /// [connectionTimeout] bounds the connect and [stallTimeout] any wait for the
 /// response headers or the next body chunk, so a slow link still succeeds as
 /// long as bytes keep arriving. [totalTimeout], when given, bounds the whole
-/// download.
+/// download. [onProgress] gets the bytes received so far and the
+/// Content-Length (null when the server sends none).
 Future<List<int>> httpDownload(
   Uri uri, {
   Duration connectionTimeout = const Duration(seconds: 30),
   Duration stallTimeout = const Duration(seconds: 60),
   Duration? totalTimeout,
+  void Function(int received, int? total)? onProgress,
 }) async {
   final client = HttpClient()..connectionTimeout = connectionTimeout;
   Future<List<int>> body() async {
@@ -50,8 +52,10 @@ Future<List<int>> httpDownload(
       throw HttpException('HTTP ${res.statusCode}', uri: uri);
     }
     final b = BytesBuilder(copy: false);
+    final total = res.contentLength < 0 ? null : res.contentLength;
     await for (final chunk in res.timeout(stallTimeout)) {
       b.add(chunk);
+      onProgress?.call(b.length, total);
     }
     return b.takeBytes();
   }
