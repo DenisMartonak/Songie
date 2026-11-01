@@ -1165,6 +1165,17 @@ void main() {
       expect(p.state.notice!.reason, startsWith('ytdlp:needsRuntime:'));
     });
 
+    test(
+      'after Not now, later age-restricted songs are skipped unasked',
+      () async {
+        answer = false;
+        resolver.failures['y2'] = ytFailure(YtErrorKind.needsRuntime, 'x');
+        await p.playQueue([y, ytTrack('y2'), b]);
+        expect(asked, 1);
+        expect(p.state.current, b);
+      },
+    );
+
     test('reaching it by queue advance never asks', () async {
       await p.playQueue([a, y, b]);
       backend.complete();

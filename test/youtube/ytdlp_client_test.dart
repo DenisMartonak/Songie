@@ -271,6 +271,26 @@ void main() {
       expect((r as Err).failure.message, isNot(contains('semi')));
     });
 
+    test('if the file cannot be made private, nothing runs or stays', () async {
+      client = YtDlpClient(
+        runner,
+        cookiesDir: Directory(p.join(dir.path, 'tmp')),
+        restrictToOwner: (_) => false,
+      );
+      final r = await client.resolveStream('v', auth: YtDlpAuth(session, auth));
+      expect(r, isA<Err<YtStream>>());
+      expect(runner.calls, isEmpty);
+      expect(Directory(p.join(dir.path, 'tmp')).listSync(), isEmpty);
+    });
+
+    test('an unwritable cookies folder is an Err, not a throw', () async {
+      final notADir = File(p.join(dir.path, 'file'))..writeAsStringSync('x');
+      client = YtDlpClient(runner, cookiesDir: Directory(notADir.path));
+      final r = await client.resolveStream('v', auth: YtDlpAuth(session, auth));
+      expect(r, isA<Err<YtStream>>());
+      expect(runner.calls, isEmpty);
+    });
+
     test('download passes the cookies too', () async {
       runner.onFail('watch?v=', 'ERROR: [youtube] v: boom');
       await client.download(

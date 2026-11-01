@@ -650,7 +650,11 @@ class PlayerService {
         _publishNotice(pending);
         pending = null;
       }
-      if (await _tryStart(entry)) return true;
+      // Only the song the user picked may ask to install the runtime, not
+      // the ones a skip lands on after it.
+      if (await _tryStart(entry, mayAsk: identical(entry, candidates.first))) {
+        return true;
+      }
       if (await _haltOnNetworkFailure()) return false;
       final reason = _lastFailureReason ?? playbackFailedError;
       AppLog.w('Skipping ${entry.track.id}: $reason');
@@ -740,7 +744,11 @@ class PlayerService {
     _ => false,
   };
 
-  Future<bool> _tryStart(_Entry entry, {bool report = true}) async {
+  Future<bool> _tryStart(
+    _Entry entry, {
+    bool report = true,
+    bool mayAsk = false,
+  }) async {
     final track = entry.track;
     _prefetchedFor = null;
     _lastFailureReason = null;
@@ -769,7 +777,7 @@ class PlayerService {
     _resolving = true;
     try {
       resolved = await _resolver.resolve(track);
-      if (await _installedRuntimeFor(track, resolved)) {
+      if (mayAsk && await _installedRuntimeFor(track, resolved)) {
         resolved = await _resolver.resolve(track);
       }
     } catch (e, s) {

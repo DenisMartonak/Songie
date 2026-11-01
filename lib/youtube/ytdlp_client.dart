@@ -63,13 +63,27 @@ YtErrorKind classifyYtDlpStderr(String stderr) {
 class YtDlpClient implements StreamSource {
   /// Signed-in runs write their cookies file into [cookiesDir] (the system
   /// temp folder when null).
-  YtDlpClient(this._runner, {this._cookiesDir, DateTime Function()? now})
-    : _now = now ?? DateTime.now;
+  /// [restrictToOwner] makes a file readable by this user only, true on
+  /// success (chmod 600; nothing to do on Windows and Android, whose app
+  /// folders are already private).
+  YtDlpClient(
+    this._runner, {
+    this._cookiesDir,
+    DateTime Function()? now,
+    bool Function(String path)? restrictToOwner,
+  }) : _now = now ?? DateTime.now,
+       _restrictToOwner = restrictToOwner ?? _chmod600;
 
   final YtDlpRunner _runner;
   final Directory? _cookiesDir;
   final DateTime Function() _now;
+  final bool Function(String path) _restrictToOwner;
   static final _random = Random.secure();
+
+  static bool _chmod600(String path) {
+    if (Platform.isWindows || Platform.isAndroid) return true;
+    return Process.runSync('chmod', ['600', path]).exitCode == 0;
+  }
 
   static const playlistTimeout = Duration(minutes: 10);
   static const streamTimeout = Duration(seconds: 60);
@@ -285,15 +299,24 @@ class YtDlpClient implements StreamSource {
         ytFailure(YtErrorKind.ageRestrictedAccount, 'invalid session cookie'),
       );
     }
-    final file = _writeCookies(text);
+    final File file;
+    try {
+      file = _newPrivateFile();
+    } catch (e) {
+      return Err(ytFailure(YtErrorKind.unknown, 'cookies file: $e'));
+    }
     final Result<YtDlpRun> r;
     try {
+      // Inside the try, so a write that fails halfway is deleted too.
+      file.writeAsStringSync(text, flush: true);
       r = await _runPlain(
         ['--cookies', file.path, ...auth.runtimeArgs, ...args],
         timeout,
         onLine: onLine,
         processId: processId,
       );
+    } catch (e) {
+      return Err(ytFailure(YtErrorKind.unknown, 'cookies file: $e'));
     } finally {
       try {
         file.deleteSync();
@@ -311,9 +334,10 @@ class YtDlpClient implements StreamSource {
     return Err(ytFailure(kind, _scrub(detail, auth.session)));
   }
 
-  /// A new cookies file holding [text], readable only by this user. Sync:
-  /// it is a few hundred bytes, and the run must not start before it exists.
-  File _writeCookies(String text) {
+  /// A new, empty cookies file readable only by this user; throws (leaving
+  /// nothing behind) when it can't be made private. Sync: the run must not
+  /// start before it exists, and it is tiny.
+  File _newPrivateFile() {
     final dir = _cookiesDir ?? Directory.systemTemp;
     dir.createSync(recursive: true);
     final name = List.generate(
@@ -322,10 +346,13 @@ class YtDlpClient implements StreamSource {
     ).join();
     final file = File(p.join(dir.path, 'cookies-$name.txt'));
     file.writeAsStringSync('');
-    if (!Platform.isWindows && !Platform.isAndroid) {
-      Process.runSync('chmod', ['600', file.path]);
+    var private = false;
+    try {
+      private = _restrictToOwner(file.path);
+    } finally {
+      if (!private) file.deleteSync();
     }
-    file.writeAsStringSync(text, flush: true);
+    if (!private) throw const FileSystemException('could not make it private');
     return file;
   }
 
