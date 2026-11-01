@@ -159,9 +159,9 @@ jobs:
           echo "apksigner from $build_tools"
           certs="$("$build_tools/apksigner" verify --print-certs "$apk" 2>&1)"
           # The public certificate only: its DN and fingerprint. The signer's
-          # label differs between build-tools versions ("Signer #1", "Signer
-          # (minSdkVersion=...)").
-          grep -E '^Signer.*certificate (DN|SHA-256 digest):' <<< "$certs" || {
+          # label differs between build-tools versions ("Signer #1 certificate
+          # DN:" up to 36, "V2 Signer: certificate DN:" in 37).
+          grep -E '^(V[0-9.]+ )?Signer[^:]*:? ?certificate (DN|SHA-256 digest):' <<< "$certs" || {
             echo "::error::apksigner printed no signer certificate for $apk"
             # Public certificate details and warnings only; no secrets.
             echo "$certs"
