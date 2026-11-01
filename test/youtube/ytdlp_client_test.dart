@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:songies/core/result.dart';
+import 'package:songies/innertube/yt_session.dart';
 import 'package:songies/youtube/yt_models.dart';
 import 'package:songies/youtube/ytdlp_client.dart';
+import 'package:songies/youtube/ytdlp_cookies.dart';
 import 'package:songies/youtube/ytdlp_runner.dart';
 
 import '../helpers/fake_ytdlp_runner.dart';
@@ -154,5 +157,132 @@ void main() {
     runner.throwOnRun = TimeoutException('slow');
     expect(kindOf(await client.fetchPlaylist(url)), YtErrorKind.network);
     expect(kindOf(await client.resolveStream('a')), YtErrorKind.network);
+  });
+
+  group('signed-in runs', () {
+    late Directory dir;
+    final session = YtSession({
+      'SID': 'sid-secret-value',
+      'SAPISID': 'sapisid-secret',
+    });
+    const auth = ['--js-runtimes', 'node'];
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('songies_cookies');
+      client = YtDlpClient(
+        runner,
+        cookiesDir: Directory(p.join(dir.path, 'tmp')),
+        now: () => DateTime.utc(2026, 11, 1),
+      );
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    String cookiesArg(List<String> args) => args[args.indexOf('--cookies') + 1];
+
+    test('without auth the args are unchanged', () async {
+      runner.onOk('watch?v=', fixture('stream_opus.json'));
+      await client.resolveStream('v');
+      expect(runner.calls.single, isNot(contains('--cookies')));
+    });
+
+    test('the cookies file holds the session during the run only', () async {
+      runner.onOk('watch?v=', fixture('stream_opus.json'));
+      String? during;
+      String? mode;
+      runner.onRunStart = (args) async {
+        final f = File(cookiesArg(args));
+        during = f.readAsStringSync();
+        if (Platform.isLinux) {
+          mode = (await Process.run('stat', [
+            '-c',
+            '%a',
+            f.path,
+          ])).stdout.toString().trim();
+        }
+      };
+      final r = await client.resolveStream('v', auth: YtDlpAuth(session, auth));
+      expect(r, isA<Ok<YtStream>>());
+      final args = runner.calls.single;
+      expect(args, containsAllInOrder(['--js-runtimes', 'node']));
+      expect(args.last, 'https://music.youtube.com/watch?v=v');
+      expect(during, contains('\tSID\tsid-secret-value'));
+      if (Platform.isLinux) expect(mode, '600');
+      expect(File(cookiesArg(args)).existsSync(), isFalse);
+    });
+
+    test('the file is deleted when the run throws', () async {
+      runner.throwOnRun = TimeoutException('slow');
+      final r = await client.resolveStream('v', auth: YtDlpAuth(session, auth));
+      expect(kindOf(r), YtErrorKind.network);
+      expect(File(cookiesArg(runner.calls.single)).existsSync(), isFalse);
+    });
+
+    test('the file is deleted when the run fails', () async {
+      runner.onFail('watch?v=', 'ERROR: [youtube] v: boom');
+      await client.resolveStream('v', auth: YtDlpAuth(session, auth));
+      expect(File(cookiesArg(runner.calls.single)).existsSync(), isFalse);
+    });
+
+    test('two runs at once use two files', () async {
+      final gate = Completer<void>();
+      runner.onOk('watch?v=', fixture('stream_opus.json'));
+      runner.onRunStart = (_) => gate.future;
+      final a = client.resolveStream('a', auth: YtDlpAuth(session, auth));
+      final b = client.resolveStream('b', auth: YtDlpAuth(session, auth));
+      await pumpEventQueue();
+      final paths = runner.calls.map(cookiesArg).toSet();
+      expect(paths, hasLength(2));
+      for (final path in paths) {
+        expect(File(path).existsSync(), isTrue);
+      }
+      gate.complete();
+      await Future.wait([a, b]);
+      for (final path in paths) {
+        expect(File(path).existsSync(), isFalse);
+      }
+    });
+
+    test('an age error when signed in is ageRestrictedAccount', () async {
+      runner.onFail(
+        'watch?v=',
+        'ERROR: [youtube] v: Sign in to confirm your age',
+      );
+      final r = await client.resolveStream('v', auth: YtDlpAuth(session, auth));
+      expect(kindOf(r), YtErrorKind.ageRestrictedAccount);
+    });
+
+    test('cookie values never reach the failure message', () async {
+      runner.onFail(
+        'watch?v=',
+        'ERROR: [youtube] v: bad cookie sid-secret-value',
+      );
+      final r = await client.resolveStream(
+        'v',
+        auth: YtDlpAuth(session, auth),
+      ) as Err<YtStream>;
+      expect(r.failure.message, isNot(contains('sid-secret-value')));
+      expect(r.failure.message, contains('<redacted>'));
+    });
+
+    test('an invalid session cookie is ageRestrictedAccount, no run', () async {
+      final bad = YtSession({'SID': 'semi;colon'});
+      final r = await client.resolveStream('v', auth: YtDlpAuth(bad, auth));
+      expect(kindOf(r), YtErrorKind.ageRestrictedAccount);
+      expect(runner.calls, isEmpty);
+      expect((r as Err).failure.message, isNot(contains('semi')));
+    });
+
+    test('download passes the cookies too', () async {
+      runner.onFail('watch?v=', 'ERROR: [youtube] v: boom');
+      await client.download(
+        'v',
+        dir,
+        processId: 'p',
+        auth: YtDlpAuth(session, auth),
+      );
+      final args = runner.calls.single;
+      expect(args, contains('--cookies'));
+      expect(args, containsAllInOrder(['--js-runtimes', 'node']));
+      expect(File(cookiesArg(args)).existsSync(), isFalse);
+    });
   });
 }

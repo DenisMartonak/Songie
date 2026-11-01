@@ -22,6 +22,10 @@ class FakeYtDlpRunner implements YtDlpRunner {
 
   /// When set, [run] throws it.
   Object? throwOnRun;
+
+  /// Called with each run's args before it answers (to look at files the
+  /// args name while the run is still going).
+  FutureOr<void> Function(List<String> args)? onRunStart;
   String? versionResult = '2026.10.21';
   Result<void> updateResult = const Ok(null);
   int updateCalls = 0;
@@ -47,6 +51,7 @@ class FakeYtDlpRunner implements YtDlpRunner {
     calls.add(List.of(args));
     timeouts.add(timeout);
     processIds.add(processId);
+    await onRunStart?.call(args);
     final t = throwOnRun;
     if (t != null) throw t;
     for (final r in _rules) {

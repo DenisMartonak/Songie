@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -112,7 +113,9 @@ Future<void> main() async {
   // YouTube. Nothing here touches the network or runs yt-dlp: that only
   // happens on a user action or during playback.
   final runner = await _ytDlpRunner(paths, settings);
-  final ytClient = YtDlpClient(runner);
+  final cookiesDir = Directory(p.join(paths.root.path, 'tmp'));
+  _deleteLeftoverCookies(cookiesDir);
+  final ytClient = YtDlpClient(runner, cookiesDir: cookiesDir);
   final thumbnails = ThumbnailFetcher(
     artCache,
     (u) => httpDownload(u, totalTimeout: const Duration(seconds: 15)),
@@ -326,6 +329,18 @@ Future<YtDlpRunner> _ytDlpRunner(
     installer: installer,
     systemBinary: useSystem ? 'yt-dlp' : null,
   );
+}
+
+/// Deletes cookies files a crashed signed-in yt-dlp run left behind.
+void _deleteLeftoverCookies(Directory dir) {
+  try {
+    if (!dir.existsSync()) return;
+    for (final f in dir.listSync().whereType<File>()) {
+      if (p.basename(f.path).startsWith('cookies-')) f.deleteSync();
+    }
+  } catch (e) {
+    AppLog.w('Could not clear old yt-dlp cookies files: $e');
+  }
 }
 
 /// Sends uncaught errors to the log file, keeping the default presentation.

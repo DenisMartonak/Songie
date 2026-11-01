@@ -1,13 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:path/path.dart' as p;
 
+import '../core/log.dart';
 import '../core/result.dart';
 import '../player/stream_source.dart';
 import 'yt_json.dart';
 import 'yt_models.dart';
+import 'ytdlp_cookies.dart';
+import '../innertube/yt_session.dart';
 import 'ytdlp_runner.dart';
 
 const ytStreamFormat = 'bestaudio[acodec=opus]/bestaudio[ext=m4a]/bestaudio';
@@ -57,9 +61,17 @@ YtErrorKind classifyYtDlpStderr(String stderr) {
 }
 
 class YtDlpClient implements StreamSource {
-  YtDlpClient(this._runner);
+  /// Signed-in runs write their cookies file into [cookiesDir] (the system
+  /// temp folder when null).
+  YtDlpClient(this._runner, {Directory? cookiesDir, DateTime Function()? now})
+    // ignore: prefer_initializing_formals
+    : _cookiesDir = cookiesDir,
+      _now = now ?? DateTime.now;
 
   final YtDlpRunner _runner;
+  final Directory? _cookiesDir;
+  final DateTime Function() _now;
+  static final _random = Random.secure();
 
   static const playlistTimeout = Duration(minutes: 10);
   static const streamTimeout = Duration(seconds: 60);
@@ -93,15 +105,23 @@ class YtDlpClient implements StreamSource {
   @override
   String get name => 'yt-dlp';
 
+  /// With [auth], the run goes out signed in (see [_run]).
   @override
-  Future<Result<YtStream>> resolveStream(String videoId) async {
-    final run = await _run([
-      '-J',
-      '--no-playlist',
-      '-f',
-      ytStreamFormat,
-      'https://music.youtube.com/watch?v=$videoId',
-    ], streamTimeout);
+  Future<Result<YtStream>> resolveStream(
+    String videoId, {
+    YtDlpAuth? auth,
+  }) async {
+    final run = await _run(
+      [
+        '-J',
+        '--no-playlist',
+        '-f',
+        ytStreamFormat,
+        'https://music.youtube.com/watch?v=$videoId',
+      ],
+      streamTimeout,
+      auth: auth,
+    );
     if (run is Err<YtDlpRun>) return Err(run.failure);
     try {
       return Ok(parseStreamJson((run as Ok<YtDlpRun>).value.stdout));
@@ -120,6 +140,7 @@ class YtDlpClient implements StreamSource {
     required String processId,
     void Function(int downloaded, int? total)? onProgress,
     Duration stallTimeout = const Duration(minutes: 2),
+    YtDlpAuth? auth,
   }) async {
     Object? done;
     int? lastDownloaded;
@@ -173,6 +194,7 @@ class YtDlpClient implements StreamSource {
         null,
         onLine: onLine,
         processId: processId,
+        auth: auth,
       );
     } finally {
       stall?.cancel();
@@ -242,7 +264,82 @@ class YtDlpClient implements StreamSource {
       v is String && v.trim().isNotEmpty && v != 'NA' ? v : null;
 
   /// Runs yt-dlp; Ok only for exit code 0 (stderr is ignored then).
+  ///
+  /// With [auth] the session's cookies go in a file only this user can read,
+  /// deleted when the run ends, and the runtime args are added. An age error
+  /// then means the account itself was refused (`ageRestrictedAccount`), and
+  /// cookie values are scrubbed from the failure.
   Future<Result<YtDlpRun>> _run(
+    List<String> args,
+    Duration? timeout, {
+    void Function(String line)? onLine,
+    String? processId,
+    YtDlpAuth? auth,
+  }) async {
+    if (auth == null) {
+      return _runPlain(args, timeout, onLine: onLine, processId: processId);
+    }
+    final String text;
+    try {
+      text = netscapeCookies(auth.session, _now());
+    } on FormatException {
+      return Err(
+        ytFailure(YtErrorKind.ageRestrictedAccount, 'invalid session cookie'),
+      );
+    }
+    final file = await _writeCookies(text);
+    final Result<YtDlpRun> r;
+    try {
+      r = await _runPlain(
+        ['--cookies', file.path, ...auth.runtimeArgs, ...args],
+        timeout,
+        onLine: onLine,
+        processId: processId,
+      );
+    } finally {
+      try {
+        await file.delete();
+      } catch (e) {
+        AppLog.w('Could not delete a yt-dlp cookies file: $e');
+      }
+    }
+    if (r is! Err<YtDlpRun>) return r;
+    final f = r.failure;
+    var kind = ytErrorKindOf(f) ?? YtErrorKind.unknown;
+    if (kind == YtErrorKind.ageRestricted) {
+      kind = YtErrorKind.ageRestrictedAccount;
+    }
+    final detail = f.message.substring(f.message.indexOf(':', 6) + 1);
+    return Err(ytFailure(kind, _scrub(detail, auth.session)));
+  }
+
+  /// A new cookies file holding [text], readable only by this user.
+  Future<File> _writeCookies(String text) async {
+    final dir = _cookiesDir ?? Directory.systemTemp;
+    await dir.create(recursive: true);
+    final name = List.generate(
+      8,
+      (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+    final file = File(p.join(dir.path, 'cookies-$name.txt'));
+    await file.writeAsString('');
+    if (!Platform.isWindows && !Platform.isAndroid) {
+      await Process.run('chmod', ['600', file.path]);
+    }
+    await file.writeAsString(text, flush: true);
+    return file;
+  }
+
+  static String _scrub(String text, YtSession session) {
+    var out = text;
+    for (final v in session.cookies.values) {
+      // Short values (flags like "1") would mangle ordinary text.
+      if (v.length >= 4) out = out.replaceAll(v, '<redacted>');
+    }
+    return out;
+  }
+
+  Future<Result<YtDlpRun>> _runPlain(
     List<String> args,
     Duration? timeout, {
     void Function(String line)? onLine,
