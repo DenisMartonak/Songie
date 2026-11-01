@@ -8,6 +8,7 @@ import '../motion/fade_slide_in.dart';
 import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
 import '../widgets/song_menu.dart';
+import '../widgets/scrolling_shelf.dart';
 import 'ytm_nav.dart';
 import 'ytm_result_tiles.dart';
 
@@ -24,7 +25,6 @@ class YtmShelfRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<SongiesColors>()!;
     final items = [
       for (final item in shelf.items)
         if (item is YtmSong ||
@@ -34,42 +34,19 @@ class YtmShelfRow extends StatelessWidget {
           item,
     ];
     if (items.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-          child: Text(
-            shelf.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: colors.text,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        SizedBox(
-          height: YtmCard.height,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (_, i) => FadeSlideIn(
-              index: i,
-              id: 'ytm.${shelf.title}.$i',
-              child: YtmCard(item: items[i]),
-            ),
-          ),
-        ),
-      ],
+    return ScrollingShelf(
+      title: shelf.title,
+      height: YtmCard.height,
+      itemCount: items.length,
+      itemBuilder: (_, i) => FadeSlideIn(
+        index: i,
+        id: 'ytm.${shelf.title}.$i',
+        child: YtmCard(item: items[i]),
+      ),
     );
   }
 }
 
-/// A feed card for a [YtmSong], [YtmAlbum], [YtmArtist] or [YtmPlaylist].
 class YtmCard extends ConsumerWidget {
   const YtmCard({required this.item, super.key});
 

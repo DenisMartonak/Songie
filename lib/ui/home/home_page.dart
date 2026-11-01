@@ -25,6 +25,7 @@ import '../ytm/ytm_result_tiles.dart';
 import '../ytm/ytm_shelf_row.dart';
 import '../widgets/favorite_star.dart';
 import '../widgets/playlist_art.dart';
+import '../widgets/scrolling_shelf.dart';
 
 /// "Good morning" from 05:00, "Good afternoon" from 12:00, "Good evening" from
 /// 18:00 until 05:00.
@@ -173,25 +174,15 @@ class HomePage extends ConsumerWidget {
                           ),
                         ),
                         const SliverToBoxAdapter(child: ListeningCard()),
-                        const SliverToBoxAdapter(
-                          child: _SectionTitle('Your playlists'),
-                        ),
                         SliverToBoxAdapter(
-                          child: SizedBox(
+                          child: ScrollingShelf(
+                            title: 'Your playlists',
                             height: _PlaylistCard.height,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              itemCount: playlists.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(width: 12),
-                              itemBuilder: (_, i) => FadeSlideIn(
-                                index: i,
-                                id: 'card.${playlists[i].id}',
-                                child: _PlaylistCard(playlist: playlists[i]),
-                              ),
+                            itemCount: playlists.length,
+                            itemBuilder: (_, i) => FadeSlideIn(
+                              index: i,
+                              id: 'card.${playlists[i].id}',
+                              child: _PlaylistCard(playlist: playlists[i]),
                             ),
                           ),
                         ),
