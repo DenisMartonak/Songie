@@ -66,6 +66,36 @@ void main() {
       expect(s!.cookies.keys.toSet(), {'SAPISID', 'LIVE'});
     });
 
+    test('Windows (WebView2) cookies: expiry in seconds, -1 for session', () {
+      final now = DateTime.utc(2026, 11, 1);
+      final inAYear =
+          now.add(const Duration(days: 365)).millisecondsSinceEpoch ~/ 1000;
+      final s = YtSessionFromCookies.build([
+        Cookie(
+          name: 'SAPISID',
+          value: 'yt-sap',
+          domain: '.youtube.com',
+          expiresDate: inAYear,
+          isSessionOnly: false,
+        ),
+        Cookie(
+          name: 'YSC',
+          value: 'session',
+          domain: '.youtube.com',
+          expiresDate: -1,
+          isSessionOnly: true,
+        ),
+        Cookie(
+          name: 'OLD',
+          value: 'o',
+          domain: '.youtube.com',
+          expiresDate: now.millisecondsSinceEpoch ~/ 1000 - 1,
+        ),
+      ], now: now);
+      expect(s, isNotNull);
+      expect(s!.cookies.keys.toSet(), {'SAPISID', 'YSC'});
+    });
+
     test('an expired SAPISID is no session', () {
       final now = DateTime.utc(2026, 10, 29);
       expect(

@@ -64,11 +64,17 @@ abstract final class YtSessionFromCookies {
 
   static bool isYouTube(Cookie c) => sentToMusicHost(_domainOf(c));
 
-  /// Whether [c] has expired by [now]; a cookie without a date is a
-  /// session cookie and has not.
+  /// Whether [c] has expired by [now]; a session cookie has not.
+  ///
+  /// Android's cookie manager gives the expiry in milliseconds. Windows'
+  /// (WebView2, through the DevTools protocol) gives seconds, and -1 for a
+  /// session cookie. Below 10^11 a value can only be seconds: as
+  /// milliseconds it would be 1973.
   static bool expired(Cookie c, DateTime now) {
-    final ms = c.expiresDate;
-    return ms != null && ms <= now.millisecondsSinceEpoch;
+    final raw = c.expiresDate;
+    if (raw == null || raw < 0 || c.isSessionOnly == true) return false;
+    final ms = raw < 100000000000 ? raw * 1000 : raw;
+    return ms <= now.millisecondsSinceEpoch;
   }
 
   /// Android's cookie manager answers name and value only: those cookies
