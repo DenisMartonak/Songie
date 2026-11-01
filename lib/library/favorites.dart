@@ -50,13 +50,11 @@ class FavoritesRepository {
     return const Ok(null);
   });
 
-  /// Adds [trackId] to the top of Favorites; nothing when it's there.
+  /// Adds [trackId] to the top of Favorites; nothing when it's there (under
+  /// any entry id: Add to playlist and sync can add it under others).
   Future<Result<void>> star(String trackId) => guardDb(_db, () async {
     final id = favoriteEntryId(trackId);
-    final entry = await (_db.select(
-      _db.playlistEntries,
-    )..where((e) => e.id.equals(id))).getSingleOrNull();
-    if (entry != null && !entry.deleted) return const Ok(null);
+    if ((await _liveEntriesOf(trackId)).isNotEmpty) return const Ok(null);
     final first =
         await (_db.select(_db.playlistEntries)
               ..where(
@@ -86,26 +84,33 @@ class FavoritesRepository {
     return const Ok(null);
   });
 
-  /// Removes [trackId] from Favorites; nothing when it isn't there.
+  /// Removes [trackId] from Favorites: every live entry holding it, whatever
+  /// its id, so what [watchIds] reports can always be un-starred.
   Future<Result<void>> unstar(String trackId) => guardDb(_db, () async {
-    final id = favoriteEntryId(trackId);
-    final entry = await (_db.select(
-      _db.playlistEntries,
-    )..where((e) => e.id.equals(id))).getSingleOrNull();
-    if (entry == null || entry.deleted) return const Ok(null);
-    final st = await _stamp.next(id: id);
-    await (_db.update(
-      _db.playlistEntries,
-    )..where((e) => e.id.equals(id))).write(
-      PlaylistEntriesCompanion(
-        deleted: const Value(true),
-        clock: Value(st.clock),
-        originDevice: Value(st.originDevice),
-        localSeq: Value(st.localSeq),
-      ),
-    );
+    for (final entry in await _liveEntriesOf(trackId)) {
+      final st = await _stamp.next(id: entry.id);
+      await (_db.update(
+        _db.playlistEntries,
+      )..where((e) => e.id.equals(entry.id))).write(
+        PlaylistEntriesCompanion(
+          deleted: const Value(true),
+          clock: Value(st.clock),
+          originDevice: Value(st.originDevice),
+          localSeq: Value(st.localSeq),
+        ),
+      );
+    }
     return const Ok(null);
   });
+
+  Future<List<PlaylistEntry>> _liveEntriesOf(String trackId) =>
+      (_db.select(_db.playlistEntries)..where(
+            (e) =>
+                e.playlistId.equals(kFavoritesPlaylistId) &
+                e.trackId.equals(trackId) &
+                e.deleted.equals(false),
+          ))
+          .get();
 
   /// Stars or un-stars [trackId]; Ok(true) when it is now a favorite.
   Future<Result<bool>> toggle(String trackId) async {

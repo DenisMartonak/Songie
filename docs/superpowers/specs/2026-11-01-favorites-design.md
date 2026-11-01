@@ -77,8 +77,11 @@ and download.
 - *(Builder's call:)* the user's devices are expected to run the same
   version. If a device still on 1.1.x deletes or renames Favorites (it sees
   an ordinary playlist), the updated device undoes that when it syncs:
-  Favorites comes back with its name and songs. Duplicate entries an old
-  device adds are collapsed to one.
+  Favorites comes back with its name. Duplicate entries an old device adds
+  are collapsed to one. *(Known limit, accepted after review:)* deleting
+  Favorites on an old device also un-stars its songs there, and those
+  un-stars sync like any other, so Favorites comes back empty; this only
+  happens if the user deletes Favorites on a device that hasn't updated.
 - A song is a favorite at most once (starring twice can't add it twice; a
   sync merge must not leave duplicates in Favorites).
 - Flutter 3.47.8, Riverpod, drift; tests follow the repo's habits (fake

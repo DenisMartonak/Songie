@@ -105,6 +105,43 @@ void main() {
       expect(all, hasLength(1));
     });
 
+    test('a favorite added under another entry id can be un-starred', () async {
+      // Add to playlist, Add songs and Undo use random entry ids; a synced
+      // track merge leaves fav-<old id> holding the surviving track.
+      await repo.addTracks(kFavoritesPlaylistId, ['a']);
+      await db
+          .into(db.playlistEntries)
+          .insert(
+            PlaylistEntriesCompanion.insert(
+              id: favoriteEntryId('gone'),
+              clock: 'c',
+              originDevice: 'dev',
+              localSeq: 1,
+              playlistId: kFavoritesPlaylistId,
+              trackId: 'b',
+              position: 'a5',
+              addedAt: DateTime(2026),
+            ),
+          );
+      expect(await favs.watchIds().first, {'a', 'b'});
+
+      expect(
+        await favs.toggle('a'),
+        isA<Ok<bool>>().having((r) => r.value, 'v', false),
+      );
+      await favs.unstar('b');
+      expect(await favs.watchIds().first, isEmpty);
+    });
+
+    test(
+      'starring a song already there under another id adds nothing',
+      () async {
+        await repo.addTracks(kFavoritesPlaylistId, ['a']);
+        await favs.star('a');
+        expect(await live(), hasLength(1));
+      },
+    );
+
     test('toggle answers the new state', () async {
       expect(
         await favs.toggle('a'),
