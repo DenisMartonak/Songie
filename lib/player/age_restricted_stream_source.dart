@@ -1,3 +1,4 @@
+import '../core/log.dart';
 import '../core/result.dart';
 import '../innertube/yt_session.dart';
 import '../youtube/js_runtime.dart';
@@ -53,9 +54,17 @@ class AgeRestrictedStreamSource implements StreamSource {
         ytErrorKindOf(r.failure) != YtErrorKind.ageRestricted) {
       return r;
     }
-    return switch (await _auth.forRetry(videoId)) {
-      Ok(:final value) => _ytDlp.resolveStream(videoId, auth: value),
-      Err(:final failure) => Err(failure),
-    };
+    final auth = await _auth.forRetry(videoId);
+    if (auth is Err<YtDlpAuth>) return Err(auth.failure);
+    final sw = Stopwatch()..start();
+    final retry = await _ytDlp.resolveStream(
+      videoId,
+      auth: (auth as Ok<YtDlpAuth>).value,
+    );
+    AppLog.i(
+      'stream $videoId: signed-in yt-dlp '
+      '${retry is Ok ? 'played' : 'failed'} in ${sw.elapsedMilliseconds} ms',
+    );
+    return retry;
   }
 }

@@ -71,7 +71,10 @@ on Android). The queue moves on as it does for any other song that can't play.
 
 ### Signed in
 
-1. The usual route runs first, unchanged: Innertube, then anonymous yt-dlp.
+1. The usual route runs first: Innertube, then anonymous yt-dlp. *(Changed
+   after the desktop check, at the user's request:)* when Innertube already
+   says `ageRestricted`, the anonymous yt-dlp run is skipped; it only gave
+   the same answer about 4 s later.
 2. If either says `ageRestricted`, Songies runs yt-dlp **once more** with the
    session's cookies (see Cookies) and a JS runtime (see Runtime).
 3. If that run returns a stream, it plays.

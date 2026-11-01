@@ -149,4 +149,18 @@ void main() {
       expect(yt.calls, ['v']);
     });
   });
+
+  test('an earlier ageRestricted answer skips the later sources', () async {
+    final it = _FakeSource(
+      'innertube',
+      Err(ytFailure(YtErrorKind.ageRestricted, 'innertube: age')),
+    );
+    final yt = _FakeSource('yt-dlp', _ok);
+    final r = await FallbackStreamSource([it, yt]).resolveStream('v');
+    expect(
+      ytErrorKindOf((r as Err<YtStream>).failure),
+      YtErrorKind.ageRestricted,
+    );
+    expect(yt.calls, isEmpty);
+  });
 }

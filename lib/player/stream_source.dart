@@ -23,8 +23,9 @@ List<StreamSource> playbackSources({
 /// so a failing fast route only costs time, never an error by itself. That
 /// includes an earlier source's `notFound` (Innertube's verdict is a
 /// heuristic): only the LAST source (yt-dlp) can confirm a video is
-/// unavailable (ruling R12, superseding R2's stop-on-notFound). When every
-/// source fails, the last source's result is returned.
+/// unavailable (ruling R12, superseding R2's stop-on-notFound). An
+/// `ageRestricted` answer stops the chain: no anonymous route can play it.
+/// When every source fails, the last source's result is returned.
 class FallbackStreamSource implements StreamSource {
   FallbackStreamSource(this._sources) : assert(_sources.isNotEmpty);
 
@@ -63,6 +64,9 @@ class FallbackStreamSource implements StreamSource {
                       '${sw.elapsedMilliseconds} ms: ${failure.message}',
           );
           last = r;
+          // Anonymous yt-dlp would get the same answer, seconds later;
+          // AgeRestrictedStreamSource retries signed in instead.
+          if (ytErrorKindOf(failure) == YtErrorKind.ageRestricted) return r;
       }
     }
     return last!;
