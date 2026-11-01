@@ -163,10 +163,13 @@ String themeFileName(String themeName) {
 
 /// Builds theme files for export and saves imported ones.
 class ThemeFiles {
-  ThemeFiles(this._themes, this._fonts);
+  /// An embedded font is unpacked into a temporary folder under [tempRoot]
+  /// (the system temp folder by default).
+  ThemeFiles(this._themes, this._fonts, {this._tempRoot});
 
   final ThemeRepository _themes;
   final FontService _fonts;
+  final Directory? _tempRoot;
 
   /// The file for [theme]. An imported font is embedded (when its file is on
   /// this device); a bundled one is referenced by family only.
@@ -255,7 +258,9 @@ class ThemeFiles {
   Future<Result<FontImport>> _importFont(ThemeFileFont font) async {
     Directory? dir;
     try {
-      dir = await Directory.systemTemp.createTemp('songies_theme_font');
+      dir = await (_tempRoot ?? Directory.systemTemp).createTemp(
+        'songies_theme_font',
+      );
       final safe = font.family.replaceAll(_unsafeFileChars, '_').trim();
       final path = p.join(
         dir.path,

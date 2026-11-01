@@ -24,6 +24,7 @@ void main() {
   late ThemeRepository themes;
   late FontService fonts;
   late ThemeFiles files;
+  late Directory tempRoot;
   late Uint8List fontBytes;
 
   setUp(() async {
@@ -37,7 +38,10 @@ void main() {
       Directory(p.join(tmp.path, 'fonts')),
       register: (_, _) async {},
     );
-    files = ThemeFiles(themes, fonts);
+    // Its own temp root: tests running in parallel import fonts too.
+    tempRoot = Directory.systemTemp.createTempSync('theme_file_test');
+    addTearDown(() => tempRoot.deleteSync(recursive: true));
+    files = ThemeFiles(themes, fonts, tempRoot: tempRoot);
     fontBytes = await File('assets/fonts/Inter-Regular.ttf').readAsBytes();
   });
   tearDown(() async {
@@ -239,7 +243,7 @@ void main() {
       expect(saved.spec.accent, custom.accent);
       // The temporary copy handed to FontService is gone.
       expect(
-        Directory.systemTemp.listSync().where(
+        tempRoot.listSync().where(
           (e) => p.basename(e.path).startsWith('songies_theme_font'),
         ),
         isEmpty,

@@ -261,8 +261,15 @@ void main() {
     expect(container.read(resolvedFontFamilyProvider), 'Inter');
 
     await tester.tap(find.byKey(const Key('themes.import')));
-    for (var i = 0; i < 5; i++) {
+    // The import copies and hashes a real font file: wait for it to finish
+    // (a slow machine needs more turns), up to about 5 s.
+    for (var i = 0; i < 100; i++) {
       await settle(tester);
+      if (find.text('Theme imported').evaluate().isNotEmpty) break;
+      await real(
+        tester,
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
     }
     expect(find.text('Theme imported'), findsOneWidget);
     expect(container.read(resolvedFontFamilyProvider), 'Fancy Sans');
