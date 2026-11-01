@@ -9,8 +9,10 @@ void main() {
     expect(contrastRatio(const Color(0xFFFFFFFF), bg), greaterThan(4.5));
   });
   test('contrast ratio of black on white is 21', () {
-    expect(contrastRatio(const Color(0xFF000000), const Color(0xFFFFFFFF)),
-        closeTo(21, 0.01));
+    expect(
+      contrastRatio(const Color(0xFF000000), const Color(0xFFFFFFFF)),
+      closeTo(21, 0.01),
+    );
   });
   test('readableOn keeps a passing preferred colour', () {
     const pref = Color(0xFFEEEEEE);
@@ -18,8 +20,9 @@ void main() {
   });
   test('#1db954 on white falls back to black', () {
     expect(
-        readableOn(const Color(0xFFFFFFFF), preferred: const Color(0xFF1DB954)),
-        const Color(0xFF000000));
+      readableOn(const Color(0xFFFFFFFF), preferred: const Color(0xFF1DB954)),
+      const Color(0xFF000000),
+    );
   });
   test('ensureAccentContrast lifts a dark accent to 3:1', () {
     final c = ensureAccentContrast(const Color(0xFF202020), bg);
@@ -31,7 +34,9 @@ void main() {
   });
   test('ensureAccentContrast darkens on a light background', () {
     final c = ensureAccentContrast(
-        const Color(0xFFE0E0E0), const Color(0xFFFFFFFF));
+      const Color(0xFFE0E0E0),
+      const Color(0xFFFFFFFF),
+    );
     expect(contrastRatio(c, const Color(0xFFFFFFFF)), greaterThanOrEqualTo(3));
   });
   test('ensureAccentContrast works on a mid-grey background', () {

@@ -63,10 +63,8 @@ YtErrorKind classifyYtDlpStderr(String stderr) {
 class YtDlpClient implements StreamSource {
   /// Signed-in runs write their cookies file into [cookiesDir] (the system
   /// temp folder when null).
-  YtDlpClient(this._runner, {Directory? cookiesDir, DateTime Function()? now})
-    // ignore: prefer_initializing_formals
-    : _cookiesDir = cookiesDir,
-      _now = now ?? DateTime.now;
+  YtDlpClient(this._runner, {this._cookiesDir, DateTime Function()? now})
+    : _now = now ?? DateTime.now;
 
   final YtDlpRunner _runner;
   final Directory? _cookiesDir;
@@ -287,7 +285,7 @@ class YtDlpClient implements StreamSource {
         ytFailure(YtErrorKind.ageRestrictedAccount, 'invalid session cookie'),
       );
     }
-    final file = await _writeCookies(text);
+    final file = _writeCookies(text);
     final Result<YtDlpRun> r;
     try {
       r = await _runPlain(
@@ -298,7 +296,7 @@ class YtDlpClient implements StreamSource {
       );
     } finally {
       try {
-        await file.delete();
+        file.deleteSync();
       } catch (e) {
         AppLog.w('Could not delete a yt-dlp cookies file: $e');
       }
@@ -313,20 +311,21 @@ class YtDlpClient implements StreamSource {
     return Err(ytFailure(kind, _scrub(detail, auth.session)));
   }
 
-  /// A new cookies file holding [text], readable only by this user.
-  Future<File> _writeCookies(String text) async {
+  /// A new cookies file holding [text], readable only by this user. Sync:
+  /// it is a few hundred bytes, and the run must not start before it exists.
+  File _writeCookies(String text) {
     final dir = _cookiesDir ?? Directory.systemTemp;
-    await dir.create(recursive: true);
+    dir.createSync(recursive: true);
     final name = List.generate(
       8,
       (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0'),
     ).join();
     final file = File(p.join(dir.path, 'cookies-$name.txt'));
-    await file.writeAsString('');
+    file.writeAsStringSync('');
     if (!Platform.isWindows && !Platform.isAndroid) {
-      await Process.run('chmod', ['600', file.path]);
+      Process.runSync('chmod', ['600', file.path]);
     }
-    await file.writeAsString(text, flush: true);
+    file.writeAsStringSync(text, flush: true);
     return file;
   }
 

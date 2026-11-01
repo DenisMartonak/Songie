@@ -102,7 +102,11 @@ void main() {
       await player.next();
       await player.next();
       await player.next();
-      expect(backend.sources, ['/music/x.mp3', '/music/y.mp3', '/music/t4.mp3']);
+      expect(backend.sources, [
+        '/music/x.mp3',
+        '/music/y.mp3',
+        '/music/t4.mp3',
+      ]);
     });
 
     test('a song queued while a queued one plays goes after the rest of the '

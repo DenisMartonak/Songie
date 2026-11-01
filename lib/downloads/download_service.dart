@@ -10,8 +10,10 @@ import '../core/log.dart';
 import '../core/result.dart';
 import '../data/database.dart';
 import '../data/settings_repository.dart';
+import '../player/age_restricted_stream_source.dart';
 import '../youtube/yt_models.dart';
 import '../youtube/ytdlp_client.dart';
+import '../youtube/ytdlp_cookies.dart';
 import 'download_notifier.dart';
 import 'download_repository.dart';
 
@@ -202,6 +204,7 @@ class DownloadService {
     DownloadNotifier? notifier,
     bool? wifiOnlyFallback,
     DateTime Function()? now,
+    this._ageAuth,
   }) : _notifier = notifier ?? const NoopDownloadNotifier(),
        _wifiOnlyFallback = wifiOnlyFallback ?? wifiOnlyDefault(),
        _now = now ?? DateTime.now;
@@ -217,6 +220,9 @@ class DownloadService {
   final DownloadNotifier _notifier;
   final bool _wifiOnlyFallback;
   final DateTime Function() _now;
+
+  /// Retries an age-restricted song signed in; none when null.
+  final AgeRestrictedAuth? _ageAuth;
 
   static const _firstBackoff = Duration(seconds: 30);
   static const _maxBackoff = Duration(minutes: 10);
@@ -514,16 +520,17 @@ class DownloadService {
       r = Err(ytFailure(YtErrorKind.unknown, 'cancelled before start'));
     } else {
       try {
-        final f = _client.download(
-          job.videoId,
-          _ytDir,
-          processId: job.processId,
-          onProgress: (d, t) => _onProgress(job, d, t),
-        );
-        job.started = true;
-        // A cancel sent before the process existed may have been lost.
-        _recancel(job);
-        r = await f;
+        r = await _download(job);
+        final ageAuth = _ageAuth;
+        if (ageAuth != null &&
+            r is Err<YtDownload> &&
+            ytErrorKindOf(r.failure) == YtErrorKind.ageRestricted &&
+            !_stopping.containsKey(job.trackId)) {
+          r = switch (await ageAuth.forRetry(job.videoId)) {
+            Ok(:final value) => await _download(job, auth: value),
+            Err(:final failure) => Err(failure),
+          };
+        }
       } catch (e) {
         r = Err(ytFailure(YtErrorKind.unknown, '$e', cause: e));
       }
@@ -541,6 +548,20 @@ class DownloadService {
     if (_disposed) return;
     _update();
     kick();
+  }
+
+  Future<Result<YtDownload>> _download(_Job job, {YtDlpAuth? auth}) {
+    final f = _client.download(
+      job.videoId,
+      _ytDir,
+      processId: job.processId,
+      onProgress: (d, t) => _onProgress(job, d, t),
+      auth: auth,
+    );
+    job.started = true;
+    // A cancel sent before the process existed may have been lost.
+    _recancel(job);
+    return f;
   }
 
   void _onProgress(_Job job, int downloaded, int? total) {

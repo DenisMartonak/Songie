@@ -11,6 +11,9 @@ import 'package:songies/data/settings_repository.dart';
 import 'package:songies/downloads/download_notifier.dart';
 import 'package:songies/downloads/download_repository.dart';
 import 'package:songies/downloads/download_service.dart';
+import 'package:songies/innertube/yt_session.dart';
+import 'package:songies/player/age_restricted_stream_source.dart';
+import 'package:songies/youtube/js_runtime.dart';
 import 'package:songies/youtube/yt_models.dart';
 import 'package:songies/youtube/ytdlp_client.dart';
 import 'package:songies/youtube/ytdlp_runner.dart';
@@ -25,6 +28,7 @@ import '../helpers/test_db.dart';
 /// when the cancel comes before the process exists.
 class GateRunner implements YtDlpRunner {
   final List<String> started = [];
+  final List<List<String>> calls = [];
   final List<String> cancelled = [];
   final Map<String, Completer<YtDlpRun>> _runs = {};
   final Map<String, void Function(String)?> _onLine = {};
@@ -43,6 +47,7 @@ class GateRunner implements YtDlpRunner {
   }) {
     final id = processId!;
     started.add(id);
+    calls.add(List.of(args));
     final c = _runs[id] = Completer<YtDlpRun>();
     _onLine[id] = onLine;
     if (_runs.length > maxRunning) maxRunning = _runs.length;
@@ -136,6 +141,9 @@ class Env {
   final unavailable = <String>[];
   final downloaded = <String, YtDownload>{};
   final base = DateTime(2026, 10, 23, 12);
+
+  /// Signed-in retries of age-restricted songs; none when null.
+  AgeRestrictedAuth? ageAuth;
   DownloadService? _service;
   int _seq = 0;
 
@@ -151,6 +159,7 @@ class Env {
     notifier: notifier,
     wifiOnlyFallback: false,
     now: () => base.add(async.elapsed),
+    ageAuth: ageAuth,
   );
 
   DownloadSnapshot get snap => service.current;
@@ -545,6 +554,24 @@ void main() {
   );
 
   run(
+    'signed in, an age-restricted song is retried with the cookies',
+    concurrency: 1,
+    (e) {
+      e.ageAuth = AgeRestrictedAuth(
+        () async => YtSession({'SID': 'sid-value'}),
+        _NodeFinder(),
+      );
+      e.queued(['y1']);
+      e.wait(e.service.start());
+      e.fail('y1', 'ERROR: [youtube] abc: Sign in to confirm your age');
+      expect(e.runner.calls.last, contains('--cookies'));
+      e.succeed('y1');
+      expect(e.unavailable, isEmpty);
+      expect(e.downloaded.keys, ['y1']);
+    },
+  );
+
+  run(
     'an extractor error fails the row until a success clears the flag',
     concurrency: 1,
     (e) {
@@ -728,4 +755,13 @@ void main() {
     e.settle();
     expect(e.runner.started, ['dl-y1']);
   });
+}
+
+class _NodeFinder implements JsRuntimeFinder {
+  @override
+  Future<JsRuntime?> find() async =>
+      const JsRuntime(JsRuntimeKind.systemNode, ['--js-runtimes', 'node']);
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }

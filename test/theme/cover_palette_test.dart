@@ -76,10 +76,11 @@ void main() {
   group('JSON', () {
     test('round trips', () {
       final p = CoverPalette(
-          dominant: const Color(0xFF112233),
-          vibrant: const Color(0xFF445566),
-          muted: const Color(0xFF778899),
-          isFallback: true);
+        dominant: const Color(0xFF112233),
+        vibrant: const Color(0xFF445566),
+        muted: const Color(0xFF778899),
+        isFallback: true,
+      );
       expect(CoverPalette.fromJson(p.toJson()), p);
     });
   });
@@ -103,8 +104,10 @@ void main() {
       final second = await s.paletteFor('a.jpg');
       expect(calls, 1);
       expect(second, first);
-      expect(File('${art.fileFor('a.jpg').path}.palette.json').existsSync(),
-          isTrue);
+      expect(
+        File('${art.fileFor('a.jpg').path}.palette.json').existsSync(),
+        isTrue,
+      );
 
       final s2 = CoverPaletteService(art, extract: ex);
       expect(await s2.paletteFor('a.jpg'), first);
@@ -114,8 +117,10 @@ void main() {
     test('missing art file gives null and caches nothing', () async {
       final s = CoverPaletteService(art, extract: (_) async => pal(0xFF000001));
       expect(await s.paletteFor('nope.jpg'), isNull);
-      expect(File('${art.fileFor('nope.jpg').path}.palette.json').existsSync(),
-          isFalse);
+      expect(
+        File('${art.fileFor('nope.jpg').path}.palette.json').existsSync(),
+        isFalse,
+      );
     });
 
     test('corrupt palette json is re-extracted', () async {
@@ -130,36 +135,46 @@ void main() {
       putArt('a.jpg');
       final s = CoverPaletteService(art, extract: (_) async => null);
       expect(await s.paletteFor('a.jpg'), isNull);
-      expect(File('${art.fileFor('a.jpg').path}.palette.json').existsSync(),
-          isFalse);
+      expect(
+        File('${art.fileFor('a.jpg').path}.palette.json').existsSync(),
+        isFalse,
+      );
     });
 
     test('at most one extraction in flight', () async {
       putArt('a.jpg');
       putArt('b.jpg');
       var running = 0, maxRunning = 0;
-      final s = CoverPaletteService(art, extract: (_) async {
-        maxRunning = ++running > maxRunning ? running : maxRunning;
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-        running--;
-        return pal(0xFF010203);
-      });
+      final s = CoverPaletteService(
+        art,
+        extract: (_) async {
+          maxRunning = ++running > maxRunning ? running : maxRunning;
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          running--;
+          return pal(0xFF010203);
+        },
+      );
       await Future.wait([s.paletteFor('a.jpg'), s.paletteFor('b.jpg')]);
       expect(maxRunning, 1);
     });
 
-    test('newest pending request runs next; stale pending ones skip',
-        () async {
+    test('newest pending request runs next; stale pending ones skip', () async {
       for (final r in ['a', 'b', 'c', 'd']) {
-        putArt('$r.jpg', png(8, 8, (x, y) => 0x010101 * (r.codeUnitAt(0) - 90)));
+        putArt(
+          '$r.jpg',
+          png(8, 8, (x, y) => 0x010101 * (r.codeUnitAt(0) - 90)),
+        );
       }
       final gate = Completer<void>();
       final started = <int>[];
-      final s = CoverPaletteService(art, extract: (bytes) async {
-        started.add(bytes.length);
-        if (started.length == 1) await gate.future;
-        return pal(0xFF010203);
-      });
+      final s = CoverPaletteService(
+        art,
+        extract: (bytes) async {
+          started.add(bytes.length);
+          if (started.length == 1) await gate.future;
+          return pal(0xFF010203);
+        },
+      );
       final fa = s.paletteFor('a.jpg');
       await Future<void>.delayed(const Duration(milliseconds: 10));
       final fb = s.paletteFor('b.jpg');
@@ -179,14 +194,20 @@ void main() {
     test('a page request (supersede: false) resolves while current-track '
         'requests keep superseding', () async {
       for (final r in ['a', 'b', 'c', 'p']) {
-        putArt('$r.jpg', png(8, 8, (x, y) => 0x010101 * (r.codeUnitAt(0) - 90)));
+        putArt(
+          '$r.jpg',
+          png(8, 8, (x, y) => 0x010101 * (r.codeUnitAt(0) - 90)),
+        );
       }
       final gate = Completer<void>();
       var calls = 0;
-      final s = CoverPaletteService(art, extract: (bytes) async {
-        if (++calls == 1) await gate.future;
-        return pal(0xFF010203);
-      });
+      final s = CoverPaletteService(
+        art,
+        extract: (bytes) async {
+          if (++calls == 1) await gate.future;
+          return pal(0xFF010203);
+        },
+      );
       final fa = s.paletteFor('a.jpg');
       await Future<void>.delayed(const Duration(milliseconds: 10));
       final fp = s.paletteFor('p.jpg', supersede: false);
@@ -200,39 +221,51 @@ void main() {
       expect(calls, 3);
     });
 
-    test('a page request for a pending current-track ref is not superseded',
-        () async {
-      for (final r in ['a', 'b', 'c']) {
-        putArt('$r.jpg', png(8, 8, (x, y) => 0x010101 * (r.codeUnitAt(0) - 90)));
-      }
-      final gate = Completer<void>();
-      var calls = 0;
-      final s = CoverPaletteService(art, extract: (bytes) async {
-        if (++calls == 1) await gate.future;
-        return pal(0xFF010203);
-      });
-      final fa = s.paletteFor('a.jpg');
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      final fb = s.paletteFor('b.jpg');
-      final page = s.paletteFor('b.jpg', supersede: false);
-      final fc = s.paletteFor('c.jpg');
-      gate.complete();
-      await fa;
-      expect(await page, isNotNull);
-      expect(await fb, isNotNull);
-      expect(await fc, isNotNull);
-    });
+    test(
+      'a page request for a pending current-track ref is not superseded',
+      () async {
+        for (final r in ['a', 'b', 'c']) {
+          putArt(
+            '$r.jpg',
+            png(8, 8, (x, y) => 0x010101 * (r.codeUnitAt(0) - 90)),
+          );
+        }
+        final gate = Completer<void>();
+        var calls = 0;
+        final s = CoverPaletteService(
+          art,
+          extract: (bytes) async {
+            if (++calls == 1) await gate.future;
+            return pal(0xFF010203);
+          },
+        );
+        final fa = s.paletteFor('a.jpg');
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        final fb = s.paletteFor('b.jpg');
+        final page = s.paletteFor('b.jpg', supersede: false);
+        final fc = s.paletteFor('c.jpg');
+        gate.complete();
+        await fa;
+        expect(await page, isNotNull);
+        expect(await fb, isNotNull);
+        expect(await fc, isNotNull);
+      },
+    );
 
     test('paletteStream: slow A superseded by B emits only B', () async {
       putArt('a.jpg', png(8, 8, (x, y) => 0x111111));
       putArt('b.jpg', png(8, 8, (x, y) => 0x222222));
       final gate = Completer<void>();
-      final s = CoverPaletteService(art, extract: (bytes) async {
-        final isA = bytes.length == art.fileFor('a.jpg').lengthSync() &&
-            _same(bytes, art.fileFor('a.jpg').readAsBytesSync());
-        if (isA) await gate.future;
-        return pal(isA ? 0xFFAA0000 : 0xFF00BB00);
-      });
+      final s = CoverPaletteService(
+        art,
+        extract: (bytes) async {
+          final isA =
+              bytes.length == art.fileFor('a.jpg').lengthSync() &&
+              _same(bytes, art.fileFor('a.jpg').readAsBytesSync());
+          if (isA) await gate.future;
+          return pal(isA ? 0xFFAA0000 : 0xFF00BB00);
+        },
+      );
       final refs = StreamController<String?>();
       final out = <CoverPalette?>[];
       final sub = s.paletteStream(refs.stream).listen(out.add);

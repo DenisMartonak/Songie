@@ -12,6 +12,8 @@ import 'app.dart';
 import 'core/app_version.dart';
 import 'core/connectivity.dart';
 import 'core/log.dart';
+import 'player/age_restricted_stream_source.dart';
+import 'youtube/js_runtime.dart';
 import 'innertube/yt_session_store.dart';
 import 'core/paths.dart';
 import 'data/database.dart';
@@ -127,13 +129,26 @@ Future<void> main() async {
   // Instant streams from Innertube; yt-dlp when every client is refused.
   final innertubeStreams = InnertubeStreamSource(innertube);
   if (_forceYtDlp) AppLog.i('SONGIES_FORCE_YTDLP: Innertube streams off');
+  // Age-restricted songs retry signed in, with a JS runtime for yt-dlp.
+  // The session comes from the provider container, made further down.
+  SessionLoader loadSession = () async => null;
+  final runtimes = JsRuntimeFinder(
+    binDir: paths.bin,
+    isAndroid: Platform.isAndroid,
+    isWindows: Platform.isWindows,
+  );
+  final ageAuth = AgeRestrictedAuth(() => loadSession(), runtimes);
   final streams = StreamResolver(
-    FallbackStreamSource(
-      playbackSources(
-        innertube: innertubeStreams,
-        ytDlp: ytClient,
-        forceYtDlp: _forceYtDlp,
+    AgeRestrictedStreamSource(
+      FallbackStreamSource(
+        playbackSources(
+          innertube: innertubeStreams,
+          ytDlp: ytClient,
+          forceYtDlp: _forceYtDlp,
+        ),
       ),
+      ytClient,
+      ageAuth,
     ),
     network,
     settings,
@@ -169,6 +184,7 @@ Future<void> main() async {
     concurrency: Platform.isAndroid ? 2 : 3,
     wifiOnlyFallback: Platform.isAndroid,
     notifier: downloadNotifier,
+    ageAuth: ageAuth,
     onDownloaded: (trackId, d) async {
       await library.updateTrackMetadata(
         trackId,
@@ -269,6 +285,7 @@ Future<void> main() async {
   // Reads two device-local settings only: no keyring, no network, no timer.
   // Awaited, so the first Home load already knows whether to go signed in.
   await container.read(ytAuthProvider.notifier).load();
+  loadSession = container.read(ytAuthProvider.notifier).ensureSession;
   // Reports songs heard for 30 s to YouTube (to the account's history when
   // signed in); reacts to player state only.
   PlayReporter(

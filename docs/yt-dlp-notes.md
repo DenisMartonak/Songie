@@ -77,3 +77,19 @@ yt-dlp -f "bestaudio[acodec=opus]/bestaudio[ext=m4a]/bestaudio" --no-playlist --
 Fixtures:
 - `download_stdout.txt`: the real stdout of the `4D7u5KF7SP8` run, with the scratch output dir replaced by the placeholder `@OUTDIR@` (tests substitute their temp dir).
 - `download_stderr_429.txt` and `download_stderr_nospace.txt` are **hand-crafted** (not reproducible live): the real JS-runtime warning line followed by `ERROR: unable to download video data: HTTP Error 429: Too Many Requests` and `ERROR: unable to write data: [Errno 28] No space left on device` respectively, from yt-dlp's real error wording. A full disk can also surface only as a traceback (`OSError: [Errno 28] No space left on device`), so `diskFull` is matched anywhere in stderr; `throttled` is matched on `ERROR:` lines.
+
+## Age-restricted videos (2026-11-01)
+
+Checked on Linux with yt-dlp 2026.10.26 against `S4-2QqwHf5c`:
+
+| Request | Result |
+|---|---|
+| Innertube `player`, VISIONOS and ANDROID_VR, with visitor id | `LOGIN_REQUIRED` "Sign in to confirm your age" |
+| yt-dlp, no cookies | `Sign in to confirm your age` |
+| yt-dlp, signed-in cookies, no JS runtime | `Sorry, this content is age-restricted … only available on YouTube` |
+| yt-dlp, signed-in cookies, `--js-runtimes node` | OK, format `251` opus |
+
+- Both are needed: a signed-in account and a JavaScript runtime. yt-dlp enables only Deno by default; `--js-runtimes node` (or `deno:<path>`) picks another.
+- The desktop yt-dlp binary bundles the challenge solver (`yt_dlp_ejs` in `-v` output), so no `--remote-components` is needed there.
+- youtubedl-android 0.18.1 bundles QuickJS (`libqjs.so`) and adds `--js-runtimes quickjs:<path>` to every run by itself.
+- Songies runs this only after an `ageRestricted` answer, with `--cookies <file>` (Netscape format, `.youtube.com`, deleted after the run) plus the runtime args (`AgeRestrictedStreamSource`, `DownloadService`).
