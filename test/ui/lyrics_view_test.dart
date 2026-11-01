@@ -193,6 +193,28 @@ void main() {
       );
     });
 
+    for (final (density, size) in [
+      (LyricsDensity.large, 34.0),
+      (LyricsDensity.compact, 24.0),
+    ]) {
+      uiTest('${density.name}: lines are $size px bold', (tester) async {
+        service.answers['t1'] = LyricsShown(syncedOf(invented(5)));
+        await pumpView(tester, density: density);
+        await push(tester, at(const Duration(seconds: 12)));
+        final style = tester
+            .widget<RichText>(
+              find.descendant(
+                of: find.byKey(const ValueKey('lyrics.line.0')),
+                matching: find.byType(RichText),
+              ),
+            )
+            .text
+            .style!;
+        expect(style.fontSize, size);
+        expect(style.fontWeight, FontWeight.w800);
+      });
+    }
+
     for (final (name, theme) in [
       ('default', ThemeSpec.builtInDefault),
       ('album glow', ThemeSpec.albumGlow),
@@ -200,7 +222,7 @@ void main() {
     ]) {
       for (final (density, minRatio) in [
         (LyricsDensity.large, 3.0),
-        (LyricsDensity.compact, 4.5),
+        (LyricsDensity.compact, 3.0),
       ]) {
         uiTest('$name, ${density.name}: the dimmed lines reach '
             '$minRatio:1 on the background and over the worst blurred '

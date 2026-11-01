@@ -130,21 +130,22 @@ class _LyricsStyle {
     final base = Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
     return _LyricsStyle(
       colors: colors,
+      // Big enough that only a few lines show at once.
       line: base.copyWith(
-        fontSize: large ? 26 : 16,
-        fontWeight: large ? FontWeight.w800 : FontWeight.w700,
-        height: 1.3,
+        fontSize: large ? 34 : 24,
+        fontWeight: FontWeight.w800,
+        height: 1.25,
       ),
       current: colors.text,
-      // 26 px w800 is large text (3:1); 16 px w700 is not (4.5:1).
-      dimmed: _dimmed(colors, minRatio: large ? 3 : 4.5),
+      // Both sizes are large text (3:1).
+      dimmed: _dimmed(colors, minRatio: 3),
       credit: base.copyWith(
         fontSize: large ? 13 : 12,
         color: colors.mutedText,
         height: 1.4,
       ),
-      padding: large ? 24 : 16,
-      lineGap: large ? 10 : 6,
+      padding: large ? 24 : 20,
+      lineGap: large ? 20 : 14,
     );
   }
 
