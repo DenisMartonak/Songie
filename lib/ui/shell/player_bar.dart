@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/database.dart' show Track;
 import '../../player/player_service.dart';
 import '../../providers.dart';
 import '../../router.dart';
@@ -11,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
 import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
 import '../widgets/artwork.dart';
+import '../widgets/song_menu.dart';
 import '../widgets/steady_track_shape.dart';
 
 /// The desktop's bottom player bar, 72 px high: the current track on the left;
@@ -64,6 +66,20 @@ class _NowPlaying extends ConsumerWidget {
     );
     if (track == null) return const SizedBox.shrink();
     final colors = Theme.of(context).extension<SongiesColors>()!;
+    // Right-click opens the playing song's menu at the pointer.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onSecondaryTapUp: (d) => showSongMenu(
+        context,
+        ref,
+        MenuSong.track(track),
+        anchor: d.globalPosition & Size.zero,
+      ),
+      child: _row(track, colors),
+    );
+  }
+
+  Widget _row(Track track, SongiesColors colors) {
     return Row(
       children: [
         Hero(
