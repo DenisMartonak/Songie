@@ -21,7 +21,7 @@ class TitleBar extends ConsumerWidget {
     super.key,
   });
 
-  static const double height = 36;
+  static const double height = 46;
 
   final TextEditingController searchController;
   final FocusNode searchFocus;
@@ -58,7 +58,9 @@ class TitleBar extends ConsumerWidget {
               Expanded(
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 380),
+                    constraints: const BoxConstraints(
+                      maxWidth: ShellSearchField.maxWidth,
+                    ),
                     child: ShellSearchField(
                       controller: searchController,
                       focusNode: searchFocus,
@@ -103,10 +105,14 @@ class ShellSearchField extends StatelessWidget {
   final VoidCallback onTapOutside;
   final SongiesColors colors;
 
+  /// Widest the field grows in a wide window.
+  static const double maxWidth = 520;
+  static const double height = 36;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 26,
+      height: height,
       child: TextField(
         key: const Key('shell.search'),
         controller: controller,
@@ -115,24 +121,24 @@ class ShellSearchField extends StatelessWidget {
         onSubmitted: onSubmitted,
         onTapOutside: (_) => onTapOutside(),
         textInputAction: TextInputAction.search,
-        style: TextStyle(color: colors.text, fontSize: 12.5),
+        style: TextStyle(color: colors.text, fontSize: 14),
         cursorColor: colors.accent,
-        cursorHeight: 14,
+        cursorHeight: 18,
         decoration: InputDecoration(
           isDense: true,
           filled: true,
           fillColor: colors.surface,
           hintText: 'Search  (Ctrl+K)',
-          hintStyle: TextStyle(color: colors.mutedText, fontSize: 12.5),
-          prefixIcon: Icon(Icons.search, size: 16, color: colors.mutedText),
-          prefixIconConstraints: const BoxConstraints(minWidth: 34),
-          contentPadding: const EdgeInsets.symmetric(vertical: 5),
+          hintStyle: TextStyle(color: colors.mutedText, fontSize: 14),
+          prefixIcon: Icon(Icons.search, size: 20, color: colors.mutedText),
+          prefixIconConstraints: const BoxConstraints(minWidth: 42),
+          contentPadding: const EdgeInsets.symmetric(vertical: 8),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(height / 2),
             borderSide: BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(height / 2),
             borderSide: BorderSide(color: colors.accent, width: 1),
           ),
         ),

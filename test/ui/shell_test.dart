@@ -531,27 +531,31 @@ void main() {
   group('desktop shell (1280x800)', () {
     const desktop = Size(1280, 800);
 
-    testWidgets('shows title bar, 260 px sidebar and 72 px player bar', (
-      tester,
-    ) async {
-      await pumpApp(tester, desktop);
-      expect(find.byType(DesktopShell), findsOneWidget);
-      expect(find.byType(BottomNav), findsNothing);
-      expect(find.byType(MiniPlayer), findsNothing);
-      expect(tester.getSize(find.byKey(const Key('titleBar'))).height, 36);
-      expect(tester.getSize(find.byKey(const Key('sidebar'))).width, 260);
-      expect(tester.getSize(find.byKey(const Key('playerBar'))).height, 72);
-      // The sidebar lists them (Home shows the playlists too).
-      final sidebar = find.byKey(const Key('sidebar'));
-      expect(
-        find.descendant(of: sidebar, matching: find.text('Gym Mix')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: sidebar, matching: find.text('Road trip')),
-        findsOneWidget,
-      );
-    });
+    testWidgets(
+      'shows a 46 px title bar with a 520 px search field, 260 px sidebar and 72 px player bar',
+      (tester) async {
+        await pumpApp(tester, desktop);
+        expect(find.byType(DesktopShell), findsOneWidget);
+        expect(find.byType(BottomNav), findsNothing);
+        expect(find.byType(MiniPlayer), findsNothing);
+        expect(tester.getSize(find.byKey(const Key('titleBar'))).height, 46);
+        final search = tester.getSize(find.byKey(const Key('shell.search')));
+        expect(search.height, 36);
+        expect(search.width, 520);
+        expect(tester.getSize(find.byKey(const Key('sidebar'))).width, 260);
+        expect(tester.getSize(find.byKey(const Key('playerBar'))).height, 72);
+        // The sidebar lists them (Home shows the playlists too).
+        final sidebar = find.byKey(const Key('sidebar'));
+        expect(
+          find.descendant(of: sidebar, matching: find.text('Gym Mix')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: sidebar, matching: find.text('Road trip')),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets('chevron collapses the sidebar to a 72 px rail', (
       tester,

@@ -284,7 +284,9 @@ class _SearchRow extends StatelessWidget {
       child: Align(
         alignment: Alignment.centerLeft,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 380),
+          constraints: const BoxConstraints(
+            maxWidth: ShellSearchField.maxWidth,
+          ),
           child: ShellSearchField(
             controller: controller,
             focusNode: focus,
