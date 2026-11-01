@@ -237,6 +237,40 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
     with SingleTickerProviderStateMixin {
   NowPlayingTab _tab = NowPlayingTab.player;
 
+  /// On a phone the tabs are pages side by side: swiping moves between them.
+  final PageController _pages = PageController();
+
+  /// The tab a tap is sliding to; pages passed on the way don't select
+  /// themselves.
+  NowPlayingTab? _slidingTo;
+
+  Future<void> _selectTab(NowPlayingTab tab) async {
+    if (tab == _tab) return;
+    setState(() => _tab = tab);
+    if (!_pages.hasClients) return;
+    final duration = Motion.of(context).standard;
+    if (duration == Duration.zero) {
+      _pages.jumpToPage(tab.index);
+      return;
+    }
+    _slidingTo = tab;
+    try {
+      await _pages.animateToPage(
+        tab.index,
+        duration: duration,
+        curve: Motion.standardCurve,
+      );
+    } finally {
+      if (_slidingTo == tab) _slidingTo = null;
+    }
+  }
+
+  void _onPageChanged(int index) {
+    final tab = NowPlayingTab.values[index];
+    if (_slidingTo != null && tab != _slidingTo) return;
+    setState(() => _tab = tab);
+  }
+
   /// How far (px) the desktop panel has been dragged down. (On a phone the
   /// drag drives the route's own transition instead.)
   late final AnimationController _drag = AnimationController.unbounded(
@@ -333,6 +367,7 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
     );
     _dragRoute = null;
     _drag.dispose();
+    _pages.dispose();
     super.dispose();
   }
 
@@ -374,6 +409,13 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
       });
     }
 
+    if (!wide && !_pages.hasClients && _tab != NowPlayingTab.player) {
+      // Back from the desktop layout: show the tab that was open there.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pages.hasClients) _pages.jumpToPage(_tab.index);
+      });
+    }
+
     // On desktop only the header and the player tab start the drag: the
     // lyrics and the queue keep the mouse for their own scrolling (and the
     // queue's reordering).
@@ -390,19 +432,32 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
                 Column(
                   children: [
                     NowPlayingHeader(wide: wide, onClose: _close),
-                    NowPlayingTabs(
-                      selected: _tab,
-                      onChanged: (tab) => setState(() => _tab = tab),
-                    ),
+                    NowPlayingTabs(selected: _tab, onChanged: _selectTab),
                   ],
                 ),
               ),
               Expanded(
-                child: switch (_tab) {
-                  NowPlayingTab.player => handle(const _PlayerTab()),
-                  NowPlayingTab.lyrics => _LyricsTab(wide: wide),
-                  NowPlayingTab.queue => const NowPlayingQueue(),
-                },
+                child: wide
+                    ? switch (_tab) {
+                        NowPlayingTab.player => handle(const _PlayerTab()),
+                        NowPlayingTab.lyrics => _LyricsTab(wide: wide),
+                        NowPlayingTab.queue => const NowPlayingQueue(),
+                      }
+                    : PageView(
+                        key: const Key('nowPlaying.pages'),
+                        controller: _pages,
+                        onPageChanged: _onPageChanged,
+                        children: [
+                          for (final tab in NowPlayingTab.values)
+                            _KeepAlive(
+                              child: switch (tab) {
+                                NowPlayingTab.player => const _PlayerTab(),
+                                NowPlayingTab.lyrics => _LyricsTab(wide: wide),
+                                NowPlayingTab.queue => const NowPlayingQueue(),
+                              },
+                            ),
+                        ],
+                      ),
               ),
             ],
           ),
@@ -443,6 +498,28 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage>
       _page(Scaffold(backgroundColor: colors.background, body: body)),
       wide: false,
     );
+  }
+}
+
+/// Keeps a swiped-away tab's page (its scroll position and state) alive.
+class _KeepAlive extends StatefulWidget {
+  const _KeepAlive({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAlive> createState() => _KeepAliveState();
+}
+
+class _KeepAliveState extends State<_KeepAlive>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
 
@@ -708,9 +785,12 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
               );
             },
           ),
-          const SizedBox(height: 8),
-          const NowPlayingScrubber(),
-          const SizedBox(height: 8),
+          // Drawn a little higher than its slot: the top of its touch band
+          // overlaps the space under the artist.
+          Transform.translate(
+            offset: const Offset(0, -10),
+            child: const NowPlayingScrubber(),
+          ),
           const NowPlayingControls(),
         ],
       ),

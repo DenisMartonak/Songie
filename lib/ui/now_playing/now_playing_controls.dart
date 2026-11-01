@@ -9,13 +9,20 @@ import '../shell/player_bar.dart' show formatDuration;
 
 /// The seek slider with elapsed and remaining time underneath. Dragging
 /// previews the time (both labels follow the finger); the seek happens when
-/// the finger lifts. The thumb grows from nothing to 12 px while dragging, and
-/// the buffered part is drawn at 30 % opacity.
+/// the finger lifts. The 6 px track takes touches across a [touchHeight] band,
+/// the thumb grows from nothing to 16 px while dragging, and the buffered part
+/// is drawn at 30 % opacity.
 class NowPlayingScrubber extends ConsumerStatefulWidget {
   const NowPlayingScrubber({super.key});
 
-  /// Thumb radius while dragging (a 12 px thumb).
-  static const double thumbRadius = 6;
+  /// Thumb radius while dragging (a 16 px thumb).
+  static const double thumbRadius = 8;
+
+  /// Height of the band that takes touches, centred on the track.
+  static const double touchHeight = 32;
+
+  /// From the track's centre down to the top of the time labels.
+  static const double labelGap = 8;
 
   @override
   ConsumerState<NowPlayingScrubber> createState() => _NowPlayingScrubberState();
@@ -44,57 +51,75 @@ class _NowPlayingScrubberState extends ConsumerState<NowPlayingScrubber> {
     final style = TextStyle(color: colors.text.withAlpha(153), fontSize: 11);
     final bufferedColor = colors.text.withValues(alpha: 0.3);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        TweenAnimationBuilder<double>(
-          tween: Tween(end: _drag == null ? 0 : NowPlayingScrubber.thumbRadius),
-          duration: motion.quick,
-          curve: Motion.standardCurve,
-          builder: (context, radius, slider) => SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 4,
-              activeTrackColor: colors.text,
-              inactiveTrackColor: colors.text.withAlpha(64),
-              secondaryActiveTrackColor: bufferedColor,
-              thumbColor: colors.text,
-              disabledThumbColor: Colors.transparent,
-              disabledActiveTrackColor: colors.text.withAlpha(64),
-              disabledInactiveTrackColor: colors.text.withAlpha(64),
-              disabledSecondaryActiveTrackColor: colors.text.withAlpha(64),
-              thumbShape: RoundSliderThumbShape(
-                enabledThumbRadius: radius,
-                disabledThumbRadius: 0,
-                elevation: 0,
-                pressedElevation: 0,
+    const half = NowPlayingScrubber.touchHeight / 2;
+    // The labels sit inside the touch band's lower half (they let touches
+    // through), so the bar is easy to hit without pushing the labels away.
+    return SizedBox(
+      height: half + NowPlayingScrubber.labelGap + 16,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: NowPlayingScrubber.touchHeight,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(
+                end: _drag == null ? 0 : NowPlayingScrubber.thumbRadius,
               ),
-              overlayShape: SliderComponentShape.noOverlay,
-              trackShape: const RoundedRectSliderTrackShape(),
+              duration: motion.quick,
+              curve: Motion.standardCurve,
+              builder: (context, radius, slider) => SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 6,
+                  activeTrackColor: colors.text,
+                  inactiveTrackColor: colors.text.withAlpha(64),
+                  secondaryActiveTrackColor: bufferedColor,
+                  thumbColor: colors.text,
+                  disabledThumbColor: Colors.transparent,
+                  disabledActiveTrackColor: colors.text.withAlpha(64),
+                  disabledInactiveTrackColor: colors.text.withAlpha(64),
+                  disabledSecondaryActiveTrackColor: colors.text.withAlpha(64),
+                  thumbShape: RoundSliderThumbShape(
+                    enabledThumbRadius: radius,
+                    disabledThumbRadius: 0,
+                    elevation: 0,
+                    pressedElevation: 0,
+                  ),
+                  overlayShape: SliderComponentShape.noOverlay,
+                  trackShape: const RoundedRectSliderTrackShape(),
+                ),
+                child: slider!,
+              ),
+              child: Slider(
+                key: const Key('nowPlaying.scrubber'),
+                value: _drag ?? fraction,
+                secondaryTrackValue: buffered,
+                onChanged: seekable ? (v) => setState(() => _drag = v) : null,
+                onChangeEnd: (v) {
+                  setState(() => _drag = null);
+                  ref.read(playerServiceProvider).seek(total * v);
+                },
+              ),
             ),
-            child: slider!,
           ),
-          child: Slider(
-            key: const Key('nowPlaying.scrubber'),
-            value: _drag ?? fraction,
-            secondaryTrackValue: buffered,
-            onChanged: seekable ? (v) => setState(() => _drag = v) : null,
-            onChangeEnd: (v) {
-              setState(() => _drag = null);
-              ref.read(playerServiceProvider).seek(total * v);
-            },
+          Positioned(
+            top: half + NowPlayingScrubber.labelGap,
+            left: 6,
+            right: 6,
+            child: IgnorePointer(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(formatDuration(elapsed), style: style),
+                  Text('-${formatDuration(remaining)}', style: style),
+                ],
+              ),
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(formatDuration(elapsed), style: style),
-              Text('-${formatDuration(remaining)}', style: style),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -13,6 +13,7 @@ import 'package:songies/theme/theme_service.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/motion/equalizer_bars.dart';
 import 'package:songies/ui/motion/motion.dart';
+import 'package:songies/ui/now_playing/now_playing_controls.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
 import 'package:songies/ui/shell/mini_player.dart';
 import 'package:songies/ui/shell/player_bar.dart';
@@ -607,7 +608,7 @@ void main() {
       return theme.thumbShape!.getPreferredSize(true, false).width / 2;
     }
 
-    uiTest('the thumb grows to 12 px only while dragging', (tester) async {
+    uiTest('the thumb grows to 16 px only while dragging', (tester) async {
       await pumpApp(tester);
       await playThree(tester);
       expect(thumbRadius(tester), 0);
@@ -617,10 +618,26 @@ void main() {
       );
       await gesture.moveTo(rect.center);
       await tester.pumpAndSettle();
-      expect(thumbRadius(tester), 6);
+      expect(thumbRadius(tester), 8);
       await gesture.up();
       await settle(tester);
       expect(thumbRadius(tester), 0);
+    });
+
+    uiTest('the bar takes touches across 32 px, and the times sit just '
+        'below the track', (tester) async {
+      await pumpApp(tester);
+      await playThree(tester);
+      final bar = tester.getRect(find.byKey(const Key('nowPlaying.scrubber')));
+      expect(bar.height, NowPlayingScrubber.touchHeight);
+      final label = tester.getRect(find.text('0:00'));
+      expect(label.top - bar.center.dy, NowPlayingScrubber.labelGap);
+
+      // A tap near the band's bottom edge, beside the labels, still seeks.
+      h.backend.clearCalls();
+      await tester.tapAt(Offset(bar.center.dx, bar.bottom - 3));
+      await settle(tester);
+      expect(h.backend.calls.where((c) => c.startsWith('seek:')), hasLength(1));
     });
 
     uiTest('shows elapsed and remaining time', (tester) async {

@@ -6,7 +6,10 @@ import 'package:songies/data/database.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
+import 'package:songies/ui/now_playing/now_playing_header.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
+import 'package:songies/ui/now_playing/now_playing_queue.dart';
+import 'package:songies/ui/lyrics/lyrics_view.dart';
 
 import '../helpers/test_db.dart';
 import '../helpers/ui_harness.dart';
@@ -391,6 +394,61 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(queueIds(), ['t1', 't3']);
       expect(find.text('Song two'), findsNothing);
+    });
+  });
+
+  group('tabs on a phone', () {
+    final pages = find.byKey(const Key('nowPlaying.pages'));
+    double? page(WidgetTester tester) =>
+        tester.widget<PageView>(pages).controller!.page;
+
+    uiTest('swiping moves between Now playing, Lyrics and Queue', (
+      tester,
+    ) async {
+      await pumpApp(tester, disableAnimations: true);
+      await playThree(tester);
+      expect(page(tester), 0);
+
+      for (final (dx, expected) in [(-300.0, 1), (-300.0, 2), (300.0, 1)]) {
+        await tester.fling(pages, Offset(dx, 0), 1000);
+        await settle(tester);
+        expect(page(tester), expected);
+      }
+      expect(find.byType(LyricsView), findsOneWidget);
+
+      await tester.fling(pages, const Offset(300, 0), 1000);
+      await settle(tester);
+      expect(page(tester), 0);
+      expect(
+        find.byKey(const Key('nowPlaying.scrubber')).hitTestable(),
+        findsOneWidget,
+      );
+    });
+
+    uiTest('tapping a tab slides to it', (tester) async {
+      await pumpApp(tester, disableAnimations: true);
+      await playThree(tester);
+      await tester.tap(find.byKey(const Key('nowPlaying.tab.queue')));
+      await settle(tester);
+      expect(page(tester), 2);
+      expect(find.byType(NowPlayingQueue), findsOneWidget);
+    });
+
+    uiTest('a tap on Queue slides past Lyrics without selecting it', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await playThree(tester);
+      await tester.tap(find.byKey(const Key('nowPlaying.tab.queue')));
+      // Mid-slide, past the Lyrics page.
+      await tester.pump(const Duration(milliseconds: 150));
+      final selected = tester.widget<NowPlayingTabs>(
+        find.byType(NowPlayingTabs),
+      );
+      expect(selected.selected, NowPlayingTab.queue);
+      // The playing row's bars never settle with motion on.
+      await tester.pump(const Duration(seconds: 1));
+      expect(page(tester), 2);
     });
   });
 
