@@ -89,7 +89,14 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   static const _minMainWidth = 360.0;
 
   @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addListener(_onFocusChanged);
+  }
+
+  @override
   void dispose() {
+    FocusManager.instance.removeListener(_onFocusChanged);
     _searchController.dispose();
     _searchFocus.dispose();
     _rootFocus.dispose();
@@ -99,7 +106,30 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   void _onQueryChanged(String query) {
     ref.read(searchQueryProvider.notifier).set(query);
     if (widget.shell.currentIndex != _searchBranch) {
+      // Showing the Search page hands focus to its route a frame or two
+      // later; take it back so typing carries on in the field.
+      if (_searchFocus.hasFocus) {
+        _keepSearchFocusUntil = DateTime.now().add(_keepSearchFocusFor);
+      }
       goTab(widget.shell, _searchBranch);
+    }
+  }
+
+  /// While set, a route taking focus gives it back to the search field.
+  DateTime? _keepSearchFocusUntil;
+  static const _keepSearchFocusFor = Duration(seconds: 1);
+
+  void _onFocusChanged() {
+    final until = _keepSearchFocusUntil;
+    if (until == null) return;
+    if (DateTime.now().isAfter(until)) {
+      _keepSearchFocusUntil = null;
+      return;
+    }
+    // Only a route's own scope: a field or button the user picked keeps it.
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus is FocusScopeNode && !_searchFocus.hasFocus) {
+      _searchFocus.requestFocus();
     }
   }
 

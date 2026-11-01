@@ -577,7 +577,7 @@ void main() {
       expect(tester.getSize(find.byKey(const Key('sidebar'))).width, 260);
     });
 
-    testWidgets('sidebar navigates; Sync devices is disabled', (tester) async {
+    testWidgets('sidebar navigates, Sync devices included', (tester) async {
       await pumpApp(tester, desktop);
 
       await tester.tap(find.byKey(const Key('sidebar.search')));
@@ -595,8 +595,8 @@ void main() {
 
       await tester.tap(find.byKey(const Key('sidebar.sync')));
       await tester.pumpAndSettle();
-      expect(router.state.uri.path, '/home');
-      expect(find.byTooltip('Coming soon'), findsOneWidget);
+      expect(router.state.uri.path, '/settings/sync');
+      expect(find.byTooltip('Coming soon'), findsNothing);
 
       await tester.tap(find.byKey(const Key('sidebar.settings')));
       await tester.pumpAndSettle();
@@ -624,6 +624,27 @@ void main() {
         expect(router.state.uri.path, '/search');
       },
     );
+
+    testWidgets('the search field keeps focus when the first letter opens '
+        'Search', (tester) async {
+      await pumpApp(tester, desktop);
+      final field = find.byKey(const Key('shell.search'));
+      await tester.tap(field);
+      await tester.pump();
+      await tester.enterText(field, 'b');
+      await tester.pumpAndSettle();
+      expect(router.state.uri.path, '/search');
+      final editable = tester.state<EditableTextState>(
+        find.descendant(of: field, matching: find.byType(EditableText)),
+      );
+      expect(editable.widget.focusNode.hasFocus, isTrue);
+
+      // The next letters land in the field.
+      tester.testTextInput.enterText('be');
+      await tester.pumpAndSettle();
+      expect(editable.widget.controller.text, 'be');
+      expect(editable.widget.focusNode.hasFocus, isTrue);
+    });
 
     testWidgets('without a custom title bar (wide Android) there is no title '
         'bar, no window plugin use, and search moves to the main pane', (
@@ -733,6 +754,18 @@ void main() {
         expect(theme().trackHeight, 4);
       });
     }
+
+    testWidgets('the times sit 12 px off the ends of the bar', (tester) async {
+      await pumpApp(tester, desktop);
+      await startPlaying(tester);
+      backend.setDuration(const Duration(seconds: 200));
+      await tester.pumpAndSettle();
+      final bar = tester.getRect(find.byKey(const Key('playerBar.scrubber')));
+      final elapsed = tester.getRect(find.text('0:00'));
+      final total = tester.getRect(find.text('3:20'));
+      expect(bar.left - elapsed.right, greaterThanOrEqualTo(12));
+      expect(total.left - bar.right, greaterThanOrEqualTo(12));
+    });
 
     testWidgets('the playing playlist row shows EqualizerBars', (tester) async {
       await pumpApp(tester, desktop);

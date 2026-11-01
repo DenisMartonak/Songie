@@ -104,6 +104,18 @@ void main() {
       expect(desktop, contains('\nIcon=songies\n'));
     });
 
+    test('the bundle ships the icon and the window loads it', () {
+      expect(
+        read('linux/CMakeLists.txt'),
+        contains(
+          'install(FILES "\${CMAKE_CURRENT_SOURCE_DIR}/packaging/songies.png"',
+        ),
+      );
+      final runner = read('linux/runner/my_application.cc');
+      expect(runner, contains('"data", "songies.png"'));
+      expect(runner, contains('gtk_window_set_icon_from_file'));
+    });
+
     test('the AppImage uses the 512 px app icon', () {
       final script = read('tool/build_appimage.sh');
       expect(script, contains('ICON_SRC="\$PACKAGING/songies.png"'));

@@ -287,6 +287,7 @@ class _ScrubberState extends ConsumerState<_Scrubber> {
               style: style,
             ),
           ),
+          const SizedBox(width: _timeGap),
           Expanded(
             child: _HoverSlider(
               sliderKey: const Key('playerBar.scrubber'),
@@ -307,11 +308,15 @@ class _ScrubberState extends ConsumerState<_Scrubber> {
               },
             ),
           ),
+          const SizedBox(width: _timeGap),
           SizedBox(width: 38, child: Text(formatDuration(total), style: style)),
         ],
       ),
     );
   }
+
+  /// Room between each time and the bar.
+  static const double _timeGap = 12;
 }
 
 class _QueueAndVolume extends ConsumerWidget {
@@ -355,6 +360,7 @@ class _QueueAndVolume extends ConsumerWidget {
           size: 20,
           color: colors.mutedText,
         ),
+        const SizedBox(width: 8),
         // Gives way in the narrowest desktop windows.
         Flexible(
           child: SizedBox(

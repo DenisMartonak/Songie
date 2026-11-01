@@ -17,6 +17,9 @@ import 'go_tab.dart';
 /// Settings entry. 260 px wide, or a 72 px icon rail when [collapsed]. Rows
 /// highlight on hover; the selected row carries an accent bar on its left
 /// edge that slides between the rows of its group.
+/// Where Sync devices lives (inside Settings, in Home's branch).
+const syncDevicesLocation = '/settings/sync';
+
 class Sidebar extends ConsumerWidget {
   const Sidebar({
     required this.shell,
@@ -41,9 +44,10 @@ class Sidebar extends ConsumerWidget {
     final path = GoRouterState.of(context).uri.path;
     final playlists = ref.watch(playlistsProvider).value ?? const [];
     final current = shell.currentIndex;
-    // Settings shares Home's branch but is not Home.
+    // Settings and Sync devices share Home's branch but are not Home.
     final onSettings = path == '/settings';
-    final homeSelected = current == 0 && !onSettings;
+    final onSync = path == syncDevicesLocation;
+    final homeSelected = current == 0 && !onSettings && !onSync;
     final playlistSelected = playlists.indexWhere(
       (p) => path.endsWith('/playlist/${p.id}'),
     );
@@ -51,7 +55,13 @@ class Sidebar extends ConsumerWidget {
     final onListedPlaylist = playlistSelected >= 0;
     final navSelected = onListedPlaylist
         ? null
-        : (homeSelected ? 0 : (current == 1 ? 1 : null));
+        : homeSelected
+        ? 0
+        : current == 1
+        ? 1
+        : onSync
+        ? 2
+        : null;
     final boxColor = Color.alphaBlend(
       Colors.white.withAlpha(10),
       Color.alphaBlend(Colors.black.withAlpha(90), colors.background),
@@ -116,15 +126,14 @@ class Sidebar extends ConsumerWidget {
                       _NavItem(
                         key: const Key('sidebar.sync'),
                         label: 'Sync devices',
-                        tooltip: 'Coming soon',
                         collapsed: collapsed,
-                        selected: false,
+                        selected: onSync,
                         icon: Icon(
                           Icons.sync_rounded,
                           size: 22,
-                          color: colors.mutedText,
+                          color: onSync ? colors.text : colors.mutedText,
                         ),
-                        onTap: null,
+                        onTap: () => context.go(syncDevicesLocation),
                       ),
                     ],
                   ),
@@ -258,7 +267,6 @@ class _NavItem extends StatelessWidget {
     required this.collapsed,
     required this.selected,
     required this.onTap,
-    this.tooltip,
     super.key,
   });
 
@@ -269,9 +277,6 @@ class _NavItem extends StatelessWidget {
   final bool collapsed;
   final bool selected;
   final VoidCallback? onTap;
-
-  /// Overrides the label as the tooltip.
-  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -306,7 +311,7 @@ class _NavItem extends StatelessWidget {
       ),
     );
 
-    final message = tooltip ?? (collapsed ? label : null);
+    final message = collapsed ? label : null;
     return Opacity(
       opacity: enabled ? 1 : 0.5,
       child: Semantics(

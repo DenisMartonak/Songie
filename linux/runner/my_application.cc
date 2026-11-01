@@ -54,6 +54,17 @@ static void my_application_activate(GApplication* application) {
 
   gtk_window_set_default_size(window, 1280, 720);
 
+  // The app icon, from data/ beside the binary. Window managers that show
+  // window icons use it; GNOME on Wayland takes the icon from the desktop
+  // entry whose name or StartupWMClass matches the app id instead.
+  g_autofree gchar* exe = g_file_read_link("/proc/self/exe", nullptr);
+  if (exe != nullptr) {
+    g_autofree gchar* dir = g_path_get_dirname(exe);
+    g_autofree gchar* icon =
+        g_build_filename(dir, "data", "songies.png", nullptr);
+    gtk_window_set_icon_from_file(window, icon, nullptr);
+  }
+
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);
