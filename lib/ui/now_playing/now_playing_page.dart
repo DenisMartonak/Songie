@@ -15,6 +15,8 @@ import '../lyrics/lyrics_view.dart';
 import '../motion/motion.dart';
 import '../shell/adaptive_shell.dart';
 import '../widgets/artwork.dart';
+import '../widgets/favorite_star.dart';
+import '../widgets/song_menu.dart';
 import 'now_playing_controls.dart';
 import 'now_playing_header.dart';
 import 'now_playing_queue.dart';
@@ -775,11 +777,18 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
                 child: SizedBox(
                   key: trackKey,
                   width: width,
-                  child: _TitleAndArtist(
-                    title: track.title,
-                    artist: track.artist,
-                    trackId: track.id,
-                    playing: playing,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _TitleAndArtist(
+                          title: track.title,
+                          artist: track.artist,
+                          trackId: track.id,
+                          playing: playing,
+                        ),
+                      ),
+                      FavoriteStar(song: MenuSong.track(track), size: 26),
+                    ],
                   ),
                 ),
               );

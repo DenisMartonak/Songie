@@ -12,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
 import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
 import '../widgets/artwork.dart';
+import '../widgets/favorite_star.dart';
 import '../widgets/song_menu.dart';
 import '../widgets/steady_track_shape.dart';
 
@@ -113,6 +114,7 @@ class _NowPlaying extends ConsumerWidget {
             ],
           ),
         ),
+        FavoriteStar(song: MenuSong.track(track), size: 18),
       ],
     );
   }
