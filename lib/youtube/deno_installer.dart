@@ -25,12 +25,11 @@ typedef ProgressDownload = Future<List<int>> Function(
 class DenoInstaller {
   DenoInstaller(
     this.binDir, {
-    required ProgressDownload download,
+    required this._download,
     required this.isWindows,
     ProcessRunFn? runProcess,
     this.versionTimeout = const Duration(seconds: 30),
-  }) : _download = download,
-       _run = runProcess ?? _defaultRun;
+  }) : _run = runProcess ?? _defaultRun;
 
   final Directory binDir;
   final bool isWindows;
