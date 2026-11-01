@@ -24,6 +24,7 @@ import 'package:songies/ui/motion/shimmer.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/library/add_songs_sheet.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
+import 'package:songies/library/favorites.dart';
 
 import '../helpers/test_db.dart';
 import '../helpers/ui_harness.dart';
@@ -965,6 +966,37 @@ void main() {
     final title = tester.widget<Text>(find.text(long));
     expect(title.maxLines, 1);
     expect(title.overflow, TextOverflow.ellipsis);
+  });
+
+  uiTest('Favorites has a star, and no Rename or Delete', (tester) async {
+    await real(tester, () async {
+      await h.addTrack('t1');
+      final f = FavoritesRepository(h.db, h.stamp);
+      await f.ensureFavorites();
+      await f.star('t1');
+    });
+    await pumpPage(tester, kFavoritesPlaylistId);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('playlist.cover')),
+        matching: find.byIcon(Icons.star_rounded),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('More'));
+    await settle(tester);
+    expect(find.text('Rename'), findsNothing);
+    expect(find.text('Delete'), findsNothing);
+    expect(find.text('Add songs'), findsOneWidget);
+  });
+
+  uiTest('an ordinary playlist still has Rename and Delete', (tester) async {
+    final id = await threeSongs(tester);
+    await pumpPage(tester, id);
+    await tester.tap(find.byTooltip('More'));
+    await settle(tester);
+    expect(find.text('Rename'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
   });
 
   uiTest('rename changes the name; an empty name cannot be saved', (

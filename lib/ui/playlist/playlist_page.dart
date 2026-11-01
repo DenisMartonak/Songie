@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
+import '../../library/favorites.dart';
 import '../../core/log.dart';
 import '../../core/result.dart';
 import '../../library/library_repository.dart';
@@ -27,6 +28,7 @@ import '../widgets/name_dialog.dart';
 import '../widgets/page_snack_bar.dart';
 import '../widgets/song_menu.dart';
 import '../widgets/favorite_star.dart';
+import '../widgets/playlist_art.dart';
 import 'hero_backdrop.dart';
 import 'yt_playlist_actions.dart';
 
@@ -675,6 +677,7 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
                       child: _HeroActions(
                         canPlay: canPlay,
                         hasOwnCover: summary.hasOwnCover,
+                        builtIn: summary.id == kFavoritesPlaylistId,
                         onShuffle: onShuffle,
                         onMenu: onMenu,
                       ),
@@ -779,12 +782,12 @@ class _HeroCover extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Artwork(
-                  summary.coverRef,
+                child: PlaylistArt(
                   key: const Key('playlist.cover'),
+                  playlistId: summary.id,
+                  coverRef: summary.coverRef,
                   size: coverSize,
                   radius: colors.radius + 4,
-                  seed: summary.id,
                 ),
               ),
             ),
@@ -834,11 +837,15 @@ class _HeroActions extends StatelessWidget {
   const _HeroActions({
     required this.canPlay,
     required this.hasOwnCover,
+    required this.builtIn,
     required this.onShuffle,
     required this.onMenu,
   });
 
   final bool canPlay;
+
+  /// Favorites: no Rename and no Delete.
+  final bool builtIn;
 
   /// Offers Remove cover (back to the first song's artwork).
   final bool hasOwnCover;
@@ -867,10 +874,11 @@ class _HeroActions extends StatelessWidget {
             icon: const Icon(Icons.more_horiz),
             onSelected: onMenu,
             itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: _MenuAction.rename,
-                child: Text('Rename'),
-              ),
+              if (!builtIn)
+                const PopupMenuItem(
+                  value: _MenuAction.rename,
+                  child: Text('Rename'),
+                ),
               const PopupMenuItem(
                 key: Key('playlist.changeCover'),
                 value: _MenuAction.changeCover,
@@ -886,10 +894,11 @@ class _HeroActions extends StatelessWidget {
                 value: _MenuAction.addSongs,
                 child: Text('Add songs'),
               ),
-              const PopupMenuItem(
-                value: _MenuAction.delete,
-                child: Text('Delete'),
-              ),
+              if (!builtIn)
+                const PopupMenuItem(
+                  value: _MenuAction.delete,
+                  child: Text('Delete'),
+                ),
             ],
           ),
           // The floating Play button sits here.

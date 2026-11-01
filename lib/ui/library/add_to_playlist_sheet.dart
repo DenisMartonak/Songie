@@ -7,9 +7,9 @@ import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../motion/pressable.dart';
-import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../widgets/page_snack_bar.dart';
+import '../widgets/playlist_art.dart';
 
 /// Lets the user pick a playlist (or make a new one) and appends [trackIds]
 /// to it, saying so in a snack bar on the page [context] belongs to. Songs the
@@ -138,7 +138,11 @@ class _AddToPlaylistSheet extends ConsumerWidget {
                       ),
                       child: Row(
                         children: [
-                          Artwork(p.coverRef, size: 40, seed: p.id),
+                          PlaylistArt(
+                            playlistId: p.id,
+                            coverRef: p.coverRef,
+                            size: 40,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(

@@ -7,9 +7,9 @@ import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
-import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../widgets/page_snack_bar.dart';
+import '../widgets/playlist_art.dart';
 import 'add_folder_flow.dart';
 import 'import_dialog.dart';
 
@@ -199,7 +199,11 @@ class _PlaylistTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
           children: [
-            Artwork(playlist.coverRef, size: 56, seed: playlist.id),
+            PlaylistArt(
+              playlistId: playlist.id,
+              coverRef: playlist.coverRef,
+              size: 56,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

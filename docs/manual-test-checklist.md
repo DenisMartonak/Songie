@@ -276,6 +276,16 @@ Use `S4-2QqwHf5c` ("HOMOŠLERKY (Full Song)").
 - [ ] Download it (signed in): the download completes.
 - [ ] After upgrading, songs previously marked unavailable get one more try (log: `Unflagged N unavailable YouTube songs`).
 
+## Favorites
+
+- [ ] A fresh install shows Favorites first in the library, with a star cover.
+- [ ] The star next to the playing song (desktop player bar, phone Now Playing) fills when tapped and the song appears at the top of Favorites.
+- [ ] Stars on search results, playlist rows, Home recents, YouTube Music song rows, the queue and stats top songs all toggle.
+- [ ] Starring a YouTube Music search result that isn't in the library adds it to the library and to Favorites.
+- [ ] The song menu shows Add to Favorites / Remove from Favorites.
+- [ ] Favorites has no Rename or Delete; its download switch works.
+- [ ] Two devices: star a song on each, sync, both have both; un-star one on one device, sync, it's gone on both, with no conflict prompt.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.

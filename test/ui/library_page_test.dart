@@ -9,6 +9,7 @@ import 'package:songies/library/library_scanner.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/library/library_page.dart';
 import 'package:songies/ui/motion/motion.dart';
+import 'package:songies/library/favorites.dart';
 
 import '../helpers/ui_harness.dart';
 
@@ -66,6 +67,31 @@ void main() {
     await tester.tap(find.text(item));
     await settle(tester);
   }
+
+  uiTest('Favorites is the first playlist, with a star', (tester) async {
+    await real(tester, () async {
+      await h.addTrack('t1');
+      await h.addPlaylist('Aaa', ['t1']);
+      await FavoritesRepository(h.db, h.stamp).ensureFavorites();
+    });
+    await pumpLibrary(tester);
+    final tiles = find.byWidgetPredicate(
+      (w) =>
+          w.key is ValueKey<String> &&
+          (w.key! as ValueKey<String>).value.startsWith('library.playlist.'),
+    );
+    expect(
+      (tester.widgetList(tiles).first.key! as ValueKey<String>).value,
+      'library.playlist.$kFavoritesPlaylistId',
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('library.playlist.$kFavoritesPlaylistId')),
+        matching: find.byIcon(Icons.star_rounded),
+      ),
+      findsOneWidget,
+    );
+  });
 
   uiTest('with no playlists it offers to add a music folder', (tester) async {
     await pumpLibrary(tester);
