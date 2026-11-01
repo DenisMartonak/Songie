@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/hlc.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/data/sync_stamp.dart';
+import 'package:songies/library/favorites.dart';
 import 'package:songies/sync/merger.dart';
 import 'package:songies/sync/row_applier.dart';
 import 'package:songies/sync/sync_row.dart';
@@ -546,5 +547,35 @@ void main() {
       (await view.entriesOf('p')).map((e) => e.id),
       unorderedEquals(['e1', 'e2']),
     );
+  });
+
+  group('Favorites', () {
+    test('a star against an un-star settles by clock, no clash', () {
+      final mine = [
+        pl(kFavoritesPlaylistId, name: kFavoritesName),
+        en('fav-s', kFavoritesPlaylistId, track: 's', clock: clk(5, 'me')),
+      ];
+      final theirs = [
+        pl(kFavoritesPlaylistId, name: kFavoritesName),
+        en(
+          'fav-s',
+          kFavoritesPlaylistId,
+          track: 's',
+          deleted: true,
+          clock: clk(9),
+        ),
+      ];
+      final r = merger.merge(mine, theirs);
+      expect(r.clashes, isEmpty);
+      expect(r.settled.singleWhere((x) => x.id == 'fav-s').deleted, isTrue);
+    });
+
+    test('the same shape in an ordinary playlist still clashes', () {
+      final r = merger.merge(
+        [pl('p'), en('e', 'p', track: 's', clock: clk(5, 'me'))],
+        [pl('p'), en('e', 'p', track: 's', deleted: true, clock: clk(9))],
+      );
+      expect(r.clashes, hasLength(1));
+    });
   });
 }

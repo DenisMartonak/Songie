@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/data/sync_stamp.dart';
+import 'package:songies/library/favorites.dart';
 import 'package:songies/sync/change_feed.dart';
 import 'package:songies/sync/row_applier.dart';
 import 'package:songies/sync/sync_row.dart';
@@ -377,6 +378,56 @@ void main() {
       expect(lyrics['b']!.deleted, isTrue);
     }
     expect(await snapshot(peer), await snapshot(db));
+  });
+
+  group('Favorites', () {
+    Future<Playlist> fav() => (db.select(
+      db.playlists,
+    )..where((p) => p.id.equals(kFavoritesPlaylistId))).getSingle();
+
+    for (final (what, change) in [
+      ('deleted', const PlaylistsCompanion(deleted: Value(true))),
+      ('renamed', const PlaylistsCompanion(name: Value('Faves'))),
+    ]) {
+      test('a $what Favorites from a peer comes back, restamped', () async {
+        await addPlaylist(peer, kFavoritesPlaylistId, clock: clk(9));
+        await (peer.update(
+          peer.playlists,
+        )..where((p) => p.id.equals(kFavoritesPlaylistId))).write(change);
+        final incoming = (await rowsOf(peer))
+            .singleWhere((r) => r.id == kFavoritesPlaylistId);
+
+        await applier.apply([incoming]);
+
+        final p = await fav();
+        expect(p.deleted, isFalse);
+        expect(p.name, kFavoritesName);
+        expect(p.clock, isNot(incoming.clock));
+      });
+    }
+
+    test('one live entry per song, the fav- one', () async {
+      await addTrack(db, 's');
+      await FavoritesRepository(db, stamp).ensureFavorites();
+      await FavoritesRepository(db, stamp).star('s');
+      await addEntry(
+        peer,
+        'e-random',
+        kFavoritesPlaylistId,
+        's',
+        clock: clk(9),
+      );
+      final incoming = (await rowsOf(peer))
+          .where((r) => r.table == SyncTable.playlistEntries)
+          .toList();
+
+      await applier.apply(incoming);
+
+      final live = await (db.select(
+        db.playlistEntries,
+      )..where((e) => e.deleted.equals(false) & e.trackId.equals('s'))).get();
+      expect(live.map((e) => e.id), [favoriteEntryId('s')]);
+    });
   });
 
   test('local playlist keeps the same song twice', () async {

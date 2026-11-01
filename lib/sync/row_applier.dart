@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import '../core/hlc.dart';
 import '../data/database.dart';
 import '../data/sync_stamp.dart';
+import '../library/favorites.dart';
 import '../stats/listen_store.dart';
 import 'sync_row.dart';
 
@@ -269,6 +270,12 @@ class _Run {
 
   /// Playlists: live ones with the same YouTube URL are one playlist.
   Future<SyncRow> _claimPlaylist(SyncRow row) async {
+    // Favorites is never deleted or renamed (an older peer may try); the
+    // fixed row is restamped so the fix goes back to it.
+    if (row.id == kFavoritesPlaylistId &&
+        (row.deleted || row.data['name'] != kFavoritesName)) {
+      return _with(row, {'deleted': false, 'name': kFavoritesName});
+    }
     final url = row.data['ytPlaylistUrl'] as String?;
     if (row.deleted || url == null) return row;
     final others = await _select(
@@ -306,9 +313,9 @@ class _Run {
     if (row.deleted) return row;
     final playlistId = row.data['playlistId']! as String;
     final trackId = row.data['trackId']! as String;
-    if (!await _isLiveYt(playlistId)) return row;
+    if (!await _onePerSong(playlistId)) return row;
     final others = await _liveEntries(playlistId, trackId, except: row.id);
-    final winner = _best([row, ...others]);
+    final winner = _bestEntry([row, ...others]);
     for (final x in others) {
       if (x.id != winner.id) await _restamp(_with(x, {'deleted': true}));
     }
@@ -394,10 +401,10 @@ class _Run {
   /// Leaves one live entry (the smallest id) of [trackId] in [playlistId]
   /// when that is a live YouTube playlist.
   Future<void> _dedupeEntries(String playlistId, String trackId) async {
-    if (!await _isLiveYt(playlistId)) return;
+    if (!await _onePerSong(playlistId)) return;
     final live = await _liveEntries(playlistId, trackId);
     if (live.length < 2) return;
-    final keep = _best(live);
+    final keep = _bestEntry(live);
     for (final x in live) {
       if (x.id != keep.id) await _restamp(_with(x, {'deleted': true}));
     }
@@ -457,6 +464,20 @@ class _Run {
   }
 
   // --- Reading and writing --------------------------------------------------
+
+  /// Live YouTube playlists and Favorites hold a song once; local ones may
+  /// hold it twice.
+  Future<bool> _onePerSong(String playlistId) async =>
+      playlistId == kFavoritesPlaylistId || await _isLiveYt(playlistId);
+
+  /// Like [_best], but a favorite's own `fav-<trackId>` entry wins.
+  SyncRow _bestEntry(List<SyncRow> rows) {
+    final fav = rows.where(
+      (r) =>
+          !r.deleted && r.id == favoriteEntryId(r.data['trackId']! as String),
+    );
+    return fav.isNotEmpty ? fav.first : _best(rows);
+  }
 
   Future<bool> _isLiveYt(String playlistId) async {
     final p = await _local(SyncTable.playlists, playlistId);

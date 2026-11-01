@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../core/hlc.dart';
 import '../data/database.dart';
 import '../data/sync_stamp.dart';
+import '../library/favorites.dart';
 import '../library/library_repository.dart' show maxPlaylistNameLength;
 import 'sync_row.dart';
 
@@ -119,7 +120,9 @@ class Merger {
       [for (final r in theirs) _follow(r, into)],
     )) {
       final row = (pair.$1 ?? pair.$2)!;
-      if (row.table.clashes) {
+      // Favorites settles by last writer: a star against an un-star is not a
+      // conflict worth asking about, and "keep both" can't apply to it.
+      if (row.table.clashes && _playlistOf(row) != kFavoritesPlaylistId) {
         groups.putIfAbsent(_playlistOf(row), () => []).add(pair);
       } else {
         settled.add(_settle(pair));
