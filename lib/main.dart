@@ -225,17 +225,23 @@ Future<void> main() async {
   // The equalizer: Android's system effect in the player's pipeline; mpv's
   // filter on desktop (hooked before the first mpv player is made).
   final androidEq = Platform.isAndroid ? AndroidEqualizer() : null;
-  final Equalizer equalizer = androidEq != null
-      ? AndroidEqualizerControl(JustAudioEqualizerPort(androidEq))
-      : MpvEqualizerControl(mpv: MediaKitMpvCommands());
+  final equalizer = equalizerFor(
+    android: Platform.isAndroid,
+    windows: Platform.isWindows,
+    androidEq: androidEq,
+    mpv: MediaKitMpvCommands.new,
+  );
   final backend = JustAudioBackend(
     pipeline: androidEq == null
         ? null
         : AudioPipeline(androidAudioEffects: [androidEq]),
   );
-  await applyStoredEqPreset(
-    read: () => settings.getString(kEqPreset),
-    apply: equalizer.apply,
+  // Not awaited: Android's bands are only known once a song has loaded.
+  unawaited(
+    applyStoredEqPreset(
+      read: () => settings.getString(kEqPreset),
+      apply: equalizer.apply,
+    ),
   );
   final player = PlayerService(
     backend,

@@ -31,65 +31,60 @@ abstract class MpvCommands {
 
 const _label = 'songieseq';
 
-/// The audio filter put on every mpv player once: one octave-wide peaking
-/// equalizer per band of [kEqBandsHz] and a volume stage for the preamp,
-/// each named so [MpvEqualizerControl] can change its gain in place.
-String mpvEqFilter() {
+/// mpv's audio filter for [preset]: one octave-wide peaking equalizer per
+/// band of [kEqBandsHz] and a volume stage for the preamp, each named so a
+/// gain can also be changed in the playing chain. mpv rebuilds the chain
+/// from this option for every file, so the option itself carries the gains.
+String mpvEqFilter(EqPreset preset) {
   final stages = [
     for (var i = 0; i < kEqBandsHz.length; i++)
-      'equalizer@b$i=f=${kEqBandsHz[i]}:t=o:w=1:g=0',
-    'volume@pre=volume=0dB',
+      'equalizer@b$i=f=${kEqBandsHz[i]}:t=o:w=1:'
+          'g=${preset.gains[i].toStringAsFixed(1)}',
+    'volume@pre=volume=${eqPreampDb(preset).toStringAsFixed(1)}dB',
   ];
   return '@$_label:lavfi=[${stages.join(',')}]';
 }
 
-/// The desktop equalizer: the filter is set once per mpv player and preset
-/// changes send `af-command`s, so switching is seamless. Off is every gain
-/// at 0 dB.
+/// The desktop equalizer. Every mpv player's `af` option holds the current
+/// preset (so the next file and a rebuilt player get it); a change while a
+/// song plays is also sent to the playing chain with `af-command`s. Off is
+/// every gain at 0 dB.
+///
+/// mpv reports neither a missing filter nor a failed command, so this can't
+/// tell whether the engine has an equalizer: it is only used where the
+/// filter is known to exist (see `main.dart`).
 class MpvEqualizerControl implements Equalizer {
   MpvEqualizerControl({required this._mpv}) {
-    _mpv.onPlayerCreated = (p) => unawaited(_setUp(p));
+    _mpv.onPlayerCreated = (p) => unawaited(_setFilter(p));
   }
 
   final MpvCommands _mpv;
-  final _availability = Completer<bool>();
-  bool? _known;
   EqPreset _preset = EqPreset.off;
 
   @override
-  Future<bool> get available => _availability.future;
+  Future<bool> get available async => true;
 
   @override
-  bool? get knownAvailable => _known;
+  bool? get knownAvailable => true;
 
   @override
   Future<void> apply(EqPreset preset) async {
     _preset = preset;
-    if (_known == false) return;
     for (final p in _mpv.players.toList()) {
-      await _send(p, preset);
+      await _sendToPlaying(p, preset);
+      await _setFilter(p);
     }
   }
 
-  Future<void> _setUp(Object player) async {
-    if (_known == false) return;
+  Future<void> _setFilter(Object player) async {
     try {
-      await _mpv.setFilter(player, mpvEqFilter());
-      _settle(true);
+      await _mpv.setFilter(player, mpvEqFilter(_preset));
     } catch (e) {
-      AppLog.w('Equalizer unavailable: mpv refused its filter ($e)');
-      _settle(false);
-      return;
+      AppLog.w('Equalizer: could not set the filter ($e)');
     }
-    await _send(player, _preset);
   }
 
-  void _settle(bool ok) {
-    _known = ok;
-    if (!_availability.isCompleted) _availability.complete(ok);
-  }
-
-  Future<void> _send(Object player, EqPreset preset) async {
+  Future<void> _sendToPlaying(Object player, EqPreset preset) async {
     try {
       for (var i = 0; i < kEqBandsHz.length; i++) {
         await _mpv.command(player, [
@@ -155,10 +150,18 @@ class AndroidEqualizerControl implements Equalizer {
   @override
   Future<void> apply(EqPreset preset) async {
     try {
-      if (preset == EqPreset.off) {
-        await _port.setEnabled(false);
-        return;
-      }
+      // Recorded at once and sent when the player starts; the bands are only
+      // known once a song has loaded, so their gains follow in the
+      // background (just_audio replays them whenever the player restarts).
+      await _port.setEnabled(preset != EqPreset.off);
+    } catch (e) {
+      AppLog.w('Equalizer: the system equalizer refused a change ($e)');
+    }
+    if (preset != EqPreset.off) unawaited(_setGains(preset));
+  }
+
+  Future<void> _setGains(EqPreset preset) async {
+    try {
       final b = await _port.bands();
       final pre = eqPreampDb(preset);
       final gains = mapGains(
@@ -170,7 +173,6 @@ class AndroidEqualizerControl implements Equalizer {
       for (var i = 0; i < gains.length; i++) {
         await _port.setBandGain(i, (gains[i] + pre).clamp(b.minDb, b.maxDb));
       }
-      await _port.setEnabled(true);
     } catch (e) {
       AppLog.w('Equalizer: the system equalizer refused a change ($e)');
     }
@@ -220,3 +222,21 @@ Future<void> applyStoredEqPreset({
   required Future<String?> Function() read,
   required Future<void> Function(EqPreset p) apply,
 }) async => apply(eqPresetFromName(await read()));
+
+/// The equalizer for this platform: Android's system effect ([androidEq],
+/// which must be in the player's pipeline), mpv's filter on Linux, and none
+/// on Windows for now. Windows' bundled libmpv may lack the filter, and mpv
+/// can't report that: with the filter installed and missing, every song
+/// would play silent. Enable it there once a Windows run shows it works.
+Equalizer equalizerFor({
+  required bool android,
+  required bool windows,
+  AndroidEqualizer? androidEq,
+  required MpvCommands Function() mpv,
+}) {
+  if (android && androidEq != null) {
+    return AndroidEqualizerControl(JustAudioEqualizerPort(androidEq));
+  }
+  if (windows) return const NoEqualizer();
+  return MpvEqualizerControl(mpv: mpv());
+}

@@ -289,8 +289,9 @@ Use `S4-2QqwHf5c` ("HOMOŠLERKY (Full Song)").
 ## Equalizer
 
 - [ ] Settings → Playback → Equalizer lists Off, Bass boost, Vocal, Rock, Pop, Classical, Electronic, Acoustic.
-- [ ] Linux: picking Rock while a song plays changes the sound at once, with no gap or restart; Off sounds like before.
-- [ ] Windows: same as Linux. If the sound doesn't change, the row should read "Not available on Windows yet" (the bundled libmpv lacks the filter).
+- [ ] Linux: picking Rock while a song plays changes the sound at once; note any gap or click when switching. Off sounds like before.
+- [ ] Linux: the preset holds on the next song, after the queue ends and you play again, and after a restart.
+- [ ] Windows: the row reads "Not available on Windows yet" (the equalizer is off there until a Windows run proves the filter; see the spec).
 - [ ] Android: same, through the phone's equalizer.
 - [ ] The preset survives a restart and applies to the next song, a YouTube stream and a downloaded file alike.
 

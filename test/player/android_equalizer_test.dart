@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/player/eq_presets.dart';
 import 'package:songies/player/equalizer.dart';
@@ -26,11 +28,23 @@ void main() {
     final port = FakePort();
     final eq = AndroidEqualizerControl(port);
     await eq.apply(EqPreset.bassBoost);
+    await pumpEventQueue(); // the band gains follow in the background
     expect(port.enabled, isTrue);
     // mapGains [5, 2, 0, 0, 0] plus the preamp (-3 dB) folded in.
     expect(port.gains, {0: 2.0, 1: -1.0, 2: -3.0, 3: -3.0, 4: -3.0});
     expect(await eq.available, isTrue);
   });
+
+  test(
+    'apply never waits for the bands (ready only once a song loads)',
+    () async {
+      final port = SlowPort();
+      await AndroidEqualizerControl(port)
+          .apply(EqPreset.rock)
+          .timeout(const Duration(seconds: 1));
+      expect(port.enabled, isTrue);
+    },
+  );
 
   test('Off disables it', () async {
     final port = FakePort();
@@ -48,4 +62,11 @@ void main() {
     );
     expect(applied, [EqPreset.vocal]);
   });
+}
+
+class SlowPort extends FakePort {
+  @override
+  Future<({List<double> centersHz, double minDb, double maxDb})> bands() =>
+      Completer<({List<double> centersHz, double minDb, double maxDb})>()
+          .future;
 }

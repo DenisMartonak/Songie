@@ -39,14 +39,21 @@ fiddling with sliders.
   media_kit player. `just_audio_media_kit` keeps its mpv player private, so
   Songies carries a small patched copy of that package (a path dependency
   under `packages/`) that exposes a way to set the filter.
-- *(Builder's call:)* on desktop the equalizer filter is put in mpv's chain
-  once, labelled, and presets change its gains in place (`af-command`), so
-  switching is seamless. **Off** is then every band at 0 dB: the same sound,
+- *(Builder's call, revised after review:)* on desktop each mpv player's
+  `af` option holds the current preset's gains (mpv rebuilds the chain from
+  it for every file), and a change mid-song is also sent to the playing
+  chain with `af-command`s. Whether re-setting `af` mid-song is audible
+  needs an ear test on Linux. **Off** is then every band at 0 dB: the same sound,
   though the filter stays in the chain. (Setting and clearing `af` on each
   change would make Off literally filter-free but risks a click on every
   switch.) just_audio rebuilds the desktop player after `stop()`, so the
   filter is applied again whenever a new player is made.
 
+- **Windows, as built:** mpv reports neither a missing filter nor a failed
+  command, so Songies can't detect it, and a missing filter would silence
+  every song. Windows therefore ships with no equalizer ("Not available on
+  Windows yet") until a Windows run shows the filter works; enabling it then
+  is a one-line change in `equalizerFor`.
 - **Windows (user's decision):** the bundled `media_kit_libs_windows_audio`
   libmpv is a minimal audio build that may lack FFmpeg's `equalizer` filter.
   The first task checks it on Windows. If the filter is there, Windows works

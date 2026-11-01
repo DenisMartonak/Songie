@@ -2,11 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/player/eq_presets.dart';
 import 'package:songies/player/equalizer.dart';
 
+/// Models mpv: `af` is an option that every new file's audio chain is built
+/// from; `af-command` only changes the current file's chain; setting a
+/// property never throws.
 class FakeMpv implements MpvCommands {
-  final calls = <(Object, List<String>)>[];
-  final filters = <(Object, String)>[];
   final live = <Object>[];
-  bool failFilter = false;
+  final af = <Object, String>{};
+  final commands = <(Object, List<String>)>[];
 
   @override
   Iterable<Object> get players => live;
@@ -17,14 +19,12 @@ class FakeMpv implements MpvCommands {
   set onPlayerCreated(void Function(Object player)? f) => created = f;
 
   @override
-  Future<void> setFilter(Object player, String af) async {
-    if (failFilter) throw Exception('no equalizer filter');
-    filters.add((player, af));
-  }
+  Future<void> setFilter(Object player, String filter) async =>
+      af[player] = filter;
 
   @override
   Future<void> command(Object player, List<String> args) async =>
-      calls.add((player, args));
+      commands.add((player, args));
 
   Future<void> newPlayer(Object p) async {
     live.add(p);
@@ -33,59 +33,57 @@ class FakeMpv implements MpvCommands {
   }
 }
 
-/// The gains sent to [player], by band index (and the preamp at 'pre').
-Map<String, String> gainsSent(FakeMpv mpv, Object player) => {
-  for (final (p, args) in mpv.calls)
-    if (identical(p, player)) args.last: args[3],
-};
-
 void main() {
-  test('the filter: ten labelled octave-wide stages and a preamp', () {
-    final f = mpvEqFilter();
+  test('the filter carries the preset: ten named stages and a preamp', () {
+    final f = mpvEqFilter(EqPreset.rock);
     expect(f, startsWith('@songieseq:lavfi=['));
     expect(RegExp('equalizer@b').allMatches(f), hasLength(10));
-    for (var i = 0; i < kEqBandsHz.length; i++) {
-      expect(f, contains('equalizer@b$i=f=${kEqBandsHz[i]}:t=o:w=1:g=0'));
-    }
-    expect(f, endsWith('volume@pre=volume=0dB]'));
+    expect(f, contains('equalizer@b0=f=31:t=o:w=1:g=4.0'));
+    expect(f, contains('equalizer@b4=f=500:t=o:w=1:g=-1.0'));
+    expect(f, endsWith('volume@pre=volume=-2.0dB]'));
+    expect(
+      mpvEqFilter(EqPreset.off),
+      contains('equalizer@b0=f=31:t=o:w=1:g=0.0'),
+    );
   });
 
-  test('a new player gets the filter, then the current gains', () async {
+  test('a preset picked while idle reaches the next file', () async {
     final mpv = FakeMpv();
     final eq = MpvEqualizerControl(mpv: mpv);
+    await mpv.newPlayer('p');
     await eq.apply(EqPreset.rock);
-    const p = 'player1';
-    await mpv.newPlayer(p);
-    expect(mpv.filters.single, (p, mpvEqFilter()));
-    final sent = gainsSent(mpv, p);
-    expect(sent['equalizer@b0'], '4.0');
-    expect(sent['equalizer@b9'], '4.0');
-    expect(sent['volume@pre'], '-2.0dB');
+    // The option the next file's chain is built from holds Rock.
+    expect(mpv.af['p'], mpvEqFilter(EqPreset.rock));
   });
 
-  test(
-    'Off on a live player sends flat gains, never clears the filter',
-    () async {
-      final mpv = FakeMpv();
-      final eq = MpvEqualizerControl(mpv: mpv);
-      await mpv.newPlayer('p');
-      await eq.apply(EqPreset.bassBoost);
-      mpv.calls.clear();
-      await eq.apply(EqPreset.off);
-      final sent = gainsSent(mpv, 'p');
-      expect(sent.values.where((v) => v != '0.0dB'), everyElement('0.0'));
-      expect(sent['volume@pre'], '0.0dB');
-      expect(mpv.filters, hasLength(1));
-      expect(mpv.calls.map((c) => c.$2.first), everyElement('af-command'));
-    },
-  );
+  test('a player made later starts with the current preset', () async {
+    final mpv = FakeMpv();
+    final eq = MpvEqualizerControl(mpv: mpv);
+    await eq.apply(EqPreset.vocal);
+    await mpv.newPlayer('p2');
+    expect(mpv.af['p2'], mpvEqFilter(EqPreset.vocal));
+  });
 
-  test('without the filter it is unavailable and quiet', () async {
-    final mpv = FakeMpv()..failFilter = true;
+  test('a change mid-song is also sent to the playing chain', () async {
+    final mpv = FakeMpv();
     final eq = MpvEqualizerControl(mpv: mpv);
     await mpv.newPlayer('p');
-    expect(await eq.available, isFalse);
-    await eq.apply(EqPreset.rock);
-    expect(mpv.calls, isEmpty);
+    mpv.commands.clear();
+    await eq.apply(EqPreset.bassBoost);
+    final sent = {for (final (_, a) in mpv.commands) a.last: a[3]};
+    expect(sent['equalizer@b0'], '6.0');
+    expect(sent['volume@pre'], '-3.0dB');
+  });
+
+  test('each platform gets its equalizer; Windows none for now', () {
+    MpvCommands mpv() => FakeMpv();
+    expect(
+      equalizerFor(android: false, windows: true, mpv: mpv),
+      isA<NoEqualizer>(),
+    );
+    expect(
+      equalizerFor(android: false, windows: false, mpv: mpv),
+      isA<MpvEqualizerControl>(),
+    );
   });
 }
