@@ -22,9 +22,10 @@ class PlaybackTracking {
 /// Instant streams from Innertube's `player` endpoint, trying each of
 /// [kPlayerClients] in order (the last one that worked first).
 ///
-/// The answer is `notFound` only when every client tried says the *video*
-/// is unavailable (UNPLAYABLE, ERROR, or LOGIN_REQUIRED for age); any other
-/// outcome is a plain `Err` so [FallbackStreamSource] moves on to yt-dlp.
+/// The answer is `ageRestricted` when any client asks for an age check,
+/// `notFound` only when every client tried says the *video* is unavailable
+/// (UNPLAYABLE, ERROR); any other outcome is a plain `Err` so
+/// [FallbackStreamSource] moves on to yt-dlp.
 class InnertubeStreamSource implements StreamSource {
   InnertubeStreamSource(
     this._client, {
@@ -77,6 +78,7 @@ class InnertubeStreamSource implements StreamSource {
     ];
     final reasons = <String>[];
     var allVideoLevel = true;
+    var ageRestricted = false;
     for (final c in order) {
       final r = await _client.call(c, 'player', {
         'videoId': videoId,
@@ -98,9 +100,13 @@ class InnertubeStreamSource implements StreamSource {
         return Ok(o.stream!);
       }
       reasons.add('${c.name}: ${o.reason}');
+      if (o.ageRestricted) ageRestricted = true;
       if (!o.videoLevel) allVideoLevel = false;
     }
     final detail = 'innertube $videoId: ${reasons.join('; ')}';
+    if (ageRestricted) {
+      return Err(ytFailure(YtErrorKind.ageRestricted, detail));
+    }
     if (allVideoLevel) return Err(ytFailure(YtErrorKind.notFound, detail));
     return Err(ytFailure(YtErrorKind.extractor, detail));
   }
@@ -137,6 +143,7 @@ class InnertubeStreamSource implements StreamSource {
     final reason = ps?['reason'] is String ? ps!['reason']! as String : '';
     if (status != 'OK') {
       final label = '$status${reason.isEmpty ? '' : ' "$reason"'}';
+      if (_isAgeCheck(status, reason)) return _Outcome.ageRestricted(label);
       return _isVideoLevel(status, reason)
           ? _Outcome.unavailable(label)
           : _Outcome.fail(label);
@@ -161,17 +168,16 @@ class InnertubeStreamSource implements StreamSource {
   }
 
   /// Whether a non-OK status is about the video itself (removed, private,
-  /// region-blocked, age-restricted) rather than this client being refused.
-  static bool _isVideoLevel(Object? status, String reason) {
-    final r = reason.toLowerCase();
-    return switch (status) {
-      'UNPLAYABLE' || 'ERROR' => !r.contains('reload'),
-      'LOGIN_REQUIRED' => RegExp(
-        r'\bage\b|age-restrict|inappropriate for some users',
-      ).hasMatch(r),
-      _ => false,
-    };
-  }
+  /// region-blocked) rather than this client being refused.
+  static bool _isVideoLevel(Object? status, String reason) =>
+      (status == 'UNPLAYABLE' || status == 'ERROR') &&
+      !reason.toLowerCase().contains('reload');
+
+  /// Whether a non-OK status asks for an age check (playable signed in).
+  static bool _isAgeCheck(Object? status, String reason) =>
+      status == 'LOGIN_REQUIRED' &&
+      RegExp(r'\bage\b|age-restrict|inappropriate for some users')
+          .hasMatch(reason.toLowerCase());
 
   /// Audio-only formats with a plain `url`: opus first, then m4a, then any
   /// other, the highest bitrate within each (yt-dlp's
@@ -226,11 +232,25 @@ class InnertubeStreamSource implements StreamSource {
 }
 
 class _Outcome {
-  const _Outcome.ok(YtStream this.stream) : reason = 'ok', videoLevel = false;
-  const _Outcome.fail(this.reason) : stream = null, videoLevel = false;
-  const _Outcome.unavailable(this.reason) : stream = null, videoLevel = true;
+  const _Outcome.ok(YtStream this.stream)
+    : reason = 'ok',
+      videoLevel = false,
+      ageRestricted = false;
+  const _Outcome.fail(this.reason)
+    : stream = null,
+      videoLevel = false,
+      ageRestricted = false;
+  const _Outcome.unavailable(this.reason)
+    : stream = null,
+      videoLevel = true,
+      ageRestricted = false;
+  const _Outcome.ageRestricted(this.reason)
+    : stream = null,
+      videoLevel = true,
+      ageRestricted = true;
 
   final YtStream? stream;
   final String reason;
   final bool videoLevel;
+  final bool ageRestricted;
 }

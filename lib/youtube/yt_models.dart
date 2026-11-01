@@ -68,6 +68,17 @@ enum YtErrorKind {
   /// The disk is full (ENOSPC).
   diskFull,
   unknown,
+
+  /// Age-restricted: YouTube wants a signed-in account to play it.
+  ageRestricted,
+
+  /// Age-restricted, and the signed-in account was refused too (expired
+  /// session, or an account without age verification).
+  ageRestrictedAccount,
+
+  /// Age-restricted and signed in, but yt-dlp has no JavaScript runtime to
+  /// play it with.
+  needsRuntime,
 }
 
 /// A finished yt-dlp download.
@@ -132,5 +143,11 @@ String ytErrorUserMessageFromText(String message) {
     YtErrorKind.throttled => 'YouTube is limiting downloads — retrying soon',
     YtErrorKind.diskFull => 'Storage is full — free up space and retry',
     YtErrorKind.unknown => 'Something went wrong with yt-dlp',
+    YtErrorKind.ageRestricted =>
+      'Age-restricted — sign in to YouTube to play it',
+    YtErrorKind.ageRestrictedAccount =>
+      "This YouTube account isn't valid for age-restricted songs",
+    YtErrorKind.needsRuntime =>
+      'Age-restricted — install the helper in Settings to play it',
   };
 }

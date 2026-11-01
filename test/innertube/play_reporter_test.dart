@@ -92,23 +92,26 @@ void main() {
     );
   });
 
-  test('31 s of a YouTube track sends a playback and a watchtime GET', () async {
-    play(_track('a'), 0, 31);
-    await _settle();
-    expect(transport.gets, hasLength(2));
-    final p = transport.gets[0].url;
-    expect(p.path, '/api/stats/playback');
-    expect(p.queryParameters['ver'], '2');
-    expect(p.queryParameters['cpn'], matches(RegExp(r'^[A-Za-z0-9_-]{16}$')));
-    expect(p.queryParameters['docid'], 'vid_a');
-    final w = transport.gets[1].url;
-    expect(w.path, '/api/stats/watchtime');
-    expect(w.queryParameters['cpn'], p.queryParameters['cpn']);
-    expect(w.queryParameters['st'], '0');
-    expect(w.queryParameters['et'], '30');
-    expect(w.queryParameters['cmt'], '30');
-    expect(transport.gets[0].headers['User-Agent'], contains('Macintosh'));
-  });
+  test(
+    '31 s of a YouTube track sends a playback and a watchtime GET',
+    () async {
+      play(_track('a'), 0, 31);
+      await _settle();
+      expect(transport.gets, hasLength(2));
+      final p = transport.gets[0].url;
+      expect(p.path, '/api/stats/playback');
+      expect(p.queryParameters['ver'], '2');
+      expect(p.queryParameters['cpn'], matches(RegExp(r'^[A-Za-z0-9_-]{16}$')));
+      expect(p.queryParameters['docid'], 'vid_a');
+      final w = transport.gets[1].url;
+      expect(w.path, '/api/stats/watchtime');
+      expect(w.queryParameters['cpn'], p.queryParameters['cpn']);
+      expect(w.queryParameters['st'], '0');
+      expect(w.queryParameters['et'], '30');
+      expect(w.queryParameters['cmt'], '30');
+      expect(transport.gets[0].headers['User-Agent'], contains('Macintosh'));
+    },
+  );
 
   test('no second report for the same play, even after a seek', () async {
     final t = _track('a');
@@ -173,65 +176,66 @@ void main() {
     expect(transport.gets, hasLength(2));
   });
 
-  void tick(Track t, int ms, {bool playing = true, int? lengthMs}) => states.add(
-    PlayerState(
-      queue: [t],
-      index: 0,
-      playing: playing,
-      position: Duration(milliseconds: ms),
-      duration: lengthMs == null ? null : Duration(milliseconds: lengthMs),
-    ),
-  );
-
-  test('20 s song with ticks 0.4..19.6 s then a track change is reported once',
-      () async {
-    final a = _track('a', durationMs: 20000);
-    for (var ms = 400; ms <= 19600; ms += 1200) {
-      tick(a, ms);
-    }
-    tick(a, 19600);
-    states.add(
-      PlayerState(
-        queue: [a, _track('b')],
-        index: 1,
-        playing: true,
-      ),
-    );
-    await _settle();
-    expect(transport.gets, hasLength(2));
-    expect(transport.gets[0].url.queryParameters['docid'], 'vid_a');
-  });
-
-  test('20 s song ending with playing=false at 19.5 s is reported once',
-      () async {
-    final a = _track('a', durationMs: 20000);
-    for (var ms = 500; ms < 19500; ms += 1000) {
-      tick(a, ms);
-    }
-    tick(a, 19500, playing: false);
-    tick(a, 19500, playing: false);
-    await _settle();
-    expect(transport.gets, hasLength(2));
-  });
-
-  test('20 s of a long song A, a track change, 20 s of B sends nothing',
-      () async {
-    final a = _track('a');
-    play(a, 0, 20);
-    final b = _track('b');
-    for (var s = 0; s <= 20; s++) {
+  void tick(Track t, int ms, {bool playing = true, int? lengthMs}) =>
       states.add(
         PlayerState(
-          queue: [a, b],
-          index: 1,
-          playing: true,
-          position: Duration(seconds: s),
+          queue: [t],
+          index: 0,
+          playing: playing,
+          position: Duration(milliseconds: ms),
+          duration: lengthMs == null ? null : Duration(milliseconds: lengthMs),
         ),
       );
-    }
-    await _settle();
-    expect(transport.gets, isEmpty);
-  });
+
+  test(
+    '20 s song with ticks 0.4..19.6 s then a track change is reported once',
+    () async {
+      final a = _track('a', durationMs: 20000);
+      for (var ms = 400; ms <= 19600; ms += 1200) {
+        tick(a, ms);
+      }
+      tick(a, 19600);
+      states.add(PlayerState(queue: [a, _track('b')], index: 1, playing: true));
+      await _settle();
+      expect(transport.gets, hasLength(2));
+      expect(transport.gets[0].url.queryParameters['docid'], 'vid_a');
+    },
+  );
+
+  test(
+    '20 s song ending with playing=false at 19.5 s is reported once',
+    () async {
+      final a = _track('a', durationMs: 20000);
+      for (var ms = 500; ms < 19500; ms += 1000) {
+        tick(a, ms);
+      }
+      tick(a, 19500, playing: false);
+      tick(a, 19500, playing: false);
+      await _settle();
+      expect(transport.gets, hasLength(2));
+    },
+  );
+
+  test(
+    '20 s of a long song A, a track change, 20 s of B sends nothing',
+    () async {
+      final a = _track('a');
+      play(a, 0, 20);
+      final b = _track('b');
+      for (var s = 0; s <= 20; s++) {
+        states.add(
+          PlayerState(
+            queue: [a, b],
+            index: 1,
+            playing: true,
+            position: Duration(seconds: s),
+          ),
+        );
+      }
+      await _settle();
+      expect(transport.gets, isEmpty);
+    },
+  );
 
   group('signed in', () {
     final session = YtSession({
@@ -272,22 +276,24 @@ void main() {
     });
     tearDown(() => signed.dispose());
 
-    test('reports carry Cookie and Authorization and keep ver and cpn',
-        () async {
-      play(_track('a'), 0, 31);
-      await _settle();
-      await _settle();
-      expect(transport.gets, hasLength(2));
-      for (final g in transport.gets) {
-        expect(g.headers['Cookie'], contains('SAPISID=SAPISECRET1234'));
-        expect(g.headers['Authorization'], startsWith('SAPISIDHASH '));
-        expect(g.headers['X-Goog-AuthUser'], '0');
-        expect(g.headers['X-Origin'], 'https://music.youtube.com');
-        expect(g.url.queryParameters['ver'], '2');
-        expect(g.url.queryParameters['cpn'], hasLength(16));
-      }
-      expect(transport.gets[0].url.queryParameters['acct'], '1');
-    });
+    test(
+      'reports carry Cookie and Authorization and keep ver and cpn',
+      () async {
+        play(_track('a'), 0, 31);
+        await _settle();
+        await _settle();
+        expect(transport.gets, hasLength(2));
+        for (final g in transport.gets) {
+          expect(g.headers['Cookie'], contains('SAPISID=SAPISECRET1234'));
+          expect(g.headers['Authorization'], startsWith('SAPISIDHASH '));
+          expect(g.headers['X-Goog-AuthUser'], '0');
+          expect(g.headers['X-Origin'], 'https://music.youtube.com');
+          expect(g.url.queryParameters['ver'], '2');
+          expect(g.url.queryParameters['cpn'], hasLength(16));
+        }
+        expect(transport.gets[0].url.queryParameters['acct'], '1');
+      },
+    );
 
     test('exactly one accountTracking call per qualifying play', () async {
       play(_track('a'), 0, 31);
@@ -303,32 +309,36 @@ void main() {
       expect(transport.gets, isEmpty);
     });
 
-    test('accountTracking failing falls back to anonymous, no session',
-        () async {
-      accountResult = null;
-      play(_track('a'), 0, 31);
-      await _settle();
-      await _settle();
-      expect(accountCalls, 1);
-      expect(transport.gets, hasLength(2));
-      for (final g in transport.gets) {
-        expect(g.headers.containsKey('Cookie'), isFalse);
-        expect(g.headers.containsKey('Authorization'), isFalse);
-      }
-    });
+    test(
+      'accountTracking failing falls back to anonymous, no session',
+      () async {
+        accountResult = null;
+        play(_track('a'), 0, 31);
+        await _settle();
+        await _settle();
+        expect(accountCalls, 1);
+        expect(transport.gets, hasLength(2));
+        for (final g in transport.gets) {
+          expect(g.headers.containsKey('Cookie'), isFalse);
+          expect(g.headers.containsKey('Authorization'), isFalse);
+        }
+      },
+    );
 
-    test('signed out (no session) sends no account call and no headers',
-        () async {
-      signed.dispose();
-      signed = build(s: () => null);
-      play(_track('a'), 0, 31);
-      await _settle();
-      await _settle();
-      expect(accountCalls, 0);
-      expect(transport.gets, hasLength(2));
-      expect(transport.gets[0].headers.containsKey('Cookie'), isFalse);
-      expect(transport.gets[0].headers.containsKey('Authorization'), isFalse);
-    });
+    test(
+      'signed out (no session) sends no account call and no headers',
+      () async {
+        signed.dispose();
+        signed = build(s: () => null);
+        play(_track('a'), 0, 31);
+        await _settle();
+        await _settle();
+        expect(accountCalls, 0);
+        expect(transport.gets, hasLength(2));
+        expect(transport.gets[0].headers.containsKey('Cookie'), isFalse);
+        expect(transport.gets[0].headers.containsKey('Authorization'), isFalse);
+      },
+    );
 
     test('a failing signed-in report logs no cookie or hash value', () async {
       final lines = <String>[];

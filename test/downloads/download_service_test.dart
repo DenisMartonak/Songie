@@ -526,6 +526,25 @@ void main() {
   });
 
   run(
+    'an age-restricted song fails its row, never unavailable',
+    concurrency: 1,
+    (e) {
+      e.queued(['y1', 'y2']);
+      e.wait(e.service.start());
+      e.fail('y1', 'ERROR: [youtube] abc: Sign in to confirm your age');
+      expect(e.unavailable, isEmpty);
+      final r = e.row('y1')!;
+      expect(r.state, 'failed');
+      expect(
+        r.error,
+        ytErrorUserMessage(ytFailure(YtErrorKind.ageRestricted, '')),
+      );
+      expect(e.snap.extractorFailing, isFalse);
+      expect(e.runner.started, ['dl-y1', 'dl-y2']);
+    },
+  );
+
+  run(
     'an extractor error fails the row until a success clears the flag',
     concurrency: 1,
     (e) {

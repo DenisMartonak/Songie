@@ -1110,6 +1110,17 @@ void main() {
       expect(missingReports, isEmpty);
     });
 
+    test('yt ageRestricted skips without reporting unavailable', () async {
+      final y = ytTrack('y');
+      resolver.failures['y'] = ytFailure(YtErrorKind.ageRestricted, 'x');
+      await player.playQueue([y, b]);
+
+      expect(player.state.current, b);
+      expect(player.state.playing, isTrue);
+      expect(unavailable, isEmpty);
+      expect(player.state.notice!.reason, startsWith('ytdlp:ageRestricted:'));
+    });
+
     test('local notFound does not report unavailable', () async {
       resolver.missing.add('a');
       await player.playQueue([a, b]);

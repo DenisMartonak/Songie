@@ -210,12 +210,22 @@ void main() {
       expect(ytErrorKindOf(r.failure), YtErrorKind.notFound);
     });
 
-    test('LOGIN_REQUIRED with an age reason is notFound', () async {
+    test('LOGIN_REQUIRED with an age reason is ageRestricted', () async {
       transport
         ..reply(status('LOGIN_REQUIRED', 'Sign in to confirm your age'))
         ..reply(status('LOGIN_REQUIRED', 'Sign in to confirm your age'));
       final r = await go() as Err<YtStream>;
-      expect(ytErrorKindOf(r.failure), YtErrorKind.notFound);
+      expect(ytErrorKindOf(r.failure), YtErrorKind.ageRestricted);
+      // Never a reason to flag the song unavailable.
+      expect(r.failure.kind, isNot(FailureKind.notFound));
+    });
+
+    test('one age answer wins over an UNPLAYABLE one', () async {
+      transport
+        ..reply(status('LOGIN_REQUIRED', 'Sign in to confirm your age'))
+        ..reply(fixture('player_unplayable_handcrafted'));
+      final r = await go() as Err<YtStream>;
+      expect(ytErrorKindOf(r.failure), YtErrorKind.ageRestricted);
     });
 
     test('LOGIN_REQUIRED "not a bot" is client-level: falls through', () async {

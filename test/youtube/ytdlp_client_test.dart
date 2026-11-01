@@ -109,9 +109,12 @@ void main() {
           YtErrorKind.notFound,
       'ERROR: [youtube] abc: Sign in to confirm your age. This video may be '
               'inappropriate for some users.':
-          YtErrorKind.notFound,
+          YtErrorKind.ageRestricted,
       'ERROR: [youtube] abc: This video is age-restricted':
-          YtErrorKind.notFound,
+          YtErrorKind.ageRestricted,
+      'ERROR: [youtube] abc: Sorry, this content is age-restricted. This '
+              'video is age-restricted and only available on YouTube':
+          YtErrorKind.ageRestricted,
       'ERROR: [youtube] abc: Unable to download API page: HTTP Error 400: '
               'Bad Request':
           YtErrorKind.extractor,

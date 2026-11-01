@@ -135,6 +135,9 @@ void main() {
         YtErrorKind.extractor,
         YtErrorKind.missingBinary,
         YtErrorKind.unknown,
+        YtErrorKind.ageRestricted,
+        YtErrorKind.ageRestrictedAccount,
+        YtErrorKind.needsRuntime,
       ]) {
         expect(ytFailure(k, '').kind, FailureKind.unknown);
         expect(ytErrorKindOf(ytFailure(k, 'a:b')), k);
@@ -142,6 +145,18 @@ void main() {
     });
 
     test('user messages', () {
+      expect(
+        ytErrorUserMessage(ytFailure(YtErrorKind.ageRestricted, '')),
+        'Age-restricted — sign in to YouTube to play it',
+      );
+      expect(
+        ytErrorUserMessage(ytFailure(YtErrorKind.ageRestrictedAccount, '')),
+        "This YouTube account isn't valid for age-restricted songs",
+      );
+      expect(
+        ytErrorUserMessage(ytFailure(YtErrorKind.needsRuntime, '')),
+        'Age-restricted — install the helper in Settings to play it',
+      );
       expect(
         ytErrorUserMessage(ytFailure(YtErrorKind.notAPlaylist, '')),
         "That's a video link — paste a playlist link",
