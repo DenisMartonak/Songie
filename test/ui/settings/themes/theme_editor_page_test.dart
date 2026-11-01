@@ -219,8 +219,17 @@ void main() {
     await tester.tap(font);
     await settle(tester);
     await tester.tap(find.text('Import font…').last);
-    // Importing reads, hashes and copies the file: many real-clock turns.
-    for (var i = 0; i < 5; i++) {
+    // The editor's font field, once it shows the new family.
+    final chosen = find.descendant(
+      of: find.byKey(const Key('themeEditor.font')),
+      matching: find.text('Fancy Sans'),
+    );
+    // Importing reads, hashes and copies the file: many real-clock turns,
+    // more of them on a slow machine.
+    for (var i = 0; i < 100 && chosen.evaluate().isEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
       await settle(tester);
     }
 

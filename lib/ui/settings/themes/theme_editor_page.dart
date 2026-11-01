@@ -270,6 +270,9 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
 
   Future<void> _importFont() async {
     final snacks = PageSnackBars.of(context);
+    // The import outlives the page if it is closed meanwhile; the providers
+    // must still learn about the new font.
+    final container = ProviderScope.containerOf(context, listen: false);
     final path = await ref.read(fontFilePickerProvider)();
     if (path == null) return;
     final fonts = ref.read(fontServiceProvider);
@@ -280,8 +283,8 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
       case Ok(value: FontImport(:final entry)):
         // The new family is usable at once, by the editor and by any theme
         // that already names it.
-        ref.invalidate(resolvedFontFamilyProvider);
-        ref.invalidate(importedFontsProvider);
+        container.invalidate(resolvedFontFamilyProvider);
+        container.invalidate(importedFontsProvider);
         if (mounted) _edit(_withFont(entry.family, entry.fileHash));
     }
   }
