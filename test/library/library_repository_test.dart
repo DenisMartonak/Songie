@@ -154,6 +154,47 @@ void main() {
     });
   });
 
+  group('setPlaylistCover', () {
+    test('sets and clears the cover, re-stamping each time', () async {
+      final p = await newPlaylist('Mix');
+      final before = await (db.select(db.playlists)).getSingle();
+      expect(
+        await repo.setPlaylistCover(p, 'yt2-${'a' * 64}.jpg'),
+        isA<Ok<void>>(),
+      );
+      final set = await (db.select(db.playlists)).getSingle();
+      expect(set.coverRef, 'yt2-${'a' * 64}.jpg');
+      expect(set.localSeq, greaterThan(before.localSeq));
+
+      expect(await repo.setPlaylistCover(p, null), isA<Ok<void>>());
+      final cleared = await (db.select(db.playlists)).getSingle();
+      expect(cleared.coverRef, isNull);
+      expect(cleared.localSeq, greaterThan(set.localSeq));
+    });
+
+    test('the summary shows the own cover and says so', () async {
+      final p = await newPlaylist('Mix');
+      expect((await repo.watchPlaylists().first).single.hasOwnCover, isFalse);
+      await repo.setPlaylistCover(p, 'yt2-${'b' * 64}.jpg');
+      final summary = (await repo.watchPlaylists().first).single;
+      expect(summary.coverRef, 'yt2-${'b' * 64}.jpg');
+      expect(summary.hasOwnCover, isTrue);
+    });
+
+    test('unknown or deleted playlists are notFound', () async {
+      expect(
+        failureOf(await repo.setPlaylistCover('nope', null)),
+        FailureKind.notFound,
+      );
+      final p = await newPlaylist();
+      await repo.deletePlaylist(p);
+      expect(
+        failureOf(await repo.setPlaylistCover(p, null)),
+        FailureKind.notFound,
+      );
+    });
+  });
+
   group('renamePlaylist', () {
     test('renames, trims and re-stamps', () async {
       final p = await newPlaylist('Old');

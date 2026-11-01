@@ -19,6 +19,7 @@ class PlaylistSummary {
     required this.trackCount,
     required this.durationMs,
     required this.coverRef,
+    this.hasOwnCover = false,
   });
 
   final String id;
@@ -31,6 +32,9 @@ class PlaylistSummary {
 
   /// The playlist's own cover, else the first track's artwork.
   final String? coverRef;
+
+  /// Whether [coverRef] is the playlist's own cover (picked by the user).
+  final bool hasOwnCover;
 }
 
 /// One entry of a playlist together with its track.
@@ -79,6 +83,7 @@ Stream<List<PlaylistSummary>> watchPlaylistSummaries(AppDatabase db) {
           coverRef:
               r.readNullable<String>('cover_ref') ??
               r.readNullable<String>('first_artwork'),
+          hasOwnCover: r.readNullable<String>('cover_ref') != null,
         ),
     ];
     list.sort((a, b) {
@@ -179,6 +184,24 @@ class LibraryRepository {
       await (_db.update(_db.playlists)..where((p) => p.id.equals(id))).write(
         PlaylistsCompanion(
           name: Value(clean),
+          clock: Value(stamp.clock),
+          originDevice: Value(stamp.originDevice),
+          localSeq: Value(stamp.localSeq),
+        ),
+      );
+      return const Ok(null);
+    });
+  }
+
+  /// Gives the playlist its own cover (an art cache ref), or with null goes
+  /// back to the first song's artwork. Syncs like any other playlist edit.
+  Future<Result<void>> setPlaylistCover(String id, String? coverRef) {
+    return guardDb(_db, () async {
+      if (await _livePlaylist(id) == null) return _notFound('playlist $id');
+      final stamp = await _stamp.next(id: id);
+      await (_db.update(_db.playlists)..where((p) => p.id.equals(id))).write(
+        PlaylistsCompanion(
+          coverRef: Value(coverRef),
           clock: Value(stamp.clock),
           originDevice: Value(stamp.originDevice),
           localSeq: Value(stamp.localSeq),

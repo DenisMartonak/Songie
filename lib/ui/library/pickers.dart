@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,6 +39,20 @@ final audioFilePickerProvider = Provider<AudioFilePicker>(
       allowedExtensions: const ['mp3'],
     );
     return file?.path;
+  },
+);
+
+/// Asks the user for a picture and returns its bytes; null when cancelled.
+typedef ImagePicker = Future<Uint8List?> Function();
+
+final imagePickerProvider = Provider<ImagePicker>(
+  (ref) => () async {
+    final file = await FilePicker.pickFile(
+      dialogTitle: 'Choose a cover picture',
+      type: FileType.image,
+    );
+    final path = file?.path;
+    return path == null ? null : File(path).readAsBytes();
   },
 );
 

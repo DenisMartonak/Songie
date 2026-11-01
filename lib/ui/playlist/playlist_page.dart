@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -475,9 +476,37 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
         } else {
           context.go('/library');
         }
+      case _MenuAction.changeCover:
+        await _changeCover();
+      case _MenuAction.removeCover:
+        final result = await _repo.setPlaylistCover(_id, null);
+        if (result is Err<void>) _say("Couldn't remove the cover");
       case _MenuAction.addSongs:
         await _addSongs();
     }
+  }
+
+  /// Asks for a picture, stores it square in the art cache (so it syncs like
+  /// song covers do) and makes it the playlist's cover.
+  Future<void> _changeCover() async {
+    final art = ref.read(artCacheProvider);
+    final repo = _repo;
+    final Uint8List? bytes;
+    try {
+      bytes = await ref.read(imagePickerProvider)();
+    } catch (e, s) {
+      AppLog.w('Picking a cover failed', e, s);
+      _say("Couldn't open that picture");
+      return;
+    }
+    if (bytes == null) return;
+    final coverRef = await art.put(bytes, squareCrop: true);
+    if (coverRef == null) {
+      _say("Couldn't use that picture");
+      return;
+    }
+    final result = await repo.setPlaylistCover(_id, coverRef);
+    if (result is Err<void>) _say("Couldn't change the cover");
   }
 
   Future<void> _addSongs() => showModalBottomSheet<void>(
@@ -495,7 +524,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
   }
 }
 
-enum _MenuAction { rename, delete, addSongs }
+enum _MenuAction { rename, changeCover, removeCover, delete, addSongs }
 
 /// The hero's pinned top bar.
 const double _barHeight = 56;
@@ -644,6 +673,7 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
                       height: _actionsHeight,
                       child: _HeroActions(
                         canPlay: canPlay,
+                        hasOwnCover: summary.hasOwnCover,
                         onShuffle: onShuffle,
                         onMenu: onMenu,
                       ),
@@ -802,11 +832,15 @@ class _HeroCover extends StatelessWidget {
 class _HeroActions extends StatelessWidget {
   const _HeroActions({
     required this.canPlay,
+    required this.hasOwnCover,
     required this.onShuffle,
     required this.onMenu,
   });
 
   final bool canPlay;
+
+  /// Offers Remove cover (back to the first song's artwork).
+  final bool hasOwnCover;
   final VoidCallback onShuffle;
   final ValueChanged<_MenuAction> onMenu;
 
@@ -831,13 +865,30 @@ class _HeroActions extends StatelessWidget {
             tooltip: 'More',
             icon: const Icon(Icons.more_horiz),
             onSelected: onMenu,
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: _MenuAction.rename, child: Text('Rename')),
-              PopupMenuItem(
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: _MenuAction.rename,
+                child: Text('Rename'),
+              ),
+              const PopupMenuItem(
+                key: Key('playlist.changeCover'),
+                value: _MenuAction.changeCover,
+                child: Text('Change cover'),
+              ),
+              if (hasOwnCover)
+                const PopupMenuItem(
+                  key: Key('playlist.removeCover'),
+                  value: _MenuAction.removeCover,
+                  child: Text('Remove cover'),
+                ),
+              const PopupMenuItem(
                 value: _MenuAction.addSongs,
                 child: Text('Add songs'),
               ),
-              PopupMenuItem(value: _MenuAction.delete, child: Text('Delete')),
+              const PopupMenuItem(
+                value: _MenuAction.delete,
+                child: Text('Delete'),
+              ),
             ],
           ),
           // The floating Play button sits here.

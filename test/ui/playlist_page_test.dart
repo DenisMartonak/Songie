@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -143,6 +144,88 @@ void main() {
     expect(await order(tester, id), ['t1', 't2', 't3']);
     expect(find.text('Added to queue'), findsOneWidget);
     expect([for (final t in h.player.state.queue) t.id], ['t2']);
+  });
+
+  group('cover', () {
+    const picked =
+        'yt2-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.jpg';
+
+    Future<String?> coverOf(WidgetTester tester, String id) => real(
+      tester,
+      () async => (await (h.db.select(
+        h.db.playlists,
+      )..where((p) => p.id.equals(id))).getSingle()).coverRef,
+    );
+
+    Future<void> openMenu(WidgetTester tester) async {
+      await tester.tap(find.byTooltip('More'));
+      await settle(tester);
+    }
+
+    uiTest('Change cover stores the picked picture as the cover', (
+      tester,
+    ) async {
+      final id = await threeSongs(tester);
+      final art = _FixedArtCache(picked);
+      await pumpPage(
+        tester,
+        id,
+        extraOverrides: [
+          artCacheProvider.overrideWithValue(art),
+          imagePickerProvider.overrideWithValue(
+            () async => Uint8List.fromList([1, 2, 3]),
+          ),
+        ],
+      );
+      await openMenu(tester);
+      expect(find.byKey(const Key('playlist.removeCover')), findsNothing);
+      await tester.tap(find.byKey(const Key('playlist.changeCover')));
+      await settle(tester);
+
+      expect(art.squareCropped, isTrue);
+      expect(await coverOf(tester, id), picked);
+      await openMenu(tester);
+      await tester.tap(find.byKey(const Key('playlist.removeCover')));
+      await settle(tester);
+      expect(await coverOf(tester, id), isNull);
+    });
+
+    uiTest('a picture that cannot be read says so and keeps the cover', (
+      tester,
+    ) async {
+      final id = await threeSongs(tester);
+      await pumpPage(
+        tester,
+        id,
+        extraOverrides: [
+          artCacheProvider.overrideWithValue(_FixedArtCache(null)),
+          imagePickerProvider.overrideWithValue(
+            () async => Uint8List.fromList([1, 2, 3]),
+          ),
+        ],
+      );
+      await openMenu(tester);
+      await tester.tap(find.byKey(const Key('playlist.changeCover')));
+      await settle(tester);
+      expect(find.text("Couldn't use that picture"), findsOneWidget);
+      expect(await coverOf(tester, id), isNull);
+    });
+
+    uiTest('cancelling the picker changes nothing', (tester) async {
+      final id = await threeSongs(tester);
+      await pumpPage(
+        tester,
+        id,
+        extraOverrides: [
+          artCacheProvider.overrideWithValue(_FixedArtCache(picked)),
+          imagePickerProvider.overrideWithValue(() async => null),
+        ],
+      );
+      await openMenu(tester);
+      await tester.tap(find.byKey(const Key('playlist.changeCover')));
+      await settle(tester);
+      expect(await coverOf(tester, id), isNull);
+    });
   });
 
   uiTest('undo restores the first and the last row too', (tester) async {
@@ -1010,4 +1093,18 @@ class _SeededPending extends PendingImports {
 
   @override
   Set<String> build() => initial;
+}
+
+/// Stores nothing; answers every put with [ref] (null: undecodable).
+class _FixedArtCache extends ArtCache {
+  _FixedArtCache(this.ref) : super(Directory('/nonexistent/songies-art'));
+
+  final String? ref;
+  bool squareCropped = false;
+
+  @override
+  Future<String?> put(Uint8List imageBytes, {bool squareCrop = false}) async {
+    squareCropped = squareCrop;
+    return ref;
+  }
 }
