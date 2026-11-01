@@ -90,6 +90,42 @@ void main() {
   Finder rescan(String path) => find.byKey(Key('settings.rescan.$path'));
   Finder remove(String path) => find.byKey(Key('settings.remove.$path'));
 
+  for (final (width, back) in [(400.0, true), (1280.0, false)]) {
+    uiTest(
+      'Settings over another page: Back ${back ? 'on a phone' : 'not on desktop'}',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          h.app(
+            initialLocation: '/home',
+            extraOverrides: [
+              storageUsageProvider.overrideWith(
+                (ref) async =>
+                    const StorageUsage(artBytes: 0, databaseBytes: 0),
+              ),
+            ],
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (_, _) => const Scaffold(body: Text('Home stub')),
+              ),
+              GoRoute(
+                path: '/settings',
+                builder: (_, _) => const Scaffold(body: SettingsPage()),
+              ),
+            ],
+          ),
+        );
+        await settle(tester);
+        GoRouter.of(tester.element(find.text('Home stub'))).push('/settings');
+        await settle(tester);
+        expect(find.byTooltip('Back'), back ? findsOneWidget : findsNothing);
+      },
+    );
+  }
+
   group('music folders', () {
     uiTest('lists each folder; Rescan scans that folder through the queue', (
       tester,

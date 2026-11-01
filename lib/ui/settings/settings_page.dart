@@ -18,6 +18,7 @@ import '../library/add_folder_flow.dart';
 import '../motion/motion.dart';
 import '../update/update_dialog.dart';
 import '../widgets/page_snack_bar.dart';
+import '../shell/adaptive_shell.dart' show phoneBreakpoint;
 import 'downloads_settings.dart';
 import 'playback_settings.dart';
 import 'storage_usage.dart';
@@ -61,7 +62,11 @@ class SettingsPage extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(8, 16, 16, 0),
             child: Row(
               children: [
-                if (context.canPop())
+                // Phones open Settings from Home's gear and need a way back;
+                // wide layouts reach it from the sidebar, which is the way
+                // back there.
+                if (context.canPop() &&
+                    MediaQuery.sizeOf(context).width < phoneBreakpoint)
                   IconButton(
                     tooltip: 'Back',
                     color: colors.text,
