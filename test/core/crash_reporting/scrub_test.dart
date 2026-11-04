@@ -5,12 +5,9 @@ import 'package:songies/core/crash_reporting/scrub.dart';
 
 void main() {
   test('scrubPaths hides POSIX, Android, Windows and file:// paths', () {
-    expect(
-      scrubPaths('/home/denis/Music/Jazz/a.flac: failed'),
-      '<path>: failed',
-    );
+    expect(scrubPaths('/home/denis/Music/Jazz/a.flac: failed'), '<path>');
     expect(scrubPaths('C:\\Users\\Denis\\Music\\a.mp3'), '<path>');
-    expect(scrubPaths('D:/Music/a.mp3, gone'), '<path>, gone');
+    expect(scrubPaths('D:/Music/a.mp3, gone'), '<path>');
     expect(scrubPaths(r'\\nas\share\a.mp3'), '<path>');
     expect(scrubPaths('file:///storage/emulated/0/x.m4a'), '<path>');
     expect(scrubPaths('open "/run/media/d/x y.mp3" now'), 'open "<path>" now');
@@ -28,11 +25,8 @@ void main() {
       scrubPaths("path = '/home/d/Don't Stop.mp3' (OS Error)"),
       "path = '<path>' (OS Error)",
     );
-    expect(scrubPaths('Failed /home/d/My Song.mp3: x'), 'Failed <path>: x');
-    expect(
-      scrubPaths(r'Failed C:\Users\d\My Song.flac: x'),
-      'Failed <path>: x',
-    );
+    expect(scrubPaths('Failed /home/d/My Song.mp3: x'), 'Failed <path>');
+    expect(scrubPaths(r'Failed C:\Users\d\My Song.flac: x'), 'Failed <path>');
     expect(scrubPaths('a /tmp/x.mp3 and later b.json'), 'a <path>');
   });
 
@@ -57,7 +51,13 @@ void main() {
       scrubPaths("copy '/home/a/x y' to '/tmp/b/it's z' now"),
       "copy '<path>' to '<path>' now",
     );
-    expect(scrubPaths('bad (/home/d/a b) after'), 'bad (<path>) after');
+    expect(scrubPaths('bad (/home/d/a b) after'), 'bad (<path>');
+  });
+
+  test('scrubPaths hides unquoted names holding commas and colons', () {
+    expect(scrubPaths('/home/d/Music/Simon, Garfunkel.mp3'), '<path>');
+    expect(scrubPaths('/home/d/Artist: Title.mp3'), '<path>');
+    expect(scrubPaths('bad /home/d/a: b\nnext line'), 'bad <path>\nnext line');
   });
 
   test('scrubPaths knows more roots and content URIs', () {

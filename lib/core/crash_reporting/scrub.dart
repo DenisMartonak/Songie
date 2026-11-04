@@ -11,9 +11,6 @@ final _pathStart = RegExp(
 /// Breadcrumb categories worth keeping; the last is the SDK's own lifecycle one.
 const _keptCategories = {'navigation', 'player', 'app.lifecycle'};
 
-/// Where an unquoted path ends: at one of these, or at the end of the line.
-final _unquotedEnd = RegExp(r': |, |; | \(|[)\]\n]');
-
 /// Where the path that starts at [start] (its text begins at [from]) ends.
 /// Privacy beats diagnostic text, so this over-scrubs rather than leak a name
 /// that holds spaces or apostrophes.
@@ -36,8 +33,9 @@ int _pathEnd(String text, int from, int start, int? nextStart) {
       if (close >= from) return close;
     }
   }
-  final m = _unquotedEnd.firstMatch(text.substring(from, line));
-  return m == null ? line : from + m.start;
+  // An unquoted path runs to the end of the line: names hold commas, colons
+  // and spaces, so no delimiter is safe.
+  return line;
 }
 
 /// Replaces absolute file paths in [text] with `<path>`.
