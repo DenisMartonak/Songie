@@ -314,6 +314,25 @@ void main() {
     expect(midway.width, lessThan(long.width));
   });
 
+  uiTest('update changes the text without a cross-fade', (tester) async {
+    _desktop(tester);
+    late Islands islands;
+    await tester.pumpWidget(_app(onGo: (i) => islands = i));
+    await tester.tap(find.text('Go'));
+    final id = islands.show('Scanning 1 of 9');
+    await tester.pumpAndSettle();
+    expect(islands.update(id, 'Scanning 2 of 9'), isTrue);
+    await tester.pump();
+    // Swapped at once: no outgoing copy fading out.
+    expect(find.text('Scanning 2 of 9'), findsOneWidget);
+    expect(find.text('Scanning 1 of 9'), findsNothing);
+    islands.show('Other');
+    await tester.pumpAndSettle();
+    expect(islands.update(id, 'Scanning 3 of 9'), isFalse);
+    expect(find.text('Other'), findsOneWidget);
+    expect(find.textContaining('Scanning'), findsNothing);
+  });
+
   uiTest('it stays above the anchor when the anchor moves', (tester) async {
     _desktop(tester);
     void go(Islands i) => i.show('Hi');

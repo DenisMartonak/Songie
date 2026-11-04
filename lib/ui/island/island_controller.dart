@@ -49,12 +49,24 @@ class IslandController extends ChangeNotifier {
   /// rebuild.
   int get serial => _serial;
 
-  /// Shows [m], replacing any message and restarting the timer.
-  void show(IslandMessage m) {
+  /// Shows [m], replacing any message and restarting the timer. Returns the
+  /// new [serial], which [update] takes.
+  int show(IslandMessage m) {
     _current = m;
     _serial++;
     _startTimer(m.duration);
     notifyListeners();
+    return _serial;
+  }
+
+  /// Swaps the message shown since [show] returned [serial] for [m] in
+  /// place, without the cross-fade or a new timer. Returns false, changing
+  /// nothing, when that message is no longer on show.
+  bool update(int serial, IslandMessage m) {
+    if (serial != _serial || _current == null) return false;
+    _current = m;
+    notifyListeners();
+    return true;
   }
 
   /// Hides the island.

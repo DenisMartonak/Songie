@@ -46,30 +46,31 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
   if (createPlaylist == null) return;
 
   // The island only holds text, so the progress is said again as it moves,
-  // at most once per [_scanIslandThrottle]: every show restarts the island's
-  // cross-fade, so faster updates would make it flicker.
+  // at most once per [_scanIslandThrottle], in place. Once another message
+  // replaces it, or the user dismisses it, the progress stays off the
+  // island; the result still shows.
   var shown = 'Looking for music in $name…';
   String? pending;
-  islands.show(shown, duration: _scanIslandDuration);
-  // Runs for the whole scan, so a lull in the progress never stops it.
-  final throttle = Timer.periodic(_scanIslandThrottle, (_) {
-    final text = pending;
-    if (text == null || text == shown) return;
-    pending = null;
-    shown = text;
-    islands.show(text, duration: _scanIslandDuration);
-  });
-  final progress = queue.current.listen((p) {
-    if (p == null || p.found == 0) return;
-    pending = 'Scanning $name · ${p.processed} of ${p.found}';
-  });
+  final id = islands.show(shown, duration: _scanIslandDuration);
+  Timer? throttle;
+  StreamSubscription<ScanProgress?>? progress;
   try {
+    // Runs for the whole scan, so a lull in the progress never stops it.
+    throttle = Timer.periodic(_scanIslandThrottle, (timer) {
+      final text = pending;
+      if (text == null || text == shown) return;
+      pending = null;
+      shown = text;
+      if (!islands.update(id, text)) timer.cancel();
+    });
+    progress = queue.current.listen((p) {
+      if (p == null || p.found == 0) return;
+      pending = 'Scanning $name · ${p.processed} of ${p.found}';
+    });
     final result = await queue.enqueue(
       path,
       createPlaylistNamed: createPlaylist ? _playlistNameFor(name) : null,
     );
-    await progress.cancel();
-    throttle.cancel();
     final summary = _summary(result, name);
     islands.show(
       summary,
@@ -77,9 +78,10 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
     );
   } catch (_) {
     // ScanQueue has already logged the details.
-    await progress.cancel();
-    throttle.cancel();
     islands.show("Couldn't scan $name", kind: IslandKind.failure);
+  } finally {
+    throttle?.cancel();
+    await progress?.cancel();
   }
 }
 

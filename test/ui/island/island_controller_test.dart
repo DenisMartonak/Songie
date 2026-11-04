@@ -124,4 +124,31 @@ void main() {
       c.dispose();
     });
   });
+
+  test('update changes the shown message in place, keeping its timer', () {
+    fakeAsync((async) {
+      final c = IslandController();
+      final id = c.show(const IslandMessage(text: 'A'));
+      async.elapse(const Duration(seconds: 3));
+      expect(c.update(id, const IslandMessage(text: 'B')), isTrue);
+      expect(c.current?.text, 'B');
+      expect(c.serial, id);
+      async.elapse(const Duration(seconds: 1));
+      expect(c.current, isNull);
+      c.dispose();
+    });
+  });
+
+  test('update does nothing once another message replaced it', () {
+    final c = IslandController();
+    final id = c.show(const IslandMessage(text: 'A'));
+    c.show(const IslandMessage(text: 'B'));
+    expect(c.update(id, const IslandMessage(text: 'C')), isFalse);
+    expect(c.current?.text, 'B');
+    c.dismiss();
+    final id2 = c.serial;
+    expect(c.update(id2, const IslandMessage(text: 'C')), isFalse);
+    expect(c.current, isNull);
+    c.dispose();
+  });
 }

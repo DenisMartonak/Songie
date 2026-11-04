@@ -282,22 +282,43 @@ class Islands {
   final _IslandHostState _host;
 
   /// Shows [text] on the island, replacing any message on show. With [song]
-  /// its cover is shown instead of the [kind]'s icon.
-  void show(
+  /// its cover is shown instead of the [kind]'s icon. Returns an id for
+  /// [update], or null when the host is gone.
+  int? show(
     String text, {
     IslandKind kind = IslandKind.info,
     Track? song,
     IslandAction? action,
     Duration duration = IslandMessage.defaultDuration,
   }) {
-    if (!_host.mounted) return;
-    _host._controller.show(
+    if (!_host.mounted) return null;
+    return _host._controller.show(
       IslandMessage(
         text: text,
         kind: kind,
         song: song,
         action: action,
         duration: duration,
+      ),
+    );
+  }
+
+  /// Changes the text of the message [show] returned [id] for, in place,
+  /// while it is still on show. Returns false when it is not (another
+  /// message replaced it, or it went away), and then shows nothing.
+  bool update(int? id, String text) {
+    if (id == null || !_host.mounted) return false;
+    final controller = _host._controller;
+    final m = controller.current;
+    if (m == null) return false;
+    return controller.update(
+      id,
+      IslandMessage(
+        text: text,
+        kind: m.kind,
+        song: m.song,
+        action: m.action,
+        duration: m.duration,
       ),
     );
   }

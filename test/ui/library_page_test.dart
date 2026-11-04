@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/library/library_scanner.dart';
+import 'package:songies/ui/island/island_controller.dart';
+import 'package:songies/ui/island/island_host.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/library/library_page.dart';
 import 'package:songies/ui/motion/motion.dart';
@@ -393,6 +395,64 @@ void main() {
       await tester.pump(const Duration(milliseconds: 800));
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Scanning Rock · 7 of 10'), findsOneWidget);
+
+      controller.add(progress(processed: 10, added: 10, done: true));
+      unawaited(controller.close());
+      await flush(tester);
+      await settle(tester);
+      expect(find.text('Added 10 songs from Rock'), findsOneWidget);
+    });
+
+    uiTest('another message during a scan stays up its full time', (
+      tester,
+    ) async {
+      final controller = StreamController<ScanProgress>();
+      h.scanner.onScan = (folder, name) => controller.stream;
+      await chooseFolder(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+      await flush(tester);
+      controller.add(progress(processed: 1, added: 1));
+      await tester.pump(const Duration(milliseconds: 800));
+
+      Islands.of(tester.element(find.byType(LibraryPage)))
+          .show('Added to queue', kind: IslandKind.success);
+      await tester.pump();
+      for (var i = 2; i <= 9; i++) {
+        controller.add(progress(processed: i, added: i));
+        await tester.pump(const Duration(milliseconds: 450));
+        expect(find.text('Added to queue'), findsOneWidget, reason: '$i');
+        expect(find.textContaining('Scanning Rock'), findsNothing);
+      }
+
+      controller.add(progress(processed: 10, added: 10, done: true));
+      unawaited(controller.close());
+      await flush(tester);
+      await settle(tester);
+      expect(find.text('Added 10 songs from Rock'), findsOneWidget);
+    });
+
+    uiTest('a dismissed scan island is not raised again by progress', (
+      tester,
+    ) async {
+      final controller = StreamController<ScanProgress>();
+      h.scanner.onScan = (folder, name) => controller.stream;
+      await chooseFolder(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+      await flush(tester);
+      controller.add(progress(processed: 4, added: 4));
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Scanning Rock · 4 of 10'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('island')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.byKey(const Key('island')), findsNothing);
+      for (var i = 5; i <= 9; i++) {
+        controller.add(progress(processed: i, added: i));
+        await tester.pump(const Duration(milliseconds: 800));
+        expect(find.byKey(const Key('island')), findsNothing, reason: '$i');
+      }
 
       controller.add(progress(processed: 10, added: 10, done: true));
       unawaited(controller.close());
