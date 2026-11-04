@@ -10,6 +10,7 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/contrast.dart';
 import '../motion/marquee.dart';
+import '../island/island_host.dart';
 import '../lyrics/lyrics_strip.dart';
 import '../lyrics/lyrics_view.dart';
 import '../motion/motion.dart';
@@ -794,13 +795,22 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
               );
             },
           ),
-          // Drawn a little higher than its slot: the top of its touch band
-          // overlaps the space under the artist.
-          Transform.translate(
-            offset: const Offset(0, -10),
-            child: const NowPlayingScrubber(),
+          // The island rises from behind the scrubber and controls, so it
+          // never covers them.
+          IslandAnchor(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drawn a little higher than its slot: the top of its touch
+                // band overlaps the space under the artist.
+                Transform.translate(
+                  offset: const Offset(0, -10),
+                  child: const NowPlayingScrubber(),
+                ),
+                const NowPlayingControls(),
+              ],
+            ),
           ),
-          const NowPlayingControls(),
         ],
       ),
     );

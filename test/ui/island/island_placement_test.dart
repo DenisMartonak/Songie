@@ -10,6 +10,7 @@ import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/downloads/downloads_banner.dart';
 import 'package:songies/ui/island/island_host.dart';
+import 'package:songies/ui/now_playing/now_playing_controls.dart';
 import 'package:songies/ui/shell/bottom_nav.dart';
 import 'package:songies/ui/shell/player_bar.dart';
 
@@ -103,7 +104,7 @@ void main() {
     expect(bottom, closeTo(tester.getRect(find.byType(BottomNav)).top - 10, 1));
   });
 
-  uiTest('full-screen player open: the island rises from the screen bottom', (
+  uiTest('full-screen player open: the island rises from the controls', (
     tester,
   ) async {
     final track = await seed(tester);
@@ -116,6 +117,44 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
     final rect = tester.getRect(find.byKey(const Key('island')));
-    expect(rect.bottom, closeTo(800 - 16, 1));
+    // The block starts at the scrubber's slot, which is drawn 10 px higher.
+    final scrubber = tester.getRect(find.byType(NowPlayingScrubber));
+    expect(rect.bottom, closeTo(scrubber.top, 1));
+    for (final f in [
+      find.byType(NowPlayingControls),
+      find.byType(NowPlayingScrubber),
+    ]) {
+      expect(rect.overlaps(tester.getRect(f)), isFalse);
+    }
+  });
+
+  uiTest('after the full-screen player closes, the player bar is used again', (
+    tester,
+  ) async {
+    final track = await seed(tester);
+    final router = await open(tester, width: 1280);
+    await real(tester, () => h.player.playQueue([track]));
+    await settle(tester);
+    openNowPlaying(router);
+    await settle(tester);
+    router.pop();
+    await settle(tester);
+    showIsland(tester);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    final bottom = tester.getRect(find.byKey(const Key('island'))).bottom;
+    expect(bottom, closeTo(tester.getRect(find.byType(PlayerBar)).top - 10, 1));
+  });
+
+  uiTest('phone with the keyboard open: above the keyboard', (tester) async {
+    await open(tester, width: 400);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pump();
+    showIsland(tester);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    final bottom = tester.getRect(find.byKey(const Key('island'))).bottom;
+    expect(bottom, closeTo(800 - 300 - 16, 1));
   });
 }
