@@ -46,6 +46,10 @@ const kEqPreset = 'eq_preset';
 /// default.
 const kDiscordPresence = 'discord_presence';
 
+/// Send anonymous crash reports (release builds only). Device-local, on by
+/// default.
+const kCrashReports = 'crash_reports';
+
 /// Set once YouTube songs flagged unavailable before age-restricted songs had
 /// their own error were unflagged for one more check. Device-local.
 const kUnavailableRecheckDone = 'unavailable_recheck_done';

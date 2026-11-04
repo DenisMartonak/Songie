@@ -86,6 +86,7 @@ dependencies:
   bonsoir: ^7.1.0
   url_launcher: ^6.3.1
   archive: ^4.6.0
+  sentry_flutter: ^10.3.0
 
 dev_dependencies:
   flutter_test:
