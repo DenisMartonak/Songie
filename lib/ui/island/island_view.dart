@@ -262,6 +262,8 @@ class _Content extends StatelessWidget {
       fontWeight: FontWeight.w500,
       height: 1.25,
       decoration: TextDecoration.none,
+      // Even-width digits, so a count that ticks up doesn't jiggle the pill.
+      fontFeatures: const [FontFeature.tabularFigures()],
     );
     final action = message.action;
 

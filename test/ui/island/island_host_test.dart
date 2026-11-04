@@ -333,6 +333,19 @@ void main() {
     expect(find.textContaining('Scanning'), findsNothing);
   });
 
+  uiTest('its text uses tabular figures, so counts do not jitter', (
+    tester,
+  ) async {
+    _desktop(tester);
+    await tester.pumpWidget(_app(onGo: (i) => i.show('Scanning 1 of 9')));
+    await _go(tester);
+    final text = tester.widget<Text>(find.text('Scanning 1 of 9'));
+    expect(
+      text.style?.fontFeatures,
+      contains(const FontFeature.tabularFigures()),
+    );
+  });
+
   uiTest('it stays above the anchor when the anchor moves', (tester) async {
     _desktop(tester);
     void go(Islands i) => i.show('Hi');
