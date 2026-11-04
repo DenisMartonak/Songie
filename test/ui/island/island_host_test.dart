@@ -19,6 +19,7 @@ Widget _app({
   required void Function(Islands islands) onGo,
   double barHeight = 72,
   bool anchor = true,
+  Key? anchorKey,
   bool reduceMotion = false,
   ThemeSpec theme = ThemeSpec.builtInDefault,
 }) {
@@ -47,7 +48,10 @@ Widget _app({
               ),
             ),
           ),
-          if (anchor) IslandAnchor(child: sizedBar) else sizedBar,
+          if (anchor)
+            IslandAnchor(key: anchorKey, child: sizedBar)
+          else
+            sizedBar,
         ],
       ),
     ),
@@ -384,6 +388,36 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
     expect(find.byKey(_island), findsNothing);
+  });
+
+  uiTest('an anchor remounted under another route does not take the island', (
+    tester,
+  ) async {
+    _desktop(tester);
+    await tester.pumpWidget(_app(onGo: (_) {}, anchorKey: const Key('a')));
+    final nav = tester.state<NavigatorState>(find.byType(Navigator));
+    nav.push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          body: Column(
+            children: [
+              const Expanded(child: Text('Page B')),
+              IslandAnchor(child: SizedBox(key: const Key('top'), height: 200)),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The page below builds its anchor afresh, so it registers last.
+    await tester.pumpWidget(_app(onGo: (_) {}, anchorKey: const Key('b')));
+    await tester.pumpAndSettle();
+    Islands.of(tester.element(find.text('Page B'))).show('Hi');
+    await tester.pumpAndSettle();
+    expect(
+      tester.getRect(find.byKey(_island)).bottom,
+      closeTo(800 - 200 - 10, 1),
+    );
   });
 
   uiTest('reduced motion fades without scaling', (tester) async {

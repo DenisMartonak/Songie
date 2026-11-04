@@ -146,6 +146,32 @@ void main() {
     expect(bottom, closeTo(tester.getRect(find.byType(PlayerBar)).top - 10, 1));
   });
 
+  uiTest('while the full-screen player closes, the island never covers the '
+      'player bar', (tester) async {
+    final track = await seed(tester);
+    final router = await open(tester, width: 1280);
+    await real(tester, () => h.player.playQueue([track]));
+    await settle(tester);
+    openNowPlaying(router);
+    await settle(tester);
+    showIsland(tester);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    router.pop();
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      final island = find.byKey(const Key('island'));
+      final bar = find.byType(PlayerBar);
+      if (island.evaluate().isEmpty || bar.evaluate().isEmpty) continue;
+      expect(
+        tester.getRect(island).bottom,
+        lessThanOrEqualTo(tester.getRect(bar).top),
+        reason: 'frame $i',
+      );
+    }
+    await settle(tester);
+  });
+
   uiTest('phone with the keyboard open: above the keyboard', (tester) async {
     await open(tester, width: 400);
     tester.view.viewInsets = const FakeViewPadding(bottom: 300);

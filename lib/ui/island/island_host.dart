@@ -62,12 +62,16 @@ class _IslandHostState extends State<IslandHost> {
     WidgetsBinding.instance.ensureVisualUpdate();
   }
 
-  /// The anchor's rect in the host's coordinates, or null when there is no
-  /// usable anchor (none, not laid out, collapsed, or under another route).
+  /// The rect of the newest anchor on the current route, in the host's
+  /// coordinates, or null when there is no usable anchor (none on the current
+  /// route, not laid out, or collapsed).
   Rect? _anchorRect() {
-    if (_anchors.isEmpty) return null;
-    final anchor = _anchors.last;
-    if (!anchor.mounted || !anchor._routeIsCurrent) return null;
+    // An older anchor counts too: while the full-screen player closes, its
+    // anchor's route is no longer current but the shell's already is.
+    final anchor = _anchors.reversed
+        .where((a) => a.mounted && a._routeIsCurrent)
+        .firstOrNull;
+    if (anchor == null) return null;
     final box = anchor.context.findRenderObject();
     if (box is! RenderBox || !box.attached || !box.hasSize) return null;
     if (box.size.height <= 0) return null;
@@ -160,7 +164,8 @@ class _IslandScope extends InheritedWidget {
 }
 
 /// Marks the widget the island comes out of (the player bar, or the phone's
-/// bottom stack). When several are mounted, the newest is used.
+/// bottom stack). When several are mounted, the newest one on the current
+/// route is used.
 class IslandAnchor extends StatefulWidget {
   const IslandAnchor({required this.child, super.key});
 
