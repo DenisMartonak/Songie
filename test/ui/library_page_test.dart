@@ -325,6 +325,9 @@ void main() {
       expect(find.text('Looking for music in Rock…'), findsOneWidget);
       controller.add(progress(processed: 4, added: 4));
       await flush(tester);
+      // Progress reaches the island once the throttle window is over.
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.text('Scanning Rock · 4 of 10'), findsOneWidget);
 
@@ -334,6 +337,40 @@ void main() {
       await settle(tester);
       expect(find.text('Added 10 songs from Rock'), findsOneWidget);
       expect(find.text('Scanning Rock · 10 of 10'), findsNothing);
+    });
+
+    uiTest('fast progress updates the island at most once per window', (
+      tester,
+    ) async {
+      final controller = StreamController<ScanProgress>();
+      h.scanner.onScan = (folder, name) => controller.stream;
+      await chooseFolder(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+      await flush(tester);
+      expect(find.text('Looking for music in Rock…'), findsOneWidget);
+
+      for (var i = 1; i <= 50; i++) {
+        controller.add(progress(processed: i, added: i, found: 100));
+        await tester.pump(const Duration(milliseconds: 5));
+      }
+      await tester.pump(const Duration(milliseconds: 100));
+      // Still inside the first window: nothing but the first message.
+      for (var i = 1; i <= 50; i++) {
+        expect(find.text('Scanning Rock · $i of 100'), findsNothing);
+      }
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump(const Duration(milliseconds: 400));
+      // One update, carrying the newest numbers.
+      expect(find.text('Scanning Rock · 50 of 100'), findsOneWidget);
+      expect(find.textContaining('Scanning Rock'), findsOneWidget);
+
+      controller.add(
+        progress(processed: 100, added: 100, found: 100, done: true),
+      );
+      unawaited(controller.close());
+      await flush(tester);
+      await settle(tester);
+      expect(find.text('Added 100 songs from Rock'), findsOneWidget);
     });
 
     uiTest('a failing scan shows a message instead of crashing', (

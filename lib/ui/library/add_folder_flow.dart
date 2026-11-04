@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -43,14 +45,27 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
   );
   if (createPlaylist == null) return;
 
-  // The island only holds text, so the progress is said again as it moves.
-  islands.show('Looking for music in $name…', duration: _scanIslandDuration);
+  // The island only holds text, so the progress is said again as it moves,
+  // at most once per [_scanIslandThrottle]: every show restarts the island's
+  // cross-fade, so faster updates would make it flicker.
+  var shown = 'Looking for music in $name…';
+  String? pending;
+  Timer? throttle;
+  void tick() {
+    throttle = null;
+    final text = pending;
+    if (text == null || text == shown) return;
+    pending = null;
+    shown = text;
+    islands.show(text, duration: _scanIslandDuration);
+    throttle = Timer(_scanIslandThrottle, tick);
+  }
+
+  islands.show(shown, duration: _scanIslandDuration);
+  throttle = Timer(_scanIslandThrottle, tick);
   final progress = queue.current.listen((p) {
     if (p == null || p.found == 0) return;
-    islands.show(
-      'Scanning $name · ${p.processed} of ${p.found}',
-      duration: _scanIslandDuration,
-    );
+    pending = 'Scanning $name · ${p.processed} of ${p.found}';
   });
   try {
     final result = await queue.enqueue(
@@ -58,6 +73,7 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
       createPlaylistNamed: createPlaylist ? _playlistNameFor(name) : null,
     );
     await progress.cancel();
+    throttle?.cancel();
     final summary = _summary(result, name);
     islands.show(
       summary,
@@ -66,12 +82,16 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
   } catch (_) {
     // ScanQueue has already logged the details.
     await progress.cancel();
+    throttle?.cancel();
     islands.show("Couldn't scan $name", kind: IslandKind.failure);
   }
 }
 
 /// How long the scan's progress stays up: until the result replaces it.
 const Duration _scanIslandDuration = Duration(days: 1);
+
+/// The least time between two progress updates on the island.
+const Duration _scanIslandThrottle = Duration(milliseconds: 700);
 
 /// What to tell the user when the folder picker could not open.
 String folderPickFailureMessage(FolderPickError error) => switch (error) {
