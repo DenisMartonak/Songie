@@ -746,61 +746,61 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
             ),
           ),
           const SizedBox(height: 20),
-          LayoutBuilder(
-            builder: (context, box) {
-              final width = box.maxWidth;
-              final shift = width > 0 ? _slide / width : 0.0;
-              return AnimatedSwitcher(
-                duration: motion.emphasized,
-                switchInCurve: Motion.emphasizedCurve,
-                switchOutCurve: Motion.emphasizedCurve,
-                layoutBuilder: (current, previous) => Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [...previous, ?current],
-                ),
-                transitionBuilder: (child, animation) {
-                  // The new title comes in from the skip side, the old one
-                  // leaves the other way: both move in the skip direction.
-                  final incoming = child.key == trackKey;
-                  final from = (incoming ? shift : -shift) * direction;
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      key: const Key('nowPlaying.titleSlide'),
-                      position: Tween(
-                        begin: Offset(from, 0),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
-                    ),
-                  );
-                },
-                child: SizedBox(
-                  key: trackKey,
-                  width: width,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _TitleAndArtist(
-                          title: track.title,
-                          artist: track.artist,
-                          trackId: track.id,
-                          playing: playing,
-                        ),
-                      ),
-                      FavoriteStar(song: MenuSong.track(track), size: 26),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-          // The island rises from behind the scrubber and controls, so it
-          // never covers them.
+          // The island rises from behind the title, scrubber and controls, so
+          // it sits over the bottom of the artwork and never covers them.
           IslandAnchor(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                LayoutBuilder(
+                  builder: (context, box) {
+                    final width = box.maxWidth;
+                    final shift = width > 0 ? _slide / width : 0.0;
+                    return AnimatedSwitcher(
+                      duration: motion.emphasized,
+                      switchInCurve: Motion.emphasizedCurve,
+                      switchOutCurve: Motion.emphasizedCurve,
+                      layoutBuilder: (current, previous) => Stack(
+                        alignment: Alignment.centerLeft,
+                        children: [...previous, ?current],
+                      ),
+                      transitionBuilder: (child, animation) {
+                        // The new title comes in from the skip side, the old one
+                        // leaves the other way: both move in the skip direction.
+                        final incoming = child.key == trackKey;
+                        final from = (incoming ? shift : -shift) * direction;
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            key: const Key('nowPlaying.titleSlide'),
+                            position: Tween(
+                              begin: Offset(from, 0),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: SizedBox(
+                        key: trackKey,
+                        width: width,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _TitleAndArtist(
+                                title: track.title,
+                                artist: track.artist,
+                                trackId: track.id,
+                                playing: playing,
+                              ),
+                            ),
+                            FavoriteStar(song: MenuSong.track(track), size: 26),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 // Drawn a little higher than its slot: the top of its touch
                 // band overlaps the space under the artist.
                 Transform.translate(

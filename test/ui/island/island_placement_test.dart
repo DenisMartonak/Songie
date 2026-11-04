@@ -9,10 +9,13 @@ import 'package:songies/router.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/downloads/downloads_banner.dart';
+import 'package:songies/ui/island/island_controller.dart';
 import 'package:songies/ui/island/island_host.dart';
+import 'package:songies/ui/motion/marquee.dart';
 import 'package:songies/ui/now_playing/now_playing_controls.dart';
 import 'package:songies/ui/shell/bottom_nav.dart';
 import 'package:songies/ui/shell/player_bar.dart';
+import 'package:songies/ui/widgets/favorite_star.dart';
 
 import '../../helpers/fake_lyrics_service.dart';
 import '../../helpers/ui_harness.dart';
@@ -104,29 +107,40 @@ void main() {
     expect(bottom, closeTo(tester.getRect(find.byType(BottomNav)).top - 10, 1));
   });
 
-  uiTest('full-screen player open: the island rises from the controls', (
-    tester,
-  ) async {
-    final track = await seed(tester);
-    final router = await open(tester, width: 1280);
-    await real(tester, () => h.player.playQueue([track]));
-    await settle(tester);
-    openNowPlaying(router);
-    await settle(tester);
-    showIsland(tester);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 600));
-    final rect = tester.getRect(find.byKey(const Key('island')));
-    // The block starts at the scrubber's slot, which is drawn 10 px higher.
-    final scrubber = tester.getRect(find.byType(NowPlayingScrubber));
-    expect(rect.bottom, closeTo(scrubber.top, 1));
-    for (final f in [
-      find.byType(NowPlayingControls),
-      find.byType(NowPlayingScrubber),
-    ]) {
-      expect(rect.overlaps(tester.getRect(f)), isFalse);
-    }
-  });
+  for (final width in [1280.0, 400.0]) {
+    final layout = width < 720 ? 'phone' : 'desktop';
+    uiTest('$layout full-screen player: a two-line island rises from above '
+        'the title, clear of it and of the controls', (tester) async {
+      final track = await seed(tester);
+      final router = await open(tester, width: width);
+      await real(tester, () => h.player.playQueue([track]));
+      await settle(tester);
+      openNowPlaying(router);
+      await settle(tester);
+      Islands.of(tester.element(find.byType(Scaffold).first)).show(
+        "Couldn't play Song one: the file could not be read from the "
+        'folder it was added from',
+        kind: IslandKind.failure,
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      final rect = tester.getRect(find.byKey(const Key('island')));
+      expect(rect.height, greaterThan(40), reason: 'two lines');
+      final covered = [
+        find.byType(Marquee),
+        find.text('Artist'),
+        find.byType(FavoriteStar),
+        find.byType(NowPlayingScrubber),
+        find.byType(NowPlayingControls),
+      ];
+      for (final f in covered) {
+        final target = tester.getRect(f.last);
+        expect(rect.overlaps(target), isFalse, reason: '$f');
+        // A visible gap, not just no overlap.
+        expect(rect.bottom, lessThanOrEqualTo(target.top - 6), reason: '$f');
+      }
+    });
+  }
 
   uiTest('after the full-screen player closes, the player bar is used again', (
     tester,
