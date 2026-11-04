@@ -93,6 +93,17 @@ void main() {
       matching: find.byType(FavoriteStar),
     );
     expect(star, findsOneWidget);
+
+    // The star sits right after the title, not at the far edge.
+    final title = find.descendant(
+      of: find.byType(PlayerBar),
+      matching: find.text('Song one'),
+    );
+    final titleRect = tester.getRect(title);
+    final starRect = tester.getRect(star);
+    expect(starRect.left - titleRect.right, inInclusiveRange(0, 12));
+    expect(starRect.center.dy, closeTo(titleRect.center.dy, 4));
+
     await tester.tap(star);
     await settle(tester);
     expect(await starred(tester, 't1'), isTrue);

@@ -64,10 +64,19 @@ Future<void> toggleFavorite(
 /// A star: filled when [song] is a favorite, outlined when not. One tap
 /// toggles it; it never opens anything.
 class FavoriteStar extends ConsumerWidget {
-  const FavoriteStar({required this.song, this.size = 20, super.key});
+  const FavoriteStar({
+    required this.song,
+    this.size = 20,
+    this.dense = false,
+    super.key,
+  });
 
   final MenuSong song;
   final double size;
+
+  /// Drops the usual 48 px button padding, so the star can sit inside a
+  /// line of text (as after the title in the player bar).
+  final bool dense;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -75,6 +84,11 @@ class FavoriteStar extends ConsumerWidget {
     final on = isFavorite(ref, song);
     return IconButton(
       tooltip: on ? 'Remove from Favorites' : 'Add to Favorites',
+      padding: dense ? const EdgeInsets.all(2) : null,
+      constraints: dense ? const BoxConstraints() : null,
+      style: dense
+          ? const ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap)
+          : null,
       icon: Icon(
         on ? Icons.star_rounded : Icons.star_outline_rounded,
         size: size,

@@ -95,15 +95,29 @@ class _NowPlaying extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                track.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
+              // The star follows the title; a long title shrinks with an
+              // ellipsis so the star stays visible.
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      track.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  FavoriteStar(
+                    song: MenuSong.track(track),
+                    size: 16,
+                    dense: true,
+                  ),
+                ],
               ),
               Text(
                 track.artist,
@@ -114,7 +128,6 @@ class _NowPlaying extends ConsumerWidget {
             ],
           ),
         ),
-        FavoriteStar(song: MenuSong.track(track), size: 18),
       ],
     );
   }
