@@ -36,9 +36,7 @@ void main() {
   test('a custom duration is kept', () {
     fakeAsync((async) {
       final c = IslandController();
-      c.show(
-        const IslandMessage(text: 'Hi', duration: Duration(seconds: 2)),
-      );
+      c.show(const IslandMessage(text: 'Hi', duration: Duration(seconds: 2)));
       async.elapse(const Duration(milliseconds: 1999));
       expect(c.current, isNotNull);
       async.elapse(ms);
@@ -76,6 +74,26 @@ void main() {
       );
       c.runAction();
       expect(calls, 1);
+      expect(c.current, isNull);
+      c.dispose();
+    });
+  });
+
+  test('an action that shows a new message keeps the new one', () {
+    fakeAsync((async) {
+      final c = IslandController();
+      c.show(
+        IslandMessage(
+          text: 'Removed',
+          action: IslandAction(
+            label: 'Undo',
+            onPressed: () => c.show(const IslandMessage(text: 'Restored')),
+          ),
+        ),
+      );
+      c.runAction();
+      expect(c.current?.text, 'Restored');
+      async.elapse(const Duration(seconds: 4));
       expect(c.current, isNull);
       c.dispose();
     });

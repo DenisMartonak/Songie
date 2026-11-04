@@ -75,10 +75,12 @@ class IslandController extends ChangeNotifier {
     if (m != null) _startTimer(m.duration);
   }
 
-  /// Runs the current action, then hides the island.
+  /// Runs the current action, then hides the island, unless the action
+  /// showed a new message (an Undo that confirms itself, say).
   void runAction() {
+    final serial = _serial;
     _current?.action?.onPressed();
-    dismiss();
+    if (_serial == serial) dismiss();
   }
 
   void _startTimer(Duration d) {
