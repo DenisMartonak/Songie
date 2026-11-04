@@ -202,7 +202,9 @@ void main() {
       expect(find.text("Couldn't scan Rock"), findsOneWidget);
     });
 
-    uiTest('Rescan all names every folder that fails', (tester) async {
+    uiTest('Rescan all names every folder that fails, in one message', (
+      tester,
+    ) async {
       h.scanner.onScan = (folder, _) =>
           Stream.error(const FileSystemException('gone'));
       await seedFolders(tester, ['/music/Rock', '/music/Jazz']);
@@ -210,9 +212,26 @@ void main() {
 
       await tester.tap(find.byKey(const Key('settings.rescanAll')));
       await settle(tester);
-      // Jazz sorts first; the island shows the last failure only.
-      expect(find.text("Couldn't scan Rock"), findsOneWidget);
-      expect(find.text("Couldn't scan Jazz"), findsNothing);
+      expect(find.text("Couldn't scan Jazz and Rock"), findsOneWidget);
+    });
+
+    uiTest('Rescan all lists three failing folders with commas', (
+      tester,
+    ) async {
+      h.scanner.onScan = (folder, _) => folder == '/music/Ok'
+          ? const Stream.empty()
+          : Stream.error(const FileSystemException('gone'));
+      await seedFolders(tester, [
+        '/music/Rock',
+        '/music/Jazz',
+        '/music/Ok',
+        '/music/Pop',
+      ]);
+      await pumpSettings(tester);
+
+      await tester.tap(find.byKey(const Key('settings.rescanAll')));
+      await settle(tester);
+      expect(find.text("Couldn't scan Jazz, Pop and Rock"), findsOneWidget);
     });
 
     uiTest('Remove asks first, then forgets the folder but keeps its songs', (

@@ -182,8 +182,8 @@ class _FoldersSection extends ConsumerWidget {
   }
 }
 
-/// Queues a scan of each of [paths] (they run one at a time) and reports
-/// every one that fails.
+/// Queues a scan of each of [paths] (they run one at a time) and, once all
+/// are done, names every one that failed in one message.
 Future<void> _rescan(
   BuildContext context,
   WidgetRef ref,
@@ -205,15 +205,18 @@ Future<void> _rescan(
           .whenComplete(() => _pendingRescans.remove(path)),
     );
   }
+  final failed = <String>[];
   for (final (i, run) in runs.indexed) {
-    if (!await run) {
-      islands.show(
-        "Couldn't scan ${folderDisplayName(queued[i])}",
-        kind: IslandKind.failure,
-      );
-    }
+    if (!await run) failed.add(folderDisplayName(queued[i]));
   }
+  if (failed.isEmpty) return;
+  islands.show("Couldn't scan ${_listed(failed)}", kind: IslandKind.failure);
 }
+
+/// "A", "A and B", "A, B and C".
+String _listed(List<String> names) => names.length == 1
+    ? names.single
+    : '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}';
 
 /// Folders queued for a rescan from this page whose scan has not finished.
 final Set<String> _pendingRescans = {};
