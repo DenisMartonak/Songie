@@ -69,13 +69,16 @@ class PlayerErrorIslands extends ConsumerWidget {
         } else {
           return;
         }
+        // Looked up now: the island can outlive this widget (the shell is
+        // rebuilt when the window crosses the phone width).
+        final router = _needsSignIn(reason) ? GoRouter.maybeOf(context) : null;
         Islands.of(context).show(
           message,
           kind: IslandKind.failure,
-          action: _needsSignIn(reason)
+          action: router != null
               ? IslandAction(
                   label: 'Sign in',
-                  onPressed: () => GoRouter.of(context).go('/settings'),
+                  onPressed: () => router.go('/settings'),
                 )
               : null,
         );

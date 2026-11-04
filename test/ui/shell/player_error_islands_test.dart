@@ -107,6 +107,59 @@ void main() {
       });
     }
 
+    testWidgets('Sign in still works after the shell that showed it is gone', (
+      tester,
+    ) async {
+      final mounted = ValueNotifier(true);
+      addTearDown(mounted.dispose);
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => Scaffold(
+              body: ValueListenableBuilder<bool>(
+                valueListenable: mounted,
+                builder: (_, on, _) => on
+                    ? const PlayerErrorIslands(child: SizedBox())
+                    : const SizedBox(),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/settings',
+            builder: (_, _) => const Scaffold(body: Text('settings page')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [playerStateProvider.overrideWith((ref) => states.stream)],
+          child: MaterialApp.router(
+            routerConfig: router,
+            builder: (_, c) => IslandHost(child: c!),
+          ),
+        ),
+      );
+      await push(tester, const PlayerState());
+      await push(
+        tester,
+        const PlayerState(
+          notice: PlayerNotice(
+            trackTitle: 'Song',
+            reason: 'ytdlp:ageRestricted:x',
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      // The shell is rebuilt (say, the window crossed the phone width).
+      mounted.value = false;
+      await tester.pump();
+      await tester.tap(find.text('Sign in'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('settings page'), findsOneWidget);
+    });
+
     testWidgets('other skips have no action', (tester) async {
       await pumpIslands(tester);
       await push(tester, const PlayerState());
