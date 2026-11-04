@@ -258,7 +258,10 @@ Future<void> showSongMenu(
 
   switch (action) {
     case SongMenuAction.addToQueue:
-      if (await track() case final t?) await player.addToQueue([t]);
+      if (await track() case final t?) {
+        await player.addToQueue([t]);
+        islands.show('Added to queue', kind: IslandKind.success, song: t);
+      }
     case SongMenuAction.addToPlaylist:
       final t = await track();
       if (t != null && context.mounted) {

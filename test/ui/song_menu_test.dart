@@ -13,6 +13,7 @@ import 'package:songies/ui/now_playing/now_playing_page.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/search/search_page.dart';
 import 'package:songies/library/favorites.dart';
+import 'package:songies/ui/widgets/artwork.dart';
 import 'package:songies/ui/widgets/favorite_star.dart';
 
 import '../helpers/test_db.dart';
@@ -729,6 +730,21 @@ void main() {
       await choose(tester, 'addToQueue');
       expect(queueIds(), ['t1', 't2']);
       expect(h.ytStore.upserted, isEmpty);
+    });
+
+    uiTest('Add to queue shows an island with the song', (tester) async {
+      await recents(tester);
+      await pumpHome(tester);
+      await longPress(tester, recentRow);
+      await choose(tester, 'addToQueue');
+      expect(find.text('Added to queue'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('island')),
+          matching: find.byType(Artwork),
+        ),
+        findsOneWidget,
+      );
     });
 
     uiTest('there is no Play next', (tester) async {
