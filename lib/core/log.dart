@@ -67,3 +67,25 @@ class AppLog {
     }
   }
 }
+
+/// Sends uncaught errors to the log file, keeping the default presentation.
+/// Install before crash reporting, which hands errors on to these handlers.
+void installErrorLogging() {
+  final previous = FlutterError.onError;
+  FlutterError.onError = (details) {
+    AppLog.e(
+      'Flutter error: ${details.exceptionAsString()}',
+      details.exception,
+      details.stack,
+    );
+    if (previous != null) {
+      previous(details);
+    } else {
+      FlutterError.presentError(details);
+    }
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    AppLog.e('Uncaught error', error, stack);
+    return false;
+  };
+}

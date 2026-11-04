@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
@@ -13,6 +12,9 @@ import 'package:just_audio/just_audio.dart'
 import 'app.dart';
 import 'core/app_version.dart';
 import 'core/connectivity.dart';
+import 'core/crash_reporting/crash_breadcrumbs.dart';
+import 'core/crash_reporting/crash_config.dart';
+import 'core/crash_reporting/crash_reporter.dart';
 import 'core/log.dart';
 import 'player/age_restricted_stream_source.dart';
 import 'player/runtime_prompter.dart';
@@ -87,7 +89,7 @@ Future<void> main() async {
   final paths = await AppPaths.resolve();
   await paths.ensureCreated();
   await AppLog.init(paths.logs);
-  _installErrorLogging();
+  installErrorLogging();
 
   final db = AppDatabase.open(paths.db);
   final stamp = await SyncStamp.load(db);
@@ -114,6 +116,15 @@ Future<void> main() async {
   );
 
   final settings = SettingsRepository(db);
+
+  // Crash reports: only in a release build with a DSN, and only while the
+  // setting is on. Started before anything else can fail, after the log
+  // handlers so Sentry hands errors on to them.
+  final crashReporter = CrashReporter.sentry();
+  await crashReporter.applySetting(
+    await settings.getBool(kCrashReports, fallback: true),
+  );
+  crashReporter.follow(settings.watchBool(kCrashReports, fallback: true));
 
   // Imported fonts must be registered before the first frame.
   final fonts = FontService(db, stamp, paths.fonts);
@@ -354,6 +365,12 @@ Future<void> main() async {
       clientId: kDiscordClientId,
     );
   }
+  // Route templates and play/pause/skip words as crash breadcrumbs; nothing
+  // is recorded while Sentry is off.
+  if (crashReportingBuilt()) {
+    followRoutes(router);
+    followPlayer(player.states);
+  }
   runApp(
     UncontrolledProviderScope(
       container: container,
@@ -423,27 +440,6 @@ void _deleteLeftoverCookies(Directory dir) {
   } catch (e) {
     AppLog.w('Could not clear old yt-dlp cookies files: $e');
   }
-}
-
-/// Sends uncaught errors to the log file, keeping the default presentation.
-void _installErrorLogging() {
-  final previous = FlutterError.onError;
-  FlutterError.onError = (details) {
-    AppLog.e(
-      'Flutter error: ${details.exceptionAsString()}',
-      details.exception,
-      details.stack,
-    );
-    if (previous != null) {
-      previous(details);
-    } else {
-      FlutterError.presentError(details);
-    }
-  };
-  PlatformDispatcher.instance.onError = (error, stack) {
-    AppLog.e('Uncaught error', error, stack);
-    return false;
-  };
 }
 
 Future<void> _initDesktopWindow() async {
