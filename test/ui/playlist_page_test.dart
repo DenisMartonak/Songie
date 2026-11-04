@@ -24,6 +24,7 @@ import 'package:songies/ui/motion/shimmer.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/library/add_songs_sheet.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
+import 'package:songies/ui/widgets/artwork.dart';
 import 'package:songies/library/favorites.dart';
 
 import '../helpers/test_db.dart';
@@ -145,6 +146,19 @@ void main() {
     expect(await order(tester, id), ['t1', 't2', 't3']);
     expect(find.text('Added to queue'), findsOneWidget);
     expect([for (final t in h.player.state.queue) t.id], ['t2']);
+    // About one song, so the island shows its cover, not a check.
+    final island = find.byKey(const Key('island'));
+    expect(
+      find.descendant(of: island, matching: find.byType(Artwork)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: island,
+        matching: find.byIcon(Icons.check_circle_rounded),
+      ),
+      findsNothing,
+    );
   });
 
   group('cover', () {

@@ -299,9 +299,12 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
 
   void _queue(PlaylistTrack row) {
     ref.read(playerServiceProvider).addToQueue([row.track]);
-    Islands.of(
-      context,
-    ).show('Added to queue', kind: IslandKind.success, duration: _queuedIsland);
+    Islands.of(context).show(
+      'Added to queue',
+      kind: IslandKind.success,
+      song: row.track,
+      duration: _queuedIsland,
+    );
   }
 
   static const Duration _queuedIsland = Duration(seconds: 2);
