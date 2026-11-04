@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:songies/core/crash_reporting/scrub.dart';
@@ -21,6 +22,90 @@ void main() {
     expect(scrubPaths('no path here'), 'no path here');
     expect(scrubPaths('/playlist/:id'), '/playlist/:id');
   });
+
+  test('scrubPaths hides whole quoted and spaced names', () {
+    expect(
+      scrubPaths("path = '/home/d/Don't Stop.mp3' (OS Error)"),
+      "path = '<path>' (OS Error)",
+    );
+    expect(scrubPaths('Failed /home/d/My Song.mp3: x'), 'Failed <path>: x');
+    expect(
+      scrubPaths(r'Failed C:\Users\d\My Song.flac: x'),
+      'Failed <path>: x',
+    );
+    expect(
+      scrubPaths('a /tmp/x.mp3 and later b.json'),
+      'a <path> and later b.json',
+    );
+  });
+
+  test('scrubPaths knows more roots and content URIs', () {
+    for (final p in [
+      '/sdcard/a',
+      '/root/a',
+      '/Users/d/a',
+      '/var/a',
+      '/opt/a',
+      '/proc/1/a',
+      '~/Music/a',
+    ]) {
+      expect(scrubPaths('x $p y'), 'x <path> y', reason: p);
+    }
+    expect(scrubPaths('content://media/external/audio/media/12'), '<path>');
+  });
+
+  test('scrubPaths leaves URLs and package URIs alone', () {
+    for (final t in [
+      'https://api.x.com/v1/a',
+      'package:songies/data/repo.dart',
+      'http://h/home/x',
+    ]) {
+      expect(scrubPaths(t), t);
+    }
+  });
+
+  test(
+    'scrubEvent scrubs extra, tags, contexts, frames and drops other crumbs',
+    () {
+      final frame = SentryStackFrame(
+        absPath: '/home/d/app/x.dart',
+        fileName: '/home/d/app/x.dart',
+      );
+      final event = SentryEvent(
+        exceptions: [
+          SentryException(
+            type: 'E',
+            value: 'v',
+            stackTrace: SentryStackTrace(frames: [frame]),
+          ),
+        ],
+        extra: {
+          'a': '/tmp/z',
+          'n': {'k': '/tmp/q'},
+        },
+        tags: {'t': '/tmp/z'},
+        transaction: '/tmp/t',
+        fingerprint: ['/tmp/f'],
+        breadcrumbs: [
+          Breadcrumb(category: 'http'),
+          Breadcrumb(category: 'player'),
+        ],
+      );
+      event.contexts['custom'] = '/tmp/c';
+      final out = scrubEvent(event, Hint())!;
+      expect(frame.absPath, '<path>');
+      expect(frame.fileName, '<path>');
+      expect(out.extra, {
+        'a': '<path>',
+        'n': {'k': '<path>'},
+      });
+      expect(out.tags, {'t': '<path>'});
+      expect(out.transaction, '<path>');
+      expect(out.fingerprint, ['<path>']);
+      expect(out.contexts['custom'], '<path>');
+      expect(out.breadcrumbs!.map((c) => c.category), ['player']);
+    },
+  );
 
   test('scrubEvent scrubs exception values and drops user and server name', () {
     final event = SentryEvent(
