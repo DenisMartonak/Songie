@@ -8,52 +8,51 @@ final _pathStart = RegExp(
   r'|(?<![\w:/.~-])(?:~/|/(?:home|storage|sdcard|root|Users|var|opt|proc|data|tmp|media|mnt|run/media)/)',
 );
 
-/// A file extension that ends a path whose name may hold spaces.
-final _extension = RegExp(
-  r'\.(?:mp3|flac|m4a|aac|ogg|opus|wav|wma|webm|mp4|jpg|jpeg|png|webp|json|db|sqlite|lrc)(?!\w)',
-  caseSensitive: false,
-);
-
 /// Breadcrumb categories worth keeping; the last is the SDK's own lifecycle one.
 const _keptCategories = {'navigation', 'player', 'app.lifecycle'};
 
-/// Where the path that starts at [from] in [text] ends.
-int _pathEnd(String text, int from, int start) {
-  final lineEnd = text.indexOf('\n', from);
-  final line = lineEnd < 0 ? text.length : lineEnd;
-  // Inside quotes the path runs to the closing quote: one not followed by a
-  // letter or digit, so an apostrophe in a name ("Don't Stop") doesn't end it.
+/// Where an unquoted path ends: at one of these, or at the end of the line.
+final _unquotedEnd = RegExp(r': |, |; | \(|[)\]\n]');
+
+/// Where the path that starts at [start] (its text begins at [from]) ends.
+/// Privacy beats diagnostic text, so this over-scrubs rather than leak a name
+/// that holds spaces or apostrophes.
+int _pathEnd(String text, int from, int start, int? nextStart) {
+  final nl = text.indexOf('\n', from);
+  final line = nl < 0 ? text.length : nl;
   if (start > 0) {
     final q = text[start - 1];
     if (q == '"' || q == "'" || q == '`') {
-      for (var i = text.indexOf(q, from); i >= 0 && i < line;) {
-        final next = i + 1 < text.length ? text[i + 1] : '';
-        if (!RegExp(r'\w').hasMatch(next)) return i;
-        i = text.indexOf(q, i + 1);
+      // A quoted path ends at the last same quote before the next path, before
+      // an ` (OS Error` note, or before the end of the line.
+      var limit = line;
+      final os = text.indexOf(' (OS Error', from);
+      if (os >= 0 && os < limit) limit = os;
+      if (nextStart != null && nextStart < limit) {
+        limit = nextStart;
+        if (text[limit - 1] == q) limit--;
       }
+      final close = limit > from ? text.lastIndexOf(q, limit - 1) : -1;
+      if (close >= from) return close;
     }
   }
-  // Otherwise through the first file extension on the line (the name may hold
-  // spaces), or to the next whitespace or quote.
-  final ext = _extension.firstMatch(text.substring(from, line));
-  if (ext != null) return from + ext.end;
-  var i = from;
-  while (i < line && !' \t\r"\'`'.contains(text[i])) {
-    i++;
-  }
-  return i;
+  final m = _unquotedEnd.firstMatch(text.substring(from, line));
+  return m == null ? line : from + m.start;
 }
 
 /// Replaces absolute file paths in [text] with `<path>`.
 String scrubPaths(String text) {
   final out = StringBuffer();
   var pos = 0;
-  for (final m in _pathStart.allMatches(text)) {
+  final starts = _pathStart.allMatches(text).toList();
+  for (var i = 0; i < starts.length; i++) {
+    final m = starts[i];
     if (m.start < pos) continue;
     out
       ..write(text.substring(pos, m.start))
       ..write('<path>');
-    pos = _pathEnd(text, m.end, m.start);
+    final next = i + 1 < starts.length ? starts[i + 1].start : null;
+    pos = _pathEnd(text, m.end, m.start, next);
   }
   out.write(text.substring(pos));
   return out.toString();

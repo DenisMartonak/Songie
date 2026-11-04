@@ -5,9 +5,12 @@ import 'package:songies/core/crash_reporting/scrub.dart';
 
 void main() {
   test('scrubPaths hides POSIX, Android, Windows and file:// paths', () {
-    expect(scrubPaths('/home/denis/Music/Jazz/a.flac failed'), '<path> failed');
+    expect(
+      scrubPaths('/home/denis/Music/Jazz/a.flac: failed'),
+      '<path>: failed',
+    );
     expect(scrubPaths('C:\\Users\\Denis\\Music\\a.mp3'), '<path>');
-    expect(scrubPaths('D:/Music/a.mp3 gone'), '<path> gone');
+    expect(scrubPaths('D:/Music/a.mp3, gone'), '<path>, gone');
     expect(scrubPaths(r'\\nas\share\a.mp3'), '<path>');
     expect(scrubPaths('file:///storage/emulated/0/x.m4a'), '<path>');
     expect(scrubPaths('open "/run/media/d/x y.mp3" now'), 'open "<path>" now');
@@ -15,10 +18,7 @@ void main() {
       scrubPaths("can't read '/data/user/0/app/f' ok"),
       "can't read '<path>' ok",
     );
-    expect(
-      scrubPaths('/tmp/a and /mnt/b and /media/c'),
-      '<path> and <path> and <path>',
-    );
+    expect(scrubPaths('/tmp/a and /mnt/b and /media/c'), '<path>');
     expect(scrubPaths('no path here'), 'no path here');
     expect(scrubPaths('/playlist/:id'), '/playlist/:id');
   });
@@ -33,10 +33,31 @@ void main() {
       scrubPaths(r'Failed C:\Users\d\My Song.flac: x'),
       'Failed <path>: x',
     );
+    expect(scrubPaths('a /tmp/x.mp3 and later b.json'), 'a <path>');
+  });
+
+  test('scrubPaths hides whole paths with apostrophes and spaces', () {
     expect(
-      scrubPaths('a /tmp/x.mp3 and later b.json'),
-      'a <path> and later b.json',
+      scrubPaths(
+        "PathNotFoundException: Cannot open file, path = '/storage/emulated/0/Music/Guns N' Roses - Don't Cry.flac' (OS Error: No such file or directory, errno = 2)",
+      ),
+      "PathNotFoundException: Cannot open file, path = '<path>' (OS Error: No such file or directory, errno = 2)",
     );
+    expect(
+      scrubPaths('Cannot open /home/d/My Private Folder/secret stuff'),
+      'Cannot open <path>',
+    );
+    expect(
+      scrubPaths(
+        r"FileSystemException: Cannot open file, path = 'D:\Hudba\AC DC - It's a Long Way.mp3' (OS Error: x, errno = 2)",
+      ),
+      "FileSystemException: Cannot open file, path = '<path>' (OS Error: x, errno = 2)",
+    );
+    expect(
+      scrubPaths("copy '/home/a/x y' to '/tmp/b/it's z' now"),
+      "copy '<path>' to '<path>' now",
+    );
+    expect(scrubPaths('bad (/home/d/a b) after'), 'bad (<path>) after');
   });
 
   test('scrubPaths knows more roots and content URIs', () {
@@ -49,7 +70,7 @@ void main() {
       '/proc/1/a',
       '~/Music/a',
     ]) {
-      expect(scrubPaths('x $p y'), 'x <path> y', reason: p);
+      expect(scrubPaths('x $p y'), 'x <path>', reason: p);
     }
     expect(scrubPaths('content://media/external/audio/media/12'), '<path>');
   });
