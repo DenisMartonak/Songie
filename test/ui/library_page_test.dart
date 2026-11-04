@@ -373,6 +373,34 @@ void main() {
       expect(find.text('Added 100 songs from Rock'), findsOneWidget);
     });
 
+    uiTest('progress after a lull still reaches the island', (tester) async {
+      final controller = StreamController<ScanProgress>();
+      h.scanner.onScan = (folder, name) => controller.stream;
+      await chooseFolder(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+      await flush(tester);
+
+      // Nothing for well over a window.
+      await tester.pump(const Duration(milliseconds: 2000));
+      controller.add(progress(processed: 3, added: 3));
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Scanning Rock · 3 of 10'), findsOneWidget);
+
+      // Another lull, then more progress.
+      await tester.pump(const Duration(milliseconds: 2000));
+      controller.add(progress(processed: 7, added: 7));
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Scanning Rock · 7 of 10'), findsOneWidget);
+
+      controller.add(progress(processed: 10, added: 10, done: true));
+      unawaited(controller.close());
+      await flush(tester);
+      await settle(tester);
+      expect(find.text('Added 10 songs from Rock'), findsOneWidget);
+    });
+
     uiTest('a failing scan shows a message instead of crashing', (
       tester,
     ) async {

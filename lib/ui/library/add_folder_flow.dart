@@ -50,19 +50,15 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
   // cross-fade, so faster updates would make it flicker.
   var shown = 'Looking for music in $name…';
   String? pending;
-  Timer? throttle;
-  void tick() {
-    throttle = null;
+  islands.show(shown, duration: _scanIslandDuration);
+  // Runs for the whole scan, so a lull in the progress never stops it.
+  final throttle = Timer.periodic(_scanIslandThrottle, (_) {
     final text = pending;
     if (text == null || text == shown) return;
     pending = null;
     shown = text;
     islands.show(text, duration: _scanIslandDuration);
-    throttle = Timer(_scanIslandThrottle, tick);
-  }
-
-  islands.show(shown, duration: _scanIslandDuration);
-  throttle = Timer(_scanIslandThrottle, tick);
+  });
   final progress = queue.current.listen((p) {
     if (p == null || p.found == 0) return;
     pending = 'Scanning $name · ${p.processed} of ${p.found}';
@@ -73,7 +69,7 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
       createPlaylistNamed: createPlaylist ? _playlistNameFor(name) : null,
     );
     await progress.cancel();
-    throttle?.cancel();
+    throttle.cancel();
     final summary = _summary(result, name);
     islands.show(
       summary,
@@ -82,7 +78,7 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
   } catch (_) {
     // ScanQueue has already logged the details.
     await progress.cancel();
-    throttle?.cancel();
+    throttle.cancel();
     islands.show("Couldn't scan $name", kind: IslandKind.failure);
   }
 }
