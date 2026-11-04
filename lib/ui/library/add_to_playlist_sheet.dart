@@ -8,11 +8,12 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../motion/pressable.dart';
 import '../widgets/name_dialog.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 import '../widgets/playlist_art.dart';
 
 /// Lets the user pick a playlist (or make a new one) and appends [trackIds]
-/// to it, saying so in a snack bar on the page [context] belongs to. Songs the
+/// to it, saying so on the island. Songs the
 /// playlist already holds are left out; when that is all of them it says
 /// "Already in" the playlist and adds nothing.
 Future<void> showAddToPlaylistSheet(
@@ -20,7 +21,7 @@ Future<void> showAddToPlaylistSheet(
   WidgetRef ref,
   List<String> trackIds,
 ) async {
-  final snacks = PageSnackBars.of(context);
+  final islands = Islands.of(context);
   final choice = await showModalBottomSheet<_Choice>(
     context: context,
     useRootNavigator: true,
@@ -45,7 +46,7 @@ Future<void> showAddToPlaylistSheet(
       case Ok(:final value):
         id = value;
       case Err():
-        snacks.show(content: const Text("Couldn't create playlist"));
+        islands.show("Couldn't create playlist", kind: IslandKind.failure);
         return;
     }
   }
@@ -64,19 +65,16 @@ Future<void> showAddToPlaylistSheet(
       if (!present.contains(t)) t,
   ];
   if (fresh.isEmpty) {
-    snacks.show(content: _oneLine('Already in $name'));
+    islands.show('Already in $name');
     return;
   }
   final added = await repo.addTracks(id!, fresh);
-  snacks.show(
-    content: _oneLine(
-      added is Ok<void> ? 'Added to $name' : "Couldn't add to $name",
-    ),
-  );
+  if (added is Ok<void>) {
+    islands.show('Added to $name', kind: IslandKind.success);
+  } else {
+    islands.show("Couldn't add to $name", kind: IslandKind.failure);
+  }
 }
-
-Widget _oneLine(String text) =>
-    Text(text, maxLines: 1, overflow: TextOverflow.ellipsis);
 
 class _Choice {
   const _Choice.playlist(PlaylistSummary this.playlist) : isNew = false;

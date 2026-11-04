@@ -11,7 +11,7 @@ import '../island/island_host.dart';
 import '../lyrics/lyrics_panel.dart';
 import 'go_tab.dart';
 import 'player_bar.dart';
-import 'player_error_snacks.dart';
+import 'player_error_islands.dart';
 import 'runtime_prompt.dart';
 import 'sidebar.dart';
 import 'title_bar.dart';
@@ -237,7 +237,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                           ),
                           child: ColoredBox(
                             color: colors.background,
-                            child: PlayerErrorSnacks(
+                            child: PlayerErrorIslands(
                               child: Column(
                                 children: [
                                   // Focusable, so Update and Dismiss can be

@@ -15,7 +15,8 @@ import '../../../sync/sync_responder.dart';
 import '../../../theme/app_theme.dart';
 import '../../motion/motion.dart';
 import '../../widgets/name_dialog.dart';
-import '../../widgets/page_snack_bar.dart';
+import '../../island/island_controller.dart';
+import '../../island/island_host.dart';
 import '../settings_page.dart';
 import 'clash_dialog.dart';
 import 'pair_sheets.dart';
@@ -295,7 +296,7 @@ class _SyncDevicesPageState extends ConsumerState<SyncDevicesPage> {
   }
 
   Future<void> _unpair(SyncDeviceView device) async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final name = device.peer.name;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -324,7 +325,7 @@ class _SyncDevicesPageState extends ConsumerState<SyncDevicesPage> {
       await host.unpair(device.peer.deviceId);
     } catch (e) {
       AppLog.w('Unpairing failed', e);
-      snacks.show(content: Text("Couldn't unpair $name"));
+      islands.show("Couldn't unpair $name", kind: IslandKind.failure);
     }
   }
 
@@ -657,9 +658,9 @@ class _FirewallHelp extends ConsumerWidget {
                   color: colors.text,
                   icon: const Icon(Icons.copy_rounded),
                   onPressed: () async {
-                    final snacks = PageSnackBars.of(context);
+                    final islands = Islands.of(context);
                     await Clipboard.setData(ClipboardData(text: commands));
-                    snacks.show(content: const Text('Copied'));
+                    islands.show('Copied', kind: IslandKind.success);
                   },
                 ),
               ],

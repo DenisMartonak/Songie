@@ -484,7 +484,7 @@ void main() {
       await tester.pump(const Duration(seconds: 30));
       expect(checker.startupCalls, 1);
       expect(find.byType(Dialog), findsNothing);
-      expect(find.byType(SnackBar), findsNothing);
+      expect(find.byKey(const Key('island')), findsNothing);
     });
 
     testWidgets('startup offline or slow shows nothing and does not block', (

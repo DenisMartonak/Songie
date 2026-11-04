@@ -33,6 +33,7 @@ import 'package:songies/ui/shell/mini_player.dart';
 import 'package:songies/ui/shell/player_bar.dart';
 import 'package:songies/ui/shell/sidebar.dart';
 import 'package:songies/ui/shell/window_controls.dart';
+import 'package:songies/ui/island/island_host.dart';
 
 import '../helpers/fake_audio_backend.dart';
 
@@ -176,6 +177,7 @@ void main() {
         child: MaterialApp.router(
           theme: buildThemeData(theme),
           routerConfig: router,
+          builder: (_, c) => IslandHost(child: c!),
         ),
       ),
     );
@@ -1033,9 +1035,7 @@ void main() {
       ('phone', Size(400, 800)),
       ('desktop', Size(1280, 800)),
     ]) {
-      testWidgets('$name: all files missing shows one snack bar', (
-        tester,
-      ) async {
+      testWidgets('$name: all files missing shows one island', (tester) async {
         await pumpApp(tester, size, resolver: _MissingResolver());
         unawaited(player.playQueue([track('a'), track('b')]));
         await tester.pumpAndSettle();

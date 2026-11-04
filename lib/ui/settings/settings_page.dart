@@ -17,7 +17,8 @@ import '../../update/update_controller.dart';
 import '../library/add_folder_flow.dart';
 import '../motion/motion.dart';
 import '../update/update_dialog.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 import '../shell/adaptive_shell.dart' show phoneBreakpoint;
 import 'downloads_settings.dart';
 import 'playback_settings.dart';
@@ -188,7 +189,7 @@ Future<void> _rescan(
   WidgetRef ref,
   List<String> paths,
 ) async {
-  final snacks = PageSnackBars.of(context);
+  final islands = Islands.of(context);
   final queue = ref.read(scanQueueProvider);
   // Queue them all now; ScanQueue has already logged any failure. A folder
   // already queued from this page is skipped until its scan has finished.
@@ -206,8 +207,9 @@ Future<void> _rescan(
   }
   for (final (i, run) in runs.indexed) {
     if (!await run) {
-      snacks.show(
-        content: Text("Couldn't scan ${folderDisplayName(queued[i])}"),
+      islands.show(
+        "Couldn't scan ${folderDisplayName(queued[i])}",
+        kind: IslandKind.failure,
       );
     }
   }
@@ -466,23 +468,23 @@ class _LogsSection extends ConsumerWidget {
   }
 
   Future<void> _exportLog(BuildContext context, WidgetRef ref) async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final logs = ref.read(appPathsProvider).logs;
     final save = ref.read(logSaverProvider);
 
     await AppLog.flush();
     final bytes = _readLog(logs);
     if (bytes == null) {
-      snacks.show(content: const Text('No log yet'));
+      islands.show('No log yet', kind: IslandKind.failure);
       return;
     }
     try {
       if (await save('songies.log', bytes)) {
-        snacks.show(content: const Text('Log saved'));
+        islands.show('Log saved', kind: IslandKind.success);
       }
     } catch (e, s) {
       AppLog.e('Exporting the log failed', e, s);
-      snacks.show(content: const Text("Couldn't save the log"));
+      islands.show("Couldn't save the log", kind: IslandKind.failure);
     }
   }
 

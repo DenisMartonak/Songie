@@ -8,7 +8,8 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
 import '../widgets/name_dialog.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 import '../widgets/playlist_art.dart';
 import 'add_folder_flow.dart';
 import 'import_dialog.dart';
@@ -60,10 +61,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         .read(libraryRepositoryProvider)
         .createPlaylist(name);
     if (result is Err<String> && mounted) {
-      showPageSnackBar(
-        context,
-        content: const Text("Couldn't create playlist"),
-      );
+      Islands.of(context)
+          .show("Couldn't create playlist", kind: IslandKind.failure);
     }
   }
 

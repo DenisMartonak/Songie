@@ -10,7 +10,7 @@ import '../island/island_host.dart';
 import 'bottom_nav.dart';
 import 'go_tab.dart';
 import 'mini_player.dart';
-import 'player_error_snacks.dart';
+import 'player_error_islands.dart';
 
 /// Phone layout: the current page with the mini-player and bottom nav floating
 /// over its bottom edge. Pages get the overlay's height as bottom padding
@@ -51,7 +51,7 @@ class PhoneShell extends ConsumerWidget {
                   bottom: media.padding.bottom + overlayHeight,
                 ),
               ),
-              child: PlayerErrorSnacks(child: shell),
+              child: PlayerErrorIslands(child: shell),
             ),
           ),
           if (!keyboardOpen)

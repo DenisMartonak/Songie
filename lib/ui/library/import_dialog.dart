@@ -7,7 +7,8 @@ import '../../core/result.dart';
 import '../../providers.dart';
 import '../../youtube/yt_import_service.dart';
 import '../../youtube/yt_models.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 
 /// Asks for a YouTube playlist link and imports it. On success it opens the
 /// playlist and says how it went; errors stay in the dialog.
@@ -20,15 +21,15 @@ Future<void> showImportDialog(
   GoRouter? router,
 }) {
   final go = router ?? GoRouter.of(context);
-  final snacks = PageSnackBars.of(context);
+  final islands = Islands.of(context);
   return showDialog<void>(
     context: context,
     builder: (_) =>
-        ImportDialog(initialLink: initialLink, router: go, snacks: snacks),
+        ImportDialog(initialLink: initialLink, router: go, islands: islands),
   );
 }
 
-/// What an import did, as its snack bar says it.
+/// What an import did, as its island says it.
 String importResultMessage(ImportResult r) {
   final songs = r.added == 1 ? '1 song' : '${r.added} songs';
   return r.alreadyExisted
@@ -44,14 +45,14 @@ void markImportPending(ImportResult r, PendingImports pending) {
 class ImportDialog extends ConsumerStatefulWidget {
   const ImportDialog({
     required this.router,
-    required this.snacks,
+    required this.islands,
     this.initialLink,
     super.key,
   });
 
   final String? initialLink;
   final GoRouter router;
-  final PageSnackBars snacks;
+  final Islands islands;
 
   @override
   ConsumerState<ImportDialog> createState() => _ImportDialogState();
@@ -109,9 +110,10 @@ class _ImportDialogState extends ConsumerState<ImportDialog> {
   void _open(ImportResult r, PendingImports pending) {
     markImportPending(r, pending);
     widget.router.go('/library/playlist/${r.playlistId}');
-    widget.snacks
-      ..clear()
-      ..show(content: Text(importResultMessage(r)));
+    widget.islands.show(
+      importResultMessage(r),
+      kind: r.alreadyExisted ? IslandKind.info : IslandKind.success,
+    );
   }
 
   void _openSettings() {

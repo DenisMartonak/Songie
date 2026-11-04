@@ -6,7 +6,8 @@ import '../../core/result.dart';
 import '../../player/player_service.dart';
 import '../../providers.dart';
 import '../../youtube/yt_models.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 
 /// What the user is told for a [PlayerState.error]. [notice] supplies the last
 /// failure's reason for [PlayerService.tooManyFailuresError].
@@ -43,11 +44,9 @@ bool _needsSignIn(String reason) =>
       _ => false,
     };
 
-/// Shows a snack bar whenever the player reports a new error or skips a song.
-/// Wraps the page area of a shell, so the bar clears the shell's own bottom
-/// overlays.
-class PlayerErrorSnacks extends ConsumerWidget {
-  const PlayerErrorSnacks({required this.child, super.key});
+/// Shows an island whenever the player reports a new error or skips a song.
+class PlayerErrorIslands extends ConsumerWidget {
+  const PlayerErrorIslands({required this.child, super.key});
 
   final Widget child;
 
@@ -70,17 +69,16 @@ class PlayerErrorSnacks extends ConsumerWidget {
         } else {
           return;
         }
-        PageSnackBars.of(context)
-          ..clear()
-          ..show(
-            content: Text(message),
-            action: _needsSignIn(reason)
-                ? SnackBarAction(
-                    label: 'Sign in',
-                    onPressed: () => GoRouter.of(context).go('/settings'),
-                  )
-                : null,
-          );
+        Islands.of(context).show(
+          message,
+          kind: IslandKind.failure,
+          action: _needsSignIn(reason)
+              ? IslandAction(
+                  label: 'Sign in',
+                  onPressed: () => GoRouter.of(context).go('/settings'),
+                )
+              : null,
+        );
       },
     );
     return child;

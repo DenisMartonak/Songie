@@ -10,7 +10,7 @@ import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
 
-import 'package:songies/ui/shell/player_error_snacks.dart';
+import 'package:songies/ui/shell/player_error_islands.dart';
 import 'package:songies/youtube/yt_models.dart';
 
 import '../helpers/fake_audio_backend.dart';

@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../settings/youtube_settings.dart' show updateYtDlp;
-import '../widgets/page_snack_bar.dart';
+import '../island/island_host.dart';
 
 /// Whether the user dismissed the "Downloads failing" banner; a new failure
 /// shows it again.
@@ -64,7 +64,7 @@ class _DownloadsBannerState extends ConsumerState<DownloadsBanner> {
     try {
       final ok = await updateYtDlp(
         ref,
-        PageSnackBars.of(context),
+        Islands.of(context),
         mounted: () => mounted,
       );
       if (ok) dismissal.dismiss();

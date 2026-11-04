@@ -17,7 +17,8 @@ import '../motion/fade_slide_in.dart';
 import '../motion/shimmer.dart';
 import '../playlist/hero_backdrop.dart';
 import '../playlist/playlist_page.dart' show playlistHeroTop;
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 import 'ytm_nav.dart';
 import 'ytm_result_tiles.dart';
 import 'ytm_song_row.dart';
@@ -296,7 +297,7 @@ class _YtmImportButtonState extends ConsumerState<YtmImportButton> {
 
   Future<void> _import() async {
     if (_busy) return;
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final router = GoRouter.of(context);
     final pending = ref.read(pendingImportsProvider.notifier);
     setState(() => _busy = true);
@@ -310,19 +311,19 @@ class _YtmImportButtonState extends ConsumerState<YtmImportButton> {
       result = Err(Failure(FailureKind.unknown, '$e', cause: e));
     }
     if (mounted) setState(() => _busy = false);
-    snacks.clear();
     switch (result) {
       case Ok(:final value):
         markImportPending(value, pending);
-        snacks.show(
-          content: Text(importResultMessage(value)),
-          action: SnackBarAction(
+        islands.show(
+          importResultMessage(value),
+          kind: value.alreadyExisted ? IslandKind.info : IslandKind.success,
+          action: IslandAction(
             label: 'Open',
             onPressed: () => openLibraryPlaylistIn(router, value.playlistId),
           ),
         );
       case Err(:final failure):
-        snacks.show(content: Text(ytErrorUserMessage(failure)));
+        islands.show(ytErrorUserMessage(failure), kind: IslandKind.failure);
     }
   }
 

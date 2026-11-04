@@ -15,7 +15,8 @@ import '../../theme/app_theme.dart';
 import '../library/add_to_playlist_sheet.dart';
 import '../motion/motion.dart';
 import '../ytm/ytm_nav.dart';
-import 'page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 
 /// The song a menu is for: a library [Track] or a YouTube Music [YtmSong]
 /// (stored as a track row the first time an action needs one).
@@ -162,7 +163,7 @@ Future<void> showSongMenu(
   final radio = ref.read(radioControllerProvider);
   final askPermission = ref.read(notificationPermissionProvider);
   final favorites = ref.read(favoritesRepositoryProvider);
-  final snacks = PageSnackBars.of(context);
+  final islands = Islands.of(context);
   final playable = song.isYouTube && !song.unavailable;
   // Only Remove download needs it. Null where the app paths are not set up
   // (Remove download then says it couldn't).
@@ -241,7 +242,7 @@ Future<void> showSongMenu(
   if (action == null) return;
 
   /// [song]'s track row, storing a YouTube Music song first; null (with a
-  /// snack bar) when it cannot be stored.
+  /// island message) when it cannot be stored.
   Future<Track?> track() async {
     if (song.track case final t?) return t;
     final s = song.ytm!;
@@ -250,7 +251,7 @@ Future<void> showSongMenu(
         return value;
       case Err(:final failure):
         AppLog.w('Storing ${s.videoId} failed: ${failure.message}');
-        snacks.show(content: const Text("Couldn't add that song"));
+        islands.show("Couldn't add that song", kind: IslandKind.failure);
         return null;
     }
   }
@@ -281,25 +282,25 @@ Future<void> showSongMenu(
       unawaited(askPermission());
       try {
         if (!await downloads.downloadTrack(t.id)) {
-          snacks.show(content: const Text("Couldn't download that song"));
+          islands.show("Couldn't download that song", kind: IslandKind.failure);
         }
       } on DownloadDbException catch (e, s) {
         AppLog.w('Downloading a song failed', e, s);
-        snacks.show(content: const Text("Couldn't change that download"));
+        islands.show("Couldn't change that download", kind: IslandKind.failure);
       }
     case SongMenuAction.removeDownload:
       final t = await track();
       final dir = ytDir;
       if (t == null) return;
       if (dir == null) {
-        snacks.show(content: const Text("Couldn't change that download"));
+        islands.show("Couldn't change that download", kind: IslandKind.failure);
         return;
       }
       try {
         await downloads.removeTrackDownload(t.id, dir);
       } on DownloadDbException catch (e, s) {
         AppLog.w('Removing a song download failed', e, s);
-        snacks.show(content: const Text("Couldn't change that download"));
+        islands.show("Couldn't change that download", kind: IslandKind.failure);
       }
     case SongMenuAction.removeFromPlaylist:
       onRemoveFromPlaylist!();

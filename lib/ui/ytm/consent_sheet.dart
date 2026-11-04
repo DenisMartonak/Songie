@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../innertube/yt_session_store.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_host.dart';
 
 /// The notice shown once when YouTube no longer accepts the sign-in.
 const ytSignInExpiredNotice =
@@ -56,7 +56,7 @@ class _ConsentListenerState extends ConsumerState<ConsentListener> {
     ref.listen(ytAuthProvider, (prev, next) {
       // Only the signed-in -> expired step, so it shows once per expiry.
       if (prev is YtSignedIn && next is YtExpired) {
-        showPageSnackBar(context, content: const Text(ytSignInExpiredNotice));
+        Islands.of(context).show(ytSignInExpiredNotice);
       }
     });
     return widget.child;

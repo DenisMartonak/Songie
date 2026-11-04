@@ -8,7 +8,8 @@ import '../../downloads/download_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../settings/storage_usage.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 
 String _songs(int n) => n == 1 ? '1 song' : '$n songs';
 
@@ -39,24 +40,22 @@ class _DownloadToggleState extends ConsumerState<DownloadToggle> {
   }
 
   Future<void> _turnOn() async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final repo = ref.read(downloadRepositoryProvider);
     unawaited(ref.read(notificationPermissionProvider)());
     try {
       final n = await repo.setPlaylistDownload(_id, true);
       if (n > 0) {
-        snacks
-          ..clear()
-          ..show(content: Text('Downloading ${_songs(n)}'));
+        islands.show('Downloading ${_songs(n)}', kind: IslandKind.success);
       }
     } on DownloadDbException catch (e, s) {
       AppLog.w('Turning on downloads failed', e, s);
-      snacks.show(content: const Text("Couldn't turn on downloads"));
+      islands.show("Couldn't turn on downloads", kind: IslandKind.failure);
     }
   }
 
   Future<void> _turnOff() async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final repo = ref.read(downloadRepositoryProvider);
     final ytDir = ref.read(appPathsProvider).libraryYt;
     try {
@@ -72,7 +71,7 @@ class _DownloadToggleState extends ConsumerState<DownloadToggle> {
       if (remove) await repo.removeFiles(only, ytDir);
     } on DownloadDbException catch (e, s) {
       AppLog.w('Turning off downloads failed', e, s);
-      snacks.show(content: const Text("Couldn't turn off downloads"));
+      islands.show("Couldn't turn off downloads", kind: IslandKind.failure);
     }
   }
 

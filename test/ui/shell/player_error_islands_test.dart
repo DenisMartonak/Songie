@@ -6,7 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/providers.dart';
-import 'package:songies/ui/shell/player_error_snacks.dart';
+import 'package:songies/ui/island/island_host.dart';
+import 'package:songies/ui/shell/player_error_islands.dart';
 
 void main() {
   test('ytdlp-prefixed errors use the yt user copy', () {
@@ -20,17 +21,18 @@ void main() {
     expect(playerErrorMessage("You're offline"), "You're offline");
   });
 
-  group('snacks', () {
+  group('islands', () {
     late StreamController<PlayerState> states;
 
     setUp(() => states = StreamController<PlayerState>.broadcast());
     tearDown(() => states.close());
 
-    Future<void> pumpSnacks(WidgetTester tester) => tester.pumpWidget(
+    Future<void> pumpIslands(WidgetTester tester) => tester.pumpWidget(
       ProviderScope(
         overrides: [playerStateProvider.overrideWith((ref) => states.stream)],
-        child: const MaterialApp(
-          home: Scaffold(body: PlayerErrorSnacks(child: SizedBox.expand())),
+        child: MaterialApp(
+          builder: (_, c) => IslandHost(child: c!),
+          home: Scaffold(body: PlayerErrorIslands(child: SizedBox.expand())),
         ),
       ),
     );
@@ -44,7 +46,7 @@ void main() {
     testWidgets('a YouTube skip names the song and the yt reason', (
       tester,
     ) async {
-      await pumpSnacks(tester);
+      await pumpIslands(tester);
       await push(tester, const PlayerState());
       await push(
         tester,
@@ -71,7 +73,7 @@ void main() {
             GoRoute(
               path: '/',
               builder: (_, _) =>
-                  const Scaffold(body: PlayerErrorSnacks(child: SizedBox())),
+                  const Scaffold(body: PlayerErrorIslands(child: SizedBox())),
             ),
             GoRoute(
               path: '/settings',
@@ -84,7 +86,10 @@ void main() {
             overrides: [
               playerStateProvider.overrideWith((ref) => states.stream),
             ],
-            child: MaterialApp.router(routerConfig: router),
+            child: MaterialApp.router(
+              routerConfig: router,
+              builder: (_, c) => IslandHost(child: c!),
+            ),
           ),
         );
         await push(tester, const PlayerState());
@@ -94,16 +99,16 @@ void main() {
             notice: PlayerNotice(trackTitle: 'Song', reason: 'ytdlp:$kind:x'),
           ),
         );
-        // Let the bar finish sliding in before tapping its action.
+        // Let the island finish rising before tapping its action.
         await tester.pump(const Duration(milliseconds: 500));
-        await tester.tap(find.widgetWithText(SnackBarAction, 'Sign in'));
+        await tester.tap(find.text('Sign in'));
         await tester.pumpAndSettle();
         expect(find.text('settings page'), findsOneWidget);
       });
     }
 
     testWidgets('other skips have no action', (tester) async {
-      await pumpSnacks(tester);
+      await pumpIslands(tester);
       await push(tester, const PlayerState());
       await push(
         tester,
@@ -111,11 +116,11 @@ void main() {
           notice: PlayerNotice(trackTitle: 'Song', reason: 'ytdlp:notFound:x'),
         ),
       );
-      expect(find.byType(SnackBarAction), findsNothing);
+      expect(find.text('Sign in'), findsNothing);
     });
 
     testWidgets('a local skip says the file is missing', (tester) async {
-      await pumpSnacks(tester);
+      await pumpIslands(tester);
       await push(tester, const PlayerState());
       await push(
         tester,
@@ -130,7 +135,7 @@ void main() {
     });
 
     testWidgets('too many failures names the last reason', (tester) async {
-      await pumpSnacks(tester);
+      await pumpIslands(tester);
       await push(tester, const PlayerState());
       await push(
         tester,

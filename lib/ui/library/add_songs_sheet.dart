@@ -7,7 +7,8 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../playlist/playlist_page.dart';
 import '../widgets/artwork.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 
 /// A searchable multi-select list of the library's songs. "Add (N)" appends
 /// the chosen songs to the playlist and closes the sheet.
@@ -41,7 +42,8 @@ class _AddSongsSheetState extends ConsumerState<AddSongsSheet> {
         .addTracks(widget.playlistId, _selected.toList());
     if (!mounted) return;
     if (result is Err<void>) {
-      showPageSnackBar(context, content: const Text('Couldn\'t add the songs'));
+      Islands.of(context)
+          .show("Couldn't add the songs", kind: IslandKind.failure);
     } else {
       Navigator.of(context).pop();
     }

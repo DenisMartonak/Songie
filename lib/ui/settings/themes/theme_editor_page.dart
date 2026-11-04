@@ -12,7 +12,8 @@ import '../../../theme/app_theme.dart';
 import '../../../theme/contrast.dart';
 import '../../../theme/font_service.dart';
 import '../../../theme/theme_spec.dart';
-import '../../widgets/page_snack_bar.dart';
+import '../../island/island_controller.dart';
+import '../../island/island_host.dart';
 import 'colour_field.dart';
 import 'theme_preview.dart';
 
@@ -237,13 +238,13 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
   }
 
   Future<void> _save() async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final repo = ref.read(themeRepositoryProvider);
     setState(() => _saving = true);
     final r = await repo.save(_saveId, _name.text, _spec);
     switch (r) {
       case Err(:final failure):
-        snacks.show(content: Text(failure.message));
+        islands.show(failure.message, kind: IslandKind.failure);
         if (mounted) setState(() => _saving = false);
         return;
       case Ok(:final value):
@@ -260,7 +261,7 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
           await repo.setActive(value);
         } catch (e, s) {
           AppLog.e('Making theme $value active failed', e, s);
-          snacks.show(content: const Text("Couldn't apply the theme"));
+          islands.show("Couldn't apply the theme", kind: IslandKind.failure);
           if (mounted) setState(() => _saving = false);
           return;
         }
@@ -269,7 +270,7 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
   }
 
   Future<void> _importFont() async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     // The import outlives the page if it is closed meanwhile; the providers
     // must still learn about the new font.
     final container = ProviderScope.containerOf(context, listen: false);
@@ -279,7 +280,7 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
     final r = await fonts.importFont(path);
     switch (r) {
       case Err(:final failure):
-        snacks.show(content: Text(failure.message));
+        islands.show(failure.message, kind: IslandKind.failure);
       case Ok(value: FontImport(:final entry)):
         // The new family is usable at once, by the editor and by any theme
         // that already names it.

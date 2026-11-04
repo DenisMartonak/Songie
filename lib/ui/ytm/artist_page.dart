@@ -5,7 +5,8 @@ import '../../core/log.dart';
 import '../../core/result.dart';
 import '../../innertube/ytm_models.dart';
 import '../../providers.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 import 'ytm_page_parts.dart';
 import 'ytm_shelf_row.dart';
 
@@ -104,7 +105,7 @@ class _ArtistPageState extends ConsumerState<ArtistPage> {
   }
 
   Future<void> _startRadio(YtmSong first, String playlistId) async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final radio = ref.read(radioControllerProvider);
     switch (await ref.read(ytTrackStoreProvider).upsert(first)) {
       case Ok(:final value):
@@ -114,7 +115,7 @@ class _ArtistPageState extends ConsumerState<ArtistPage> {
           'Artist radio: storing ${first.videoId} failed: '
           '${failure.message}',
         );
-        snacks.show(content: const Text("Couldn't start the radio"));
+        islands.show("Couldn't start the radio", kind: IslandKind.failure);
     }
   }
 }

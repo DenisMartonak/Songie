@@ -278,7 +278,7 @@ void main() {
       expect(route.runs, 1);
       expect(h.ytSessions.stored, isNull);
       expect(find.text('Sign in to YouTube'), findsOneWidget);
-      expect(find.byType(SnackBar), findsNothing);
+      expect(find.byKey(const Key('island')), findsNothing);
       expect(containerOf(tester).read(ytAuthProvider), isA<YtSignedOut>());
     });
 
@@ -360,7 +360,7 @@ void main() {
       expect(h.ytSessions.stored, isNull);
       expect(containerOf(tester).read(ytAuthProvider), isA<YtSignedOut>());
       expect(find.text('Sign in to YouTube'), findsOneWidget);
-      expect(find.byType(SnackBar), findsNothing);
+      expect(find.byKey(const Key('island')), findsNothing);
     });
 
     uiTest('a keyring that fails to clear still signs out', (tester) async {

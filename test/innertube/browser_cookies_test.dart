@@ -13,6 +13,7 @@ import 'package:songies/core/result.dart';
 import 'package:songies/innertube/browser_cookies.dart';
 import 'package:songies/innertube/browser_sign_in.dart';
 import 'package:songies/innertube/yt_sign_in.dart';
+import 'package:songies/ui/island/island_host.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 // Every value here is made up for the test; nothing comes from a real
@@ -554,6 +555,7 @@ void main() {
       late BuildContext ctx;
       await tester.pumpWidget(
         MaterialApp(
+          builder: (_, c) => IslandHost(child: c!),
           home: Scaffold(
             body: Builder(
               builder: (c) {

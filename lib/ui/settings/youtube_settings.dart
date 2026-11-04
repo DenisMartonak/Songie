@@ -14,14 +14,15 @@ import '../../youtube/yt_models.dart';
 import '../../youtube/deno_installer.dart';
 import '../../youtube/js_runtime.dart';
 import '../motion/motion.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 import 'settings_page.dart';
 
 /// Updates (or installs) yt-dlp and says how it went; true when it worked.
 /// Settings → YouTube and the "Downloads failing" banner both use it.
 Future<bool> updateYtDlp(
   WidgetRef ref,
-  PageSnackBars snacks, {
+  Islands islands, {
   required bool Function() mounted,
 }) async {
   final runner = ref.read(ytDlpRunnerProvider);
@@ -30,14 +31,13 @@ Future<bool> updateYtDlp(
     case Ok():
       if (mounted()) ref.invalidate(ytDlpVersionProvider);
       final version = await runner.version();
-      snacks.show(
-        content: Text(
-          version == null ? 'yt-dlp updated' : 'yt-dlp updated to $version',
-        ),
+      islands.show(
+        version == null ? 'yt-dlp updated' : 'yt-dlp updated to $version',
+        kind: IslandKind.success,
       );
       return true;
     case Err(:final failure):
-      snacks.show(content: Text(ytErrorUserMessage(failure)));
+      islands.show(ytErrorUserMessage(failure), kind: IslandKind.failure);
       return false;
   }
 }
@@ -119,7 +119,7 @@ class _YouTubeSettingsSectionState
   /// not an error: nothing changes.
   Future<void> _signIn(YtSignInRoute route) async {
     if (_signingIn) return;
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final auth = ref.read(ytAuthProvider.notifier);
     setState(() => _signingIn = true);
     try {
@@ -135,7 +135,10 @@ class _YouTubeSettingsSectionState
         // the session.
         AppLog.w('yt sign-in: could not store the session (${e.runtimeType})');
         await auth.checkAvailable();
-        snacks.show(content: const Text("Couldn't save the YouTube sign-in"));
+        islands.show(
+          "Couldn't save the YouTube sign-in",
+          kind: IslandKind.failure,
+        );
       }
     } finally {
       if (mounted) setState(() => _signingIn = false);
@@ -145,7 +148,7 @@ class _YouTubeSettingsSectionState
   /// Forgets the YouTube sign-in on this device (after asking); Home
   /// reloads with the regular feed.
   Future<void> _signOut() async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -175,9 +178,7 @@ class _YouTubeSettingsSectionState
       await auth.signOut();
     } catch (e) {
       AppLog.w('yt sign-out: could not clear the keyring (${e.runtimeType})');
-      snacks.show(
-        content: const Text("Signed out, but the keyring couldn't be cleared"),
-      );
+      islands.show("Signed out, but the keyring couldn't be cleared");
     }
     if (!mounted) return;
     ref.invalidate(ytmHomeProvider);
@@ -281,10 +282,10 @@ class _YouTubeSettingsSectionState
 
   Future<void> _update() async {
     if (_updating) return;
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     setState(() => _updating = true);
     try {
-      await updateYtDlp(ref, snacks, mounted: () => mounted);
+      await updateYtDlp(ref, islands, mounted: () => mounted);
     } finally {
       if (mounted) setState(() => _updating = false);
     }
@@ -294,17 +295,17 @@ class _YouTubeSettingsSectionState
   /// songs.
   Future<void> _helper(DenoInstaller deno, {required bool install}) async {
     if (_helperBusy) return;
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     setState(() => _helperBusy = true);
     try {
       if (install) {
         final r = await deno.install();
-        snacks.show(
-          content: Text(switch (r) {
-            Ok() => 'Helper installed',
-            Err(:final failure) => failure.message,
-          }),
-        );
+        switch (r) {
+          case Ok():
+            islands.show('Helper installed', kind: IslandKind.success);
+          case Err(:final failure):
+            islands.show(failure.message, kind: IslandKind.failure);
+        }
       } else {
         await deno.remove();
       }
@@ -367,7 +368,7 @@ class _YouTubeSettingsSectionState
   /// Forgets YouTube's anonymous visitor id (after asking), so the feed
   /// starts fresh, and reloads the feed.
   Future<void> _resetRecommendations() async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -394,7 +395,7 @@ class _YouTubeSettingsSectionState
     await ref.read(innertubeClientProvider).resetVisitor();
     if (!mounted) return;
     ref.invalidate(ytmHomeProvider);
-    snacks.show(content: const Text('YouTube recommendations reset'));
+    islands.show('YouTube recommendations reset', kind: IslandKind.success);
   }
 
   @override

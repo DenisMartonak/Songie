@@ -327,14 +327,13 @@ void main() {
       await flush(tester);
 
       expect(find.text('Scanning Rock · 4 of 10'), findsOneWidget);
-      expect(find.byType(LinearProgressIndicator), findsOneWidget);
 
       controller.add(progress(processed: 10, added: 10, done: true));
       unawaited(controller.close()); // completes on the fake clock
       await flush(tester);
       await settle(tester);
       expect(find.text('Added 10 songs from Rock'), findsOneWidget);
-      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(find.text('Scanning Rock · 10 of 10'), findsNothing);
     });
 
     uiTest('a failing scan shows a message instead of crashing', (

@@ -8,6 +8,7 @@ import 'package:songies/router.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/shell/player_bar.dart';
+import 'package:songies/ui/island/island_host.dart';
 
 import '../helpers/fake_lyrics_service.dart';
 import '../helpers/ui_harness.dart';
@@ -37,6 +38,7 @@ void main() {
         child: MaterialApp.router(
           theme: buildThemeData(ThemeSpec.builtInDefault),
           routerConfig: buildRouter(),
+          builder: (_, c) => IslandHost(child: c!),
         ),
       ),
     );

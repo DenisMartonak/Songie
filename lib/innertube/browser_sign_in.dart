@@ -6,7 +6,8 @@ import 'package:flutter_inappwebview_platform_interface/flutter_inappwebview_pla
 
 import '../core/log.dart';
 import '../core/result.dart';
-import '../ui/widgets/page_snack_bar.dart';
+import '../ui/island/island_controller.dart';
+import '../ui/island/island_host.dart';
 import 'browser_cookies.dart';
 import 'yt_sign_in.dart';
 
@@ -49,12 +50,12 @@ class BrowserSignIn implements YtSignInRoute {
 
   @override
   Future<YtSignInResult?> signIn(BuildContext context) async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     if (!await _ask(context) || !context.mounted) return null;
     final profiles = await _findProfiles();
     if (!context.mounted) return null;
     if (profiles.isEmpty) {
-      snacks.show(content: const Text('No browser profile found'));
+      islands.show('No browser profile found', kind: IslandKind.failure);
       return null;
     }
     while (true) {
@@ -65,7 +66,7 @@ class BrowserSignIn implements YtSignInRoute {
       switch (result) {
         case Err(:final failure):
           // The failure's message is plain and names only the browser.
-          snacks.show(content: Text(failure.message));
+          islands.show(failure.message, kind: IslandKind.failure);
           return null;
         case Ok(:final value):
           final session = YtSessionFromCookies.build(value);
@@ -74,11 +75,9 @@ class BrowserSignIn implements YtSignInRoute {
             '${session != null}',
           );
           if (session != null) return YtSignInResult(session: session);
-          snacks.show(
-            content: Text(
-              "${picked.browser} (${picked.profile}) isn't signed in to "
-              'YouTube',
-            ),
+          islands.show(
+            "${picked.browser} (${picked.profile}) isn't signed in to "
+            'YouTube',
           );
       }
     }

@@ -215,7 +215,7 @@ void main() {
 
       expect(h.importService.imported, hasLength(1));
       expect(find.text('Open'), findsNothing);
-      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.byKey(const Key('island')), findsOneWidget);
     });
 
     uiTest('an album playlist id that is not OLAK5uy_ hides Import', (

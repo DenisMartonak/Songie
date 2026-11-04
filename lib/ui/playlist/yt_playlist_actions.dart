@@ -8,7 +8,8 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../../youtube/yt_import_service.dart';
 import '../../youtube/yt_models.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 
 /// "just now", "N min ago", "N h ago" or "N d ago".
 String relativeTimeText(DateTime then, DateTime now) {
@@ -71,7 +72,7 @@ class _YtSyncButtonState extends ConsumerState<YtSyncButton> {
 
   Future<void> _sync() async {
     if (_busy) return;
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final service = ref.read(ytImportServiceProvider);
     final downloadRepo = ref.read(downloadRepositoryProvider);
     final downloads = ref.read(downloadServiceProvider);
@@ -82,13 +83,12 @@ class _YtSyncButtonState extends ConsumerState<YtSyncButton> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-    final text = switch (result) {
-      Ok(:final value) => syncResultText(value),
-      Err(:final failure) => ytErrorUserMessage(failure),
-    };
-    snacks
-      ..clear()
-      ..show(content: Text(text));
+    switch (result) {
+      case Ok(:final value):
+        islands.show(syncResultText(value));
+      case Err(:final failure):
+        islands.show(ytErrorUserMessage(failure), kind: IslandKind.failure);
+    }
     if (result case Ok(:final value) when value.addedTrackIds.isNotEmpty) {
       // New songs of a downloaded playlist are downloaded too.
       try {
@@ -157,8 +157,10 @@ class YtRemovedActions extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     Future<void> run(Future<Result<void>> Function() action, String err) async {
-      final snacks = PageSnackBars.of(context);
-      if (await action() is Err<void>) snacks.show(content: Text(err));
+      final islands = Islands.of(context);
+      if (await action() is Err<void>) {
+        islands.show(err, kind: IslandKind.failure);
+      }
     }
 
     final repo = ref.read(libraryRepositoryProvider);

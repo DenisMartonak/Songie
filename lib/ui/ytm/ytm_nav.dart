@@ -29,8 +29,8 @@ extension YtmNav on BuildContext {
 }
 
 /// Opens one of the user's playlists in the tab [router] shows now (outside a
-/// tab, in Library). For callbacks that outlive their page, such as a snack
-/// bar's action.
+/// tab, in Library). For callbacks that outlive their page, such as an
+/// island's action.
 void openLibraryPlaylistIn(GoRouter router, String id) {
   final root = tabRootOf(router.state.uri.path);
   final path = 'playlist/${Uri.encodeComponent(id)}';

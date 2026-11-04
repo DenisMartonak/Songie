@@ -10,7 +10,8 @@ import '../../../theme/contrast.dart';
 import '../../../theme/theme_repository.dart';
 import '../../motion/fade_slide_in.dart';
 import '../../motion/pressable.dart';
-import '../../widgets/page_snack_bar.dart';
+import '../../island/island_controller.dart';
+import '../../island/island_host.dart';
 import 'theme_editor_page.dart';
 import 'theme_file.dart';
 
@@ -117,7 +118,7 @@ class ThemesPage extends ConsumerWidget {
   }
 
   Future<void> _import(BuildContext context, WidgetRef ref) async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final path = await ref.read(themeFilePickerProvider)();
     if (path == null) return;
     final r = await ref.read(themeFilesProvider).importFile(path);
@@ -127,9 +128,9 @@ class ThemesPage extends ConsumerWidget {
         // Import font….
         ref.invalidate(resolvedFontFamilyProvider);
         ref.invalidate(importedFontsProvider);
-        snacks.show(content: const Text('Theme imported'));
+        islands.show('Theme imported', kind: IslandKind.success);
       case Err(:final failure):
-        snacks.show(content: Text(failure.message));
+        islands.show(failure.message, kind: IslandKind.failure);
     }
   }
 }
@@ -286,35 +287,35 @@ class _ThemeCard extends ConsumerWidget {
       );
 
   Future<void> _act(BuildContext context, WidgetRef ref, _CardAction a) async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final repo = ref.read(themeRepositoryProvider);
     switch (a) {
       case _CardAction.edit:
         await context.push(themeEditorLocation(theme.id));
       case _CardAction.duplicate:
         if (await repo.duplicate(theme.id) case Err(:final failure)) {
-          snacks.show(content: Text(failure.message));
+          islands.show(failure.message, kind: IslandKind.failure);
         }
       case _CardAction.export:
-        await _export(ref, snacks);
+        await _export(ref, islands);
       case _CardAction.delete:
         if (!await _confirmDelete(context)) return;
         if (await repo.delete(theme.id) case Err(:final failure)) {
-          snacks.show(content: Text(failure.message));
+          islands.show(failure.message, kind: IslandKind.failure);
         }
     }
   }
 
-  Future<void> _export(WidgetRef ref, PageSnackBars snacks) async {
+  Future<void> _export(WidgetRef ref, Islands islands) async {
     final save = ref.read(themeFileSaverProvider);
     try {
       final file = await ref.read(themeFilesProvider).fileFor(theme);
       if (await save(themeFileName(theme.name), file.encode())) {
-        snacks.show(content: const Text('Theme exported'));
+        islands.show('Theme exported', kind: IslandKind.success);
       }
     } catch (e, s) {
       AppLog.e('Exporting theme ${theme.id} failed', e, s);
-      snacks.show(content: const Text("Couldn't export the theme"));
+      islands.show("Couldn't export the theme", kind: IslandKind.failure);
     }
   }
 

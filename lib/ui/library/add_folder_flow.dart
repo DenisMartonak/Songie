@@ -5,14 +5,15 @@ import 'package:path/path.dart' as p;
 import '../../library/library_scanner.dart';
 import '../../providers.dart';
 import '../widgets/name_dialog.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 import 'pickers.dart';
 
 /// The "add a music folder" flow shared by Your Library and Settings: ask for
 /// media access, pick a folder, ask whether to also create a playlist from it,
-/// then scan it through the scan queue with a progress snack bar.
+/// then scan it through the scan queue with its progress on the island.
 Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
-  final snacks = PageSnackBars.of(context);
+  final islands = Islands.of(context);
   final requestAccess = ref.read(mediaAccessProvider);
   final pickFolder = ref.read(folderPickerProvider);
   final queue = ref.read(scanQueueProvider);
@@ -29,7 +30,7 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
     FolderPicked(:final path) => path,
     FolderPickCancelled() => null,
     FolderPickFailed(:final error) => () {
-      snacks.show(content: Text(folderPickFailureMessage(error)));
+      islands.show(folderPickFailureMessage(error), kind: IslandKind.failure);
       return null;
     }(),
   };
@@ -42,23 +43,35 @@ Future<void> addMusicFolder(BuildContext context, WidgetRef ref) async {
   );
   if (createPlaylist == null) return;
 
-  final progress = snacks.show(
-    content: _ScanProgressText(folderName: name),
-    duration: const Duration(days: 1),
-  );
+  // The island only holds text, so the progress is said again as it moves.
+  islands.show('Looking for music in $name…', duration: _scanIslandDuration);
+  final progress = queue.current.listen((p) {
+    if (p == null || p.found == 0) return;
+    islands.show(
+      'Scanning $name · ${p.processed} of ${p.found}',
+      duration: _scanIslandDuration,
+    );
+  });
   try {
     final result = await queue.enqueue(
       path,
       createPlaylistNamed: createPlaylist ? _playlistNameFor(name) : null,
     );
-    progress.close();
-    snacks.show(content: Text(_summary(result, name)));
+    await progress.cancel();
+    final summary = _summary(result, name);
+    islands.show(
+      summary,
+      kind: summary.startsWith('Added') ? IslandKind.success : IslandKind.info,
+    );
   } catch (_) {
     // ScanQueue has already logged the details.
-    progress.close();
-    snacks.show(content: Text("Couldn't scan $name"));
+    await progress.cancel();
+    islands.show("Couldn't scan $name", kind: IslandKind.failure);
   }
 }
+
+/// How long the scan's progress stays up: until the result replaces it.
+const Duration _scanIslandDuration = Duration(days: 1);
 
 /// What to tell the user when the folder picker could not open.
 String folderPickFailureMessage(FolderPickError error) => switch (error) {
@@ -159,33 +172,6 @@ class _AddFolderDialogState extends State<_AddFolderDialog> {
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_createPlaylist),
           child: const Text('Add'),
-        ),
-      ],
-    );
-  }
-}
-
-/// The body of the "scanning" snack bar; follows the scan queue.
-class _ScanProgressText extends ConsumerWidget {
-  const _ScanProgressText({required this.folderName});
-
-  final String folderName;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final progress = ref.watch(scanProgressProvider).value;
-    final found = progress?.found ?? 0;
-    final text = found == 0
-        ? 'Looking for music in $folderName…'
-        : 'Scanning $folderName · ${progress!.processed} of $found';
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 8),
-        LinearProgressIndicator(
-          value: found == 0 ? null : progress!.processed / found,
         ),
       ],
     );

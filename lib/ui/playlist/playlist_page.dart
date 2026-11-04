@@ -25,7 +25,8 @@ import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
 import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
-import '../widgets/page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 import '../widgets/song_menu.dart';
 import '../widgets/favorite_star.dart';
 import '../widgets/playlist_art.dart';
@@ -298,11 +299,12 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
 
   void _queue(PlaylistTrack row) {
     ref.read(playerServiceProvider).addToQueue([row.track]);
-    PageSnackBars.of(context)
-        .show(content: const Text('Added to queue'), duration: _queuedSnack);
+    Islands.of(
+      context,
+    ).show('Added to queue', kind: IslandKind.success, duration: _queuedIsland);
   }
 
-  static const Duration _queuedSnack = Duration(seconds: 2);
+  static const Duration _queuedIsland = Duration(seconds: 2);
 
   Future<void> _remove(List<PlaylistTrack> rows, int index) async {
     final removed = rows[index];
@@ -310,7 +312,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     final next = index < rows.length - 1 ? rows[index + 1].entryId : null;
     setState(() => _pending = [...rows]..removeAt(index));
 
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final repo = _repo;
     final result = await repo.removeEntry(removed.entryId);
     if (!mounted) return;
@@ -319,15 +321,15 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
       _say('Couldn\'t remove that song');
       return;
     }
-    snacks
-      ..clear()
-      ..show(
-        content: Text('Removed ${removed.track.title}', maxLines: 1),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () => _undoRemove(repo, removed.track.id, previous, next),
-        ),
-      );
+    islands.show(
+      'Removed ${removed.track.title}',
+      kind: IslandKind.success,
+      song: removed.track,
+      action: IslandAction(
+        label: 'Undo',
+        onPressed: () => _undoRemove(repo, removed.track.id, previous, next),
+      ),
+    );
   }
 
   /// [_remove] for the menu's Remove from this playlist: the row is looked up
@@ -404,7 +406,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
   /// "referenced in place". Scan a folder instead; the scan repairs a missing
   /// file whose content it finds there.
   Future<void> _locateInFolder(PlaylistTrack row) async {
-    final snacks = PageSnackBars.of(context);
+    final islands = Islands.of(context);
     final repo = _repo;
     final queue = ref.read(scanQueueProvider);
     final pick = await ref.read(folderPickerProvider)();
@@ -415,7 +417,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
       case FolderPickCancelled():
         return;
       case FolderPickFailed(:final error):
-        snacks.show(content: Text(folderPickFailureMessage(error)));
+        islands.show(folderPickFailureMessage(error), kind: IslandKind.failure);
         return;
     }
     final name = p.basename(folder).isEmpty ? folder : p.basename(folder);
@@ -423,7 +425,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
       await queue.enqueue(folder, registerFolder: false);
     } catch (_) {
       // ScanQueue has already logged the details.
-      snacks.show(content: Text("Couldn't scan $name"));
+      islands.show("Couldn't scan $name", kind: IslandKind.failure);
       return;
     }
     final entries = await repo.watchPlaylistTracks(_id).first;
@@ -431,7 +433,10 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
       (e) => e.entryId == row.entryId && e.fileMissing,
     );
     if (stillMissing) {
-      snacks.show(content: Text("Couldn't find that song in $name"));
+      islands.show(
+        "Couldn't find that song in $name",
+        kind: IslandKind.failure,
+      );
     }
   }
 
@@ -523,7 +528,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
 
   void _say(String message) {
     if (!mounted) return;
-    showPageSnackBar(context, content: Text(message));
+    Islands.of(context).show(message, kind: IslandKind.failure);
   }
 }
 

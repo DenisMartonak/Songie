@@ -51,7 +51,7 @@ void main() {
 
   uiTest('a cancelled pick shows nothing', (tester) async {
     await startFlow(tester);
-    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byKey(const Key('island')), findsNothing);
     expect(find.byType(AlertDialog), findsNothing);
   });
 

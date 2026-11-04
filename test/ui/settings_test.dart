@@ -210,12 +210,9 @@ void main() {
 
       await tester.tap(find.byKey(const Key('settings.rescanAll')));
       await settle(tester);
-      // Jazz sorts first; the second snack bar queues behind the first.
-      expect(find.text("Couldn't scan Jazz"), findsOneWidget);
-      ScaffoldMessenger.of(tester.element(find.byType(SettingsPage)))
-          .hideCurrentSnackBar();
-      await settle(tester);
+      // Jazz sorts first; the island shows the last failure only.
       expect(find.text("Couldn't scan Rock"), findsOneWidget);
+      expect(find.text("Couldn't scan Jazz"), findsNothing);
     });
 
     uiTest('Remove asks first, then forgets the folder but keeps its songs', (

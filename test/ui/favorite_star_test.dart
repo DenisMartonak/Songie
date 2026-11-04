@@ -11,6 +11,7 @@ import 'package:songies/theme/theme_spec.dart';
 import 'package:songies/ui/shell/player_bar.dart';
 import 'package:songies/ui/widgets/favorite_star.dart';
 import 'package:songies/ui/widgets/song_menu.dart';
+import 'package:songies/ui/island/island_host.dart';
 
 import '../helpers/fake_lyrics_service.dart';
 import '../helpers/ui_harness.dart';
@@ -47,6 +48,7 @@ void main() {
         overrides: h.overrides,
         child: MaterialApp(
           theme: buildThemeData(ThemeSpec.builtInDefault),
+          builder: (_, c) => IslandHost(child: c!),
           home: Scaffold(body: FavoriteStar(song: MenuSong.track(track))),
         ),
       ),
@@ -82,6 +84,7 @@ void main() {
         child: MaterialApp.router(
           theme: buildThemeData(ThemeSpec.builtInDefault),
           routerConfig: buildRouter(),
+          builder: (_, c) => IslandHost(child: c!),
         ),
       ),
     );

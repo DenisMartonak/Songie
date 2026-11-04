@@ -6,7 +6,8 @@ import '../../core/result.dart';
 import '../../data/database.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
-import 'page_snack_bar.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 import 'song_menu.dart';
 
 /// The library track id of a YouTube Music song, or null when it isn't in
@@ -39,7 +40,7 @@ Future<void> toggleFavorite(
 ) async {
   final favorites = ref.read(favoritesRepositoryProvider);
   final store = ref.read(ytTrackStoreProvider);
-  final snacks = PageSnackBars.of(context);
+  final islands = Islands.of(context);
   final Track track;
   if (song.track case final t?) {
     track = t;
@@ -51,7 +52,7 @@ Future<void> toggleFavorite(
         ref.invalidate(_libraryIdOfVideo(s.videoId));
       case Err(:final failure):
         AppLog.w('Storing ${s.videoId} failed: ${failure.message}');
-        snacks.show(content: const Text("Couldn't add that song"));
+        islands.show("Couldn't add that song", kind: IslandKind.failure);
         return;
     }
   }
