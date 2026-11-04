@@ -10,13 +10,13 @@ Songies' own code and style.
 
 Released so far: **1.1.3** (equalizer, Favorites, queue fix, shelf arrows).
 
-## 1. Star next to the title (quick) — built, not committed yet
+## 1. Star next to the title (quick) — done (on main, untagged)
 
 In the desktop player bar the Favorites star sits at the right edge of the
 song area; move it right after the title text (as Liner's heart does, see
 the bottom-left of `roadmap/playlist-page.png`).
 
-## 2. Island notifications
+## 2. Island notifications — done (on main, untagged)
 
 Replace the bottom snack bars (errors, "Added to queue", "Added to
 playlist", …) with a small pill that pops up just above the player bar
