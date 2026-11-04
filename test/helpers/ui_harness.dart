@@ -25,6 +25,7 @@ import 'package:songies/providers.dart';
 import 'package:songies/stats/stats_repository.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
+import 'package:songies/ui/island/island_host.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/youtube/ytdlp_client.dart';
 
@@ -320,12 +321,14 @@ class UiHarness {
       overrides: [...overrides, ...extraOverrides],
       child: MaterialApp.router(
         theme: buildThemeData(theme),
-        builder: disableAnimations
-            ? (context, child) => MediaQuery(
-                data: MediaQuery.of(context).copyWith(disableAnimations: true),
-                child: child!,
-              )
-            : null,
+        builder: (context, child) {
+          final host = IslandHost(child: child!);
+          if (!disableAnimations) return host;
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: host,
+          );
+        },
         routerConfig: GoRouter(
           initialLocation: initialLocation,
           routes: routes,

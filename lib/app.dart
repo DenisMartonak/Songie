@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'core/log.dart';
 import 'providers.dart';
 import 'theme/theme_service.dart';
+import 'ui/island/island_host.dart';
 import 'ui/motion/motion.dart';
 import 'ui/update/update_dialog.dart';
 import 'update/update_controller.dart';
@@ -86,7 +87,10 @@ class _SongiesAppState extends ConsumerState<SongiesApp> {
       themeAnimationStyle: AnimationStyle.noAnimation,
       routerConfig: widget.router,
       builder: (context, child) => MotionScope(
-        child: _ThemeScope(theme: theme, child: child!),
+        child: _ThemeScope(
+          theme: theme,
+          child: IslandHost(child: child!),
+        ),
       ),
     );
   }

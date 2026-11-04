@@ -6,6 +6,7 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../downloads/downloads_banner.dart';
 import '../downloads/downloads_sheet.dart';
+import '../island/island_host.dart';
 import 'bottom_nav.dart';
 import 'go_tab.dart';
 import 'mini_player.dart';
@@ -58,28 +59,30 @@ class PhoneShell extends ConsumerWidget {
               left: 0,
               right: 0,
               bottom: 0,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (banner) const DownloadsBanner(),
-                  if (downloading)
+              child: IslandAnchor(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (banner) const DownloadsBanner(),
+                    if (downloading)
+                      ColoredBox(
+                        color: colors.background,
+                        child: const DownloadsIndicator(),
+                      ),
+                    if (hasMini) ...[
+                      const MiniPlayer(),
+                      const SizedBox(height: MiniPlayer.gapAboveNav),
+                    ],
+                    BottomNav(shell.currentIndex, (i) => goTab(shell, i)),
                     ColoredBox(
                       color: colors.background,
-                      child: const DownloadsIndicator(),
+                      child: SizedBox(
+                        height: bottomInset,
+                        width: double.infinity,
+                      ),
                     ),
-                  if (hasMini) ...[
-                    const MiniPlayer(),
-                    const SizedBox(height: MiniPlayer.gapAboveNav),
                   ],
-                  BottomNav(shell.currentIndex, (i) => goTab(shell, i)),
-                  ColoredBox(
-                    color: colors.background,
-                    child: SizedBox(
-                      height: bottomInset,
-                      width: double.infinity,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
         ],

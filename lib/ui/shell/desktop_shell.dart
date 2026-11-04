@@ -7,6 +7,7 @@ import '../../player/runtime_prompter.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../downloads/downloads_banner.dart';
+import '../island/island_host.dart';
 import '../lyrics/lyrics_panel.dart';
 import 'go_tab.dart';
 import 'player_bar.dart';
@@ -299,7 +300,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                     },
                   ),
                 ),
-                const ExcludeFocus(child: PlayerBar()),
+                const IslandAnchor(child: ExcludeFocus(child: PlayerBar())),
               ],
             ),
           ),
