@@ -81,6 +81,44 @@ void main() {
       m(const AuthApiException('x', statusCode: '429')),
       AccountError.tooManyRequests,
     );
+    expect(
+      m(
+        const AuthApiException(
+          'x',
+          statusCode: '400',
+          code: 'email_address_invalid',
+        ),
+      ),
+      AccountError.invalidEmail,
+    );
+    expect(
+      m(
+        const AuthApiException(
+          'x',
+          statusCode: '422',
+          code: 'validation_failed',
+        ),
+      ),
+      AccountError.invalidEmail,
+    );
+    expect(
+      m(
+        const AuthApiException(
+          'x',
+          statusCode: '400',
+          code: 'email_address_not_authorized',
+        ),
+      ),
+      AccountError.emailNotAllowed,
+    );
+    expect(
+      AccountError.invalidEmail.message,
+      "That email address doesn't look right.",
+    );
+    expect(
+      AccountError.emailNotAllowed.message,
+      "The server can't send email to that address yet.",
+    );
     // The sign-up trigger's unique violation reaches us as a 500.
     expect(
       m(

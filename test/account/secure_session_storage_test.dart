@@ -147,4 +147,25 @@ void main() {
       expect(await s.accessToken(), isNull);
     },
   );
+
+  test('a fallback while the marker is set clears it, so an in-memory log-in '
+      "can't be followed by the keyring's old session next start", () async {
+    final keyring = _Keyring()..values[kSupabaseSessionKey] = '{"old":1}';
+    final marker = _Marker(true);
+    final s = SecureSessionStorage(marker: marker, storage: keyring);
+    await s.initialize();
+    // The keyring can't be read this run.
+    keyring.broken = true;
+    expect(await s.accessToken(), isNull);
+    expect(marker.value, isFalse);
+    await s.persistSession('{"new":1}');
+    expect(await s.accessToken(), '{"new":1}');
+    expect(marker.value, isFalse);
+
+    // Next start, the keyring works again: nothing is restored.
+    keyring.broken = false;
+    final next = SecureSessionStorage(marker: marker, storage: keyring);
+    await next.initialize();
+    expect(await next.accessToken(), isNull);
+  });
 }

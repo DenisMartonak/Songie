@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/log.dart';
 import 'secure_session_storage.dart';
 import 'supabase_config.dart';
+import 'timeout_client.dart';
 
 /// What can go wrong with an account action, with the copy to show.
 enum AccountError {
@@ -15,6 +16,8 @@ enum AccountError {
   emailTaken(
     'That email already has an account. Log in, or reset your password.',
   ),
+  invalidEmail("That email address doesn't look right."),
+  emailNotAllowed("The server can't send email to that address yet."),
   usernameTaken('That username is taken.'),
   usernameJustTaken('That username was just taken.'),
   badCode('That code is wrong or has expired.'),
@@ -137,6 +140,9 @@ AccountError accountErrorOf(Object e) {
         'user_already_exists' || 'email_exists' => AccountError.emailTaken,
         'same_password' => AccountError.samePassword,
         'weak_password' => AccountError.weakPassword,
+        'email_address_invalid' ||
+        'validation_failed' => AccountError.invalidEmail,
+        'email_address_not_authorized' => AccountError.emailNotAllowed,
         'over_email_send_rate_limit' ||
         'over_request_rate_limit' => AccountError.tooManyRequests,
         _ when statusCode == '429' => AccountError.tooManyRequests,
@@ -179,11 +185,14 @@ Never _fail(String what, Object e) {
 /// Supabase.initialize with the keyring session storage; [marker] says
 /// whether a session was stored, so a signed-out start never touches the
 /// keyring. Codes, not links, so the implicit flow (no PKCE verifier to
-/// keep), no deep links, and no Supabase logs in debug builds.
+/// keep), no deep links, and no Supabase logs in debug builds. Requests
+/// give up after [kAccountHttpTimeout], so a dead network can't hold the
+/// account screens for minutes.
 Future<AccountBackend> connectSupabase(SessionMarker marker) async {
   final s = await Supabase.initialize(
     url: kSupabaseUrl,
     publishableKey: kSupabasePublishableKey,
+    httpClient: TimeoutClient(http.Client()),
     debug: false,
     authOptions: FlutterAuthClientOptions(
       localStorage: SecureSessionStorage(marker: marker),

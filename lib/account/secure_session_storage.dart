@@ -44,13 +44,21 @@ class SecureSessionStorage extends LocalStorage {
   bool _loaded = false;
   String? _memory;
 
-  /// Switches to memory for the rest of the run.
-  void _fallBack(Object e) {
+  /// Switches to memory for the rest of the run and clears the marker, so
+  /// the keyring's older copy isn't restored at the next start.
+  Future<void> _fallBack(Object e) async {
     if (_inMemory) return;
     _inMemory = true;
     AppLog.w(
       'Account session: no keyring, keeping it in memory (${e.runtimeType})',
     );
+    if (!_stored) return;
+    _stored = false;
+    try {
+      await _marker.write(false);
+    } catch (e) {
+      AppLog.w('Account session: marker not cleared (${e.runtimeType})');
+    }
   }
 
   /// Reads the marker only; never the keyring.
@@ -76,7 +84,7 @@ class SecureSessionStorage extends LocalStorage {
       _memory = await _s.read(key: kSupabaseSessionKey);
       _loaded = true;
     } catch (e) {
-      _fallBack(e);
+      await _fallBack(e);
     }
     return _memory;
   }
@@ -96,7 +104,7 @@ class SecureSessionStorage extends LocalStorage {
     try {
       await _s.delete(key: kSupabaseSessionKey);
     } catch (e) {
-      _fallBack(e);
+      await _fallBack(e);
     }
   }
 
@@ -109,15 +117,7 @@ class SecureSessionStorage extends LocalStorage {
     try {
       await _s.write(key: kSupabaseSessionKey, value: persistSessionString);
     } catch (e) {
-      // Memory only from now on; the keyring's older copy shouldn't be
-      // restored next time.
-      _fallBack(e);
-      if (_stored) {
-        _stored = false;
-        try {
-          await _marker.write(false);
-        } catch (_) {}
-      }
+      await _fallBack(e);
       return;
     }
     if (_stored) return;
