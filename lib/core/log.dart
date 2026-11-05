@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
@@ -88,4 +89,15 @@ void installErrorLogging() {
     AppLog.e('Uncaught error', error, stack);
     return false;
   };
+}
+
+/// The rotated log followed by the current one; null when both are empty or
+/// missing. Small (at most 2 MB each), so read in one go.
+Uint8List? readLogFiles(Directory logs) {
+  final builder = BytesBuilder(copy: false);
+  for (final name in ['songies.log.1', 'songies.log']) {
+    final file = File('${logs.path}/$name');
+    if (file.existsSync()) builder.add(file.readAsBytesSync());
+  }
+  return builder.isEmpty ? null : builder.takeBytes();
 }

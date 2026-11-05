@@ -10,6 +10,7 @@ class MainActivity : AudioServiceActivity() {
     private var folderPicker: FolderPickerPlugin? = null
     private var downloadNotifier: DownloadNotifierPlugin? = null
     private var updater: UpdaterPlugin? = null
+    private var deviceInfo: DeviceInfoPlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -19,6 +20,7 @@ class MainActivity : AudioServiceActivity() {
         folderPicker = FolderPickerPlugin(this, messenger)
         downloadNotifier = DownloadNotifierPlugin(applicationContext, messenger)
         updater = UpdaterPlugin(this, messenger)
+        deviceInfo = DeviceInfoPlugin(messenger)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -28,6 +30,7 @@ class MainActivity : AudioServiceActivity() {
         folderPicker = null
         downloadNotifier = null
         updater = null
+        deviceInfo = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 

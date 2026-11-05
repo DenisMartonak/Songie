@@ -644,11 +644,13 @@ void main() {
       });
     });
 
-    test('appVersion matches pubspec.yaml', () {
+    test('appVersion and appBuild match pubspec.yaml', () {
       final line = File('pubspec.yaml')
           .readAsLinesSync()
           .firstWhere((l) => l.startsWith('version:'));
-      expect(line.split(':')[1].trim().split('+').first, appVersion);
+      final version = line.split(':')[1].trim().split('+');
+      expect(version.first, appVersion);
+      expect(version.last, appBuild);
     });
   });
 }

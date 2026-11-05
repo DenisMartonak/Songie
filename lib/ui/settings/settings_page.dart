@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -478,7 +477,7 @@ class _LogsSection extends ConsumerWidget {
     final save = ref.read(logSaverProvider);
 
     await AppLog.flush();
-    final bytes = _readLog(logs);
+    final bytes = readLogFiles(logs);
     if (bytes == null) {
       islands.show('No log yet', kind: IslandKind.failure);
       return;
@@ -491,17 +490,6 @@ class _LogsSection extends ConsumerWidget {
       AppLog.e('Exporting the log failed', e, s);
       islands.show("Couldn't save the log", kind: IslandKind.failure);
     }
-  }
-
-  /// The rotated log followed by the current one; null when both are empty
-  /// or missing. Small (at most 2 MB each), so read in one go.
-  static Uint8List? _readLog(Directory logs) {
-    final builder = BytesBuilder(copy: false);
-    for (final name in ['songies.log.1', 'songies.log']) {
-      final file = File('${logs.path}/$name');
-      if (file.existsSync()) builder.add(file.readAsBytesSync());
-    }
-    return builder.isEmpty ? null : builder.takeBytes();
   }
 }
 

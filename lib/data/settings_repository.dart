@@ -54,6 +54,10 @@ const kCrashReports = 'crash_reports';
 /// problem hits. Device-local; never the sync device identity.
 const kCrashInstallId = 'crash_install_id';
 
+/// The name last typed in the Report a bug form, so it is filled in next time.
+/// Device-local.
+const kBugReportName = 'bug_report_name';
+
 /// Set once YouTube songs flagged unavailable before age-restricted songs had
 /// their own error were unflagged for one more check. Device-local.
 const kUnavailableRecheckDone = 'unavailable_recheck_done';
