@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -47,7 +48,8 @@ final screenshotPickerProvider = Provider<ScreenshotPicker>(
 const int _minDescription = 10;
 
 /// Opens the bug report form: a dialog on wide windows, a full page on narrow
-/// ones.
+/// ones. The page goes on the root navigator, above the tab bar and mini
+/// player, so switching tabs cannot throw away a report being typed.
 Future<void> showBugReportForm(BuildContext context) {
   if (MediaQuery.sizeOf(context).width >= phoneBreakpoint) {
     return showDialog<void>(
@@ -62,7 +64,7 @@ Future<void> showBugReportForm(BuildContext context) {
       ),
     );
   }
-  return Navigator.of(context).push<void>(
+  return Navigator.of(context, rootNavigator: true).push<void>(
     MaterialPageRoute(
       fullscreenDialog: true,
       builder: (_) => const Scaffold(
@@ -71,6 +73,11 @@ Future<void> showBugReportForm(BuildContext context) {
     ),
   );
 }
+
+/// [collectLog] on another isolate: the log is big. A top-level function, so
+/// the closure holds only these plain values and not a widget.
+Future<Uint8List> _collectLogOffThread(String logsPath, List<String> names) =>
+    Isolate.run(() => collectLog(Directory(logsPath), deviceNames: names));
 
 /// The form itself: what happened, an optional name and screenshot, and Send.
 class BugReportForm extends ConsumerStatefulWidget {
@@ -124,13 +131,14 @@ class _BugReportFormState extends ConsumerState<BugReportForm> {
   }
 
   Future<void> _send() async {
+    if (_sending) return;
     final islands = Islands.of(context);
     final navigator = Navigator.of(context);
     final route = ModalRoute.of(context);
     final settings = ref.read(settingsRepositoryProvider);
     final sender = ref.read(bugReportSenderProvider);
     final readDevice = ref.read(deviceSummaryProvider);
-    final logs = ref.read(appPathsProvider).logs;
+    final logsPath = ref.read(appPathsProvider).logs.path;
     final name = _name.text.trim();
     setState(() {
       _sending = true;
@@ -141,6 +149,11 @@ class _BugReportFormState extends ConsumerState<BugReportForm> {
       await AppLog.flush();
       // Never create an install id for a report: only read one that exists.
       final installId = await settings.getString(kCrashInstallId);
+      // Sync peers are named after the host on desktop; keep that out of the log.
+      final deviceNames = [
+        Platform.localHostname,
+        ?await settings.getString(kDeviceName),
+      ];
       final report = BugReport(
         description: _description.text.trim(),
         name: name.isEmpty ? null : name,
@@ -148,7 +161,7 @@ class _BugReportFormState extends ConsumerState<BugReportForm> {
         version: '$appVersion+$appBuild',
         time: DateTime.now().toUtc(),
         installId: installId,
-        log: collectLog(logs),
+        log: await _collectLogOffThread(logsPath, deviceNames),
         screenshot: _screenshot,
       );
       result = await sender.send(report);
@@ -157,10 +170,20 @@ class _BugReportFormState extends ConsumerState<BugReportForm> {
       result = BugReportSendResult.failed;
     }
     if (result == BugReportSendResult.sent) {
-      await settings.setString(kBugReportName, name.isEmpty ? null : name);
+      try {
+        await settings.setString(kBugReportName, name.isEmpty ? null : name);
+      } catch (e) {
+        AppLog.w('Bug report name not saved: ${e.runtimeType}');
+      }
       islands.show('Bug report sent', kind: IslandKind.success);
       // Only close our own route; never whatever is on top by now.
-      if (route != null && route.isCurrent) navigator.pop();
+      if (route != null && route.isCurrent) {
+        navigator.pop();
+      } else if (route != null && route.isActive) {
+        navigator.removeRoute(route);
+      } else if (mounted) {
+        setState(() => _sending = false);
+      }
       return;
     }
     if (!mounted) return;
@@ -231,6 +254,7 @@ class _BugReportFormState extends ConsumerState<BugReportForm> {
                     child: Image.memory(
                       shot.bytes,
                       key: const Key('bugReport.thumbnail'),
+                      cacheWidth: 112,
                       width: 56,
                       height: 56,
                       fit: BoxFit.cover,

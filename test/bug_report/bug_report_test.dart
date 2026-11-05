@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/bug_report/bug_report.dart';
 
@@ -21,6 +21,81 @@ BugReport _report({String description = 'It broke', String? name = 'Sam'}) =>
     );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('readDeviceSummary', () {
+    const channel = MethodChannel('songies/device');
+    tearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    test(
+      'Android: model, release and API level come from the channel',
+      () async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+              channel,
+              (_) async => {
+                'model': 'Google Pixel 8',
+                'release': '14',
+                'sdk': 34,
+              },
+            );
+        final d = await readDeviceSummary(isAndroid: true);
+        expect(d.model, 'Google Pixel 8');
+        expect(d.os, 'Android 14 (API 34)');
+        expect(d.os, isNot(contains('Linux')));
+      },
+    );
+
+    test('Android: a failing channel says unknown', () async {
+      final d = await readDeviceSummary(isAndroid: true);
+      expect(d.model, 'unknown');
+      expect(d.os, startsWith('Android'));
+    });
+
+    test(
+      'Linux: the model is the os-release PRETTY_NAME, else Linux',
+      () async {
+        final dir = Directory.systemTemp.createTempSync('osrel');
+        addTearDown(() => dir.deleteSync(recursive: true));
+        final f = File('${dir.path}/os-release')
+          ..writeAsStringSync('NAME="Fedora"\nPRETTY_NAME="Fedora Linux 44"\n');
+        expect(
+          (await readDeviceSummary(isLinux: true, osReleasePath: f.path)).model,
+          'Fedora Linux 44',
+        );
+        expect(
+          (await readDeviceSummary(
+            isLinux: true,
+            osReleasePath: '${dir.path}/missing',
+          )).model,
+          'Linux',
+        );
+      },
+    );
+
+    test('parseOsReleasePrettyName handles quotes and absence', () {
+      expect(
+        parseOsReleasePrettyName("PRETTY_NAME='Arch Linux'\n"),
+        'Arch Linux',
+      );
+      expect(parseOsReleasePrettyName('PRETTY_NAME=Plain\n'), 'Plain');
+      expect(parseOsReleasePrettyName('NAME=x\n'), isNull);
+    });
+  });
+
+  group('redactDeviceNames', () {
+    test('replaces each name and ignores empty or very short ones', () {
+      expect(
+        redactDeviceNames('Synced with mira-pc ok', ['mira-pc', '', 'ab']),
+        'Synced with <device> ok',
+      );
+      expect(redactDeviceNames('ab cd', ['ab']), 'ab cd');
+    });
+  });
+
   test('bugReportsBuilt is false for an empty webhook', () {
     expect(bugReportsBuilt(webhook: ''), isFalse);
     expect(
@@ -52,6 +127,15 @@ void main() {
       expect(trimmed, endsWith('last line\n'));
       expect(trimmed, isNot(contains('old line')));
       expect(trimmed, startsWith('line '), reason: 'starts on a whole line');
+    });
+
+    test('replaces the given device names with <device>', () {
+      File('${dir.path}/songies.log')
+          .writeAsStringSync('Synced with mira-pc\nSynced with Den Laptop\n');
+      final text = utf8.decode(
+        collectLog(dir, deviceNames: ['mira-pc', 'Den Laptop']),
+      );
+      expect(text, 'Synced with <device>\nSynced with <device>\n');
     });
 
     test('is empty when there are no log files', () {

@@ -50,6 +50,7 @@ void main() {
     WidgetTester tester, {
     bool built = true,
     double width = 800,
+    bool nested = false,
   }) async {
     tester.view.physicalSize = Size(width, 1600);
     tester.view.devicePixelRatio = 1;
@@ -86,7 +87,14 @@ void main() {
         routes: [
           GoRoute(
             path: '/settings',
-            builder: (_, _) => const Scaffold(body: SettingsPage()),
+            // [nested]: Settings inside its own navigator, like a shell branch.
+            builder: (_, _) => nested
+                ? Navigator(
+                    onGenerateRoute: (_) => MaterialPageRoute<void>(
+                      builder: (_) => const Scaffold(body: SettingsPage()),
+                    ),
+                  )
+                : const Scaffold(body: SettingsPage()),
           ),
         ],
       ),
@@ -110,6 +118,10 @@ void main() {
   /// Lets a send finish: its file, database and HTTP work spans both clocks.
   Future<void> afterSend(WidgetTester tester) async {
     for (var i = 0; i < 3; i++) {
+      // The log is read on another isolate, which takes real time.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 150)),
+      );
       await flush(tester);
       await tester.pump(const Duration(milliseconds: 300));
     }
@@ -320,6 +332,59 @@ void main() {
     await pump(tester);
     await openForm(tester);
     expect(find.byType(Dialog), findsOneWidget);
+  });
+
+  uiTest('the phone page is on the root navigator, above a shell branch', (
+    tester,
+  ) async {
+    await pump(tester, width: 500, nested: true);
+    await openForm(tester);
+    final ctx = tester.element(find.byType(BugReportForm));
+    expect(
+      Navigator.of(ctx),
+      same(Navigator.of(ctx, rootNavigator: true)),
+      reason: 'a branch navigator would keep the tab bar and mini player',
+    );
+  });
+
+  uiTest('a success after the form is no longer on top still ends the '
+      'sending state', (tester) async {
+    hold = Completer<void>();
+    await pump(tester, width: 500);
+    await openForm(tester);
+    await fill(tester);
+    await tester.tap(find.byKey(const Key('bugReport.send')));
+    await flush(tester);
+    // Another page lands on top while the report is on its way.
+    final ctx = tester.element(find.byType(BugReportForm));
+    unawaited(
+      Navigator.of(ctx).push<void>(
+        MaterialPageRoute(builder: (_) => const Scaffold(body: Text('Other'))),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    hold!.complete();
+    await afterSend(tester);
+    expect(find.text('Bug report sent'), findsOneWidget);
+    expect(
+      find.byType(BugReportForm, skipOffstage: false),
+      findsNothing,
+      reason: 'route removed',
+    );
+    expect(find.text('Other'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  uiTest('the thumbnail is decoded at thumbnail size', (tester) async {
+    await pump(tester);
+    await openForm(tester);
+    pick = (fileName: 'ok.png', size: 100, bytes: Uint8List(100));
+    await tester.tap(find.byKey(const Key('bugReport.attach')));
+    await settle(tester);
+    final image = tester.widget<Image>(
+      find.byKey(const Key('bugReport.thumbnail')),
+    );
+    expect((image.image as ResizeImage).width, 112);
   });
 
   uiTest('phone width opens a full page', (tester) async {

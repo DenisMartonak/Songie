@@ -31,25 +31,70 @@ class DeviceSummary {
 }
 
 /// The device's platform, OS version and model. Android asks the platform for
-/// the manufacturer and model; desktop has no model, so it says 'desktop'.
-Future<DeviceSummary> readDeviceSummary() async {
+/// the model, Android release and API level; Linux names its distribution
+/// (from [osReleasePath]); Windows has no model, so it says 'desktop'.
+/// [isAndroid] and [isLinux] exist for tests.
+Future<DeviceSummary> readDeviceSummary({
+  bool? isAndroid,
+  bool? isLinux,
+  String osReleasePath = '/etc/os-release',
+}) async {
   var model = 'desktop';
   var os = '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
-  if (Platform.isAndroid) {
-    os = 'Android ${Platform.operatingSystemVersion}';
+  if (isAndroid ?? Platform.isAndroid) {
+    os = 'Android';
+    model = 'unknown';
     try {
-      final m = await const MethodChannel('songies/device')
-          .invokeMethod<String>('model');
-      model = (m == null || m.isEmpty) ? 'unknown' : m;
-    } catch (_) {
-      model = 'unknown';
-    }
+      final info = await const MethodChannel('songies/device')
+          .invokeMapMethod<String, Object?>('info');
+      final m = info?['model'];
+      if (m is String && m.isNotEmpty) model = m;
+      final release = info?['release'];
+      final sdk = info?['sdk'];
+      if (release is String && release.isNotEmpty) {
+        os = 'Android $release${sdk is int ? ' (API $sdk)' : ''}';
+      }
+    } catch (_) {}
+  } else if (isLinux ?? Platform.isLinux) {
+    model = 'Linux';
+    try {
+      model =
+          parseOsReleasePrettyName(File(osReleasePath).readAsStringSync()) ??
+          model;
+    } catch (_) {}
   }
   return DeviceSummary(
     platform: Platform.operatingSystem,
     os: os,
     model: model,
   );
+}
+
+/// The PRETTY_NAME in an os-release file's text, without quotes; null if none.
+String? parseOsReleasePrettyName(String text) {
+  for (final line in text.split('\n')) {
+    if (!line.startsWith('PRETTY_NAME=')) continue;
+    var v = line.substring('PRETTY_NAME='.length).trim();
+    if (v.length >= 2 &&
+        (v.startsWith('"') && v.endsWith('"') ||
+            v.startsWith("'") && v.endsWith("'"))) {
+      v = v.substring(1, v.length - 1);
+    }
+    return v.isEmpty ? null : v;
+  }
+  return null;
+}
+
+/// [text] with each of [names] replaced by `<device>`. Names shorter than 3
+/// characters are skipped: they would hit unrelated text.
+String redactDeviceNames(String text, Iterable<String> names) {
+  final todo =
+      names.map((n) => n.trim()).where((n) => n.length >= 3).toSet().toList()
+        ..sort((a, b) => b.length.compareTo(a.length));
+  for (final n in todo) {
+    text = text.replaceAll(n, '<device>');
+  }
+  return text;
 }
 
 /// One bug report, ready to be sent.
@@ -80,8 +125,13 @@ class BugReport {
 }
 
 /// The app log (rotated, then current) with paths scrubbed from every line,
-/// cut to its newest [maxBytes] on a whole line. Empty when there is no log.
-Uint8List collectLog(Directory logsDir, {int maxBytes = maxLogBytes}) {
+/// cut to its newest [maxBytes] on a whole line. [deviceNames] (host and device
+/// names) become `<device>`. Empty when there is no log.
+Uint8List collectLog(
+  Directory logsDir, {
+  int maxBytes = maxLogBytes,
+  List<String> deviceNames = const [],
+}) {
   final raw = readLogFiles(logsDir);
   if (raw == null) return Uint8List(0);
   final text = utf8
@@ -89,7 +139,10 @@ Uint8List collectLog(Directory logsDir, {int maxBytes = maxLogBytes}) {
       .split('\n')
       .map(scrubPaths)
       .join('\n');
-  return trimToNewest(utf8.encode(text), maxBytes);
+  return trimToNewest(
+    utf8.encode(redactDeviceNames(text, deviceNames)),
+    maxBytes,
+  );
 }
 
 /// The last [maxBytes] of [bytes], starting on a line start when it had to cut.

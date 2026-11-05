@@ -96,8 +96,6 @@ The Report a bug form in Settings sends a report to a Discord channel through a 
 3. Every build the workflow makes (a tag push and a manual run) gets the address. A build without the secret, and anything you build yourself, hides Report a bug.
 4. If the address leaks or the channel gets spammed: delete the webhook in Discord, make a new one, update the `SONGIES_BUG_WEBHOOK` secret, and make a new release. Old installs keep the old address and stop working until people update.
 
-Android needs version 8.0 or newer (the crash reporter requires it).
-
 ## 5. Make a release (every time)
 
 1. Pick the new version, for example `1.1.0`.
@@ -119,6 +117,8 @@ Android needs version 8.0 or newer (the crash reporter requires it).
 - **`publish` fails after the release was created:** delete that release on the Releases page (keep the tag), then re-run the workflow. A half-made release blocks the re-run.
 
 ## 6. First-time switch on the phone
+
+Songies needs Android 8.0 or newer (the crash reporter requires it).
 
 Your current phone app is signed with a debug key, so it cannot be updated by the release APK. Do this once:
 
