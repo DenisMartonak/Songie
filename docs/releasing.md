@@ -133,7 +133,7 @@ Your current phone app is signed with a debug key, so it cannot be updated by th
 3. Install the release APK (`songies-X.Y.Z.apk` from the GitHub release).
 4. Sign in again; the library comes back from your account.
 
-What does not come back: downloads are fetched again (where downloads are on), you sign in to YouTube again, and settings are not carried over. After this, updates install over the top without losing anything.
+What does not come back: downloads are fetched again (where downloads are on), you sign in to YouTube again, and settings are not carried over. Songs from your own music folders come back only if the files are on the phone and you add its music folder again: cloud sync doesn't copy your MP3s, and playlists hide songs the phone doesn't have. After this, updates install over the top without losing anything.
 
 ## 7. First-time switch on Windows
 
@@ -151,8 +151,7 @@ The installer is not signed with a paid certificate, so Windows may say "Windows
 
 ## 9. Linux
 
-1. Make the AppImage executable: `chmod +x songies-X.Y.Z-x86_64.AppImage`, then run it. Keep it in a folder you can write to, so in-app updates can replace it. If it cannot be replaced, the app offers "Open download page" instead. An in-app update swaps the new version in under the old file name, so `songies-1.0.0-x86_64.AppImage` may hold 1.1.0 afterwards; Settings → About shows the real version.
-2. Device sync still needs the firewall opened and Avahi running, exactly as described for device sync (the AppImage cannot change that). On Fedora/Nobara, allow the sync port (TCP 47823) and mDNS (UDP 5353, for discovery) in firewalld, for example `sudo firewall-cmd --add-port=47823/tcp --add-service=mdns` (add `--permanent` to keep it), and make sure `avahi-daemon` is enabled.
+Make the AppImage executable: `chmod +x songies-X.Y.Z-x86_64.AppImage`, then run it. Keep it in a folder you can write to, so in-app updates can replace it. If it cannot be replaced, the app offers "Open download page" instead. An in-app update swaps the new version in under the old file name, so `songies-1.0.0-x86_64.AppImage` may hold 1.1.0 afterwards; Settings → About shows the real version.
 
 ## 10. Before making the repo public
 

@@ -215,9 +215,9 @@ Phone (Android), desktop Linux and Windows. Where a check says "desktop", do it 
 - [ ] Force-quit the app in the middle of a song. At most about 30 s of that song is lost.
 - [ ] Phone: the card is compact, and your playlists stay visible on Home without scrolling far.
 
-## Plan 10: device sync
+## Plan 10: home-network sync (removed)
 
-Removed: home-network sync was replaced by cloud sync (see Cloud sync below).
+Replaced by cloud sync; see Cloud sync below.
 
 ## Plan 11: packaging and in-app updates
 
