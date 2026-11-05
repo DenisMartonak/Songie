@@ -603,4 +603,82 @@ void main() {
       });
     });
   });
+
+  group('fix round 2', () {
+    Future<CloudSync> engine(_Dev d) async => CloudSync(
+      db: d.db,
+      stamp: await SyncStamp.load(d.db),
+      remote: d.remote,
+      settings: SettingsRepository(d.db),
+      fontsDir: d.fonts,
+      files: d.files,
+    );
+
+    test('files that keep failing do not loop the runs', () async {
+      final a = dev('a');
+      a.fonts.createSync(recursive: true);
+      for (var i = 0; i < 25; i++) {
+        final bytes = _bytes('bad $i');
+        final hash = _sha(bytes);
+        await a.addFont(hash, 'ttf', family: 'Bad $i');
+        a.fontFile(hash, 'ttf').writeAsBytesSync(bytes);
+      }
+      a.remote.failUploads = true;
+      final sync = await engine(a);
+      await sync.start(_uid);
+      // One run: every file tried once, then it stops.
+      expect(a.remote.uploads, hasLength(25));
+      expect(a.remote.listCalls, 1);
+      expect(sync.current.phase, SyncPhase.error);
+      await sync.dispose();
+    });
+
+    test('failing files leave later ones their turn', () async {
+      final b = dev('b');
+      // 25 tampered fonts on the server, listed first, then 5 good ones.
+      for (var i = 0; i < 25; i++) {
+        final hash = _sha(_bytes('real $i'));
+        server.files['$_uid/font/$hash.ttf'] = (_bytes('tampered'), 'font/ttf');
+        await b.addFont(hash, 'ttf', family: 'Bad $i');
+      }
+      final good = <String>[];
+      for (var i = 0; i < 5; i++) {
+        final bytes = _bytes('good $i');
+        final hash = _sha(bytes);
+        server.files['$_uid/font/$hash.ttf'] = (bytes, 'font/ttf');
+        await b.addFont(hash, 'ttf', family: 'Good $i');
+        good.add(hash);
+      }
+      final sync = await engine(b);
+      await sync.start(_uid);
+      for (final h in good) {
+        expect(b.fontFile(h, 'ttf').existsSync(), isTrue);
+      }
+      expect(b.remote.downloads, hasLength(30));
+      expect(b.remote.listCalls, 1);
+      await sync.dispose();
+    });
+
+    test('files over 10 MB are counted in the warning', () async {
+      final a = dev('a');
+      a.fonts.createSync(recursive: true);
+      final bytes = Uint8List(CloudFiles.maxBytes + 1);
+      final hash = _sha(bytes);
+      await a.addFont(hash, 'ttf');
+      a.fontFile(hash, 'ttf').writeAsBytesSync(bytes);
+      final logs = <String>[];
+      final old = debugPrint;
+      debugPrint = (m, {wrapWidth}) => logs.add(m ?? '');
+      try {
+        final out = await a.files.reconcile(_uid);
+        expect(out.pending, isFalse);
+      } finally {
+        debugPrint = old;
+      }
+      expect(a.remote.uploads, isEmpty);
+      final lines = logs.where((l) => l.contains('over 10 MB'));
+      expect(lines, hasLength(1));
+      expect(lines.single, contains('1 file'));
+    });
+  });
 }

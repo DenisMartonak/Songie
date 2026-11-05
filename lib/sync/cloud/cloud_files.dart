@@ -78,6 +78,7 @@ class CloudFiles {
     var fontsArrived = 0;
     final failures = <String>{};
     var failCount = 0;
+    var tooBig = 0;
     try {
       final fonts = await _fontNames();
       final art = await _artRefs();
@@ -95,15 +96,15 @@ class CloudFiles {
           final down = there.contains(name);
           if (down ? await file.exists() : !await file.exists()) continue;
           final size = down ? 0 : await file.length();
-          if (!down && (size == 0 || size > maxBytes)) {
-            AppLog.w('Cloud sync: a file is too big to upload ($size bytes)');
-            continue;
-          }
+          // The bucket refuses files over 10 MB: they stay on this device.
+          if (!down && size > maxBytes) tooBig++;
+          if (!down && (size == 0 || size > maxBytes)) continue;
+          // Only files that went count, so files that keep failing never
+          // fill the cap: `more` means this run made progress.
           if (moved >= maxFilesPerRun || movedBytes >= maxBytesPerRun) {
             // Left for the next run, which may hold uploads: pending.
             return FilesOutcome(pending: true, more: true);
           }
-          moved++;
           try {
             if (down) {
               final n = await _download(
@@ -112,15 +113,19 @@ class CloudFiles {
                 kind: kind,
                 cancelled: stop,
               );
-              movedBytes += n;
-              if (n > 0 && kind == 'font') fontsArrived++;
+              if (n > 0) {
+                moved++;
+                movedBytes += n;
+                if (kind == 'font') fontsArrived++;
+              }
             } else {
-              movedBytes += size;
               await _remote.uploadFile(
                 '$folder/$name',
                 await file.readAsBytes(),
                 contentType: type(name),
               );
+              moved++;
+              movedBytes += size;
             }
           } on CloudOffline {
             if (!down) pending = true;
@@ -149,6 +154,12 @@ class CloudFiles {
         AppLog.w(
           'Cloud sync: $failCount files failed to sync '
           '(${failures.join(', ')}); tried again next time',
+        );
+      }
+      if (tooBig > 0) {
+        AppLog.w(
+          'Cloud sync: $tooBig ${tooBig == 1 ? 'file' : 'files'} over 10 MB '
+          'not synced (the limit per file)',
         );
       }
       if (fontsArrived > 0) {

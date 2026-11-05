@@ -30,9 +30,9 @@ The second migration adds what cloud sync needs:
 - `push_rows` (upload up to 500 rows; a row replaces the stored one only when its clock is newer) and `pull_rows` (the rows changed since the last pull, 500 at a time). `push_rows` also refuses a row over 256 KB and a clock more than a day ahead of the server's time.
 - Every write to `sync_rows` must go through `push_rows`. Don't edit the table by hand in the Table Editor or SQL editor (except to look): `push_rows` hands out the change numbers devices pull by one push at a time per account, and a write that skips it can be missed by devices for good.
 - A Realtime notice, so a change on one device reaches the others while they run: after each push the database sends a Broadcast message on the private channel `sync:<user id>` saying only "something changed" (the newest change number), and the devices then pull. A user can listen only on their own channel, and no app can send on it. The migration sets this up (a trigger and a rule on `realtime.messages`); there's nothing to switch on in the dashboard. `sync_rows` is deliberately not in the `supabase_realtime` publication: table-change events don't apply the row rules to deletions, so deleting an account would tell every listener which rows it had.
-- The private `sync-files` storage bucket for font files and artwork that can't be fetched again, each user only inside their own `<user id>/` folder. Files are at most 10 MB and must be fonts (TTF/OTF) or JPEG, PNG or WebP images.
+- The private `sync-files` storage bucket for font files and artwork that can't be fetched again, each user only inside their own `<user id>/` folder. Files are at most 10 MB and must be fonts (TTF/OTF) or JPEG, PNG or WebP images. A font or cover over 10 MB doesn't sync: it stays on the device it was added on (the app skips it and logs a warning).
 
-Deleting an account (`delete_my_account`) deletes its `sync_rows` too. The user's `sync-files` folder is deleted by the app just before (that part comes with the file sync, in a later step; until then, delete a removed account's folder by hand in Storage).
+Deleting an account (`delete_my_account`) deletes its `sync_rows` too. The user's `sync-files` folder is deleted by the app just before; if that fails, the account is not deleted.
 
 ## 2. Email sign-in settings
 
