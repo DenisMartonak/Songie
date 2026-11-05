@@ -159,3 +159,82 @@ Future<bool> confirmDeleteAccount(BuildContext context) async {
   );
   return yes ?? false;
 }
+
+/// Asks before logging out with changes the account hasn't got yet; true to
+/// log out anyway.
+Future<bool> confirmLogOutWithUnsent(BuildContext context) async {
+  final yes = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Log out'),
+      content: const Text(
+        "Some changes on this device haven't been uploaded yet. Log out "
+        'anyway?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('account.confirmLogOut'),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Log out'),
+        ),
+      ],
+    ),
+  );
+  return yes ?? false;
+}
+
+/// Cloud sync's question on signing in as another account than last time:
+/// true to merge this device's library into it, false to start empty.
+///
+/// Asked on [navigator] (the app's root navigator) once it is up: before the
+/// first frame, or while the app is in the background and draws nothing, it
+/// waits. Only a tap on "Start empty" answers false; the dialog can't be
+/// dismissed, and if it is taken away unanswered it is asked again.
+Future<bool> askMergeOrStartEmpty(GlobalKey<NavigatorState> navigator) async {
+  while (true) {
+    final context = navigator.currentContext;
+    if (context != null && context.mounted) {
+      final merge = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _MergeDialog(),
+      );
+      if (merge != null) return merge;
+    }
+    await WidgetsBinding.instance.endOfFrame;
+  }
+}
+
+class _MergeDialog extends StatelessWidget {
+  const _MergeDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: const Text('Another account'),
+        content: const Text(
+          'This device has a library from another account. Merge it into '
+          'this account, or start empty?',
+        ),
+        actions: [
+          TextButton(
+            key: const Key('account.startEmpty'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Start empty'),
+          ),
+          FilledButton(
+            key: const Key('account.merge'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Merge'),
+          ),
+        ],
+      ),
+    );
+  }
+}

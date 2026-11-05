@@ -10,9 +10,11 @@ import '../../account/account_service.dart';
 import '../../account/avatar_image.dart' show ImageTooBigException;
 import '../../core/log.dart';
 import '../../providers.dart';
+import '../../sync/cloud/sync_status.dart';
 import '../../theme/app_theme.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
+import '../playlist/yt_playlist_actions.dart' show relativeTimeText;
 import '../settings/settings_page.dart' show SettingsSectionTitle;
 import 'account_dialogs.dart';
 import 'auth_screens.dart';
@@ -44,6 +46,15 @@ final avatarPickerProvider = Provider<Future<AvatarPick?> Function()>(
     );
   },
 );
+
+/// The sync status line's main text.
+String syncPhaseText(SyncPhase phase) => switch (phase) {
+  SyncPhase.idle => 'Synced',
+  SyncPhase.syncing => 'Syncing…',
+  SyncPhase.offline => 'Waiting for internet',
+  SyncPhase.error => "Couldn't sync. Will try again.",
+  SyncPhase.clockWrong => "Can't sync: this device's date and time are wrong.",
+};
 
 /// Settings → Account: Sign up and Log in when signed out; the picture,
 /// username, email and the account's actions when signed in.
@@ -108,6 +119,34 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
       return;
     }
     await _run(() => service.changeAvatar(bytes), 'Picture updated');
+  }
+
+  /// Logs out. Changes the account hasn't got yet are uploaded first; if
+  /// that can't be done (offline), it asks before logging out anyway.
+  Future<void> _logOut() async {
+    if (_busy) return;
+    final service = ref.read(accountServiceProvider);
+    final sync = ref.read(cloudSyncProvider);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    var unsent = false;
+    try {
+      if (await sync.hasUnsent()) {
+        await sync.syncNow();
+        unsent = await sync.hasUnsent();
+      }
+    } catch (e) {
+      // Can't tell: ask, rather than lose changes silently.
+      AppLog.w('Checking for unsent changes failed: ${e.runtimeType}');
+      unsent = true;
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (unsent && !await confirmLogOutWithUnsent(context)) return;
+    if (!mounted) return;
+    await _run(service.logOut, 'Signed out');
   }
 
   Future<void> _delete() async {
@@ -230,6 +269,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
           ],
         ),
       ),
+      const _SyncStatusLine(),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Wrap(
@@ -253,12 +293,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
                 'Remove picture',
                 () => _run(service.removeAvatar, 'Picture removed'),
               ),
-            action(
-              'account.logOut',
-              Icons.logout_rounded,
-              'Log out',
-              () => _run(service.logOut, 'Signed out'),
-            ),
+            action('account.logOut', Icons.logout_rounded, 'Log out', _logOut),
             action(
               'account.delete',
               Icons.delete_outline_rounded,
@@ -270,5 +305,61 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
         ),
       ),
     ];
+  }
+}
+
+/// Cloud sync's state ("Synced", "Syncing…", …), when it last synced, and
+/// Sync now.
+class _SyncStatusLine extends ConsumerWidget {
+  const _SyncStatusLine();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final status =
+        ref.watch(cloudSyncStatusProvider).value ??
+        ref.read(cloudSyncProvider).current;
+    final syncing = status.phase == SyncPhase.syncing;
+    final last = status.lastSynced;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  syncPhaseText(status.phase),
+                  key: const Key('account.syncStatus'),
+                  style: TextStyle(
+                    color: switch (status.phase) {
+                      SyncPhase.error || SyncPhase.clockWrong => Theme.of(
+                        context,
+                      ).colorScheme.error,
+                      _ => colors.text,
+                    },
+                    fontSize: 13,
+                  ),
+                ),
+                if (last != null && !syncing)
+                  Text(
+                    'Last synced ${relativeTimeText(last, ref.read(nowProvider)())}',
+                    key: const Key('account.lastSynced'),
+                    style: TextStyle(color: colors.mutedText, fontSize: 12),
+                  ),
+              ],
+            ),
+          ),
+          TextButton(
+            key: const Key('account.syncNow'),
+            onPressed: syncing
+                ? null
+                : () => unawaited(ref.read(cloudSyncProvider).syncNow()),
+            child: const Text('Sync now'),
+          ),
+        ],
+      ),
+    );
   }
 }

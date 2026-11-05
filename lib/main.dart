@@ -74,6 +74,7 @@ import 'sync/cloud/cloud_sync.dart';
 import 'sync/device_identity.dart';
 import 'theme/font_service.dart';
 import 'theme/theme_repository.dart';
+import 'ui/account/account_dialogs.dart' show askMergeOrStartEmpty;
 import 'ui/library/import_dialog.dart';
 import 'youtube/android_ytdlp_runner.dart';
 import 'youtube/desktop_ytdlp_runner.dart';
@@ -325,6 +326,7 @@ Future<void> main() async {
     network: network.changes,
     deleteSyncFiles: cloudFiles.deleteAll,
   );
+  final navigatorKey = GlobalKey<NavigatorState>();
   final cloudSync = CloudSync(
     db: db,
     stamp: stamp,
@@ -333,11 +335,11 @@ Future<void> main() async {
     settings: settings,
     network: network.changes,
     fontsDir: paths.fonts,
-    // Placeholder until the merge-or-start-empty question has its dialog.
-    askMerge: () async => true,
+    // Signing in as another account than last time: asked on the app's
+    // navigator once it is up.
+    askMerge: () => askMergeOrStartEmpty(navigatorKey),
   );
 
-  final navigatorKey = GlobalKey<NavigatorState>();
   final router = buildRouter(navigatorKey: navigatorKey);
   try {
     final controls = await MediaControlsBinding.create(player, artCache);

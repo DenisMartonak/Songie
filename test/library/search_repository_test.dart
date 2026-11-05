@@ -24,22 +24,18 @@ void main() {
     String source = 'local',
     bool deleted = false,
   }) {
-    return db
-        .into(db.tracks)
-        .insert(
-          trackRow(
-            id: id,
-            title: title,
-            artist: artist,
-            album: album,
-            source: source,
-          ).copyWith(
-            deleted: Value(deleted),
-            searchText: Value(
-              normalizeForSearch('$title $artist ${album ?? ''}'),
-            ),
-          ),
-        );
+    return db.insertTrack(
+      trackRow(
+        id: id,
+        title: title,
+        artist: artist,
+        album: album,
+        source: source,
+      ).copyWith(
+        deleted: Value(deleted),
+        searchText: Value(normalizeForSearch('$title $artist ${album ?? ''}')),
+      ),
+    );
   }
 
   Future<void> addPlaylist(String id, String name, {bool deleted = false}) {

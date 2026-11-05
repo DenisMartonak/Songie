@@ -23,7 +23,7 @@ void main() {
 
   Future<void> insertTracks(List<String> ids) async {
     for (final id in ids) {
-      await db.into(db.tracks).insert(trackRow(id: id, durationMs: 1000));
+      await db.insertTrack(trackRow(id: id, durationMs: 1000));
     }
   }
 
@@ -103,9 +103,9 @@ void main() {
     });
 
     test('counts live entries with live tracks and sums duration', () async {
-      await db.into(db.tracks).insert(trackRow(id: 'a', durationMs: 1000));
-      await db.into(db.tracks).insert(trackRow(id: 'b', durationMs: 2500));
-      await db.into(db.tracks).insert(trackRow(id: 'c', durationMs: 4000));
+      await db.insertTrack(trackRow(id: 'a', durationMs: 1000));
+      await db.insertTrack(trackRow(id: 'b', durationMs: 2500));
+      await db.insertTrack(trackRow(id: 'c', durationMs: 4000));
       final p = await newPlaylist();
       await repo.addTracks(p, ['a', 'b', 'c', 'a']);
       var s = (await repo.watchPlaylists().first).single;
@@ -123,8 +123,8 @@ void main() {
     });
 
     test('coverRef falls back to the first track artworkRef', () async {
-      await db.into(db.tracks).insert(trackRow(id: 'a'));
-      await db.into(db.tracks).insert(trackRow(id: 'b'));
+      await db.insertTrack(trackRow(id: 'a'));
+      await db.insertTrack(trackRow(id: 'b'));
       await (db.update(db.tracks)..where((t) => t.id.equals('a'))).write(
         const TracksCompanion(artworkRef: Value('art/a.jpg')),
       );
@@ -315,7 +315,7 @@ void main() {
       await insertTracks(['t1', 't2', 't3']);
       Future<void> file(String id, String state) => db
           .into(db.localFiles)
-          .insert(
+          .insertOnConflictUpdate(
             LocalFilesCompanion.insert(
               trackId: id,
               path: '/music/$id.mp3',
@@ -639,7 +639,7 @@ void main() {
         (db.select(db.tracks)..where((t) => t.id.equals(id))).getSingle();
 
     test('flags the track, stamped; a second call is a no-op', () async {
-      await db.into(db.tracks).insert(trackRow(id: 't', localSeq: 99));
+      await db.insertTrack(trackRow(id: 't', localSeq: 99));
       final before = await row('t');
       expect(await repo.markUnavailable('t'), isA<Ok<void>>());
       final after = await row('t');

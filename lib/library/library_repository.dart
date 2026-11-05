@@ -57,12 +57,31 @@ class PlaylistTrack {
   final bool fileMissing;
 }
 
+/// SQL: track `t` shows on this device. A local-library track does only
+/// when this device has a LocalFiles row for it (in any state, so a file
+/// that went missing here still shows with Locate); one from another device
+/// whose file never came here is hidden. YouTube tracks always show.
+const shownHereSql =
+    "(t.source = 'yt' OR EXISTS "
+    '(SELECT 1 FROM local_files lf WHERE lf.track_id = t.id))';
+
+/// [shownHereSql] for a typed query over [tracks].
+Expression<bool> shownHere(AppDatabase db, $TracksTable tracks) =>
+    tracks.source.equals('yt') |
+    existsQuery(
+      db.selectOnly(db.localFiles)
+        ..addColumns([db.localFiles.trackId])
+        ..where(db.localFiles.trackId.equalsExp(tracks.id)),
+    );
+
 /// Live playlists with their entry count, total duration and cover, ordered
 /// by name (case-insensitive). Shared by the playlist list and playlist search.
+/// Entries hidden on this device ([shownHereSql]) count for nothing.
 Stream<List<PlaylistSummary>> watchPlaylistSummaries(AppDatabase db) {
   const liveEntries =
       'FROM playlist_entries e JOIN tracks t ON t.id = e.track_id '
-      'WHERE e.playlist_id = p.id AND e.deleted = 0 AND t.deleted = 0';
+      'WHERE e.playlist_id = p.id AND e.deleted = 0 AND t.deleted = 0 '
+      'AND $shownHereSql';
   final query = db.customSelect(
     'SELECT p.id, p.name, p.source, p.cover_ref, '
     '(SELECT COUNT(*) $liveEntries) AS track_count, '
@@ -70,7 +89,7 @@ Stream<List<PlaylistSummary>> watchPlaylistSummaries(AppDatabase db) {
     '(SELECT t.artwork_ref $liveEntries '
     'ORDER BY e.position, e.id LIMIT 1) AS first_artwork '
     'FROM playlists p WHERE p.deleted = 0',
-    readsFrom: {db.playlists, db.playlistEntries, db.tracks},
+    readsFrom: {db.playlists, db.playlistEntries, db.tracks, db.localFiles},
   );
   return query.watch().map((rows) {
     final list = [
@@ -121,6 +140,8 @@ class LibraryRepository {
   Future<void> removeFolder(String path) =>
       (_db.delete(_db.libraryFolders)..where((f) => f.path.equals(path))).go();
 
+  /// The playlist's entries in order, without those hidden on this device
+  /// (see [shownHereSql]); play-all and shuffle queue exactly these.
   Stream<List<PlaylistTrack>> watchPlaylistTracks(String playlistId) {
     final query =
         _db.select(_db.playlistEntries).join([
@@ -136,7 +157,10 @@ class LibraryRepository {
           ..where(
             _db.playlistEntries.playlistId.equals(playlistId) &
                 _db.playlistEntries.deleted.equals(false) &
-                _db.tracks.deleted.equals(false),
+                _db.tracks.deleted.equals(false) &
+                // The left join already holds the track's LocalFiles row.
+                (_db.tracks.source.equals('yt') |
+                    _db.localFiles.trackId.isNotNull()),
           )
           ..orderBy([
             OrderingTerm.asc(_db.playlistEntries.position),

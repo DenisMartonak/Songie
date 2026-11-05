@@ -32,6 +32,7 @@ import 'package:songies/youtube/ytdlp_client.dart';
 
 import '../account/fake_account_backend.dart';
 import 'fake_audio_backend.dart';
+import 'fake_cloud_sync.dart';
 
 import 'package:songies/innertube/yt_sign_in.dart';
 import 'package:songies/youtube/deno_installer.dart';
@@ -222,6 +223,9 @@ class UiHarness {
   /// Accounts over [accountBackend], made on first use.
   late final AccountService accounts = AccountService(accountBackend);
 
+  /// Cloud sync as Settings → Account sees it; never signed in.
+  late final FakeCloudSync cloudSync = FakeCloudSync(db, stamp);
+
   /// How often the UI asked for the notification permission.
   int permissionAsks = 0;
 
@@ -267,6 +271,7 @@ class UiHarness {
     unawaited(player.dispose());
     innertube.dispose();
     unawaited(accounts.dispose());
+    await cloudSync.dispose();
     await db.close();
   }
 
@@ -316,6 +321,7 @@ class UiHarness {
     jsRuntimeProvider.overrideWith((ref) async => jsRuntime),
     denoInstallerProvider.overrideWithValue(denoInstaller),
     accountServiceProvider.overrideWithValue(accounts),
+    cloudSyncProvider.overrideWithValue(cloudSync),
   ];
 
   /// An app showing [routes], starting at [initialLocation]; with
@@ -326,6 +332,7 @@ class UiHarness {
     ThemeSpec theme = ThemeSpec.builtInDefault,
     List<Override> extraOverrides = const [],
     bool disableAnimations = false,
+    GlobalKey<NavigatorState>? navigatorKey,
   }) {
     return ProviderScope(
       overrides: [...overrides, ...extraOverrides],
@@ -340,6 +347,7 @@ class UiHarness {
           );
         },
         routerConfig: GoRouter(
+          navigatorKey: navigatorKey,
           initialLocation: initialLocation,
           routes: routes,
         ),

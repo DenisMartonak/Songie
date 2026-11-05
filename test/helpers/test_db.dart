@@ -34,3 +34,22 @@ TracksCompanion trackRow({
     searchText: '${title.toLowerCase()} ${artist.toLowerCase()}',
   );
 }
+
+extension TestTracks on AppDatabase {
+  /// Inserts [row] as a track this device has: a local-library track gets a
+  /// LocalFiles row (state [file]) too, since playlists, counts and search
+  /// hide local tracks without one (songs that live on another device).
+  Future<void> insertTrack(TracksCompanion row, {String file = 'done'}) async {
+    await into(tracks).insert(row);
+    if (row.source.value == 'yt') return;
+    await into(localFiles).insertOnConflictUpdate(
+      LocalFilesCompanion.insert(
+        trackId: row.id.value,
+        path: '/music/${row.id.value}.mp3',
+        state: file,
+        bytes: 1,
+        mtimeMs: 1,
+      ),
+    );
+  }
+}
