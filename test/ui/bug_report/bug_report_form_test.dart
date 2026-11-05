@@ -301,8 +301,11 @@ void main() {
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
-    await tester.binding.handlePopRoute();
-    await tester.pump(const Duration(milliseconds: 500));
+    await Navigator.of(tester.element(find.byType(BugReportForm))).maybePop();
+    // A dismissed route needs a few frames to leave the tree.
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
     expect(find.byType(BugReportForm), findsOneWidget);
     hold!.complete();
     await afterSend(tester);

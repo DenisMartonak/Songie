@@ -39,9 +39,7 @@ void main() {
     await tester.pumpWidget(
       h.app(
         initialLocation: '/settings',
-        extraOverrides: [
-          equalizerProvider.overrideWithValue(eq),
-        ],
+        extraOverrides: [equalizerProvider.overrideWithValue(eq)],
         routes: [
           GoRoute(
             path: '/settings',
