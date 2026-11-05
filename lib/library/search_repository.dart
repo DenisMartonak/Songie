@@ -62,8 +62,8 @@ class SearchRepository {
         .watch();
   }
 
-  /// Local tracks count when this device has their file ([shownHere]). A
-  /// YouTube track (an imported one, or one played
+  /// Local tracks count only when this device has their file ([shownHere]),
+  /// even when a playlist holds them. A YouTube track (an imported one, or one played
   /// from search and never added anywhere) counts only while an active entry
   /// of a non-deleted playlist points at it.
   Expression<bool> _inLibrary($TracksTable t) {
@@ -78,8 +78,8 @@ class SearchRepository {
                 e.status.equals('active') &
                 p.deleted.equals(false),
           );
-    return (t.source.equals('yt').not() & shownHere(_db, t)) |
-        existsQuery(reachable);
+    return shownHere(_db, t) &
+        (t.source.equals('yt').not() | existsQuery(reachable));
   }
 
   static final List<OrderingTerm Function($TracksTable)> _titleOrder = [

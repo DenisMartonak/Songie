@@ -190,6 +190,9 @@ void main() {
     await tester.tapAt(const Offset(5, 5));
     await settle(tester);
     expect(find.text(question), findsOneWidget);
+    expect(await navigator.currentState!.maybePop(), isTrue);
+    await settle(tester);
+    expect(find.text(question), findsOneWidget);
     expect(answer, isNull);
 
     await tester.tap(find.text('Start empty'));
@@ -202,5 +205,42 @@ void main() {
     await tester.tap(find.text('Merge'));
     await settle(tester);
     expect(answer, isTrue);
+  });
+
+  uiTest('the merge question goes away when sync cancels it (signed out)', (
+    tester,
+  ) async {
+    final navigator = GlobalKey<NavigatorState>();
+    const question =
+        'This device has a library from another account. Merge it into '
+        'this account, or start empty?';
+    await pumpAccount(tester, navigatorKey: navigator);
+    final cancel = Completer<void>();
+    var finished = false;
+    unawaited(
+      askMergeOrStartEmpty(
+        navigator,
+        cancelled: cancel.future,
+      ).then((_) => finished = true),
+    );
+    await settle(tester);
+    expect(find.text(question), findsOneWidget);
+
+    cancel.complete();
+    await settle(tester);
+    expect(find.text(question), findsNothing);
+    expect(finished, isTrue);
+    // The rest of the app is still there, nothing else was popped.
+    expect(find.text('Account'), findsWidgets);
+  });
+
+  uiTest('while the merge question is open the status reads Syncing… and '
+      'Sync now is off', (tester) async {
+    await signedIn();
+    // What CloudSync reports while it waits for the answer.
+    h.cloudSync.emit(const SyncStatus(SyncPhase.syncing));
+    await pumpAccount(tester);
+    expect(statusText(tester), 'Syncing…');
+    expect(tester.widget<TextButton>(key('account.syncNow')).onPressed, isNull);
   });
 }

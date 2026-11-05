@@ -337,7 +337,8 @@ Future<void> main() async {
     fontsDir: paths.fonts,
     // Signing in as another account than last time: asked on the app's
     // navigator once it is up.
-    askMerge: () => askMergeOrStartEmpty(navigatorKey),
+    askMerge: (cancelled) =>
+        askMergeOrStartEmpty(navigatorKey, cancelled: cancelled),
   );
 
   final router = buildRouter(navigatorKey: navigatorKey);

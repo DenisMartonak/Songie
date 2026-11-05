@@ -36,7 +36,7 @@ class _Dev {
 
   static Future<_Dev> make(
     FakeServer server, {
-    Future<bool> Function()? askMerge,
+    Future<bool> Function(Future<void> cancelled)? askMerge,
     Stream<NetworkKind>? network,
     Directory? fontsDir,
     Duration pushDelay = const Duration(hours: 1),
@@ -115,7 +115,7 @@ void main() {
   final devs = <_Dev>[];
 
   Future<_Dev> dev({
-    Future<bool> Function()? askMerge,
+    Future<bool> Function(Future<void> cancelled)? askMerge,
     Stream<NetworkKind>? network,
     Directory? fontsDir,
     Duration pushDelay = const Duration(hours: 1),
@@ -365,7 +365,7 @@ void main() {
     var asked = 0;
     final a = await dev(
       fontsDir: fontsDir,
-      askMerge: () async {
+      askMerge: (_) async {
         asked++;
         return false;
       },
@@ -412,12 +412,59 @@ void main() {
 
     // Back to u1: asked again; Merge keeps everything and sends it up.
     await a.sync.stop();
-    final b = await dev(askMerge: () async => true);
+    final b = await dev(askMerge: (_) async => true);
     await b.newPlaylist('Mine');
     await b.settings.setString('cloud_last_account', 'u2');
     await b.start('u1');
     expect(await b.liveNames(), unorderedEquals(['Mine', 'P', 'Favorites']));
     expect(server.rowsOf('u1').values.map((d) => d['name']), contains('Mine'));
+  });
+
+  test('while the merge question is open the status is syncing; signing out '
+      'or another sign-in cancels it, and its late answer changes '
+      'nothing', () async {
+    final answers = <Completer<bool>>[];
+    final cancels = <Future<void>>[];
+    final a = await dev(
+      askMerge: (cancelled) {
+        cancels.add(cancelled);
+        answers.add(Completer<bool>());
+        return answers.last.future;
+      },
+    );
+    await a.newPlaylist('Mine');
+    await a.settings.setString('cloud_last_account', 'other');
+    final cancelled = <int>{};
+
+    final first = a.start('u1');
+    await pumpEventQueue();
+    expect(cancels, hasLength(1));
+    unawaited(cancels[0].then((_) => cancelled.add(0)));
+    expect(a.sync.current.phase, SyncPhase.syncing);
+
+    // Signing in as someone else meanwhile: the first question goes away.
+    a.remote.user = 'u2';
+    final second = a.sync.start('u2');
+    await pumpEventQueue();
+    expect(cancelled, {0});
+    expect(cancels, hasLength(2));
+    unawaited(cancels[1].then((_) => cancelled.add(1)));
+    expect(a.sync.current.phase, SyncPhase.syncing);
+
+    await a.sync.stop();
+    await pumpEventQueue();
+    expect(cancelled, {0, 1});
+    expect(a.sync.current.phase, SyncPhase.idle);
+
+    // Late "Start empty" answers wipe nothing and record no account.
+    for (final c in answers) {
+      c.complete(false);
+    }
+    await first;
+    await second;
+    expect(await a.liveNames(), contains('Mine'));
+    expect(await a.settings.getString('cloud_last_account'), 'other');
+    expect(a.remote.pushCalls, 0);
   });
 
   test(

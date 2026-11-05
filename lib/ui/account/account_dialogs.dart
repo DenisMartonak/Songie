@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -193,20 +195,41 @@ Future<bool> confirmLogOutWithUnsent(BuildContext context) async {
 /// Asked on [navigator] (the app's root navigator) once it is up: before the
 /// first frame, or while the app is in the background and draws nothing, it
 /// waits. Only a tap on "Start empty" answers false; the dialog can't be
-/// dismissed, and if it is taken away unanswered it is asked again.
-Future<bool> askMergeOrStartEmpty(GlobalKey<NavigatorState> navigator) async {
-  while (true) {
+/// dismissed, and if it is taken away unanswered it is asked again. When
+/// [cancelled] completes (signed out meanwhile) the dialog closes and the
+/// answer is true, which sync then ignores.
+Future<bool> askMergeOrStartEmpty(
+  GlobalKey<NavigatorState> navigator, {
+  Future<void>? cancelled,
+}) async {
+  var gone = false;
+  Route<bool>? open;
+  unawaited(
+    cancelled?.then((_) {
+      gone = true;
+      final route = open;
+      if (route != null && route.isActive) {
+        route.navigator?.removeRoute(route);
+      }
+    }),
+  );
+  while (!gone) {
+    final nav = navigator.currentState;
     final context = navigator.currentContext;
-    if (context != null && context.mounted) {
-      final merge = await showDialog<bool>(
+    if (nav != null && context != null && context.mounted) {
+      final route = open = DialogRoute<bool>(
         context: context,
         barrierDismissible: false,
         builder: (_) => const _MergeDialog(),
       );
+      final merge = await nav.push(route);
+      open = null;
+      if (gone) break;
       if (merge != null) return merge;
     }
     await WidgetsBinding.instance.endOfFrame;
   }
+  return true;
 }
 
 class _MergeDialog extends StatelessWidget {

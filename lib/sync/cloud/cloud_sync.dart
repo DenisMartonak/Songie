@@ -43,7 +43,7 @@ class CloudSync {
     required this._remote,
     required this._settings,
     Stream<NetworkKind>? network,
-    Future<bool> Function()? askMerge,
+    Future<bool> Function(Future<void> cancelled)? askMerge,
     this._fontsDir,
     this._files,
     this._pushDelay = const Duration(seconds: 3),
@@ -54,13 +54,20 @@ class CloudSync {
     _netSub = network?.listen(_onNetwork, onError: (Object _) {});
   }
 
-  static Future<bool> _merge() async => true;
+  static Future<bool> _merge(Future<void> _) async => true;
 
   final AppDatabase _db;
   final SyncStamp _stamp;
   final CloudRemote _remote;
   final SettingsRepository _settings;
-  final Future<bool> Function() _askMerge;
+
+  /// Asks merge (true) or start empty (false); `cancelled` completes when
+  /// the question is no longer wanted (signed out, or another sign-in), and
+  /// the answer is then ignored.
+  final Future<bool> Function(Future<void> cancelled) _askMerge;
+
+  /// The open merge question's cancel signal.
+  Completer<void>? _asking;
   final Directory? _fontsDir;
 
   /// Fonts and covers the synced rows point at, reconciled after each run.
@@ -127,14 +134,20 @@ class CloudSync {
   Future<void> start(String userId) async {
     if (_uid == userId && _stopping == null) return;
     final gen = ++_gen;
+    _cancelAsk();
     if (_uid != null) unawaited(_halt());
     while (_stopping != null) {
       await _stopping;
     }
     if (gen != _gen) return;
     final last = await _settings.getString(kCloudLastAccount);
+    if (gen != _gen) return;
     if (last != null && last != userId) {
-      final merge = await _askMerge();
+      final asking = _asking = Completer<void>();
+      // Waiting for the answer shows as syncing (Sync now off).
+      _setStatus(SyncStatus(SyncPhase.syncing, lastSynced: _status.lastSynced));
+      final merge = await _askMerge(asking.future);
+      if (identical(_asking, asking)) _asking = null;
       if (gen != _gen) return;
       if (!merge) await wipeForNewAccount();
       // Everything here goes up to the new account, and all of its rows
@@ -166,7 +179,18 @@ class CloudSync {
   Future<void> stop() {
     // Also stops a start that is still asking or wiping.
     _gen++;
+    _cancelAsk();
     return _halt();
+  }
+
+  /// Takes away an open merge question; signed out again meanwhile, the
+  /// status goes back to idle.
+  void _cancelAsk() {
+    final asking = _asking;
+    if (asking == null) return;
+    _asking = null;
+    asking.complete();
+    if (_uid == null) _setStatus(const SyncStatus(SyncPhase.idle));
   }
 
   /// Signs the engine out; the tidying up is [_stopping] until done.

@@ -144,6 +144,8 @@ void main() {
     final search = SearchRepository(db);
     await local('here');
     await local('elsewhere', file: null);
+    // It came with a synced playlist: still not here.
+    await playlist(['elsewhere', 'here']);
 
     expect((await search.allTracks().first).map((t) => t.id), ['here']);
     expect((await search.searchTracks('song').first).map((t) => t.id), [
