@@ -5,6 +5,10 @@ import 'package:flutter/material.dart'
     show ImageProvider, NetworkImage, ResizeImage, ThemeData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:http/http.dart' as http;
+
+import 'bug_report/bug_report.dart';
+import 'bug_report/bug_report_sender.dart';
 import 'core/app_version.dart';
 import 'core/connectivity.dart';
 import 'core/log.dart';
@@ -918,3 +922,20 @@ final updateDownloaderProvider = Provider<UpdateDownloader>(
 /// The in-app update flow behind the update dialog and Settings → About.
 final updateControllerProvider =
     NotifierProvider<UpdateController, UpdateState>(UpdateController.new);
+
+// --- Bug reports -----------------------------------------------------------
+
+/// Whether this build can send bug reports; a provider so tests can fake it.
+final bugReportsBuiltProvider = Provider<bool>((ref) => bugReportsBuilt());
+
+/// The one sender of the app run, so its one-a-minute limit holds.
+final bugReportSenderProvider = Provider<BugReportSender>((ref) {
+  final client = http.Client();
+  ref.onDispose(client.close);
+  return BugReportSender(client: client);
+});
+
+/// Reads the device for a bug report; replaceable in tests.
+final deviceSummaryProvider = Provider<Future<DeviceSummary> Function()>(
+  (ref) => readDeviceSummary,
+);

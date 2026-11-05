@@ -15,6 +15,7 @@ import '../../theme/app_theme.dart';
 import '../../update/update_controller.dart';
 import '../library/add_folder_flow.dart';
 import '../motion/motion.dart';
+import '../bug_report/bug_report_form.dart';
 import '../update/update_dialog.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
@@ -506,6 +507,16 @@ class _AboutSection extends ConsumerWidget {
         const SettingsSectionTitle('About'),
         const _InfoRow('Version', appVersion),
         _InfoRow('Device ID', shortId),
+        if (ref.watch(bugReportsBuiltProvider))
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: TextButton.icon(
+              key: const Key('settings.reportBug'),
+              onPressed: () => showBugReportForm(context),
+              icon: const Icon(Icons.bug_report_outlined),
+              label: const Text('Report a bug'),
+            ),
+          ),
         const _CheckForUpdates(),
       ],
     );
