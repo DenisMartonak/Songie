@@ -25,6 +25,7 @@ import 'playback_settings.dart';
 import 'storage_usage.dart';
 import 'youtube_settings.dart';
 import 'discord_settings.dart';
+import 'crash_reports_settings.dart';
 
 export '../../core/app_version.dart';
 
@@ -95,6 +96,7 @@ class SettingsPage extends ConsumerWidget {
           const DownloadsSettingsSection(),
           const _SyncSection(),
           const _StorageSection(),
+          const CrashReportsSettingsSection(),
           const _LogsSection(),
           const _AboutSection(),
         ],

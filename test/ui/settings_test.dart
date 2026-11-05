@@ -606,6 +606,8 @@ void main() {
           200,
           scrollable: find.byType(Scrollable).first,
         );
+        await tester.ensureVisible(find.text('Check for updates'));
+        await tester.pump();
       }
 
       uiTest('Checking…, then No updates found.', (tester) async {
