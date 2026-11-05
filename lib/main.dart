@@ -71,7 +71,6 @@ import 'router.dart';
 import 'sync/cloud/cloud_files.dart';
 import 'sync/cloud/cloud_remote.dart';
 import 'sync/cloud/cloud_sync.dart';
-import 'sync/device_identity.dart';
 import 'theme/font_service.dart';
 import 'theme/theme_repository.dart';
 import 'ui/account/account_dialogs.dart' show askMergeOrStartEmpty;
@@ -98,6 +97,7 @@ Future<void> main() async {
   await paths.ensureCreated();
   await AppLog.init(paths.logs);
   installErrorLogging();
+  _deleteOldSyncDir(paths.root);
 
   final db = AppDatabase.open(paths.db);
   final stamp = await SyncStamp.load(db);
@@ -298,15 +298,6 @@ Future<void> main() async {
     network: network,
   );
 
-  // Sync's TLS identity. Failure here must not stop the app: only the Sync
-  // devices page needs it.
-  DeviceIdentity? deviceIdentity;
-  try {
-    deviceIdentity = await DeviceIdentity.loadOrCreate(paths.sync);
-  } catch (e, s) {
-    AppLog.e('Device identity unavailable', e, s);
-  }
-
   // Accounts: Supabase starts in the background, so a slow keyring or no
   // network never holds up the first frame; signed out, it never touches
   // the keyring. If it fails, the app runs signed out.
@@ -352,8 +343,6 @@ Future<void> main() async {
   final container = ProviderContainer(
     overrides: [
       appPathsProvider.overrideWithValue(paths),
-      if (deviceIdentity != null)
-        deviceIdentityProvider.overrideWithValue(deviceIdentity),
       databaseProvider.overrideWithValue(db),
       syncStampProvider.overrideWithValue(stamp),
       libraryRepositoryProvider.overrideWithValue(library),
@@ -475,6 +464,17 @@ Future<void> _recheckUnavailableOnce(
       await settings.setBool(kUnavailableRecheckDone, true);
     case Err(:final failure):
       AppLog.w('Unavailable re-check failed: ${failure.message}');
+  }
+}
+
+/// Deletes the home-network sync's directory (its TLS certificate and key),
+/// left behind by versions before cloud sync.
+void _deleteOldSyncDir(Directory root) {
+  try {
+    final dir = Directory(p.join(root.path, 'sync'));
+    if (dir.existsSync()) dir.deleteSync(recursive: true);
+  } catch (e) {
+    AppLog.w('Could not remove the old sync directory: $e');
   }
 }
 

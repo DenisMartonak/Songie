@@ -13,13 +13,10 @@ import '../motion/motion.dart';
 import '../widgets/playlist_art.dart';
 import 'go_tab.dart';
 
-/// The desktop sidebar: Home / Search / Sync devices, the playlist list and a
+/// The desktop sidebar: Home / Search, the playlist list and a
 /// Settings entry. 260 px wide, or a 72 px icon rail when [collapsed]. Rows
 /// highlight on hover; the selected row carries an accent bar on its left
 /// edge that slides between the rows of its group.
-/// Where Sync devices lives (inside Settings, in Home's branch).
-const syncDevicesLocation = '/settings/sync';
-
 class Sidebar extends ConsumerWidget {
   const Sidebar({
     required this.shell,
@@ -44,10 +41,9 @@ class Sidebar extends ConsumerWidget {
     final path = GoRouterState.of(context).uri.path;
     final playlists = ref.watch(playlistsProvider).value ?? const [];
     final current = shell.currentIndex;
-    // Settings and Sync devices share Home's branch but are not Home.
+    // Settings shares Home's branch but is not Home.
     final onSettings = path == '/settings';
-    final onSync = path == syncDevicesLocation;
-    final homeSelected = current == 0 && !onSettings && !onSync;
+    final homeSelected = current == 0 && !onSettings;
     final playlistSelected = playlists.indexWhere(
       (p) => path.endsWith('/playlist/${p.id}'),
     );
@@ -59,8 +55,6 @@ class Sidebar extends ConsumerWidget {
         ? 0
         : current == 1
         ? 1
-        : onSync
-        ? 2
         : null;
     final boxColor = Color.alphaBlend(
       Colors.white.withAlpha(10),
@@ -122,18 +116,6 @@ class Sidebar extends ConsumerWidget {
                           colorFilter: _tint(colors, current == 1),
                         ),
                         onTap: () => goTab(shell, 1),
-                      ),
-                      _NavItem(
-                        key: const Key('sidebar.sync'),
-                        label: 'Sync devices',
-                        collapsed: collapsed,
-                        selected: onSync,
-                        icon: Icon(
-                          Icons.sync_rounded,
-                          size: 22,
-                          color: onSync ? colors.text : colors.mutedText,
-                        ),
-                        onTap: () => context.go(syncDevicesLocation),
                       ),
                     ],
                   ),

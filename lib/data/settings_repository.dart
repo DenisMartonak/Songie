@@ -27,8 +27,8 @@ const kYtVisitorData = 'yt_visitor_data';
 /// then on Innertube requests carry the `SOCS=CAI` cookie. Device-local.
 const kYtConsentGiven = 'yt_consent_given';
 
-/// This device's name as shown to paired devices. Device-local; unset means
-/// the default (hostname on desktop, `Android` on Android).
+/// The device name home-network sync showed to paired devices (that sync is
+/// gone; kept so bug reports still redact it from older logs). Device-local.
 const kDeviceName = 'device_name';
 
 /// Cached display name of the signed-in YouTube account. Device-local, not

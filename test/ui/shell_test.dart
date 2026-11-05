@@ -586,7 +586,7 @@ void main() {
       expect(tester.getSize(find.byKey(const Key('sidebar'))).width, 260);
     });
 
-    testWidgets('sidebar navigates, Sync devices included', (tester) async {
+    testWidgets('sidebar navigates', (tester) async {
       await pumpApp(tester, desktop);
 
       await tester.tap(find.byKey(const Key('sidebar.search')));
@@ -601,11 +601,6 @@ void main() {
       await tester.tap(find.byKey(const Key('sidebar.home')));
       await tester.pumpAndSettle();
       expect(router.state.uri.path, '/home');
-
-      await tester.tap(find.byKey(const Key('sidebar.sync')));
-      await tester.pumpAndSettle();
-      expect(router.state.uri.path, '/settings/sync');
-      expect(find.byTooltip('Coming soon'), findsNothing);
 
       await tester.tap(find.byKey(const Key('sidebar.settings')));
       await tester.pumpAndSettle();

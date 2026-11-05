@@ -110,6 +110,12 @@ The Report a bug form in Settings sends a report to a Discord channel through a 
    ```
 6. GitHub builds the APK, the Windows installer and the Linux AppImage, then publishes them on the Releases page. If the tag and `pubspec.yaml` disagree, the workflow fails on purpose; fix the version and tag again.
 
+### Notes for the next release
+
+The workflow writes the release notes from the commits; edit them on GitHub and add these lines:
+
+- Home-network sync is gone: sign in on every device to keep them in sync.
+
 ### When something goes wrong
 
 - **First-ever run:** do a manual build first (Actions tab, the release workflow, Run workflow). It builds everything without publishing. Once that is green, push a throwaway tag (for example `v0.0.1-test`, then delete the release and tag afterwards) before the real one.
@@ -122,10 +128,10 @@ Songies needs Android 8.0 or newer (the crash reporter requires it).
 
 Your current phone app is signed with a debug key, so it cannot be updated by the release APK. Do this once:
 
-1. Sync the phone to a PC with device sync, so the library is safe on the PC.
+1. Sign in on the phone (Settings, Account) and wait until it says "Synced", so the library is safe in your account.
 2. Uninstall Songies on the phone.
 3. Install the release APK (`songies-X.Y.Z.apk` from the GitHub release).
-4. Pair the phone with the PC again and sync back.
+4. Sign in again; the library comes back from your account.
 
 What does not come back: downloads are fetched again (where downloads are on), you sign in to YouTube again, and settings are not carried over. After this, updates install over the top without losing anything.
 

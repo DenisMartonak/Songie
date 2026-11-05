@@ -202,24 +202,3 @@ class Listens extends Table with SyncColumns {
   TextColumn get artistSnapshot => text()();
   TextColumn get artworkRef => text().nullable()();
 }
-
-/// A paired device (Plan 10). Device-local, never synced.
-@DataClassName('PeerRow')
-class Peers extends Table {
-  TextColumn get deviceId => text()();
-  TextColumn get name => text()();
-
-  /// Lowercase hex SHA-256 of the peer's certificate DER.
-  TextColumn get certFingerprint => text()();
-
-  /// Base64 pairing key.
-  TextColumn get pairKey => text()();
-  TextColumn get host => text().nullable()();
-  IntColumn get port => integer().nullable()();
-  IntColumn get lastSentSeq => integer().withDefault(const Constant(0))();
-  IntColumn get lastReceivedSeq => integer().withDefault(const Constant(0))();
-  DateTimeColumn get lastSyncAt => dateTime().nullable()();
-
-  @override
-  Set<Column> get primaryKey => {deviceId};
-}

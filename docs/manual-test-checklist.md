@@ -217,27 +217,7 @@ Phone (Android), desktop Linux and Windows. Where a check says "desktop", do it 
 
 ## Plan 10: device sync
 
-Phone (Android), desktop Linux and Windows. Open Settings and then Sync devices on both devices before each check: the other device must have Sync devices open, because nothing runs in the background. Back up nothing first, but try the large-library check on a copy if you can.
-- [ ] Pair by code, phone and Linux: one device shows a 6-digit code, the other types it. They find each other, pair, and run a first sync.
-- [ ] Pair by code, phone and Windows (same check).
-- [ ] Pair by code, Linux and Windows (same check).
-- [ ] A wrong code: the app says the code was wrong and nothing is paired. After 5 wrong tries the code stops working and you need a new one.
-- [ ] An expired code: show a code, wait 5 minutes, then type it on the other device. Pairing fails and you need a new code.
-- [ ] Connect by address: type the other device's address and the code. Pairing works, including on Linux without Avahi.
-- [ ] After pairing, "Your devices" lists the other device; a later sync is one tap on it.
-- [ ] Sync with music playing: playback does not stop or stutter, and the queue stays as it was.
-- [ ] A clash on a playlist (rename it on both devices, or edit it on both): the prompt offers Keep this device's, Keep the other's and Keep both. Check each choice leaves the right playlist on both devices after the next sync.
-- [ ] Delete a playlist on one device and edit it on the other, then sync. The prompt appears, and each choice does what it says.
-- [ ] Changes to different parts of one playlist (a song added on one device, the name changed on the other) combine without asking.
-- [ ] A large library's first sync (thousands of songs): it finishes, progress moves, memory stays reasonable and the app stays usable. Cancel part-way and sync again; it picks up.
-- [ ] An MP3 added on one device arrives on the other and plays. A font added on one device arrives and can be chosen in Settings. A cover arrives too.
-- [ ] The summary after a sync reads sensibly ("1 playlist changed", "N files copied").
-- [ ] Forwarding: pair A with B and B with C, sync A and B, then B and C. A's changes reach C without A and C ever meeting.
-- [ ] Unpair: the device disappears from Your devices, and the other device can no longer sync with this one until you pair again.
-- [ ] Linux firewall: allow port 47823/tcp and the mdns service (for example `sudo firewall-cmd --add-port=47823/tcp --add-service=mdns`, add `--permanent` to keep it). Without them the other devices cannot find or reach the Linux machine; with them they can. Discovery needs Avahi; without it, Connect by address still works.
-- [ ] Windows: the first time, Windows may ask to allow private networks. Allow it; sync works.
-- [ ] Android: with the app paused (switched away) or the tab hidden, the page stops serving, so another device can't connect; coming back makes it available again. A sync that is running keeps going.
-- [ ] Leaving the Sync devices page on any device stops it serving (the other device then says it can't find it).
+Removed: home-network sync was replaced by cloud sync (see Cloud sync below).
 
 ## Plan 11: packaging and in-app updates
 
@@ -246,7 +226,7 @@ Needs a GitHub repo (public, or a public test repo for the test-build item) and 
 - [ ] The release APK, installed on a phone from the release page, opens and plays music.
 - [ ] The Windows setup exe installs for the current user (no administrator prompt), and Songies starts from the Start menu.
 - [ ] The AppImage runs on Linux after `chmod +x`.
-- [ ] First-time phone switch from the debug build: sync to a PC first, uninstall the debug build, install the release APK, pair again and sync back. The library returns; downloads, sign-in and settings need redoing, as the guide says.
+- [ ] First-time phone switch from the debug build: sign in and let it sync first, uninstall the debug build, install the release APK, sign in again and let it sync. The library returns; downloads, sign-in and settings need redoing, as the guide says.
 - [ ] First-time Windows switch: install the setup exe over a machine that used the loose build folder. The installed app finds the library in `%APPDATA%\Songies`.
 - [ ] On mobile data with downloads set to Wi-Fi only: the dialog says "You're on mobile data, and downloads are set to Wi-Fi only." with "Close" and "Download anyway".
 - [ ] Update, Android: with release 1.0.0 installed, publish 1.1.0 (higher build number). The app shows "Songies 1.1.0 is available" with "Update now" and "Not now"; Update now downloads it, then "Install now" installs it over the top. The library, playlists and settings are still there.
@@ -336,6 +316,7 @@ Two devices (phone and desktop) signed in to the same account, and a second acco
 - [ ] Realtime: with both devices open, add a song to a playlist on one; it appears on the other within seconds without a restart. In the dashboard, Realtime, Inspector, join the private channel `sync:<user id>` (as that user): each push shows a `changed` message with only a `server_seq`. Joining another user's `sync:<id>` as yourself is refused.
 - [ ] Table Editor, `sync_rows`: after signing in on a device with a library, rows appear for that user only (`user_id` is theirs), one per synced row.
 - [ ] Database rules (review the migration; the SQL editor runs as the owner and skips them): a signed-in user can read only their own `sync_rows`, can't insert, change or delete them except through `push_rows`, and can touch only their own `<user id>/` folder in `sync-files`.
+- [ ] Upgrade from a version with Sync devices (database schema 8): the app opens with the library, playlists and settings intact; Settings has no Sync devices entry, the desktop sidebar has none, and the old `sync` folder under the app data folder is gone.
 - [ ] Delete account: that user's `sync_rows` and `sync-files/<user id>/` folder are gone; the other account's rows stay.
 
 ## Known follow-ups

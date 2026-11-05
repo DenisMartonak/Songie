@@ -96,7 +96,6 @@ class SettingsPage extends ConsumerWidget {
           const DiscordSettingsSection(),
           const YouTubeSettingsSection(),
           const DownloadsSettingsSection(),
-          const _SyncSection(),
           const _StorageSection(),
           const CrashReportsSettingsSection(),
           const _LogsSection(),
@@ -372,32 +371,6 @@ class _AppearanceSection extends ConsumerWidget {
           value: ref.watch(reduceMotionProvider),
           onChanged: (v) =>
               ref.read(settingsRepositoryProvider).setBool(kReduceMotion, v),
-        ),
-      ],
-    );
-  }
-}
-
-/// Opens Sync devices (pairing and syncing with other devices).
-class _SyncSection extends StatelessWidget {
-  const _SyncSection();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<SongiesColors>()!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SettingsSectionTitle('Sync'),
-        ListTile(
-          key: const Key('settings.syncDevices'),
-          title: Text('Sync devices', style: TextStyle(color: colors.text)),
-          subtitle: Text(
-            'Pair your devices and sync playlists and songs over Wi-Fi',
-            style: TextStyle(color: colors.mutedText, fontSize: 12),
-          ),
-          trailing: Icon(Icons.chevron_right_rounded, color: colors.mutedText),
-          onTap: () => context.push('/settings/sync'),
         ),
       ],
     );

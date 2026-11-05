@@ -149,7 +149,8 @@ class _BugReportFormState extends ConsumerState<BugReportForm> {
       await AppLog.flush();
       // Never create an install id for a report: only read one that exists.
       final installId = await settings.getString(kCrashInstallId);
-      // Sync peers are named after the host on desktop; keep that out of the log.
+      // Device names (the hostname, and a name the old home-network sync let
+      // the user set, which older logs may hold) stay out of the log.
       final deviceNames = [
         Platform.localHostname,
         ?await settings.getString(kDeviceName),

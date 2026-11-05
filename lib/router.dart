@@ -9,7 +9,6 @@ import 'ui/playlist/playlist_page.dart';
 import 'ui/now_playing/now_playing_page.dart';
 import 'ui/search/search_page.dart';
 import 'ui/settings/settings_page.dart';
-import 'ui/settings/sync/sync_devices_page.dart';
 import 'ui/settings/themes/theme_editor_page.dart';
 import 'ui/settings/themes/themes_page.dart';
 import 'ui/shell/adaptive_shell.dart';
@@ -76,14 +75,6 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
                 const PageSurface(child: SettingsPage()),
               ),
               routes: [
-                GoRoute(
-                  path: 'sync',
-                  pageBuilder: (context, state) => sharedAxisPage(
-                    context,
-                    state,
-                    const PageSurface(child: SyncDevicesPage()),
-                  ),
-                ),
                 GoRoute(
                   path: 'themes',
                   pageBuilder: (context, state) => sharedAxisPage(

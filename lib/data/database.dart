@@ -22,7 +22,6 @@ part 'database.g.dart';
     Fonts,
     Lyrics,
     Listens,
-    Peers,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -33,7 +32,7 @@ class AppDatabase extends _$AppDatabase {
       AppDatabase(NativeDatabase.createInBackground(f));
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -58,7 +57,6 @@ class AppDatabase extends _$AppDatabase {
       if (from < 8) {
         await m.addColumn(tracks, tracks.mergedInto);
         await m.addColumn(playlists, playlists.mergedInto);
-        await m.createTable(peers);
         for (final idx in [
           tracksLocalSeq,
           playlistsLocalSeq,
@@ -72,6 +70,8 @@ class AppDatabase extends _$AppDatabase {
           await m.createIndex(idx);
         }
       }
+      // Home-network sync's paired devices, gone with it.
+      if (from < 9) await m.deleteTable('peers');
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');

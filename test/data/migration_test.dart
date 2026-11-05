@@ -15,7 +15,8 @@ const _v1Schema = <String>[
   'CREATE INDEX playlist_entries_playlist_position ON playlist_entries (playlist_id, position)',
 ];
 
-/// Undoes the v8 additions on an open current-schema database.
+/// Undoes the v8 additions (and the v9 removal of `peers`, a no-op) on an
+/// open current-schema database.
 Future<void> _stepBackToV7(AppDatabase db) async {
   await db.customStatement('DROP TABLE IF EXISTS peers');
   for (final t in [
@@ -77,7 +78,7 @@ void main() {
     expect(await db.select(db.playHistory).get(), hasLength(1));
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 8);
+    expect(version.data.values.single, 9);
   });
 
   test('a v2 database opened with v3 code gains yt_seen and keeps data', () async {
@@ -137,7 +138,7 @@ void main() {
       throwsA(anything),
     );
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 8);
+    expect(version.data.values.single, 9);
   });
 
   test(
@@ -181,7 +182,7 @@ void main() {
       expect(pref.downloadEnabled, isFalse);
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 8);
+      expect(version.data.values.single, 9);
     },
   );
 
@@ -231,11 +232,11 @@ void main() {
     expect(await db.select(db.themes).get(), hasLength(1));
     expect((await db.select(db.fonts).getSingle()).family, 'Fira');
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 8);
+    expect(version.data.values.single, 9);
   });
 
   test(
-    'a v5 database opened with v8 code gains an empty lyrics table',
+    'a v5 database opened with v9 code gains an empty lyrics table',
     () async {
       final dir = await Directory.systemTemp.createTemp('songies_migration');
       addTearDown(() => dir.delete(recursive: true));
@@ -253,12 +254,12 @@ void main() {
       addTearDown(db.close);
       expect(await db.select(db.lyrics).get(), isEmpty);
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 8);
+      expect(version.data.values.single, 9);
     },
   );
 
   test(
-    'a v6 database opened with v8 code gains an empty listens table and index',
+    'a v6 database opened with v9 code gains an empty listens table and index',
     () async {
       final dir = await Directory.systemTemp.createTemp('songies_migration');
       addTearDown(() => dir.delete(recursive: true));
@@ -282,11 +283,11 @@ void main() {
           .get();
       expect(idx, hasLength(1));
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 8);
+      expect(version.data.values.single, 9);
     },
   );
 
-  test('v7 to v8 adds merged_into, peers and local_seq indexes', () async {
+  test('v7 to v9 adds merged_into and local_seq indexes', () async {
     final dir = await Directory.systemTemp.createTemp('songies_migration');
     addTearDown(() => dir.delete(recursive: true));
     final file = File('${dir.path}/songies.db');
@@ -301,13 +302,99 @@ void main() {
     addTearDown(db.close);
     final cols = await db.customSelect('PRAGMA table_info(tracks)').get();
     expect(cols.map((r) => r.read<String>('name')), contains('merged_into'));
-    expect(await db.select(db.peers).get(), isEmpty);
     final idx = await db.customSelect('PRAGMA index_list(listens)').get();
     expect(
       idx.map((r) => r.read<String>('name')),
       contains('listens_local_seq'),
     );
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 8);
+    expect(version.data.values.single, 9);
+  });
+  test('v8 to v9 drops peers and keeps every other table\'s rows', () async {
+    final dir = await Directory.systemTemp.createTemp('songies_migration');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File('${dir.path}/songies.db');
+
+    // A v8 database: today's tables plus the paired-devices table, with a
+    // row in each.
+    final first = AppDatabase.open(file);
+    await first.customSelect('select 1').get();
+    await first.customStatement(
+      'CREATE TABLE IF NOT EXISTS "peers" ("device_id" TEXT NOT NULL, '
+      '"name" TEXT NOT NULL, "cert_fingerprint" TEXT NOT NULL, '
+      '"pair_key" TEXT NOT NULL, "host" TEXT NULL, "port" INTEGER NULL, '
+      '"last_sent_seq" INTEGER NOT NULL DEFAULT 0, '
+      '"last_received_seq" INTEGER NOT NULL DEFAULT 0, '
+      '"last_sync_at" INTEGER NULL, PRIMARY KEY ("device_id"))',
+    );
+    const sync = "'c', 'dev', 1";
+    for (final sql in [
+      "INSERT INTO peers (device_id, name, cert_fingerprint, pair_key) "
+          "VALUES ('d2', 'Laptop', 'ff', 'a2V5')",
+      "INSERT INTO tracks (id, clock, origin_device, local_seq, source, title, "
+          "artist, search_text) VALUES ('t1', $sync, 'local', 'Halo', "
+          "'Beyonce', 'halo beyonce')",
+      "INSERT INTO playlists (id, clock, origin_device, local_seq, name, "
+          "source) VALUES ('p1', $sync, 'Chill', 'local')",
+      "INSERT INTO playlist_entries (id, clock, origin_device, local_seq, "
+          "playlist_id, track_id, position, added_at) "
+          "VALUES ('e1', $sync, 'p1', 't1', 'a', 0)",
+      "INSERT INTO yt_seen (id, clock, origin_device, local_seq, playlist_id, "
+          "video_id) VALUES ('s1', $sync, 'p1', 'v1')",
+      "INSERT INTO themes (id, clock, origin_device, local_seq, name, "
+          "spec_json) VALUES ('th1', $sync, 'Dark', '{}')",
+      "INSERT INTO fonts (id, clock, origin_device, local_seq, family, "
+          "file_hash, ext) VALUES ('f1', $sync, 'Fira', 'h', 'ttf')",
+      "INSERT INTO lyrics (id, clock, origin_device, local_seq, kind, body, "
+          "fetched_at) VALUES ('t1', $sync, 'plain', 'la', 0)",
+      "INSERT INTO listens (id, clock, origin_device, local_seq, track_id, "
+          "started_at, heard_ms, counted, main_artist, title_snapshot, "
+          "artist_snapshot) VALUES ('l1', $sync, 't1', 0, 1000, 1, 'Beyonce', "
+          "'Halo', 'Beyonce')",
+      "INSERT INTO local_files (track_id, path, state, bytes, mtime_ms) "
+          "VALUES ('t1', '/m/halo.mp3', 'present', 1, 1)",
+      "INSERT INTO playlist_device_prefs (playlist_id) VALUES ('p1')",
+      "INSERT INTO library_folders (path) VALUES ('/m')",
+      "INSERT INTO settings (key, value) VALUES ('k', 'v')",
+      "INSERT INTO play_history (track_id, played_at) VALUES ('t1', 0)",
+    ]) {
+      await first.customStatement(sql);
+    }
+    Future<Map<String, int>> counts(AppDatabase db) async {
+      final names = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name NOT LIKE 'sqlite_%' AND name != 'peers'",
+          )
+          .get();
+      return {
+        for (final r in names)
+          r.read<String>('name'):
+              (await db
+                      .customSelect(
+                        'SELECT count(*) AS n FROM "${r.read<String>('name')}"',
+                      )
+                      .getSingle())
+                  .read<int>('n'),
+      };
+    }
+
+    final before = await counts(first);
+    expect(before.values, everyElement(1));
+    await first.customStatement('PRAGMA user_version = 8');
+    await first.close();
+
+    final db = AppDatabase.open(file);
+    addTearDown(db.close);
+    final peers = await db
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type = 'table' "
+          "AND name = 'peers'",
+        )
+        .get();
+    expect(peers, isEmpty);
+    expect(await counts(db), before);
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data.values.single, 9);
   });
 }

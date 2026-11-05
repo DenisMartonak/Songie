@@ -12,7 +12,6 @@ class AppPaths {
       fonts = Directory(p.join(root.path, 'fonts')),
       bin = Directory(p.join(root.path, 'bin')),
       logs = Directory(p.join(root.path, 'logs')),
-      sync = Directory(p.join(root.path, 'sync')),
       updates = Directory(p.join(root.path, 'updates')),
       db = File(p.join(root.path, 'songies.db'));
 
@@ -23,7 +22,6 @@ class AppPaths {
   final Directory fonts;
   final Directory bin;
   final Directory logs;
-  final Directory sync;
   final Directory updates;
   final File db;
 
@@ -68,7 +66,6 @@ class AppPaths {
       fonts,
       bin,
       logs,
-      sync,
       updates,
     ]) {
       await d.create(recursive: true);

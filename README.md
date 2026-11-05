@@ -34,7 +34,7 @@
 - Discord status on Windows and Linux: show what you're listening to on your profile (off by default).
 
 **Across your devices**
-- Sync your library, playlists, themes, lyrics and stats between your devices on the same network: no account, no cloud.
+- Sync your library, playlists, themes, lyrics and stats between your devices by signing in to one account (optional; the app works signed out).
 - In-app updates: Songies finds a new release, checks its checksum and installs it over the top, keeping your library.
 
 ## Download
@@ -51,11 +51,7 @@ Each release also has a `SHA256SUMS` file to check your download against.
 
 ## Syncing devices
 
-Open **Settings → Sync devices** on both devices (or the Sync devices button in the desktop sidebar). One shows a 6-digit code, the other types it in; after that, syncing is one tap. Both devices need Sync devices open at the time and must be on the same network. Your music files are copied across too; settings, sign-in and download choices stay on each device.
-
-- **Linux:** allow port `47823/tcp` and the `mdns` service in your firewall and have Avahi installed so devices can find each other (without Avahi, use Connect by address).
-- **Windows:** you may be asked to allow Songies on private networks.
-- **Android:** syncing works while the app is open on that page.
+Sign in (**Settings → Account**) with the same account on each device, and your playlists, Favorites, themes, fonts, covers, lyrics and stats stay in sync through the cloud. Your music files are not uploaded: a song from your own folders shows on another device only if that device has the file too. Settings, YouTube sign-in and download choices stay on each device. Signed out, nothing leaves the device.
 
 ## Discord status
 

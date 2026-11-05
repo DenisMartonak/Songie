@@ -80,11 +80,8 @@ dependencies:
   # WebView2 plugin on Windows, unused there). Exact version: 0.4.0 is the
   # one probed on Linux (docs/innertube-notes.md).
   pointycastle: ^4.0.0
-  basic_utils: ^5.8.2
   dbus: ^0.7.15
   desktop_webview_window: 0.4.0
-  # mDNS discovery for Sync devices (_songies._tcp).
-  bonsoir: ^7.1.0
   url_launcher: ^6.3.1
   archive: ^4.6.0
   sentry_flutter: ^10.3.0

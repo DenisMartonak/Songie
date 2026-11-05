@@ -49,11 +49,9 @@ Big; built in stages, each released on its own:
 1. **Sign up / log in** with Supabase Auth (email + password, maybe Google).
    Optional: the app keeps working signed out. Note: the free tier pauses a
    project after 7 days with no activity.
-2. **Cloud sync of the library** (playlists, Favorites, saved artists,
-   settings worth syncing) through Postgres with row-level security, replacing
-   today's LAN peer-to-peer sync (pairing codes, mDNS, `lib/sync/`). Decide
-   in design: keep LAN sync as a fallback or remove it; how to move existing
-   paired libraries into the account.
+2. **Cloud sync of the library** — done. Postgres with row-level security
+   (`lib/sync/cloud/`); the LAN peer-to-peer sync (pairing codes, mDNS) is
+   removed, and paired devices sync again once signed in to one account.
 3. **Remote control** (Spotify Connect-like): see the user's other signed-in
    devices, and play/pause/skip/change songs on one device from another,
    through Supabase Realtime.
