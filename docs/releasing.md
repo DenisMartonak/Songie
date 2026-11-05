@@ -63,7 +63,10 @@ Release builds send anonymous crash reports to Sentry (Settings → Send crash r
 3. On GitHub open the repo, then Settings, Secrets and variables, Actions.
    - On the Secrets tab, New repository secret: `SENTRY_AUTH_TOKEN`, the token from step 1.
    - On the Variables tab, New repository variable: `SENTRY_PROJECT`, the slug from step 2.
-4. In Sentry open the project's Settings, then Security & Privacy, and leave **Store Native Crash Reports** off. Sentry still reads native crash dumps into normal crash reports; it just does not keep the raw dump file, which can hold bits of memory such as song or file names.
+4. In Sentry open the project's Settings, then Security & Privacy. These settings also cover native crashes, which the app cannot clean up itself before they are sent.
+   - Leave **Store Native Crash Reports** off. Sentry still reads native crash dumps into normal crash reports; it just does not keep the raw dump file, which can hold bits of memory such as song or file names.
+   - Turn on **Prevent Storing of IP Addresses**.
+   - Under Advanced Data Scrubbing, Add Rule: Method **Replace**, Data Type **Usernames in filepaths**, Source **All fields** (`**`). Save. This hides the user name in any path that still reaches Sentry.
 
 5. Nothing to do for the DSN (the address the app sends reports to). It is written in `.github/workflows/release.yml` as `SONGIES_SENTRY_DSN`, and Sentry shows it under the project's Settings, then Client Keys (DSN). It is public by design (it only lets an app send reports), so it is not a secret. If you ever make a new one in Sentry, change it in the workflow.
 
@@ -71,6 +74,14 @@ What reports and what does not:
 
 - Only a tag push (a real release) builds the app with the Sentry address, so only installed releases send reports. A manual run (Run workflow) and anything you build yourself never send anything.
 - If `SENTRY_AUTH_TOKEN` is missing, the release still builds and publishes. Each build job shows the warning "SENTRY_AUTH_TOKEN not set; symbols not uploaded", and crash reports from that release show addresses instead of names. Add the token before the next release. The same goes for a missing `SENTRY_PROJECT` ("SENTRY_PROJECT not set; symbols not uploaded").
+
+### Reading a stack trace from the log
+
+Release builds are made with `--split-debug-info`, so a stack trace in the app's own log (Settings, Export log) shows memory addresses instead of function names. Crash reports in Sentry are decoded by Sentry itself; this is only for the log.
+
+1. Find the release's workflow run on GitHub (Actions, Release, the run for the tag) and download the artifact for the platform: `symbols-android`, `symbols-linux` or `symbols-windows`. GitHub keeps them for 90 days. After that, download the same files from Sentry: the project's Settings, then Debug Files.
+2. Copy the trace from the log into a file, for example `trace.txt`, from the line starting with `*** *** ***` to the last `#` line.
+3. Run `flutter symbolize -i trace.txt -d <file>.symbols` with the symbols file for the device's CPU, for example `app.android-arm64.symbols` for most phones, `app.linux-x64.symbols` or `app.windows-x64.symbols`. It prints the trace with function names and line numbers.
 
 ### Building for Linux on your own PC
 

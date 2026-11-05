@@ -18,7 +18,9 @@
 # builds the app with the Sentry DSN and release name, so manual builds never
 # report. Each platform job then uploads its debug symbols with the
 # SENTRY_AUTH_TOKEN secret and the SENTRY_PROJECT variable; without the token
-# the upload is skipped with a warning and the release goes on.
+# the upload is skipped with a warning and the release goes on. The symbols
+# are also kept for 90 days as the run's symbols-<platform> artifacts, for
+# decoding stack traces in the app's own log.
 name: Release
 
 on:
@@ -181,6 +183,16 @@ jobs:
           fi
           flutter build apk "${args[@]}"
 
+      - name: Keep the debug symbols
+        # For decoding stack traces in the app's own log (docs/releasing.md,
+        # "Reading a stack trace from the log").
+        uses: actions/upload-artifact@v4
+        with:
+          name: symbols-android
+          path: build/symbols/android
+          retention-days: 90
+          if-no-files-found: error
+
       - name: Upload the debug symbols to Sentry
         if: env.IS_RELEASE == 'true'
         # Never fails the release: a missing token or project or a failed
@@ -281,6 +293,16 @@ jobs:
           fi
           flutter build linux "${args[@]}"
 
+      - name: Keep the debug symbols
+        # For decoding stack traces in the app's own log (docs/releasing.md,
+        # "Reading a stack trace from the log").
+        uses: actions/upload-artifact@v4
+        with:
+          name: symbols-linux
+          path: build/symbols/linux
+          retention-days: 90
+          if-no-files-found: error
+
       - name: Upload the debug symbols to Sentry
         if: env.IS_RELEASE == 'true'
         # Never fails the release: a missing token or project or a failed
@@ -342,6 +364,16 @@ jobs:
           }
           flutter @flutterArgs
           if ($LASTEXITCODE -ne 0) { throw "flutter build failed ($LASTEXITCODE)" }
+
+      - name: Keep the debug symbols
+        # For decoding stack traces in the app's own log (docs/releasing.md,
+        # "Reading a stack trace from the log").
+        uses: actions/upload-artifact@v4
+        with:
+          name: symbols-windows
+          path: build/symbols/windows
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Upload the debug symbols to Sentry
         if: env.IS_RELEASE == 'true'
@@ -413,6 +445,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
+          # The release files only, not the symbols-* artifacts.
+          pattern: '{android,linux,windows,version-json}'
           merge-multiple: true
 
       - name: Write SHA256SUMS

@@ -261,6 +261,10 @@ Needs a GitHub repo (public, or a public test repo for the test-build item) and 
 - [ ] The AppImage on a clean Fedora/Nobara (or one without libmpv installed): it starts and plays music, so libmpv is bundled correctly.
 - [ ] The AppImage built by the release workflow on a live Ubuntu session (a USB stick, nothing installed): it starts and plays music, so libcurl (needed by the crash reporter) and libmpv are bundled correctly.
 - [ ] After the first release, open Sentry, the project's Settings, then Debug Files: there are uploads for Android, Windows and Linux, all for `songies@X.Y.Z+N`.
+- [ ] Crash reports from a tagged release: on an installed release with Send crash reports on, make the app hit an error (for example a crash on Windows or Linux). Within a few minutes the error shows in Sentry, Issues, with release `songies@X.Y.Z+N` and environment `production`.
+- [ ] Turn Send crash reports off and cause the same error again: nothing new arrives in Sentry. Turn it back on and the next one arrives.
+- [ ] Open one of those reports in Sentry and read the whole event (also the raw JSON, from the "{ }" button): Debug Meta lists only file names such as `songies.exe` or `libmpv.so.2`, never a folder; the user has only an id; and the user name, song titles and file paths appear nowhere.
+- [ ] The release workflow run has the artifacts `symbols-android`, `symbols-linux` and `symbols-windows`.
 - [ ] AppImage in a read-only folder (for example `chmod a-w` on the folder): an update offers "Open download page" instead of replacing itself.
 - [ ] Test build against a public test repo: build with `--dart-define=SONGIES_UPDATE_REPO=<you>/<test-repo>`, put a release with higher version there, and check the app finds and offers it. (A normal build looks at `DenisMartonak/Songie`.)
 - [ ] The secret scan before going public: run `tool/scan_secrets.sh` and read every finding. Today it reports 2 known false positives (the plan doc quoting the key pattern, and Chromium's `'peanuts'` constant in `test/innertube/browser_cookies_test.dart`). Anything else is new. Then work through the list in releasing.md section 10.
