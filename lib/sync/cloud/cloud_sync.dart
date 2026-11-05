@@ -6,6 +6,7 @@ import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/connectivity.dart';
+import '../../core/hlc.dart';
 import '../../core/log.dart';
 import '../../data/database.dart';
 import '../../data/settings_repository.dart';
@@ -20,8 +21,9 @@ import 'sync_status.dart';
 /// Rows per push and per pull.
 const kCloudPageSize = 500;
 
-/// The largest row `push_rows` takes (its `data` as JSON).
-const _maxRowBytes = 256 * 1024;
+/// The largest row sent (its `data` as JSON). `push_rows` takes 256 KB as
+/// jsonb text, which spaces out the JSON, so this stays clear of it.
+const _maxRowBytes = 240 * 1024;
 
 /// Syncs the synced tables with the signed-in account's rows on the server.
 ///
@@ -44,6 +46,7 @@ class CloudSync {
     this._fontsDir,
     this._pushDelay = const Duration(seconds: 3),
     this._now = DateTime.now,
+    this._stopWait = kCloudCallTimeout,
   }) : _askMerge = askMerge ?? _merge {
     _writesSub = _stamp.writes.listen((_) => localWrite());
     _netSub = network?.listen(_onNetwork, onError: (Object _) {});
@@ -60,6 +63,10 @@ class CloudSync {
   final Duration _pushDelay;
   final DateTime Function() _now;
 
+  /// How long [stop] waits for a running sync (a hung call) before leaving
+  /// it behind.
+  final Duration _stopWait;
+
   late final StreamSubscription<void> _writesSub;
   StreamSubscription<NetworkKind>? _netSub;
   StreamSubscription<void>? _changesSub;
@@ -72,7 +79,19 @@ class CloudSync {
   /// stops at its next step.
   int _gen = 0;
   Future<void>? _running;
+
+  /// The running loop's token; a loop left behind by [stop] sees another.
+  Object? _runToken;
+
+  /// A [stop] still tidying up; [start] waits for it.
+  Future<void>? _stopping;
   bool _again = false;
+
+  /// Set during a run: a push failed (shown as error once the pull is done).
+  bool _pushFailed = false;
+
+  /// Set during a run: the server finds this device's clock a day ahead.
+  bool _clockWrong = false;
   bool _offline = false;
 
   /// Pulled rows this device stores as they came, by `'<wire>/<id>'` to
@@ -100,9 +119,13 @@ class CloudSync {
   /// Signing in as another account than last time first asks whether to
   /// merge this device's library into it or start empty.
   Future<void> start(String userId) async {
-    if (_uid == userId) return;
-    if (_uid != null) await stop();
+    if (_uid == userId && _stopping == null) return;
     final gen = ++_gen;
+    if (_uid != null) unawaited(_halt());
+    while (_stopping != null) {
+      await _stopping;
+    }
+    if (gen != _gen) return;
     final last = await _settings.getString(kCloudLastAccount);
     if (last != null && last != userId) {
       final merge = await _askMerge();
@@ -114,12 +137,12 @@ class CloudSync {
       await _settings.setString(_pullKey(userId), null);
     }
     await _settings.setString(kCloudLastAccount, userId);
-    if (gen != _gen) return;
-    _uid = userId;
-    _onServer.clear();
     final ms = int.tryParse(
       await _settings.getString(_syncedKey(userId)) ?? '',
     );
+    if (gen != _gen) return;
+    _uid = userId;
+    _onServer.clear();
     _setStatus(
       SyncStatus(
         _offline ? SyncPhase.offline : SyncPhase.idle,
@@ -132,22 +155,43 @@ class CloudSync {
     await syncNow();
   }
 
-  /// Stops syncing (signed out). Waits for a running sync to stop.
-  Future<void> stop() async {
+  /// Stops syncing (signed out). Waits for a running sync to stop, but no
+  /// longer than the stop wait.
+  Future<void> stop() {
     // Also stops a start that is still asking or wiping.
     _gen++;
-    if (_uid == null) return;
+    return _halt();
+  }
+
+  /// Signs the engine out; the tidying up is [_stopping] until done.
+  Future<void> _halt() {
+    if (_uid == null) return _stopping ?? Future.value();
     _uid = null;
     _pushTimer?.cancel();
     _pushTimer = null;
-    await _changesSub?.cancel();
+    final sub = _changesSub;
     _changesSub = null;
-    try {
-      await _running;
-    } catch (_) {}
-    await _remote.close();
-    _onServer.clear();
-    _setStatus(const SyncStatus(SyncPhase.idle));
+    final running = _running;
+    late final Future<void> done;
+    done = () async {
+      await sub?.cancel();
+      if (running != null) {
+        try {
+          await running.timeout(_stopWait);
+        } on TimeoutException {
+          AppLog.w('Cloud sync: a sync did not stop in time; left behind');
+          if (identical(_running, running)) {
+            _running = null;
+            _runToken = null;
+          }
+        } catch (_) {}
+      }
+      await _remote.close();
+      _onServer.clear();
+      _setStatus(const SyncStatus(SyncPhase.idle));
+      if (identical(_stopping, done)) _stopping = null;
+    }();
+    return _stopping = done;
   }
 
   /// Pushes and pulls now. During a sync, schedules one more after it; the
@@ -233,13 +277,17 @@ class CloudSync {
   /// Runs syncs until no trigger came during the last one. Clears
   /// [_running] in the same step as that last check, so no trigger is lost.
   Future<void> _loop() async {
+    final token = _runToken = Object();
     try {
       do {
         _again = false;
         await _runOnce(_uid!, _gen);
-      } while (_again && _uid != null);
+      } while (_again && _uid != null && identical(_runToken, token));
     } finally {
-      _running = null;
+      if (identical(_runToken, token)) {
+        _running = null;
+        _runToken = null;
+      }
     }
   }
 
@@ -249,9 +297,17 @@ class CloudSync {
       return;
     }
     _setStatus(SyncStatus(SyncPhase.syncing, lastSynced: _status.lastSynced));
+    _pushFailed = false;
+    _clockWrong = false;
     try {
-      await _pushAll(uid, gen);
+      await _pushSafe(uid, gen);
       await _pullAll(uid, gen);
+      _check(gen);
+      if (_clockWrong || _pushFailed) {
+        final phase = _clockWrong ? SyncPhase.clockWrong : SyncPhase.error;
+        _setStatus(SyncStatus(phase, lastSynced: _status.lastSynced));
+        return;
+      }
       final at = _now();
       await _settings.setString(
         _syncedKey(uid),
@@ -269,6 +325,26 @@ class CloudSync {
       if (gen != _gen) return;
       AppLog.w('Cloud sync failed', e, s);
       _setStatus(SyncStatus(SyncPhase.error, lastSynced: _status.lastSynced));
+    }
+  }
+
+  /// [_pushAll], but a failure that isn't the connection only marks the run
+  /// ([_pushFailed], [_clockWrong]), so the pull still runs. Once one push
+  /// failed, the run pushes no more.
+  Future<void> _pushSafe(String uid, int gen) async {
+    if (_pushFailed || _clockWrong) return;
+    try {
+      await _pushAll(uid, gen);
+    } on _ClockWrong {
+      AppLog.w("Cloud sync: the server finds this device's clock a day ahead");
+      _clockWrong = true;
+    } on CloudOffline {
+      rethrow;
+    } on _Stopped {
+      rethrow;
+    } catch (e, s) {
+      AppLog.w('Cloud sync: push failed', e, s);
+      _pushFailed = true;
     }
   }
 
@@ -293,7 +369,7 @@ class CloudSync {
           send.add(r);
         }
       }
-      if (send.isNotEmpty) await _remote.push(send);
+      if (send.isNotEmpty) await _pushRows(send);
       final next = page.next;
       final to = next == null || next > high ? high : next;
       if (to > seq) {
@@ -305,6 +381,65 @@ class CloudSync {
       }
       if (next == null || to < next) return;
     }
+  }
+
+  /// Pushes [rows]. When the server refuses them for some of the rows, those
+  /// are found by halving: rows with a clock a day ahead of this device's
+  /// time get fresh stamps (they go up on the next run), other bad rows are
+  /// skipped, and the rest go up. If no row is ahead by this device's time,
+  /// its time itself is wrong: [_ClockWrong].
+  Future<void> _pushRows(List<SyncRow> rows) async {
+    try {
+      await _remote.push(rows);
+    } on CloudRejected catch (e) {
+      if (e.reason == CloudRejection.clockAhead) {
+        final limit =
+            _now().millisecondsSinceEpoch + SyncStamp.maxAhead.inMilliseconds;
+        final ahead = [
+          for (final r in rows)
+            if (Hlc.parse(r.clock).wallMs > limit) r,
+        ];
+        if (ahead.isEmpty) throw const _ClockWrong();
+        await _restamp(ahead);
+        final rest = [
+          for (final r in rows)
+            if (!ahead.contains(r)) r,
+        ];
+        if (rest.isNotEmpty) await _pushRows(rest);
+        return;
+      }
+      if (rows.length == 1) {
+        AppLog.w(
+          'Cloud sync: the server refused ${_key(rows.single)} '
+          '(${e.reason.name}); skipped',
+        );
+        return;
+      }
+      final half = rows.length ~/ 2;
+      await _pushRows(rows.sublist(0, half));
+      await _pushRows(rows.sublist(half));
+    }
+  }
+
+  /// Gives [rows] fresh stamps from this device (its clock first put back
+  /// from the future), keeping their content.
+  Future<void> _restamp(List<SyncRow> rows) async {
+    if (_stamp.clampFutureClock()) {
+      AppLog.w('Cloud sync: put a clock from the future back to now');
+    }
+    await _db.transaction(() async {
+      for (final r in rows) {
+        final st = await _stamp.next(id: r.id);
+        await _db
+            .into(r.table.info(_db))
+            .insertOnConflictUpdate(
+              r
+                  .withStamp(clock: st.clock, originDevice: st.originDevice)
+                  .toInsertable(st.localSeq),
+            );
+      }
+    });
+    AppLog.w('Cloud sync: restamped ${rows.length} rows with clocks ahead');
   }
 
   /// Pulls and applies every server row past the pull watermark; after each
@@ -324,7 +459,7 @@ class CloudSync {
       });
       after = last;
       await _markOnServer(uid, rows);
-      await _pushAll(uid, gen);
+      await _pushSafe(uid, gen);
       if (page.length < kCloudPageSize) return;
     }
   }
@@ -389,6 +524,12 @@ class CloudSync {
     _status = s;
     if (!_statuses.isClosed) _statuses.add(s);
   }
+}
+
+/// The server refuses this device's clocks though none is ahead of its own
+/// time: the device's date and time are wrong.
+class _ClockWrong implements Exception {
+  const _ClockWrong();
 }
 
 /// A sync for an account that was signed out (or switched) meanwhile.

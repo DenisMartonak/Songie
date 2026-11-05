@@ -16,6 +16,28 @@ class CloudOffline implements Exception {
   String toString() => 'CloudOffline($cause)';
 }
 
+/// Why `push_rows` refused a page (it takes all of a page or none).
+enum CloudRejection {
+  /// A row is malformed.
+  invalidRow,
+
+  /// A row's data is over 256 KB.
+  tooBig,
+
+  /// A clock is more than a day ahead of the server's.
+  clockAhead,
+}
+
+/// `push_rows` refused the page because of one or more of its rows.
+class CloudRejected implements Exception {
+  const CloudRejected(this.reason);
+
+  final CloudRejection reason;
+
+  @override
+  String toString() => 'CloudRejected(${reason.name})';
+}
+
 /// The signed-in account's synced rows on the server. Every call acts as the
 /// signed-in user; a network failure throws [CloudOffline].
 abstract class CloudRemote {
@@ -34,6 +56,21 @@ abstract class CloudRemote {
 
   /// Drops the live connection.
   Future<void> close();
+}
+
+/// How long one push or pull may take before it counts as offline.
+const kCloudCallTimeout = Duration(seconds: 45);
+
+/// The row-specific `push_rows` refusal named by [message], if it is one.
+CloudRejection? rejectionOf(String message) {
+  if (message.contains('clock more than a day in the future')) {
+    return CloudRejection.clockAhead;
+  }
+  if (message.contains('row data over 256 KB')) return CloudRejection.tooBig;
+  if (message.startsWith('invalid row in push')) {
+    return CloudRejection.invalidRow;
+  }
+  return null;
 }
 
 /// The row as one element of `push_rows`. The local seq stays on the device.
@@ -65,20 +102,28 @@ Map<String, Object?> rowToServer(SyncRow r) => {
 class SupabaseCloudRemote implements CloudRemote {
   /// [client] is read only when a call is made, so a signed-out app never
   /// touches Supabase.
-  SupabaseCloudRemote(this._client);
+  SupabaseCloudRemote(this._client, {this._timeout = kCloudCallTimeout});
 
   final SupabaseClient Function() _client;
+  final Duration _timeout;
   RealtimeChannel? _channel;
 
   @override
   Future<int> push(List<SyncRow> rows) => _net(() async {
-    final n = await _client().rpc<dynamic>(
-      'push_rows',
-      params: {
-        'rows': [for (final r in rows) rowToServer(r)],
-      },
-    );
-    return (n as num).toInt();
+    try {
+      final n = await _client().rpc<dynamic>(
+        'push_rows',
+        params: {
+          'rows': [for (final r in rows) rowToServer(r)],
+        },
+      );
+      return (n as num).toInt();
+    } on PostgrestException catch (e) {
+      // `raise exception` in push_rows arrives as P0001 with its message.
+      final reason = e.code == 'P0001' ? rejectionOf(e.message) : null;
+      if (reason == null) rethrow;
+      throw CloudRejected(reason);
+    }
   });
 
   @override
@@ -129,9 +174,11 @@ class SupabaseCloudRemote implements CloudRemote {
     }
   }
 
-  static Future<T> _net<T>(Future<T> Function() f) async {
+  Future<T> _net<T>(Future<T> Function() f) async {
     try {
-      return await f();
+      // The client's own HTTP timeout covers each request; this caps the
+      // whole call.
+      return await f().timeout(_timeout);
     } on SocketException catch (e) {
       throw CloudOffline(e);
     } on TimeoutException catch (e) {

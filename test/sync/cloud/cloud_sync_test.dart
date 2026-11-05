@@ -40,9 +40,11 @@ class _Dev {
     Stream<NetworkKind>? network,
     Directory? fontsDir,
     Duration pushDelay = const Duration(hours: 1),
+    int clockOffsetMs = 0,
+    Duration stopWait = const Duration(seconds: 45),
   }) async {
     final db = testDb();
-    final stamp = await SyncStamp.load(db, nowMs: () => _nowMs);
+    final stamp = await SyncStamp.load(db, nowMs: () => _nowMs + clockOffsetMs);
     final settings = SettingsRepository(db);
     final remote = FakeRemote(server);
     final sync = CloudSync(
@@ -54,6 +56,8 @@ class _Dev {
       askMerge: askMerge,
       fontsDir: fontsDir,
       pushDelay: pushDelay,
+      now: () => DateTime.fromMillisecondsSinceEpoch(_nowMs + clockOffsetMs),
+      stopWait: stopWait,
     );
     return _Dev._(db, stamp, settings, remote, sync);
   }
@@ -115,6 +119,8 @@ void main() {
     Stream<NetworkKind>? network,
     Directory? fontsDir,
     Duration pushDelay = const Duration(hours: 1),
+    int clockOffsetMs = 0,
+    Duration stopWait = const Duration(seconds: 45),
   }) async {
     final d = await _Dev.make(
       server,
@@ -122,6 +128,8 @@ void main() {
       network: network,
       fontsDir: fontsDir,
       pushDelay: pushDelay,
+      clockOffsetMs: clockOffsetMs,
+      stopWait: stopWait,
     );
     devs.add(d);
     return d;
@@ -449,4 +457,146 @@ void main() {
       expect(seen.last.phase, SyncPhase.offline);
     },
   );
+
+  group('fix round 1', () {
+    const day = 86400000;
+
+    test('a refused push still pulls; the failure shows in status', () async {
+      final a = await dev();
+      final b = await dev();
+      await a.start('u1');
+      await a.newPlaylist('From A');
+      await a.sync.syncNow();
+      await b.newPlaylist('Stuck on B');
+      b.remote.pushError = Exception('server error');
+      await b.start('u1');
+      expect(await b.liveNames(), ['From A', 'Stuck on B']);
+      expect(b.sync.current.phase, SyncPhase.error);
+      expect(await b.sync.hasUnsent(), isTrue);
+    });
+
+    test(
+      'a row the server refuses is skipped; the rest of the page goes up',
+      () async {
+        final a = await dev();
+        final ids = [for (var i = 0; i < 7; i++) await a.newPlaylist('P$i')];
+        server.rejectIds.add(ids[3]);
+        await a.start('u1');
+        expect(server.rowsOf('u1').keys.toSet(), {
+          for (final id in ids)
+            if (id != ids[3]) 'playlists/$id',
+        });
+        expect(a.sync.current.phase, SyncPhase.idle);
+        expect(await a.sync.hasUnsent(), isFalse);
+      },
+    );
+
+    test('rows stamped with a clock a day ahead are restamped and go up on '
+        'right after', () async {
+      server.nowMs = () => _nowMs;
+      final a = await dev();
+      // The device's clock ran three days fast for a while, then was fixed.
+      _nowMs += 3 * day;
+      final ahead = await a.newPlaylist('From the future');
+      _nowMs -= 3 * day;
+      // A row from another device, with a sane clock.
+      await a.db
+          .into(a.db.playlists)
+          .insert(
+            PlaylistsCompanion.insert(
+              id: 'fine',
+              clock: '${_nowMs.toString().padLeft(13, '0')}-00000-other',
+              originDevice: 'other',
+              localSeq: (await a.stamp.reserve(1)).single,
+              name: 'Fine',
+              source: 'local',
+            ),
+          );
+      await a.start('u1');
+      final row = await (a.db.select(
+        a.db.playlists,
+      )..where((p) => p.id.equals(ahead))).getSingle();
+      expect(int.parse(row.clock.substring(0, 13)), lessThanOrEqualTo(_nowMs));
+      expect(row.name, 'From the future');
+      // The restamped row goes up after the refused page, in the same run.
+      expect(server.rowsOf('u1').keys.toSet(), {
+        'playlists/fine',
+        'playlists/$ahead',
+      });
+      expect(server.rowsOf('u1')['playlists/$ahead']!['clock'], row.clock);
+      expect(a.sync.current.phase, SyncPhase.idle);
+      expect(await a.sync.hasUnsent(), isFalse);
+    });
+
+    test('a device whose clock is a day ahead shows clockWrong and keeps '
+        'pulling', () async {
+      server.nowMs = () => _nowMs;
+      final a = await dev();
+      await a.start('u1');
+      await a.newPlaylist('From A');
+      await a.sync.syncNow();
+      final b = await dev(clockOffsetMs: 2 * day);
+      await b.newPlaylist('On B');
+      await b.start('u1');
+      expect(b.sync.current.phase, SyncPhase.clockWrong);
+      expect(await b.liveNames(), ['From A', 'On B']);
+      expect(server.rowsOf('u1'), hasLength(1));
+    });
+
+    test('stop gives up on a hung sync after the stop wait', () async {
+      final a = await dev(stopWait: const Duration(milliseconds: 50));
+      await a.start('u1');
+      await a.newPlaylist('Hangs');
+      final never = Completer<void>();
+      a.remote.duringPush = () => never.future;
+      unawaited(a.sync.syncNow());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final watch = Stopwatch()..start();
+      await a.sync.stop();
+      expect(watch.elapsedMilliseconds, lessThan(1000));
+      expect(a.sync.current.phase, SyncPhase.idle);
+    });
+
+    test(
+      'a start right after a stop is not undone by the stop finishing',
+      () async {
+        final a = await dev();
+        await a.start('u1');
+        final gate = Completer<void>();
+        a.remote.duringClose = () => gate.future;
+        final stopping = a.sync.stop();
+        final starting = a.start('u1');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        gate.complete();
+        await stopping;
+        await starting;
+        expect(a.remote.live, isTrue);
+        expect(a.sync.current.phase, SyncPhase.idle);
+        expect(a.sync.current.lastSynced, isNotNull);
+        final pulls = a.remote.pullCalls;
+        server.broadcast('u1');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(a.remote.pullCalls, pulls + 1);
+      },
+    );
+
+    test('a row just over 240 KB is not sent', () async {
+      final a = await dev();
+      final st = await a.stamp.next(id: 't1');
+      await a.db
+          .into(a.db.tracks)
+          .insert(
+            trackRow(
+              id: 't1',
+              clock: st.clock,
+              originDevice: st.originDevice,
+              localSeq: st.localSeq,
+              // Title and search text: about 242 KB, under the server's 256 KB.
+              title: 'x' * (121 * 1024),
+            ),
+          );
+      await a.start('u1');
+      expect(a.remote.pushCalls, 0);
+    });
+  });
 }

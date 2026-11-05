@@ -38,6 +38,10 @@ class SyncStamp {
   /// (see [recentStamps]).
   final _issued = Queue<(int, String, int)>();
 
+  /// How far ahead of now the clock may be; the server refuses clocks
+  /// further ahead (see [clampFutureClock]).
+  static const maxAhead = Duration(days: 1);
+
   /// How long an issued seq counts as possibly not yet written.
   static const pendingWindow = Duration(seconds: 60);
   int _seq;
@@ -69,6 +73,9 @@ class SyncStamp {
       last: hlcLast == null ? null : Hlc.parse(hlcLast),
       nowMs: nowMs,
     );
+    // A clock stored while the device's time ran fast would stamp every
+    // later write in the future.
+    clock.clampAhead(maxAhead);
     final seq = int.tryParse(values[_kLocalSeq] ?? '') ?? 0;
     return SyncStamp._(
       db,
@@ -148,6 +155,11 @@ class SyncStamp {
     });
     return seqs;
   }
+
+  /// Puts the clock back to now if it is more than [maxAhead] in the future
+  /// (the device's time was wrong and has been fixed). Returns whether it
+  /// did; the next stamp persists it.
+  bool clampFutureClock() => _clock.clampAhead(maxAhead);
 
   /// Seqs issued by [next] and [nextMany] within [pendingWindow], ascending,
   /// each with its stamp's id (the row's id for an insert, or one passed in).

@@ -15,7 +15,22 @@ class FakeServer {
   /// Whether a push that wrote rows tells the user's devices (Realtime).
   bool notify = false;
 
+  /// The server's clock; a pushed clock more than a day past it is refused.
+  int Function()? nowMs;
+
+  /// Row ids the server refuses as invalid.
+  final rejectIds = <String>{};
+
   int write(String user, List<SyncRow> rows) {
+    // All or nothing, checked in push_rows' order.
+    if (rows.any((r) => rejectIds.contains(r.id))) {
+      throw const CloudRejected(CloudRejection.invalidRow);
+    }
+    final now = nowMs?.call();
+    if (now != null &&
+        rows.any((r) => Hlc.parse(r.clock).wallMs > now + 86400000)) {
+      throw const CloudRejected(CloudRejection.clockAhead);
+    }
     final mine = _rows.putIfAbsent(user, () => {});
     var written = 0;
     for (final r in rows) {
@@ -89,6 +104,12 @@ class FakeRemote implements CloudRemote {
   /// Runs inside each push, before it writes.
   Future<void> Function()? duringPush;
 
+  /// Runs inside each close, before the connection drops.
+  Future<void> Function()? duringClose;
+
+  /// Thrown by every push (a server error that isn't about the rows).
+  Object? pushError;
+
   int get calls => pushCalls + pullCalls + changesCalls + closeCalls;
 
   @override
@@ -102,6 +123,8 @@ class FakeRemote implements CloudRemote {
       failPushes--;
       throw const CloudOffline();
     }
+    final e = pushError;
+    if (e != null) throw e;
     return server.write(user!, rows);
   }
 
@@ -113,12 +136,20 @@ class FakeRemote implements CloudRemote {
     return server.read(user!, after, max);
   }
 
+  /// Whether the last of changes() and close() was changes().
+  var live = false;
+
   @override
   Stream<void> changes(String userId) {
     changesCalls++;
+    live = true;
     return server.topic(userId);
   }
 
   @override
-  Future<void> close() async => closeCalls++;
+  Future<void> close() async {
+    closeCalls++;
+    await duringClose?.call();
+    live = false;
+  }
 }

@@ -79,6 +79,16 @@ class HlcClock {
     return _last = _make(wall, counter);
   }
 
+  /// Puts [last] back to now when it is more than [max] ahead of now (a
+  /// clock that once ran fast), so new values aren't stuck in the future.
+  /// Only then do values go back; returns whether they did.
+  bool clampAhead(Duration max) {
+    final now = _nowMs();
+    if (_last.wallMs <= now + max.inMilliseconds) return false;
+    _last = Hlc(wallMs: now, counter: 0, deviceId: deviceId);
+    return true;
+  }
+
   /// Merges a clock received from another device.
   Hlc receive(Hlc remote) {
     final wall = math.max(_nowMs(), math.max(_last.wallMs, remote.wallMs));

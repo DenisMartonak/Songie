@@ -141,4 +141,28 @@ void main() {
     );
     expect(c.receive(Hlc(wallMs: 200, counter: 8, deviceId: 'x')).counter, 0);
   });
+
+  test(
+    'clampAhead resets a last value too far ahead of now, and only that',
+    () {
+      final far = HlcClock(
+        'd',
+        last: Hlc(wallMs: 5000, counter: 3, deviceId: 'd'),
+        nowMs: () => 1000,
+      );
+      expect(far.clampAhead(const Duration(milliseconds: 3999)), isTrue);
+      expect(far.last, Hlc(wallMs: 1000, counter: 0, deviceId: 'd'));
+      expect(far.tick().compareTo(far.last), 0);
+      expect(far.last.wallMs, 1000);
+      expect(far.last.counter, 1);
+
+      final near = HlcClock(
+        'd',
+        last: Hlc(wallMs: 5000, counter: 3, deviceId: 'd'),
+        nowMs: () => 1000,
+      );
+      expect(near.clampAhead(const Duration(milliseconds: 4000)), isFalse);
+      expect(near.last, Hlc(wallMs: 5000, counter: 3, deviceId: 'd'));
+    },
+  );
 }

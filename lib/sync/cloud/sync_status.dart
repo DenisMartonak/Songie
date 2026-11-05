@@ -11,6 +11,10 @@ enum SyncPhase {
 
   /// The last sync failed for another reason; the next trigger retries.
   error,
+
+  /// The server refuses this device's changes because its date and time are
+  /// more than a day ahead; changes still come down.
+  clockWrong,
 }
 
 /// Cloud sync's state for the account screen.

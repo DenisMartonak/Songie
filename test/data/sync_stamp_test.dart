@@ -101,4 +101,28 @@ void main() {
       expect(after.clock.compareTo(inner.clock) > 0, isTrue);
     },
   );
+
+  test(
+    'a stored clock more than a day ahead is clamped back to now on load',
+    () async {
+      final db = testDb();
+      addTearDown(db.close);
+      const now = 1800000000000;
+      const day = 86400000;
+      var t = now + 3 * day;
+      final fast = await SyncStamp.load(db, nowMs: () => t);
+      await fast.next();
+      t = now; // the clock was fixed
+      final fixed = await SyncStamp.load(db, nowMs: () => t);
+      final st = await fixed.next();
+      expect(Hlc.parse(st.clock).wallMs, now);
+
+      // Less than a day ahead is kept: clocks never go back for that.
+      t = now + day ~/ 2;
+      await (await SyncStamp.load(db, nowMs: () => t)).next();
+      t = now;
+      final st2 = await (await SyncStamp.load(db, nowMs: () => t)).next();
+      expect(Hlc.parse(st2.clock).wallMs, now + day ~/ 2);
+    },
+  );
 }
