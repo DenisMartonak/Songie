@@ -60,6 +60,12 @@ Big; built in stages, each released on its own:
 4. **Listen together**: a shared session others join by link/code; play,
    seek and queue stay in step across listeners.
 
+Follow-up: **passkeys** for sign-in once Supabase's passkey support
+(beta since 2026-05-28; experimental in `supabase_flutter` 2.15+, via the
+`passkeys` package) leaves beta. Android and Windows only; Linux has no
+system passkey support. Needs a domain hosting `.well-known/assetlinks.json`
+for Android (a GitHub Pages site would do).
+
 ## 6. Playlist page redesign, with search and sort
 
 ![Playlist page](roadmap/playlist-page.png)
