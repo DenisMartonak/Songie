@@ -70,7 +70,8 @@ void main() {
   });
 
   test('sign up with a taken email gives emailTaken; a race gives usernameJustTaken', () async {
-    await service.signUp('a@b.c', 'password1', 'first');
+    await signedInAs('a@b.c', 'first');
+    await service.logOut();
     await expectLater(
       service.signUp('a@b.c', 'password1', 'second'),
       _throwsAccount(AccountError.emailTaken),
@@ -116,6 +117,134 @@ void main() {
       expect(service.state, isA<SignedIn>());
     },
   );
+
+  group('confirming a sign-up sets what was typed at sign-up', () {
+    /// Someone else signed up with this email first and never confirmed:
+    /// gotrue keeps their password and username on the owner's re-sign-up.
+    void squatted(String email) {
+      backend.users[email] = (
+        password: 'squatter1',
+        id: 'u9',
+        confirmed: false,
+      );
+      backend.profiles['u9'] = (username: 'squatter', avatarPath: null);
+      backend.emails['u9'] = email;
+      backend.takenUsernames.add('squatter');
+    }
+
+    test('a squatted sign-up gets the typed password and username', () async {
+      squatted('a@b.c');
+      expect(
+        await service.signUp('a@b.c', 'owner-pass1', ' Owner '),
+        AuthStep.needsCode,
+      );
+      final kept = await service.verifySignup(
+        'a@b.c',
+        backend.goodCode,
+        password: 'owner-pass1',
+        username: ' Owner ',
+      );
+      expect(kept, isNull);
+      expect(
+        backend.calls.where((c) => c == 'setPassword' || c == 'updateUsername'),
+        ['setPassword', 'updateUsername'],
+      );
+      expect(backend.users['a@b.c']!.password, 'owner-pass1');
+      final s = service.state;
+      expect(s, isA<SignedIn>());
+      expect((s as SignedIn).profile.username, 'owner');
+
+      await service.logOut();
+      await expectLater(
+        service.logIn('a@b.c', 'squatter1'),
+        _throwsAccount(AccountError.wrongCredentials),
+      );
+      expect(await service.logIn('a@b.c', 'owner-pass1'), AuthStep.done);
+    });
+
+    test('a typed username taken meanwhile keeps the existing one', () async {
+      squatted('a@b.c');
+      await service.signUp('a@b.c', 'owner-pass1', 'owner');
+      backend.takenUsernames.add('owner');
+      final kept = await service.verifySignup(
+        'a@b.c',
+        backend.goodCode,
+        password: 'owner-pass1',
+        username: 'owner',
+      );
+      expect(kept, 'squatter');
+      final s = service.state;
+      expect(s, isA<SignedIn>());
+      expect((s as SignedIn).profile.username, 'squatter');
+    });
+
+    test('an unchanged password (same_password) counts as set', () async {
+      await service.signUp('a@b.c', 'password1', 'den');
+      final kept = await service.verifySignup(
+        'a@b.c',
+        backend.goodCode,
+        password: 'password1',
+        username: 'den',
+      );
+      expect(kept, isNull);
+      expect(backend.calls, contains('setPassword'));
+      expect(backend.calls, isNot(contains('updateUsername')));
+      expect(backend.calls, isNot(contains('logOut')));
+      expect(service.state, isA<SignedIn>());
+    });
+
+    test('a password that cannot be set logs out and throws', () async {
+      squatted('a@b.c');
+      await service.signUp('a@b.c', 'owner-pass1', 'owner');
+      backend.setPasswordError = AccountError.offline;
+      await expectLater(
+        service.verifySignup(
+          'a@b.c',
+          backend.goodCode,
+          password: 'owner-pass1',
+          username: 'owner',
+        ),
+        _throwsAccount(AccountError.offline),
+      );
+      expect(backend.calls, contains('logOut'));
+      expect(backend.calls, isNot(contains('updateUsername')));
+      await pumpEventQueue();
+      expect(service.state, isA<SignedOut>());
+      expect(backend.currentUser, isNull);
+    });
+
+    test(
+      'while the password is being set, nothing counts as signed in',
+      () async {
+        squatted('a@b.c');
+        await service.signUp('a@b.c', 'owner-pass1', 'owner');
+        final seen = <AccountState>[];
+        final sub = service.states.listen(seen.add);
+        backend.setPasswordDelay = const Duration(milliseconds: 50);
+        backend.setPasswordError = AccountError.offline;
+        await expectLater(
+          service.verifySignup(
+            'a@b.c',
+            backend.goodCode,
+            password: 'owner-pass1',
+            username: 'owner',
+          ),
+          _throwsAccount(AccountError.offline),
+        );
+        await pumpEventQueue();
+        await sub.cancel();
+        expect(seen.whereType<SignedIn>(), isEmpty);
+      },
+    );
+
+    test('confirming after a log-in sets nothing', () async {
+      await service.signUp('a@b.c', 'password1', 'den');
+      await service.logIn('a@b.c', 'password1');
+      await service.verifySignup('a@b.c', backend.goodCode);
+      expect(backend.calls, isNot(contains('setPassword')));
+      expect(service.state, isA<SignedIn>());
+    });
+  });
 
   test('wrong password gives wrongCredentials', () async {
     await signedInAs('a@b.c', 'den');

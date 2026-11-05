@@ -27,6 +27,15 @@ class SignedIn extends AccountState {
   String toString() => 'SignedIn';
 }
 
+/// The sign-up's email is confirmed, but the password typed at sign-up
+/// couldn't be set, so the session was dropped: log in again.
+class PasswordNotSetException extends AccountException {
+  const PasswordNotSetException(super.error);
+
+  @override
+  String toString() => 'PasswordNotSetException(${error.name})';
+}
+
 /// Where a sign-up or log-in got to.
 enum AuthStep {
   /// Signed in.
@@ -43,10 +52,11 @@ class AccountService {
   /// [network] (connection changes) retries a restored session whose
   /// profile couldn't load when the device comes back online.
   AccountService(this._b, {Stream<NetworkKind>? network}) {
-    _sub = _b.userIdChanges.listen(
-      (id) => unawaited(_follow(id).catchError((_) {})),
-      onError: (Object _) {},
-    );
+    _sub = _b.userIdChanges.listen((id) {
+      // A confirmed sign-up counts once its password is set.
+      if (id != null && _settingPassword) return;
+      unawaited(_follow(id).catchError((_) {}));
+    }, onError: (Object _) {});
     _netSub = network?.listen((kind) {
       if (kind == NetworkKind.offline) return;
       if (_userId != null && _state is SignedOut) {
@@ -66,6 +76,9 @@ class AccountService {
   /// user can't land.
   int _gen = 0;
   String? _userId;
+
+  /// Set while [verifySignup] sets the typed password.
+  bool _settingPassword = false;
 
   AccountState get state => _state;
 
@@ -182,8 +195,60 @@ class AccountService {
     return AuthStep.done;
   }
 
-  Future<void> verifySignup(String email, String code) async =>
-      _signInAfterAuth(await _b.verifySignup(email.trim(), code.trim()));
+  /// Confirms the email with the code and signs in.
+  ///
+  /// When the code step came from [signUp], pass the [password] and
+  /// [username] typed there (kept in memory only, never stored). Re-signing
+  /// up an unconfirmed email keeps the first sign-up's password and
+  /// username, which could be someone else's; so once confirmed, the typed
+  /// password is set (an unchanged one counts as set) and the typed name is
+  /// applied. If the password can't be set, the session is dropped and a
+  /// [PasswordNotSetException] thrown: never signed in with a password the
+  /// user doesn't know.
+  ///
+  /// Returns the account's username when the typed one couldn't be applied
+  /// (taken meanwhile), else null.
+  Future<String?> verifySignup(
+    String email,
+    String code, {
+    String? password,
+    String? username,
+  }) async {
+    if (password == null) {
+      await _signInAfterAuth(await _b.verifySignup(email.trim(), code.trim()));
+      return null;
+    }
+    final String id;
+    _settingPassword = true;
+    try {
+      id = await _b.verifySignup(email.trim(), code.trim());
+      try {
+        await _b.setPassword(password);
+      } on AccountException catch (e) {
+        if (e.error != AccountError.samePassword) {
+          await logOut();
+          throw PasswordNotSetException(e.error);
+        }
+      } catch (_) {
+        await logOut();
+        throw const PasswordNotSetException(AccountError.unknown);
+      }
+    } finally {
+      _settingPassword = false;
+    }
+    await _signInAfterAuth(id);
+    if (username == null) return null;
+    final name = normalizeUsername(username);
+    final current = _signedIn.profile.username;
+    if (current == name) return null;
+    try {
+      await changeUsername(name);
+      return null;
+    } on AccountException catch (e) {
+      AppLog.w('Account: typed username not applied (${e.error.name})');
+      return current;
+    }
+  }
 
   Future<void> resendSignup(String email) => _b.resendSignup(email.trim());
 

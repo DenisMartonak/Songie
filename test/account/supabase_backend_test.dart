@@ -109,4 +109,42 @@ void main() {
       expect(seen, contains('POST /auth/v1/logout'));
     },
   );
+
+  test('setPassword after a confirmed sign-up sends the password; an '
+      'unchanged one gives samePassword', () async {
+    final bodies = <Object?>[];
+    var same = false;
+    final (backend, client, seen) = _backend((r) {
+      if (r.url.path.endsWith('/verify')) {
+        return _json(200, {
+          'access_token': 'at',
+          'refresh_token': 'rt',
+          'token_type': 'bearer',
+          'expires_in': 3600,
+          'user': _user,
+        });
+      }
+      if (r.url.path.endsWith('/user')) {
+        bodies.add(jsonDecode(r.body));
+        return same
+            ? _json(422, {'code': 'same_password', 'msg': 'same'})
+            : _json(200, _user);
+      }
+      return http.Response('', 204);
+    });
+    addTearDown(client.dispose);
+
+    expect(await backend.verifySignup('a@b.c', '123456'), 'u1');
+    await backend.setPassword('owner-pass1');
+    expect(seen, contains('PUT /auth/v1/user'));
+    expect(bodies.single, containsPair('password', 'owner-pass1'));
+
+    same = true;
+    await expectLater(
+      backend.setPassword('owner-pass1'),
+      _throwsAccount(AccountError.samePassword),
+    );
+    // Still signed in: the service decides what a refusal means.
+    expect(client.auth.currentSession, isNotNull);
+  });
 }

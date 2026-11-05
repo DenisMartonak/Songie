@@ -29,6 +29,15 @@ class FakeAccountBackend implements AccountBackend {
   /// backend, the recovery session is dropped and never reported.
   AccountError? updatePasswordError;
 
+  /// The signed-in user's password can't be set (offline and the like).
+  AccountError? setPasswordError;
+
+  /// How long setting the password takes.
+  Duration setPasswordDelay = Duration.zero;
+
+  /// The user id last reported on [userIdChanges].
+  String? currentUser;
+
   /// Set just before signUp runs: another device takes this name.
   String? raceTakes;
   int _next = 1;
@@ -38,7 +47,10 @@ class FakeAccountBackend implements AccountBackend {
     if (e != null) throw AccountException(e);
   }
 
-  void emitUser(String? id) => _ids.add(id);
+  void emitUser(String? id) {
+    currentUser = id;
+    _ids.add(id);
+  }
 
   @override
   Stream<String?> get userIdChanges => _ids.stream;
@@ -55,8 +67,14 @@ class FakeAccountBackend implements AccountBackend {
         throw const AccountException(AccountError.unknown);
       }
     }
-    if (users.containsKey(email)) {
-      throw const AccountException(AccountError.emailTaken);
+    final existing = users[email];
+    if (existing != null) {
+      if (existing.confirmed) {
+        throw const AccountException(AccountError.emailTaken);
+      }
+      // Like gotrue: an unconfirmed email only gets a new code; the first
+      // sign-up's password and username stay.
+      return null;
     }
     final id = 'u${_next++}';
     users[email] = (password: password, id: id, confirmed: false);
@@ -99,6 +117,22 @@ class FakeAccountBackend implements AccountBackend {
     }
     emitUser(u.id);
     return u.id;
+  }
+
+  @override
+  Future<void> setPassword(String password) async {
+    calls.add('setPassword');
+    await Future<void>.delayed(setPasswordDelay);
+    _check();
+    if (setPasswordError != null) throw AccountException(setPasswordError!);
+    final email = emails[currentUser];
+    if (email == null) throw const AccountException(AccountError.unknown);
+    final u = users[email]!;
+    // Like gotrue, which refuses an unchanged password.
+    if (u.password == password) {
+      throw const AccountException(AccountError.samePassword);
+    }
+    users[email] = (password: password, id: u.id, confirmed: u.confirmed);
   }
 
   @override

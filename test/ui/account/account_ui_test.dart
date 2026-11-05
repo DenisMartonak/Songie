@@ -144,6 +144,76 @@ void main() {
     expect(inTop(find.byIcon(Icons.person_outline_rounded)), findsOneWidget);
   });
 
+  /// Someone else signed up with [email] first and never confirmed.
+  void squatted(String email) {
+    final b = h.accountBackend;
+    b.users[email] = (password: 'squatter1', id: 'u9', confirmed: false);
+    b.profiles['u9'] = (username: 'squatter', avatarPath: null);
+    b.emails['u9'] = email;
+    b.takenUsernames.add('squatter');
+  }
+
+  Future<void> signUpTo(WidgetTester tester, String username) async {
+    await pumpAccount(tester);
+    await tapAndSettle(tester, key('account.signUp'));
+    await type(tester, key('auth.email'), 'den@x.com');
+    await type(tester, key('auth.username'), username);
+    await type(tester, key('auth.password'), 'owner-pass1');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tapAndSettle(tester, key('auth.submit'));
+    expect(key('auth.code'), findsOneWidget);
+    await type(tester, key('auth.code'), h.accountBackend.goodCode);
+  }
+
+  uiTest('re-signing up an unconfirmed email ends with the typed password and '
+      'username', (tester) async {
+    squatted('den@x.com');
+    await signUpTo(tester, 'owner');
+    await tapAndSettle(tester, key('auth.submit'));
+    expect(find.text('Signed in'), findsOneWidget);
+    expect(inSection(find.text('owner')), findsOneWidget);
+    expect(h.accountBackend.users['den@x.com']!.password, 'owner-pass1');
+  });
+
+  uiTest('a typed username taken meanwhile keeps the existing one and says '
+      'so', (tester) async {
+    squatted('den@x.com');
+    await signUpTo(tester, 'owner');
+    h.accountBackend.takenUsernames.add('owner');
+    await tapAndSettle(tester, key('auth.submit'));
+    expect(find.byType(Dialog), findsNothing);
+    expect(
+      find.text(
+        'Your account uses the username @squatter. You can change it in '
+        'Settings.',
+      ),
+      findsOneWidget,
+    );
+    expect(inSection(find.text('squatter')), findsOneWidget);
+    expect(h.accountBackend.users['den@x.com']!.password, 'owner-pass1');
+  });
+
+  uiTest('a password that cannot be set after the code signs out and opens '
+      'log-in with the error', (tester) async {
+    squatted('den@x.com');
+    await signUpTo(tester, 'owner');
+    h.accountBackend.setPasswordError = AccountError.offline;
+    await tapAndSettle(tester, key('auth.submit'));
+    expect(key('auth.code'), findsNothing);
+    expect(key('auth.forgot'), findsOneWidget);
+    expect(
+      tester.widget<Text>(key('auth.error')).data,
+      AccountError.offline.message,
+    );
+    expect(h.accounts.state, isA<SignedOut>());
+    expect(h.accountBackend.calls, contains('logOut'));
+    // The email kept for logging in again.
+    expect(
+      tester.widget<TextField>(key('auth.email')).controller!.text,
+      'den@x.com',
+    );
+  });
+
   uiTest('the username field lowercases, shows the rule hint and "That '
       'username is taken." while typing', (tester) async {
     h.accountBackend.takenUsernames.add('taken');
@@ -329,10 +399,16 @@ void main() {
   uiTest('forms autofill as a group, passwords can be shown, and Enter in the '
       'code field submits', (tester) async {
     await pumpAccount(tester);
-    await tapAndSettle(tester, key('account.signUp'));
-    expect(find.byType(AutofillGroup), findsOneWidget);
     List<String>? hints(String k) =>
         tester.widget<TextField>(key(k)).autofillHints?.toList();
+    // Log-in: password managers file the email as the username.
+    await tapAndSettle(tester, key('account.logIn'));
+    expect(hints('auth.email'), [AutofillHints.email, AutofillHints.username]);
+    expect(hints('auth.password'), [AutofillHints.password]);
+    await tapAndSettle(tester, key('auth.cancel'));
+
+    await tapAndSettle(tester, key('account.signUp'));
+    expect(find.byType(AutofillGroup), findsOneWidget);
     expect(hints('auth.email'), [AutofillHints.email]);
     expect(hints('auth.username'), [AutofillHints.newUsername]);
     expect(hints('auth.password'), [AutofillHints.newPassword]);

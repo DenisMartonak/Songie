@@ -66,7 +66,15 @@ just sign up/login, username changing, profile picture changing".
   The code step has "Use a different email" (back to sign-up, fields
   kept) and "Send a new code". Signing up again with the same unconfirmed
   email only sends a new code: Supabase keeps the first username and
-  password. *(Claude's calls.)*
+  password, which may be someone else's. So once that code is entered the
+  app sets the password typed at this sign-up (Supabase's "same password"
+  answer counts as done) and, if the profile's username differs, renames
+  it to the typed one; if that name was taken meanwhile it keeps the
+  existing one and says "Your account uses the username @<name>. You can
+  change it in Settings." If the password can't be set (offline), the app
+  logs out and shows the error on the log-in step. The typed password and
+  username stay in the form's memory only. A held name is freed only if
+  its account never signed in. *(Claude's calls.)*
 - Signing up with an email that already has an account: Supabase answers
   without an error but with no identities; the form says "That email
   already has an account. Log in, or reset your password." *(Claude's

@@ -86,6 +86,10 @@ abstract class AccountBackend {
   /// Returns the user id.
   Future<String> logIn(String email, String password);
 
+  /// Sets the signed-in user's password. An unchanged one is refused with
+  /// [AccountError.samePassword].
+  Future<void> setPassword(String password);
+
   /// Emails a password reset code.
   Future<void> sendReset(String email);
 
@@ -286,6 +290,12 @@ class SupabaseAccountBackend implements AccountBackend {
       });
 
   @override
+  Future<void> setPassword(String password) => _guard(
+    'set password',
+    () => _auth.updateUser(UserAttributes(password: password)),
+  );
+
+  @override
   Future<void> sendReset(String email) =>
       _guard('send reset', () => _auth.resetPasswordForEmail(email));
 
@@ -447,6 +457,10 @@ class PendingAccountBackend implements AccountBackend {
   @override
   Future<String> logIn(String email, String password) async =>
       (await _b).logIn(email, password);
+
+  @override
+  Future<void> setPassword(String password) async =>
+      (await _b).setPassword(password);
 
   @override
   Future<void> sendReset(String email) async => (await _b).sendReset(email);

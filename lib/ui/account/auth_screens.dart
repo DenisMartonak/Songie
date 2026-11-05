@@ -68,6 +68,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _usernameTaken = false;
   bool _showPassword = false;
 
+  /// The code step came from sign-up, so confirming it sets the password
+  /// and username typed there (still in their fields, in memory only).
+  bool _fromSignUp = false;
+
   /// An action's failure, shown above the buttons.
   String? _error;
 
@@ -138,8 +142,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final route = ModalRoute.of(context);
     final email = _email.text;
 
-    void signedIn() {
-      islands.show('Signed in', kind: IslandKind.success);
+    void signedIn({String? keptUsername}) {
+      if (keptUsername == null) {
+        islands.show('Signed in', kind: IslandKind.success);
+      } else {
+        islands.show(
+          'Your account uses the username @$keptUsername. You can change it '
+          'in Settings.',
+          kind: IslandKind.info,
+        );
+      }
       // Only close our own route; never whatever is on top by now.
       if (route != null && route.isCurrent) {
         navigator.pop();
@@ -159,6 +171,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           if (step == AuthStep.done) {
             signedIn();
           } else if (mounted) {
+            _fromSignUp = true;
             _go(_Step.confirm);
           }
         case _Step.logIn:
@@ -166,14 +179,32 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           if (step == AuthStep.done) {
             signedIn();
           } else if (mounted) {
+            _fromSignUp = false;
             // A log-in sends no code; send one. If that's refused (too
             // many tries), the step still opens with the error.
             _go(_Step.confirm, note: AccountError.emailNotConfirmed.message);
             await service.resendSignup(email);
           }
         case _Step.confirm:
-          await service.verifySignup(email, _code.text);
-          signedIn();
+          final String? kept;
+          try {
+            kept = await service.verifySignup(
+              email,
+              _code.text,
+              password: _fromSignUp ? _password.text : null,
+              username: _fromSignUp ? _username.text : null,
+            );
+          } on PasswordNotSetException {
+            // Confirmed but signed out again: log in with that password.
+            if (mounted) {
+              _fromSignUp = false;
+              _go(_Step.logIn);
+            }
+            rethrow;
+          }
+          _fromSignUp = false;
+          if (mounted) _password.clear();
+          signedIn(keptUsername: kept);
         case _Step.forgot:
           await service.sendReset(email);
           if (mounted) _go(_Step.reset);
@@ -267,7 +298,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   controller: _email,
                   enabled: !_busy,
                   keyboardType: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email],
+                  autofillHints: _step == _Step.logIn
+                      ? const [AutofillHints.email, AutofillHints.username]
+                      : const [AutofillHints.email],
                   autocorrect: false,
                   decoration: const InputDecoration(
                     labelText: 'Email',
