@@ -25,7 +25,7 @@ shows a short message (with an icon, and an action such as Undo or Retry
 when there is one), and shrinks away. One at a time; a new one replaces the
 old. All existing `PageSnackBars` calls move over to it.
 
-## 3. Crash reporting
+## 3. Crash reporting — done (on main, untagged)
 
 Goal: see crashes from the user's devices, per device and OS, to fix them.
 Firebase Crashlytics only supports Android/iOS/macOS, so it would miss
