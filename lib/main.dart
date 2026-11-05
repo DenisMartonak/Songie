@@ -118,8 +118,9 @@ Future<void> main() async {
   final settings = SettingsRepository(db);
 
   // Crash reports: only in a release build with a DSN, and only while the
-  // setting is on. Started before anything else can fail, after the log
-  // handlers so Sentry hands errors on to them.
+  // setting is on. The setting lives in the database, so crashes before it
+  // opens aren't reported. Started after the log handlers, so Sentry hands
+  // errors on to them.
   final crashReporter = CrashReporter.sentry();
   await crashReporter.applySetting(
     await settings.getBool(kCrashReports, fallback: true),

@@ -144,6 +144,21 @@ void main() {
     expect(starts, 2);
   });
 
+  test(
+    'a start that throws is closed, so no half-started SDK is left',
+    () async {
+      var closes = 0;
+      final r = CrashReporter(
+        built: true,
+        start: () async => throw StateError('init failed late'),
+        close: () async => closes++,
+      );
+      await r.applySetting(true);
+      expect(closes, 1);
+      expect(r.running, isFalse);
+    },
+  );
+
   test('dispose closes a running reporter', () async {
     final sdk = _FakeSdk();
     final r = sdk.reporter();

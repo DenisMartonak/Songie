@@ -56,8 +56,14 @@ class CrashReporter {
             await _start();
             _running = true;
           } catch (e, s) {
-            // Left stopped; the next switch on tries again.
             AppLog.w('Crash reporting did not start', e, s);
+            // The SDK may be partly up; close it so "stopped" is true. The
+            // next switch on tries again.
+            try {
+              await _close();
+            } catch (e, s) {
+              AppLog.w('Crash reporting did not close cleanly', e, s);
+            }
             return;
           }
         } else {
