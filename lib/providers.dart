@@ -358,10 +358,18 @@ final themeSpecProvider = Provider<ThemeSpec>(
 
 /// The family the active theme renders with: an imported font that is
 /// missing on this device falls back to Inter.
-final resolvedFontFamilyProvider = Provider<String>(
-  (ref) => ref
+final resolvedFontFamilyProvider = Provider<String>((ref) {
+  // Asks again when a font is registered later (its file arrived by sync).
+  ref.watch(fontRegistrationsProvider);
+  return ref
       .watch(fontServiceProvider)
-      .resolveFamily(ref.watch(themeSpecProvider)),
+      .resolveFamily(ref.watch(themeSpecProvider));
+});
+
+/// How many imported fonts were registered since start (see
+/// `FontService.registrations`).
+final fontRegistrationsProvider = StreamProvider<int>(
+  (ref) => ref.watch(fontServiceProvider).registrations,
 );
 
 /// Cover palettes (cached on disk next to the art).

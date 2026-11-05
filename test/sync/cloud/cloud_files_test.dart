@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -9,6 +10,7 @@ import 'package:songies/data/settings_repository.dart';
 import 'package:songies/data/sync_stamp.dart';
 import 'package:songies/sync/cloud/cloud_files.dart';
 import 'package:songies/sync/cloud/cloud_sync.dart';
+import 'package:songies/sync/cloud/sync_status.dart';
 
 import '../../helpers/test_db.dart';
 import 'fake_cloud.dart';
@@ -18,7 +20,16 @@ const _uid = 'user-a';
 /// One device: a database, its fonts and art folders, and [CloudFiles].
 class _Dev {
   _Dev(this.db, this.remote, this.fonts, this.art)
-    : files = CloudFiles(db: db, remote: remote, fontsDir: fonts, artDir: art);
+    : files = CloudFiles(
+        db: db,
+        remote: remote,
+        fontsDir: fonts,
+        artDir: art,
+        onFontsArrived: () async => fontsArrived++,
+      );
+
+  /// How often [CloudFiles] said fonts arrived.
+  static var fontsArrived = 0;
 
   final AppDatabase db;
   final FakeRemote remote;
@@ -98,6 +109,9 @@ class _Dev {
 }
 
 Uint8List _bytes(String s) => Uint8List.fromList(s.codeUnits);
+
+/// Bytes that start like a JPEG (SOI).
+Uint8List _jpeg(String s) => Uint8List.fromList([0xFF, 0xD8, ...s.codeUnits]);
 String _sha(Uint8List b) => sha256.convert(b).toString();
 
 void main() {
@@ -106,6 +120,7 @@ void main() {
   final devs = <_Dev>[];
 
   setUp(() {
+    _Dev.fontsArrived = 0;
     tmp = Directory.systemTemp.createTempSync('cloud_files_test');
     server = FakeServer();
   });
@@ -260,7 +275,7 @@ void main() {
         await rows(a);
         a.art.createSync(recursive: true);
         for (final r in ['$h1.jpg', 'yt2-$h2.jpg', '$h3.jpg', '$h4.jpg']) {
-          a.artFile(r).writeAsBytesSync(_bytes('jpeg $r'));
+          a.artFile(r).writeAsBytesSync(_jpeg(r));
         }
         // A ref with no file anywhere: nothing to do, no failure.
         await a.addTrack('t3', art: '$h5.jpg');
@@ -279,7 +294,7 @@ void main() {
         await rows(b);
         await b.files.reconcile(_uid);
         for (final r in ['$h1.jpg', 'yt2-$h2.jpg', '$h3.jpg']) {
-          expect(b.artFile(r).readAsBytesSync(), _bytes('jpeg $r'));
+          expect(b.artFile(r).readAsBytesSync(), _jpeg(r));
         }
         expect(b.artFile('$h4.jpg').existsSync(), isFalse);
         expect(b.remote.uploads, isEmpty);
@@ -386,6 +401,10 @@ void main() {
   test('deleteAll empties the folder and leaves other users alone', () async {
     final a = dev('a');
     final hash = 'a' * 64;
+    // Other kinds and placeholders go too.
+    server.files['$_uid/.emptyFolderPlaceholder'] = (_bytes(''), 'x');
+    server.files['$_uid/later/deep/f.bin'] = (_bytes('x'), 'x');
+    server.files['$_uid/art/.emptyFolderPlaceholder'] = (_bytes(''), 'x');
     server.files['$_uid/font/$hash.ttf'] = (_bytes('x'), 'font/ttf');
     server.files['$_uid/art/$hash.jpg'] = (_bytes('x'), 'image/jpeg');
     server.files['$_uid/art/yt2-$hash.jpg'] = (_bytes('x'), 'image/jpeg');
@@ -422,5 +441,166 @@ void main() {
     await sync.start(_uid);
     expect(server.files.keys, ['$_uid/font/$hash.ttf']);
     await sync.dispose();
+  });
+
+  group('fix round 1', () {
+    Future<String> font(_Dev d, String text) async {
+      final bytes = _bytes(text);
+      final hash = _sha(bytes);
+      await d.addFont(hash, 'ttf', family: 'F $text');
+      d.fonts.createSync(recursive: true);
+      d.fontFile(hash, 'ttf').writeAsBytesSync(bytes);
+      return hash;
+    }
+
+    test('downloaded fonts are announced once a run; none, no call', () async {
+      final a = dev('a');
+      final b = dev('b');
+      final h1 = await font(a, 'one');
+      final h2 = await font(a, 'two');
+      await a.files.reconcile(_uid);
+      expect(_Dev.fontsArrived, 0);
+      await b.addFont(h1, 'ttf');
+      await b.addFont(h2, 'ttf');
+      await b.files.reconcile(_uid);
+      expect(_Dev.fontsArrived, 1);
+      await b.files.reconcile(_uid);
+      expect(_Dev.fontsArrived, 1);
+    });
+
+    test('a run reports uploads still pending', () async {
+      final a = dev('a');
+      await font(a, 'f');
+      a.remote.failUploads = true;
+      var out = await a.files.reconcile(_uid);
+      expect(out.pending, isTrue);
+      expect(out.failed, isTrue);
+      a.remote.failUploads = false;
+      out = await a.files.reconcile(_uid);
+      expect(out.pending, isFalse);
+      expect(out.failed, isFalse);
+      // Offline before the bucket could be listed: not known.
+      a.remote.filesOffline = true;
+      out = await a.files.reconcile(_uid);
+      expect(out.offline, isTrue);
+      expect(out.pending, isNull);
+    });
+
+    test('a run moves at most 20 files and says when more remain', () async {
+      final a = dev('a');
+      for (var i = 0; i < 25; i++) {
+        await font(a, 'font $i');
+      }
+      var out = await a.files.reconcile(_uid);
+      expect(server.files, hasLength(CloudFiles.maxFilesPerRun));
+      expect(out.more, isTrue);
+      expect(out.pending, isTrue);
+      out = await a.files.reconcile(_uid);
+      expect(server.files, hasLength(25));
+      expect(out.more, isFalse);
+      expect(out.pending, isFalse);
+    });
+
+    test('a run moves at most 25 MB', () async {
+      final a = dev('a');
+      a.fonts.createSync(recursive: true);
+      for (var i = 0; i < 4; i++) {
+        final bytes = Uint8List(9 * 1024 * 1024)..[0] = i;
+        final hash = _sha(bytes);
+        await a.addFont(hash, 'ttf', family: 'Big $i');
+        a.fontFile(hash, 'ttf').writeAsBytesSync(bytes);
+      }
+      final out = await a.files.reconcile(_uid);
+      // The third file passes 25 MB; the run stops after it.
+      expect(server.files, hasLength(3));
+      expect(out.more, isTrue);
+    });
+
+    test('a download cancelled meanwhile writes nothing', () async {
+      final a = dev('a');
+      final b = dev('b');
+      final hash = await font(a, 'f');
+      await a.files.reconcile(_uid);
+      await b.addFont(hash, 'ttf');
+      var stopped = false;
+      b.remote.duringDownload = () async => stopped = true;
+      await b.files.reconcile(_uid, cancelled: () => stopped);
+      expect(b.fontFile(hash, 'ttf').existsSync(), isFalse);
+      expect(
+        b.fonts.existsSync() ? b.fonts.listSync() : const <FileSystemEntity>[],
+        isEmpty,
+      );
+    });
+
+    test('downloaded art that is not a JPEG is not kept', () async {
+      final b = dev('b');
+      final ref = '${'a' * 64}.jpg';
+      server.files['$_uid/art/$ref'] = (_bytes('GIF89a'), 'image/jpeg');
+      await b.addTrack('t1', art: ref);
+      await b.files.reconcile(_uid);
+      expect(b.artFile(ref).existsSync(), isFalse);
+    });
+
+    test('failures are logged once a run, with a count', () async {
+      final a = dev('a');
+      await font(a, 'x');
+      await font(a, 'y');
+      a.remote.failUploads = true;
+      final logs = <String>[];
+      final old = debugPrint;
+      debugPrint = (m, {wrapWidth}) => logs.add(m ?? '');
+      try {
+        await a.files.reconcile(_uid);
+      } finally {
+        debugPrint = old;
+      }
+      final failures = logs.where((l) => l.contains('failed to sync'));
+      expect(failures, hasLength(1));
+      expect(failures.single, contains('2 files'));
+    });
+
+    group('in a sync run', () {
+      Future<CloudSync> engine(_Dev d) async => CloudSync(
+        db: d.db,
+        stamp: await SyncStamp.load(d.db),
+        remote: d.remote,
+        settings: SettingsRepository(d.db),
+        fontsDir: d.fonts,
+        files: d.files,
+      );
+
+      test('pending uploads count as unsent, across a restart', () async {
+        final a = dev('a');
+        await font(a, 'f');
+        a.remote.failUploads = true;
+        var sync = await engine(a);
+        await sync.start(_uid);
+        expect(sync.current.phase, SyncPhase.error);
+        expect(await sync.hasUnsent(), isTrue);
+        await sync.dispose();
+
+        // A new engine (app restart), signed in again but still failing.
+        sync = await engine(a);
+        expect(await sync.hasUnsent(), isTrue);
+        a.remote.failUploads = false;
+        await sync.start(_uid);
+        expect(sync.current.phase, SyncPhase.idle);
+        expect(await sync.hasUnsent(), isFalse);
+        await sync.dispose();
+      });
+
+      test('more files than one run takes go in follow-up runs', () async {
+        final a = dev('a');
+        for (var i = 0; i < 45; i++) {
+          await font(a, 'font $i');
+        }
+        final sync = await engine(a);
+        await sync.start(_uid);
+        expect(server.files, hasLength(45));
+        expect(sync.current.phase, SyncPhase.idle);
+        expect(await sync.hasUnsent(), isFalse);
+        await sync.dispose();
+      });
+    });
   });
 }

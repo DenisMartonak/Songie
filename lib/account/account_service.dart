@@ -345,14 +345,13 @@ class AccountService {
     if (p != null && _userId == id) _set(SignedIn(p));
   }
 
-  /// Clears the picture, deletes its files and the synced files, then the
-  /// account, then signs out. If the account can't be deleted, the profile
-  /// never points at a deleted file; if the synced files can't be deleted,
-  /// the account stays (so none are left behind without an owner).
+  /// Deletes the synced files, clears the picture and deletes its files,
+  /// then the account, then signs out. If the synced files can't be
+  /// deleted, nothing else is touched (none are left without an owner); if
+  /// the account can't be deleted, the profile never points at a deleted
+  /// file.
   Future<void> deleteAccount() async {
     final id = _signedIn.profile.id;
-    await _b.setAvatarPath(id, null);
-    await _b.deleteAvatarFiles(id);
     final deleteSyncFiles = _deleteSyncFiles;
     if (deleteSyncFiles != null) {
       try {
@@ -364,6 +363,8 @@ class AccountService {
         throw const AccountException(AccountError.unknown);
       }
     }
+    await _b.setAvatarPath(id, null);
+    await _b.deleteAvatarFiles(id);
     await _b.deleteMyAccount();
     await logOut();
   }

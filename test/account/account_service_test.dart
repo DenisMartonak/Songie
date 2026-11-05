@@ -411,9 +411,9 @@ void main() {
     backend.calls.clear();
     await service.deleteAccount();
     expect(backend.calls, [
+      'deleteSyncFiles $id',
       'setAvatarPath',
       'deleteAvatarFiles',
-      'deleteSyncFiles $id',
       'deleteMyAccount',
       'logOut',
     ]);
@@ -431,7 +431,8 @@ void main() {
       service.deleteAccount(),
       _throwsAccount(AccountError.offline),
     );
-    expect(backend.calls, isNot(contains('deleteMyAccount')));
+    // Nothing else was touched: the picture stays too.
+    expect(backend.calls, isEmpty);
     expect(service.state, isA<SignedIn>());
   });
 

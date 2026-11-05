@@ -317,6 +317,8 @@ Future<void> main() async {
     remote: cloudRemote,
     fontsDir: paths.fonts,
     artDir: paths.art,
+    // Registers fonts that arrived; the theme asks again (registrations).
+    onFontsArrived: fonts.loadImported,
   );
   final accounts = AccountService(
     PendingAccountBackend(connectSupabase(SettingsSessionMarker(settings))),

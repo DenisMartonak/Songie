@@ -118,6 +118,7 @@ class CloudSync {
   static String _pushKey(String uid) => '$kCloudPushSeqPrefix$uid';
   static String _pullKey(String uid) => '$kCloudPullSeqPrefix$uid';
   static String _syncedKey(String uid) => '$kCloudLastSyncedPrefix$uid';
+  static String _filesKey(String uid) => '$kCloudFilesPendingPrefix$uid';
   static String _key(SyncRow r) => '${r.table.wire}/${r.id}';
 
   /// Starts syncing for [userId] and returns once the first sync is done.
@@ -223,10 +224,12 @@ class CloudSync {
     });
   }
 
-  /// Whether this device has rows the account hasn't got yet.
+  /// Whether this device has rows or files the account hasn't got yet.
   Future<bool> hasUnsent() async {
     final uid = _uid ?? await _settings.getString(kCloudLastAccount);
     if (uid == null) return false;
+    // Files still to go up (kept across restarts).
+    if (await _settings.getString(_filesKey(uid)) == '1') return true;
     final feed = ChangeFeed(_db, stamp: _stamp);
     var seq = await _getInt(_pushKey(uid));
     while (true) {
@@ -309,13 +312,27 @@ class CloudSync {
       await _pullAll(uid, gen);
       _check(gen);
       // Never throws; offline it stops quietly and catches up next run.
-      await _files?.reconcile(uid, cancelled: () => gen != _gen);
+      final files = await _files?.reconcile(uid, cancelled: () => gen != _gen);
       _check(gen);
-      if (_clockWrong || _pushFailed) {
+      if (files?.pending case final pending?) {
+        await _settings.setString(_filesKey(uid), pending ? '1' : null);
+        _check(gen);
+      }
+      // Files left by the per-run cap go in a follow-up run, after the rows.
+      if (files?.more ?? false) _again = true;
+      if (_clockWrong || _pushFailed || (files?.failed ?? false)) {
         final phase = _clockWrong ? SyncPhase.clockWrong : SyncPhase.error;
         _setStatus(SyncStatus(phase, lastSynced: _status.lastSynced));
         return;
       }
+      if (files?.offline ?? false) {
+        _setStatus(
+          SyncStatus(SyncPhase.offline, lastSynced: _status.lastSynced),
+        );
+        return;
+      }
+      // Still syncing: the follow-up run moves the rest.
+      if (files?.more ?? false) return;
       final at = _now();
       await _settings.setString(
         _syncedKey(uid),

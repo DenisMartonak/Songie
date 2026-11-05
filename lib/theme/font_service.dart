@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -109,6 +110,18 @@ class FontService {
   /// Imported families registered on this device, so [resolveFamily] is sync.
   final Set<String> _registered = {};
 
+  final _registrations = StreamController<int>.broadcast();
+  var _revision = 0;
+
+  /// A growing count, emitted each time a family is registered, so what
+  /// depends on [resolveFamily] can ask again (a font file that arrived by
+  /// cloud sync after the theme was resolved).
+  Stream<int> get registrations => _registrations.stream;
+
+  void _markRegistered(String family) {
+    if (_registered.add(family)) _registrations.add(++_revision);
+  }
+
   Future<List<FontRow>> _liveRows() =>
       (_db.select(_db.fonts)..where((f) => f.deleted.equals(false))).get();
 
@@ -124,7 +137,7 @@ class FontService {
           continue;
         }
         await _register(row.family, [await file.readAsBytes()]);
-        _registered.add(row.family);
+        _markRegistered(row.family);
       } catch (e) {
         AppLog.w('Could not load font ${row.family}', e);
       }
@@ -252,7 +265,7 @@ class FontService {
             await _ensureFile(hash, r.ext, bytes);
             if (!_registered.contains(r.family)) {
               if (!await _tryRegister(r.family, bytes)) return _notAFont();
-              _registered.add(r.family);
+              _markRegistered(r.family);
             }
             return Ok(
               FontImport(
@@ -291,7 +304,7 @@ class FontService {
                 ext: ext,
               ),
             );
-        _registered.add(family);
+        _markRegistered(family);
         return Ok(
           FontImport(
             FontEntry(family: family, fileHash: hash, ext: ext),

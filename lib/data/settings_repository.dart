@@ -55,6 +55,10 @@ const kCloudPullSeqPrefix = 'cloud_pull_seq:';
 /// epoch), under `cloud_last_synced:<account id>`. Device-local.
 const kCloudLastSyncedPrefix = 'cloud_last_synced:';
 
+/// Cloud sync: '1' while files of this device are still to be uploaded to
+/// an account, under `cloud_files_pending:<account id>`. Device-local.
+const kCloudFilesPendingPrefix = 'cloud_files_pending:';
+
 /// Cloud sync: the account last signed in on this device, so signing in as
 /// another one asks to merge or start empty. Device-local.
 const kCloudLastAccount = 'cloud_last_account';

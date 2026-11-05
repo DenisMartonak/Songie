@@ -1,11 +1,13 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/data/sync_stamp.dart';
+import 'package:songies/providers.dart';
 import 'package:songies/theme/font_service.dart';
 import 'package:songies/theme/theme_spec.dart';
 
@@ -142,6 +144,38 @@ void main() {
       expect(fresh.resolveFamily(_spec('Gone')), 'Inter');
     },
   );
+
+  test('a font registered later re-resolves the theme family', () async {
+    await service.import(fixture.path);
+    final row = (await db.select(db.fonts).get()).single;
+    final file = File(p.join(fontsDir.path, '${row.fileHash}.ttf'));
+    final bytes = file.readAsBytesSync();
+    file.deleteSync();
+
+    // Another device: the row came, the file not yet.
+    final fresh = build();
+    await fresh.loadImported();
+    final c = ProviderContainer(
+      overrides: [
+        fontServiceProvider.overrideWithValue(fresh),
+        themeSpecProvider.overrideWithValue(_spec('Fancy Sans')),
+      ],
+    );
+    addTearDown(c.dispose);
+    final seen = <String>[];
+    c.listen(
+      resolvedFontFamilyProvider,
+      (_, f) => seen.add(f),
+      fireImmediately: true,
+    );
+    expect(seen, ['Inter']);
+
+    // The file arrives (cloud sync) and is loaded.
+    file.writeAsBytesSync(bytes);
+    await fresh.loadImported();
+    await pumpEventQueue();
+    expect(seen, ['Inter', 'Fancy Sans']);
+  });
 
   test('resolveFamily: bundled kept, unknown falls back to Inter', () {
     for (final f in service.bundledFamilies) {

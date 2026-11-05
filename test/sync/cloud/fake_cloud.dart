@@ -138,6 +138,9 @@ class FakeRemote implements CloudRemote {
   /// Storage calls fail as offline.
   var filesOffline = false;
 
+  /// Runs inside each download, before the bytes come back.
+  Future<void> Function()? duringDownload;
+
   /// Uploads fail as a server error (not the connection).
   var failUploads = false;
 
@@ -149,16 +152,23 @@ class FakeRemote implements CloudRemote {
   }
 
   @override
-  Future<Set<String>> listFiles(String folder) async {
+  Future<CloudListing> listFiles(String folder) async {
     listCalls++;
     if (filesOffline) throw const CloudOffline();
     _own('$folder/');
-    return {
-      for (final k in server.files.keys)
-        if (k.startsWith('$folder/') &&
-            !k.substring(folder.length + 1).contains('/'))
-          k.substring(folder.length + 1),
-    };
+    final files = <String>{};
+    final folders = <String>{};
+    for (final k in server.files.keys) {
+      if (!k.startsWith('$folder/')) continue;
+      final rest = k.substring(folder.length + 1);
+      final slash = rest.indexOf('/');
+      if (slash < 0) {
+        files.add(rest);
+      } else {
+        folders.add(rest.substring(0, slash));
+      }
+    }
+    return CloudListing(files, folders);
   }
 
   @override
@@ -181,6 +191,7 @@ class FakeRemote implements CloudRemote {
   @override
   Future<Uint8List> downloadFile(String path) async {
     downloads.add(path);
+    await duringDownload?.call();
     if (filesOffline) throw const CloudOffline();
     _own(path);
     final f = server.files[path];

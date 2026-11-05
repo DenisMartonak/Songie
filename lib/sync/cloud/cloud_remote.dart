@@ -58,9 +58,9 @@ abstract class CloudRemote {
   /// Drops the live connection.
   Future<void> close();
 
-  /// The names of the files directly in [folder] (`<user id>/<kind>`) of
-  /// the `sync-files` bucket.
-  Future<Set<String>> listFiles(String folder);
+  /// The names of the files and sub-folders directly in [folder] (e.g.
+  /// `<user id>/<kind>`) of the `sync-files` bucket.
+  Future<CloudListing> listFiles(String folder);
 
   /// Stores [bytes] at [path] (`<user id>/<kind>/<name>`), replacing a file
   /// there. [contentType] must be one the bucket allows.
@@ -75,6 +75,14 @@ abstract class CloudRemote {
 
   /// Deletes the files at [paths].
   Future<void> removeFiles(List<String> paths);
+}
+
+/// What one folder of the bucket holds: file names and sub-folder names.
+class CloudListing {
+  const CloudListing(this.files, [this.folders = const {}]);
+
+  final Set<String> files;
+  final Set<String> folders;
 }
 
 /// The bucket for synced files.
@@ -201,19 +209,20 @@ class SupabaseCloudRemote implements CloudRemote {
   StorageFileApi get _bucket => _client().storage.from(kSyncFilesBucket);
 
   @override
-  Future<Set<String>> listFiles(String folder) => _net(() async {
+  Future<CloudListing> listFiles(String folder) => _net(() async {
     const page = 1000;
-    final names = <String>{};
+    final files = <String>{};
+    final folders = <String>{};
     for (var offset = 0; ; offset += page) {
-      final files = await _bucket.list(
+      final got = await _bucket.list(
         path: folder,
         searchOptions: SearchOptions(limit: page, offset: offset),
       );
-      for (final f in files) {
+      for (final f in got) {
         // Sub-folders come back as entries without an id.
-        if (f.id != null) names.add(f.name);
+        (f.id == null ? folders : files).add(f.name);
       }
-      if (files.length < page) return names;
+      if (got.length < page) return CloudListing(files, folders);
     }
   });
 
