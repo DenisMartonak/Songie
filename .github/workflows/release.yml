@@ -183,8 +183,10 @@ jobs:
 
       - name: Upload the debug symbols to Sentry
         if: env.IS_RELEASE == 'true'
-        # Never fails the release: a missing token or a failed upload only
-        # warns (the crash reports then show unreadable stack traces).
+        # Never fails the release: a missing token or project or a failed
+        # upload only warns (the crash reports then show unreadable stack
+        # traces). Keep in step with the same step in the linux and windows
+        # jobs.
         continue-on-error: true
         timeout-minutes: 15
         env:
@@ -193,6 +195,10 @@ jobs:
         run: |
           if [[ -z "$SENTRY_AUTH_TOKEN" ]]; then
             echo "::warning::SENTRY_AUTH_TOKEN not set; symbols not uploaded"
+            exit 0
+          fi
+          if [[ -z "$SENTRY_PROJECT" ]]; then
+            echo "::warning::SENTRY_PROJECT not set; symbols not uploaded"
             exit 0
           fi
           if ! dart run sentry_dart_plugin; then
@@ -277,8 +283,10 @@ jobs:
 
       - name: Upload the debug symbols to Sentry
         if: env.IS_RELEASE == 'true'
-        # Never fails the release: a missing token or a failed upload only
-        # warns (the crash reports then show unreadable stack traces).
+        # Never fails the release: a missing token or project or a failed
+        # upload only warns (the crash reports then show unreadable stack
+        # traces). Keep in step with the same step in the android and windows
+        # jobs.
         continue-on-error: true
         timeout-minutes: 15
         env:
@@ -287,6 +295,10 @@ jobs:
         run: |
           if [[ -z "$SENTRY_AUTH_TOKEN" ]]; then
             echo "::warning::SENTRY_AUTH_TOKEN not set; symbols not uploaded"
+            exit 0
+          fi
+          if [[ -z "$SENTRY_PROJECT" ]]; then
+            echo "::warning::SENTRY_PROJECT not set; symbols not uploaded"
             exit 0
           fi
           if ! dart run sentry_dart_plugin; then
@@ -333,8 +345,10 @@ jobs:
 
       - name: Upload the debug symbols to Sentry
         if: env.IS_RELEASE == 'true'
-        # Never fails the release: a missing token or a failed upload only
-        # warns (the crash reports then show unreadable stack traces).
+        # Never fails the release: a missing token or project or a failed
+        # upload only warns (the crash reports then show unreadable stack
+        # traces). Keep in step with the same step in the android and linux
+        # jobs.
         continue-on-error: true
         timeout-minutes: 15
         env:
@@ -343,6 +357,10 @@ jobs:
         run: |
           if (-not $env:SENTRY_AUTH_TOKEN) {
             Write-Output '::warning::SENTRY_AUTH_TOKEN not set; symbols not uploaded'
+            exit 0
+          }
+          if (-not $env:SENTRY_PROJECT) {
+            Write-Output '::warning::SENTRY_PROJECT not set; symbols not uploaded'
             exit 0
           }
           dart run sentry_dart_plugin

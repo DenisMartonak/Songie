@@ -5,13 +5,16 @@
 #   tool/build_appimage.sh X.Y.Z
 #
 # Runs on ubuntu-22.04 (CI) and on newer distros. Needs: bash, curl,
-# sha256sum, ldconfig and a system libmpv (Ubuntu: apt install libmpv-dev).
+# sha256sum, ldconfig, a system libmpv (Ubuntu: apt install libmpv-dev) and
+# libcurl (Ubuntu: apt install libcurl4-openssl-dev; Fedora: libcurl-devel).
 #
 # AppDir layout:
 #   AppRun                   linux/packaging/AppRun
 #   opt/songies/             the release bundle, copied unchanged (Flutter
 #                            finds lib/ and data/ next to its executable)
-#   usr/lib/                 libmpv and its media libraries, by linuxdeploy
+#   usr/lib/                 libmpv and its media libraries, and libcurl
+#                            (needed by opt/songies/lib/libsentry.so), by
+#                            linuxdeploy
 #   usr/share/applications/  linux/packaging/songies.desktop
 #   usr/share/icons/...      the app icon
 #
@@ -24,6 +27,7 @@
 #   SONGIES_BUNDLE_DIR  the Flutter bundle (default build/linux/x64/release/bundle)
 #   SONGIES_OUT_DIR     where the AppImage goes (default build/)
 #   LIBMPV              the libmpv to bundle (default: found with ldconfig)
+#   LIBCURL             the libcurl.so.4 to bundle (default: found with ldconfig)
 #   APPIMAGE_EXTRACT_AND_RUN  defaults to 1 so the tools run without FUSE
 set -euo pipefail
 
@@ -137,6 +141,17 @@ if [[ -z "${LIBMPV:-}" || ! -e "$LIBMPV" ]]; then
 fi
 echo "Bundling $LIBMPV"
 
+# sentry-native (opt/songies/lib/libsentry.so) links libcurl.so.4, which
+# some desktops lack (only libcurl-gnutls): without it the app cannot start.
+if [[ -z "${LIBCURL:-}" ]]; then
+  LIBCURL="$(ldconfig -p | awk '$1 == "libcurl.so.4" && /x86-64/ && !f { print $NF; f = 1 }')"
+fi
+if [[ -z "${LIBCURL:-}" || ! -e "$LIBCURL" ]]; then
+  echo "libcurl.so.4 not found; install it (Ubuntu: apt install libcurl4-openssl-dev)" >&2
+  exit 1
+fi
+echo "Bundling $LIBCURL"
+
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/opt/songies" "$OUT_DIR"
 cp -a "$BUNDLE_DIR/." "$APPDIR/opt/songies/"
@@ -151,12 +166,13 @@ for pattern in "${EXCLUDES[@]}"; do
   exclude_args+=(--exclude-library "$pattern")
 done
 
-# linuxdeploy copies libmpv and its dependency tree into usr/lib, skips the
-# excludes above and its own list of base-system libraries (glibc, libGL,
-# X11, fontconfig, ALSA, ...), and sets RUNPATH=$ORIGIN on every copy.
+# linuxdeploy copies libmpv, libcurl and their dependency trees into usr/lib,
+# skips the excludes above and its own list of base-system libraries (glibc,
+# libGL, X11, fontconfig, ALSA, ...), and sets RUNPATH=$ORIGIN on every copy.
 "$LINUXDEPLOY" \
   --appdir "$APPDIR" \
   --library "$LIBMPV" \
+  --library "$LIBCURL" \
   "${exclude_args[@]}" \
   --desktop-file "$PACKAGING/songies.desktop" \
   --icon-file "$ICON_DIR/songies.png" \
@@ -167,6 +183,19 @@ if [[ ! -e "$APPDIR/usr/lib/$(basename "$LIBMPV")" ]]; then
   echo "linuxdeploy did not bundle $(basename "$LIBMPV")" >&2
   exit 1
 fi
+
+if [[ ! -e "$APPDIR/usr/lib/libcurl.so.4" ]]; then
+  echo "linuxdeploy did not bundle libcurl.so.4" >&2
+  exit 1
+fi
+# libsentry.so sits in the untouched bundle (opt/songies/lib); point it at the
+# bundled libcurl. Its RUNPATH only ever served to find libcurl.
+SENTRY_LIB="$APPDIR/opt/songies/lib/libsentry.so"
+if [[ ! -e "$SENTRY_LIB" ]]; then
+  echo "No libsentry.so in the bundle at $SENTRY_LIB" >&2
+  exit 1
+fi
+"$PATCHELF" --set-rpath '$ORIGIN/../../../usr/lib' "$SENTRY_LIB"
 
 # Fail if a desktop-stack library slipped in anyway.
 for pattern in "${EXCLUDES[@]}"; do

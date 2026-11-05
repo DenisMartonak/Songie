@@ -56,7 +56,7 @@ With neither, `flutter build apk --release` still works but signs with the debug
 
 ## 4. Sentry crash reports (once)
 
-Release builds send anonymous crash reports to Sentry (Settings → Send crash reports, on by default). A crash report only holds memory addresses. To turn them into function names and line numbers, Sentry needs the app's debug symbols, and the workflow uploads them on every release. For that it needs a token.
+Release builds send anonymous crash reports to Sentry (Settings → Send crash reports, on by default). Without the app's debug symbols, a crash report's stack trace shows only memory addresses. To turn them into function names and line numbers, Sentry needs those symbols, and the workflow uploads them on every release. For that it needs a token.
 
 1. In Sentry open Settings, then Auth Tokens (the page may say Organization Tokens), then Create New Token. Name it `songies-ci`. An organization token already has the scopes the upload needs (`org:ci`: create releases and upload debug files) and knows the Sentry region (EU), so there is nothing else to pick. Copy the token now; Sentry shows it only once.
 2. Find the project slug: open the Songies project in Sentry and look at the address bar, for example `https://denis-martonak.sentry.io/projects/songies/`. The part after `projects/` is the slug.
@@ -65,10 +65,12 @@ Release builds send anonymous crash reports to Sentry (Settings → Send crash r
    - On the Variables tab, New repository variable: `SENTRY_PROJECT`, the slug from step 2.
 4. In Sentry open the project's Settings, then Security & Privacy, and leave **Store Native Crash Reports** off. Sentry still reads native crash dumps into normal crash reports; it just does not keep the raw dump file, which can hold bits of memory such as song or file names.
 
+5. Nothing to do for the DSN (the address the app sends reports to). It is written in `.github/workflows/release.yml` as `SONGIES_SENTRY_DSN`, and Sentry shows it under the project's Settings, then Client Keys (DSN). It is public by design (it only lets an app send reports), so it is not a secret. If you ever make a new one in Sentry, change it in the workflow.
+
 What reports and what does not:
 
 - Only a tag push (a real release) builds the app with the Sentry address, so only installed releases send reports. A manual run (Run workflow) and anything you build yourself never send anything.
-- If `SENTRY_AUTH_TOKEN` is missing, the release still builds and publishes. Each build job shows the warning "SENTRY_AUTH_TOKEN not set; symbols not uploaded", and crash reports from that release show addresses instead of names. Add the token before the next release.
+- If `SENTRY_AUTH_TOKEN` is missing, the release still builds and publishes. Each build job shows the warning "SENTRY_AUTH_TOKEN not set; symbols not uploaded", and crash reports from that release show addresses instead of names. Add the token before the next release. The same goes for a missing `SENTRY_PROJECT` ("SENTRY_PROJECT not set; symbols not uploaded").
 
 ### Building for Linux on your own PC
 

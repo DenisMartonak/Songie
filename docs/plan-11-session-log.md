@@ -8,7 +8,7 @@ _2026-10-31. Tasks 1–9 done, each reviewed. Nothing has been run on GitHub or 
 - **Spec:** [packaging design](superpowers/specs/2026-10-31-songies-packaging-design.md). **Plan:** [Plan 11](superpowers/plans/2026-10-31-songies-plan-11-packaging.md). **Guide:** [releasing.md](releasing.md).
 - **Done:** an update checker and verifying downloader, per-platform installers (Android, Windows, Linux AppImage), the update prompt and Settings, Check for updates, release signing config, the Windows Inno Setup installer, the AppImage build, the tag-triggered release workflow, and the history secret scan `tool/scan_secrets.sh`.
 - **Final checks:** `flutter analyze` clean; `flutter test` 2,057 passing; release builds succeeded: APK 83.3 MB (signed with the debug key here, since no release keystore was configured), Linux bundle 36 MB, AppImage 115 MB (`songies-1.0.0-x86_64.AppImage`). Build outputs are not committed.
-- **Next:** the Plan 11 section of the [manual checklist](manual-test-checklist.md), starting with a manual `workflow_dispatch` run on GitHub, then a throwaway tag, then the first real release. Run the secret scan and the list in releasing.md section 9 before making the repo public.
+- **Next:** the Plan 11 section of the [manual checklist](manual-test-checklist.md), starting with a manual `workflow_dispatch` run on GitHub, then a throwaway tag, then the first real release. Run the secret scan and the list in releasing.md section 10 before making the repo public.
 
 ## Commits
 
