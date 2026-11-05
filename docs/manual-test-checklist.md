@@ -309,6 +309,26 @@ Use `S4-2QqwHf5c` ("HOMOŠLERKY (Full Song)").
 - [ ] A report that contains @everyone or @here in the description fires no mention or notification.
 - [ ] The form cannot be closed while it is sending.
 
+## Accounts
+
+Phone (Android), desktop Linux and Windows. First do the one-time setup in `docs/supabase.md`. Use two test email addresses you can read.
+- [ ] Signed out, the app works as before: no prompt at launch, and Settings → Account (the first section) offers Sign up and Log in.
+- [ ] Sign up with email, a password of 8+ characters and a free username. A 6-digit code arrives by email; typing it logs you in and the Account section shows your username and email.
+- [ ] The username field lowercases as you type, shows "3–20 letters, numbers, _ or .", and says "That username is taken." for a taken name (try your first account's name in a different case).
+- [ ] Sign up with a password of 7 characters: refused with "At least 8 characters".
+- [ ] Sign up again with the first email: "That email already has an account. Log in, or reset your password." and no code screen.
+- [ ] A wrong or expired code: "That code is wrong or has expired."; Send a new code sends one that works.
+- [ ] Log in with a wrong password: "Wrong email or password."
+- [ ] Log in to an account whose email isn't confirmed yet: the app asks for the code.
+- [ ] Forgot password: a code arrives; the code and a new password log you in; the old password no longer works.
+- [ ] Change username: the new name shows at once and after a restart; a taken name is refused.
+- [ ] Change picture: it shows as a round picture in Settings and (desktop) in the top bar; after another change the old file is gone from the `avatars` bucket in the dashboard. Remove picture brings back the letter circle.
+- [ ] Desktop: the top-bar avatar sits right of the search field and left of the window buttons (or at the right end of the search row without the custom title bar), and opens Settings → Account; signed out it is a person icon with a "Log in" tooltip.
+- [ ] Log out, then restart: still signed out. Log in, then restart: still signed in.
+- [ ] Airplane mode (or the Supabase project paused): the app starts and plays music; account actions say "Couldn't reach the server. Check your connection."
+- [ ] Delete account: the confirmation reads "Delete your account? Your username and picture are removed. Your music on this device stays."; afterwards you're signed out, your library is untouched, the user is gone from Authentication → Users, and the username can be signed up again.
+- [ ] Database rules (review the migration; the dashboard SQL editor runs as the owner and skips them): a signed-in user can't change someone else's profile or upload outside their own `<user id>/` folder in `avatars`. In the SQL editor, `select public.username_available('somename');` returns only true or false.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.
