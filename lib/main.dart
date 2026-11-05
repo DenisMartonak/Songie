@@ -68,6 +68,7 @@ import 'player/track_resolver.dart';
 import 'player/equalizer.dart';
 import 'providers.dart';
 import 'router.dart';
+import 'sync/cloud/cloud_files.dart';
 import 'sync/cloud/cloud_remote.dart';
 import 'sync/cloud/cloud_sync.dart';
 import 'sync/device_identity.dart';
@@ -308,16 +309,25 @@ Future<void> main() async {
   // Accounts: Supabase starts in the background, so a slow keyring or no
   // network never holds up the first frame; signed out, it never touches
   // the keyring. If it fails, the app runs signed out.
+  // Cloud sync: follows the account (see cloudSyncFollowerProvider); signed
+  // out it never touches Supabase, so the client is read only when needed.
+  final cloudRemote = SupabaseCloudRemote(() => Supabase.instance.client);
+  final cloudFiles = CloudFiles(
+    db: db,
+    remote: cloudRemote,
+    fontsDir: paths.fonts,
+    artDir: paths.art,
+  );
   final accounts = AccountService(
     PendingAccountBackend(connectSupabase(SettingsSessionMarker(settings))),
     network: network.changes,
+    deleteSyncFiles: cloudFiles.deleteAll,
   );
-  // Cloud sync: follows the account (see cloudSyncFollowerProvider); signed
-  // out it never touches Supabase, so the client is read only when needed.
   final cloudSync = CloudSync(
     db: db,
     stamp: stamp,
-    remote: SupabaseCloudRemote(() => Supabase.instance.client),
+    remote: cloudRemote,
+    files: cloudFiles,
     settings: settings,
     network: network.changes,
     fontsDir: paths.fonts,

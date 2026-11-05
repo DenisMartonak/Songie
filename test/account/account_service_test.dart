@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:image/image.dart' as img;
 import 'package:songies/core/connectivity.dart';
 import 'package:songies/account/account_service.dart';
+import 'package:songies/sync/cloud/cloud_remote.dart';
 
 import 'fake_account_backend.dart';
 
@@ -397,6 +398,41 @@ void main() {
     expect(backend.profiles[id]!.avatarPath, isNull);
     expect(backend.files, isEmpty);
     expect(service.state, isA<SignedOut>());
+  });
+
+  test('deleteAccount deletes the synced files before the account', () async {
+    await service.dispose();
+    service = AccountService(
+      backend,
+      deleteSyncFiles: (uid) async => backend.calls.add('deleteSyncFiles $uid'),
+    );
+    await signedInAs('a@b.c', 'den');
+    final id = (service.state as SignedIn).profile.id;
+    backend.calls.clear();
+    await service.deleteAccount();
+    expect(backend.calls, [
+      'setAvatarPath',
+      'deleteAvatarFiles',
+      'deleteSyncFiles $id',
+      'deleteMyAccount',
+      'logOut',
+    ]);
+  });
+
+  test('synced files that cannot be deleted keep the account', () async {
+    await service.dispose();
+    service = AccountService(
+      backend,
+      deleteSyncFiles: (_) async => throw const CloudOffline(),
+    );
+    await signedInAs('a@b.c', 'den');
+    backend.calls.clear();
+    await expectLater(
+      service.deleteAccount(),
+      _throwsAccount(AccountError.offline),
+    );
+    expect(backend.calls, isNot(contains('deleteMyAccount')));
+    expect(service.state, isA<SignedIn>());
   });
 
   test('profile actions while signed out throw', () async {

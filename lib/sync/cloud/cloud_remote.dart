@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -56,6 +57,40 @@ abstract class CloudRemote {
 
   /// Drops the live connection.
   Future<void> close();
+
+  /// The names of the files directly in [folder] (`<user id>/<kind>`) of
+  /// the `sync-files` bucket.
+  Future<Set<String>> listFiles(String folder);
+
+  /// Stores [bytes] at [path] (`<user id>/<kind>/<name>`), replacing a file
+  /// there. [contentType] must be one the bucket allows.
+  Future<void> uploadFile(
+    String path,
+    Uint8List bytes, {
+    required String contentType,
+  });
+
+  /// The file at [path].
+  Future<Uint8List> downloadFile(String path);
+
+  /// Deletes the files at [paths].
+  Future<void> removeFiles(List<String> paths);
+}
+
+/// The bucket for synced files.
+const kSyncFilesBucket = 'sync-files';
+
+/// How long one file upload or download may take before it counts as
+/// offline (files are up to 10 MB).
+const kCloudFileTimeout = Duration(minutes: 5);
+
+/// Storage reports a failed request (no network) with the exception's type
+/// name as the status; a paused project answers with a gateway error.
+bool _storageUnreachable(StorageException e) {
+  final status = e.statusCode;
+  return status == null ||
+      int.tryParse(status) == null ||
+      const {'502', '503', '504', '540'}.contains(status);
 }
 
 /// How long one push or pull may take before it counts as offline.
@@ -163,6 +198,48 @@ class SupabaseCloudRemote implements CloudRemote {
   @override
   Future<void> close() => _drop();
 
+  StorageFileApi get _bucket => _client().storage.from(kSyncFilesBucket);
+
+  @override
+  Future<Set<String>> listFiles(String folder) => _net(() async {
+    const page = 1000;
+    final names = <String>{};
+    for (var offset = 0; ; offset += page) {
+      final files = await _bucket.list(
+        path: folder,
+        searchOptions: SearchOptions(limit: page, offset: offset),
+      );
+      for (final f in files) {
+        // Sub-folders come back as entries without an id.
+        if (f.id != null) names.add(f.name);
+      }
+      if (files.length < page) return names;
+    }
+  });
+
+  @override
+  Future<void> uploadFile(
+    String path,
+    Uint8List bytes, {
+    required String contentType,
+  }) => _net(
+    () => _bucket.uploadBinary(
+      path,
+      bytes,
+      // Named by content hash, so replacing is harmless.
+      fileOptions: FileOptions(contentType: contentType, upsert: true),
+    ),
+    timeout: kCloudFileTimeout,
+  );
+
+  @override
+  Future<Uint8List> downloadFile(String path) =>
+      _net(() => _bucket.download(path), timeout: kCloudFileTimeout);
+
+  @override
+  Future<void> removeFiles(List<String> paths) =>
+      _net(() => _bucket.remove(paths));
+
   Future<void> _drop() async {
     final c = _channel;
     _channel = null;
@@ -174,11 +251,11 @@ class SupabaseCloudRemote implements CloudRemote {
     }
   }
 
-  Future<T> _net<T>(Future<T> Function() f) async {
+  Future<T> _net<T>(Future<T> Function() f, {Duration? timeout}) async {
     try {
       // The client's own HTTP timeout covers each request; this caps the
       // whole call.
-      return await f().timeout(_timeout);
+      return await f().timeout(timeout ?? _timeout);
     } on SocketException catch (e) {
       throw CloudOffline(e);
     } on TimeoutException catch (e) {
@@ -187,6 +264,9 @@ class SupabaseCloudRemote implements CloudRemote {
       throw CloudOffline(e);
     } on AuthRetryableFetchException catch (e) {
       throw CloudOffline(e);
+    } on StorageException catch (e) {
+      if (_storageUnreachable(e)) throw CloudOffline(e);
+      rethrow;
     }
   }
 }

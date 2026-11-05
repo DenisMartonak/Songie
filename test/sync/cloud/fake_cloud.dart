@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:songies/core/hlc.dart';
 import 'package:songies/sync/cloud/cloud_remote.dart';
@@ -76,6 +77,22 @@ class FakeServer {
   /// A Realtime message to [user]'s devices.
   void broadcast(String user) =>
       _topics.putIfAbsent(user, StreamController<void>.broadcast).add(null);
+
+  /// The `sync-files` bucket: path to bytes and content type.
+  final files = <String, (Uint8List, String)>{};
+
+  /// The bucket's allowed content types (the migration's list).
+  static const allowedTypes = {
+    'font/ttf',
+    'font/otf',
+    'application/vnd.ms-opentype',
+    'application/x-font-ttf',
+    'application/x-font-otf',
+    'application/font-sfnt',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  };
 }
 
 /// One device's [CloudRemote] on a [FakeServer], counting every call.
@@ -111,6 +128,75 @@ class FakeRemote implements CloudRemote {
   Object? pushError;
 
   int get calls => pushCalls + pullCalls + changesCalls + closeCalls;
+
+  /// Storage calls: every upload's path, downloads, listings, removals.
+  final uploads = <String>[];
+  final downloads = <String>[];
+  var listCalls = 0;
+  var removeCalls = 0;
+
+  /// Storage calls fail as offline.
+  var filesOffline = false;
+
+  /// Uploads fail as a server error (not the connection).
+  var failUploads = false;
+
+  /// Storage policies: only the signed-in user's folder.
+  void _own(String path) {
+    if (user == null || !path.startsWith('$user/')) {
+      throw StateError('not your folder: $path');
+    }
+  }
+
+  @override
+  Future<Set<String>> listFiles(String folder) async {
+    listCalls++;
+    if (filesOffline) throw const CloudOffline();
+    _own('$folder/');
+    return {
+      for (final k in server.files.keys)
+        if (k.startsWith('$folder/') &&
+            !k.substring(folder.length + 1).contains('/'))
+          k.substring(folder.length + 1),
+    };
+  }
+
+  @override
+  Future<void> uploadFile(
+    String path,
+    Uint8List bytes, {
+    required String contentType,
+  }) async {
+    uploads.add(path);
+    if (filesOffline) throw const CloudOffline();
+    if (failUploads) throw StateError('server error');
+    _own(path);
+    if (!FakeServer.allowedTypes.contains(contentType)) {
+      throw StateError('mime type $contentType is not supported');
+    }
+    if (bytes.length > 10 * 1024 * 1024) throw StateError('too big');
+    server.files[path] = (Uint8List.fromList(bytes), contentType);
+  }
+
+  @override
+  Future<Uint8List> downloadFile(String path) async {
+    downloads.add(path);
+    if (filesOffline) throw const CloudOffline();
+    _own(path);
+    final f = server.files[path];
+    if (f == null) throw StateError('not found');
+    return Uint8List.fromList(f.$1);
+  }
+
+  @override
+  Future<void> removeFiles(List<String> paths) async {
+    removeCalls++;
+    if (filesOffline) throw const CloudOffline();
+    for (final p in paths) {
+      _own(p);
+      server.files.remove(p);
+    }
+  }
 
   @override
   Future<int> push(List<SyncRow> rows) async {

@@ -15,6 +15,7 @@ import '../../library/favorites.dart';
 import '../change_feed.dart';
 import '../row_applier.dart';
 import '../sync_row.dart';
+import 'cloud_files.dart';
 import 'cloud_remote.dart';
 import 'sync_status.dart';
 
@@ -44,6 +45,7 @@ class CloudSync {
     Stream<NetworkKind>? network,
     Future<bool> Function()? askMerge,
     this._fontsDir,
+    this._files,
     this._pushDelay = const Duration(seconds: 3),
     this._now = DateTime.now,
     this._stopWait = kCloudCallTimeout,
@@ -60,6 +62,9 @@ class CloudSync {
   final SettingsRepository _settings;
   final Future<bool> Function() _askMerge;
   final Directory? _fontsDir;
+
+  /// Fonts and covers the synced rows point at, reconciled after each run.
+  final CloudFiles? _files;
   final Duration _pushDelay;
   final DateTime Function() _now;
 
@@ -302,6 +307,9 @@ class CloudSync {
     try {
       await _pushSafe(uid, gen);
       await _pullAll(uid, gen);
+      _check(gen);
+      // Never throws; offline it stops quietly and catches up next run.
+      await _files?.reconcile(uid, cancelled: () => gen != _gen);
       _check(gen);
       if (_clockWrong || _pushFailed) {
         final phase = _clockWrong ? SyncPhase.clockWrong : SyncPhase.error;

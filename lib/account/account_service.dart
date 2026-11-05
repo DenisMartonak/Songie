@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import '../core/connectivity.dart';
 import '../core/log.dart';
+import '../sync/cloud/cloud_remote.dart';
 import 'account_backend.dart';
 import 'avatar_image.dart';
 import 'username.dart';
@@ -51,7 +52,14 @@ enum AuthStep {
 class AccountService {
   /// [network] (connection changes) retries a restored session whose
   /// profile couldn't load when the device comes back online.
-  AccountService(this._b, {Stream<NetworkKind>? network}) {
+  ///
+  /// [deleteSyncFiles] deletes the account's synced files (the
+  /// `sync-files/<user id>/` folder) when the account is deleted.
+  AccountService(
+    this._b, {
+    Stream<NetworkKind>? network,
+    this._deleteSyncFiles,
+  }) {
     _sub = _b.userIdChanges.listen((id) {
       // A confirmed sign-up counts once its password is set.
       if (id != null && _settingPassword) return;
@@ -68,6 +76,7 @@ class AccountService {
   StreamSubscription<NetworkKind>? _netSub;
 
   final AccountBackend _b;
+  final Future<void> Function(String userId)? _deleteSyncFiles;
   late final StreamSubscription<String?> _sub;
   final _changes = StreamController<AccountState>.broadcast();
   AccountState _state = const SignedOut();
@@ -336,13 +345,25 @@ class AccountService {
     if (p != null && _userId == id) _set(SignedIn(p));
   }
 
-  /// Clears the picture, deletes its files, then the account, then signs
-  /// out. If the account can't be deleted, the profile never points at a
-  /// deleted file.
+  /// Clears the picture, deletes its files and the synced files, then the
+  /// account, then signs out. If the account can't be deleted, the profile
+  /// never points at a deleted file; if the synced files can't be deleted,
+  /// the account stays (so none are left behind without an owner).
   Future<void> deleteAccount() async {
     final id = _signedIn.profile.id;
     await _b.setAvatarPath(id, null);
     await _b.deleteAvatarFiles(id);
+    final deleteSyncFiles = _deleteSyncFiles;
+    if (deleteSyncFiles != null) {
+      try {
+        await deleteSyncFiles(id);
+      } on CloudOffline {
+        throw const AccountException(AccountError.offline);
+      } catch (e) {
+        AppLog.w('Synced files could not be deleted (${e.runtimeType})');
+        throw const AccountException(AccountError.unknown);
+      }
+    }
     await _b.deleteMyAccount();
     await logOut();
   }
