@@ -11,6 +11,7 @@ import 'package:just_audio/just_audio.dart'
 
 import 'account/account_backend.dart';
 import 'account/account_service.dart';
+import 'account/secure_session_storage.dart';
 import 'app.dart';
 import 'core/app_version.dart';
 import 'core/connectivity.dart';
@@ -301,10 +302,13 @@ Future<void> main() async {
     AppLog.e('Device identity unavailable', e, s);
   }
 
-  // Accounts: Supabase starts in the background (it reads the session from
-  // the keyring), so a slow keyring or no network never holds up the first
-  // frame. If it fails, the app runs signed out.
-  final accounts = AccountService(PendingAccountBackend(connectSupabase()));
+  // Accounts: Supabase starts in the background, so a slow keyring or no
+  // network never holds up the first frame; signed out, it never touches
+  // the keyring. If it fails, the app runs signed out.
+  final accounts = AccountService(
+    PendingAccountBackend(connectSupabase(SettingsSessionMarker(settings))),
+    network: network.changes,
+  );
 
   final navigatorKey = GlobalKey<NavigatorState>();
   final router = buildRouter(navigatorKey: navigatorKey);

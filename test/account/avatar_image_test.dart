@@ -39,4 +39,13 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('avatarJpeg fills transparent areas with white', () {
+    final src = img.Image(width: 50, height: 50, numChannels: 4);
+    final out = img.decodeJpg(
+      avatarJpeg(Uint8List.fromList(img.encodePng(src))),
+    )!;
+    final p = out.getPixel(128, 128);
+    expect([p.r, p.g, p.b], everyElement(greaterThan(240)));
+  });
 }

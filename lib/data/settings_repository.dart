@@ -39,6 +39,10 @@ const kYtAccountName = 'yt_account_name';
 /// keyring entirely. Device-local.
 const kYtSignedIn = 'yt_signed_in';
 
+/// Non-secret marker: a Songies account session is stored in the keyring,
+/// so a signed-out start never touches it. Device-local.
+const kAccountSignedIn = 'account_signed_in';
+
 /// The equalizer preset (an `EqPreset` name). Device-local, Off by default.
 const kEqPreset = 'eq_preset';
 

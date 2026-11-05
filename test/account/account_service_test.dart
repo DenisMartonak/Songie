@@ -1,7 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+
+import 'dart:async';
+
 import 'package:image/image.dart' as img;
+import 'package:songies/core/connectivity.dart';
 import 'package:songies/account/account_service.dart';
 
 import 'fake_account_backend.dart';
@@ -43,6 +47,15 @@ void main() {
     expect(
       AccountError.offline.message,
       "Couldn't reach the server. Check your connection.",
+    );
+    expect(
+      AccountError.samePassword.message,
+      'Choose a password different from your old one.',
+    );
+    expect(AccountError.weakPassword.message, 'That password is too weak.');
+    expect(
+      AccountError.tooManyRequests.message,
+      'Too many tries. Wait a while and try again.',
     );
     for (final e in AccountError.values) {
       expect(e.message, isNotEmpty);
@@ -255,5 +268,97 @@ void main() {
   test('profile actions while signed out throw', () async {
     await expectLater(service.changeUsername('abc'), throwsStateError);
     await expectLater(service.deleteAccount(), throwsStateError);
+  });
+
+  test(
+    'a refused new password stays signed out, without a SignedIn flash',
+    () async {
+      await signedInAs('a@b.c', 'den');
+      await service.logOut();
+      final seen = <AccountState>[];
+      final sub = service.states.listen(seen.add);
+      backend.updatePasswordError = AccountError.samePassword;
+      await expectLater(
+        service.resetPassword('a@b.c', backend.goodCode, 'password1'),
+        _throwsAccount(AccountError.samePassword),
+      );
+      await pumpEventQueue();
+      await sub.cancel();
+      expect(seen.whereType<SignedIn>(), isEmpty);
+      expect(service.state, isA<SignedOut>());
+    },
+  );
+
+  test('log in, verify or reset whose profile load fails logs out and throws offline', () async {
+    await service.signUp('a@b.c', 'password1', 'den');
+    backend.profileError = AccountError.offline;
+    await expectLater(
+      service.verifySignup('a@b.c', backend.goodCode),
+      _throwsAccount(AccountError.offline),
+    );
+    expect(backend.calls.last, 'logOut');
+    expect(service.state, isA<SignedOut>());
+
+    backend.calls.clear();
+    await expectLater(
+      service.logIn('a@b.c', 'password1'),
+      _throwsAccount(AccountError.offline),
+    );
+    expect(backend.calls, contains('logOut'));
+
+    backend.calls.clear();
+    await expectLater(
+      service.resetPassword('a@b.c', backend.goodCode, 'newpassword'),
+      _throwsAccount(AccountError.offline),
+    );
+    expect(backend.calls, contains('logOut'));
+    await pumpEventQueue();
+    expect(service.state, isA<SignedOut>());
+
+    backend.profileError = null;
+    await service.logIn('a@b.c', 'newpassword');
+    expect(service.state, isA<SignedIn>());
+  });
+
+  test(
+    'a restored session loads its profile when the network comes back',
+    () async {
+      final net = StreamController<NetworkKind>.broadcast();
+      final s2 = AccountService(backend, network: net.stream);
+      addTearDown(s2.dispose);
+      await service.signUp('a@b.c', 'password1', 'den');
+      final id = backend.users['a@b.c']!.id;
+
+      backend.profileError = AccountError.offline;
+      backend.emitUser(id);
+      await pumpEventQueue();
+      expect(s2.state, isA<SignedOut>());
+
+      net.add(NetworkKind.offline);
+      await pumpEventQueue();
+      expect(s2.state, isA<SignedOut>());
+
+      backend.profileError = null;
+      net.add(NetworkKind.wifi);
+      await pumpEventQueue();
+      expect(s2.state, isA<SignedIn>());
+      await net.close();
+    },
+  );
+
+  test('refresh loads a restored session that could not load before', () async {
+    await service.signUp('a@b.c', 'password1', 'den');
+    final id = backend.users['a@b.c']!.id;
+    backend.profileError = AccountError.offline;
+    backend.emitUser(id);
+    await pumpEventQueue();
+    await expectLater(service.refresh(), _throwsAccount(AccountError.offline));
+    backend.profileError = null;
+    await service.refresh();
+    expect(service.state, isA<SignedIn>());
+    // Signed out: nothing to refresh.
+    await service.logOut();
+    await service.refresh();
+    expect(service.state, isA<SignedOut>());
   });
 }

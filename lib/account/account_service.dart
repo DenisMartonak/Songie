@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import '../core/connectivity.dart';
 import '../core/log.dart';
 import 'account_backend.dart';
 import 'avatar_image.dart';
@@ -39,12 +40,22 @@ enum AuthStep {
 /// an [AccountBackend]. Signed in means the profile has loaded; while it
 /// can't load (offline), the app counts as signed out.
 class AccountService {
-  AccountService(this._b) {
+  /// [network] (connection changes) retries a restored session whose
+  /// profile couldn't load when the device comes back online.
+  AccountService(this._b, {Stream<NetworkKind>? network}) {
     _sub = _b.userIdChanges.listen(
       (id) => unawaited(_follow(id).catchError((_) {})),
       onError: (Object _) {},
     );
+    _netSub = network?.listen((kind) {
+      if (kind == NetworkKind.offline) return;
+      if (_userId != null && _state is SignedOut) {
+        unawaited(refresh().catchError((_) {}));
+      }
+    }, onError: (Object _) {});
   }
+
+  StreamSubscription<NetworkKind>? _netSub;
 
   final AccountBackend _b;
   late final StreamSubscription<String?> _sub;
@@ -118,14 +129,31 @@ class AccountService {
     _set(SignedIn(profile));
   }
 
-  /// Reloads the profile of the signed-in (or signed-in but not yet
-  /// loaded) user.
+  /// Loads the profile again: for a session restored while offline (still
+  /// signed out), or to pick up changes. Does nothing when no session.
   Future<void> refresh() async {
     final id = _userId;
     if (id == null) return;
-    final profile = await _b.loadProfile(id);
-    if (id != _userId || profile == null) return;
-    _set(SignedIn(profile));
+    if (_state is SignedIn) {
+      await _reload(id);
+    } else {
+      await _follow(id);
+    }
+  }
+
+  /// Signs in as [id] after a user action. If the profile can't load, the
+  /// session is dropped again (so the stored session and the app agree) and
+  /// the load's error is thrown.
+  Future<void> _signInAfterAuth(String id) async {
+    try {
+      await _follow(id);
+    } on AccountException {
+      await logOut();
+      rethrow;
+    } catch (_) {
+      await logOut();
+      throw const AccountException(AccountError.unknown);
+    }
   }
 
   /// [AuthStep.needsCode] until the emailed code is entered. A username
@@ -150,12 +178,12 @@ class AccountService {
       rethrow;
     }
     if (id == null) return AuthStep.needsCode;
-    await _follow(id);
+    await _signInAfterAuth(id);
     return AuthStep.done;
   }
 
   Future<void> verifySignup(String email, String code) async =>
-      _follow(await _b.verifySignup(email.trim(), code.trim()));
+      _signInAfterAuth(await _b.verifySignup(email.trim(), code.trim()));
 
   Future<void> resendSignup(String email) => _b.resendSignup(email.trim());
 
@@ -168,7 +196,7 @@ class AccountService {
       if (e.error == AccountError.emailNotConfirmed) return AuthStep.needsCode;
       rethrow;
     }
-    await _follow(id);
+    await _signInAfterAuth(id);
     return AuthStep.done;
   }
 
@@ -179,8 +207,9 @@ class AccountService {
     String email,
     String code,
     String newPassword,
-  ) async =>
-      _follow(await _b.resetPassword(email.trim(), code.trim(), newPassword));
+  ) async => _signInAfterAuth(
+    await _b.resetPassword(email.trim(), code.trim(), newPassword),
+  );
 
   Future<void> logOut() async {
     await _b.logOut();
@@ -251,6 +280,7 @@ class AccountService {
   }
 
   Future<void> dispose() async {
+    await _netSub?.cancel();
     await _sub.cancel();
     await _changes.close();
   }

@@ -19,6 +19,9 @@ enum AccountError {
   usernameJustTaken('That username was just taken.'),
   badCode('That code is wrong or has expired.'),
   emailNotConfirmed('Enter the code we emailed you to confirm your email.'),
+  samePassword('Choose a password different from your old one.'),
+  weakPassword('That password is too weak.'),
+  tooManyRequests('Too many tries. Wait a while and try again.'),
   offline("Couldn't reach the server. Check your connection."),
   unknown('Something went wrong. Try again.');
 
@@ -84,6 +87,8 @@ abstract class AccountBackend {
   Future<void> sendReset(String email);
 
   /// Signs in with the reset code and sets [newPassword]; returns the id.
+  /// If the new password is refused, the recovery session is dropped and
+  /// [userIdChanges] never reports it.
   Future<String> resetPassword(String email, String code, String newPassword);
 
   /// Forgets the session on this device; never throws.
@@ -124,12 +129,17 @@ AccountError accountErrorOf(Object e) {
       return statusCode == null || _unreachableStatus.contains(statusCode)
           ? AccountError.offline
           : AccountError.unknown;
-    case AuthException(:final code):
+    case AuthException(:final code, :final statusCode):
       return switch (code) {
         'invalid_credentials' => AccountError.wrongCredentials,
         'email_not_confirmed' => AccountError.emailNotConfirmed,
         'otp_expired' => AccountError.badCode,
         'user_already_exists' || 'email_exists' => AccountError.emailTaken,
+        'same_password' => AccountError.samePassword,
+        'weak_password' => AccountError.weakPassword,
+        'over_email_send_rate_limit' ||
+        'over_request_rate_limit' => AccountError.tooManyRequests,
+        _ when statusCode == '429' => AccountError.tooManyRequests,
         _ => AccountError.unknown,
       };
     case PostgrestException(:final code):
@@ -166,19 +176,34 @@ Never _fail(String what, Object e) {
   throw AccountException(error);
 }
 
-/// Supabase.initialize with the keyring session storage. Codes, not links,
-/// so the implicit flow (no PKCE verifier to keep) and no deep links.
-Future<AccountBackend> connectSupabase() async {
+/// Supabase.initialize with the keyring session storage; [marker] says
+/// whether a session was stored, so a signed-out start never touches the
+/// keyring. Codes, not links, so the implicit flow (no PKCE verifier to
+/// keep), no deep links, and no Supabase logs in debug builds.
+Future<AccountBackend> connectSupabase(SessionMarker marker) async {
   final s = await Supabase.initialize(
     url: kSupabaseUrl,
     publishableKey: kSupabasePublishableKey,
+    debug: false,
     authOptions: FlutterAuthClientOptions(
-      localStorage: SecureSessionStorage(),
+      localStorage: SecureSessionStorage(marker: marker),
+      pkceAsyncStorage: _NoAsyncStorage(),
       authFlowType: AuthFlowType.implicit,
       detectSessionInUri: false,
     ),
   );
   return SupabaseAccountBackend(s.client);
+}
+
+/// Keeps nothing: the implicit flow never needs a PKCE verifier, and this
+/// avoids Supabase's default shared_preferences store.
+class _NoAsyncStorage extends GotrueAsyncStorage {
+  @override
+  Future<String?> getItem({required String key}) async => null;
+  @override
+  Future<void> setItem({required String key, required String value}) async {}
+  @override
+  Future<void> removeItem({required String key}) async {}
 }
 
 /// [AccountBackend] on a Supabase client.
@@ -199,6 +224,9 @@ class SupabaseAccountBackend implements AccountBackend {
 
   @override
   Stream<String?> get userIdChanges => _auth.onAuthStateChange
+      // A reset code's session counts only once the new password is set
+      // (the userUpdated event that follows).
+      .where((s) => s.event != AuthChangeEvent.passwordRecovery)
       .map((s) => s.session?.user.id)
       .handleError((Object e) {
         // A failed token refresh while offline; the session stays.
@@ -261,7 +289,13 @@ class SupabaseAccountBackend implements AccountBackend {
           type: OtpType.recovery,
         );
         final id = _idOf(r);
-        await _auth.updateUser(UserAttributes(password: newPassword));
+        try {
+          await _auth.updateUser(UserAttributes(password: newPassword));
+        } catch (_) {
+          // The code is used up; don't stay signed in with the old password.
+          await logOut();
+          rethrow;
+        }
         return id;
       });
 

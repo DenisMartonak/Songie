@@ -21,6 +21,13 @@ class FakeAccountBackend implements AccountBackend {
   AccountError? uploadError;
   AccountError? everythingError;
 
+  /// Only profile loads fail with this.
+  AccountError? profileError;
+
+  /// The new password is refused after the code was accepted; like the real
+  /// backend, the recovery session is dropped and never reported.
+  AccountError? updatePasswordError;
+
   /// Set just before signUp runs: another device takes this name.
   String? raceTakes;
   int _next = 1;
@@ -110,6 +117,9 @@ class FakeAccountBackend implements AccountBackend {
     if (u == null || code != goodCode) {
       throw const AccountException(AccountError.badCode);
     }
+    if (updatePasswordError != null) {
+      throw AccountException(updatePasswordError!);
+    }
     users[email] = (password: newPassword, id: u.id, confirmed: true);
     emitUser(u.id);
     return u.id;
@@ -132,6 +142,7 @@ class FakeAccountBackend implements AccountBackend {
   Future<Profile?> loadProfile(String id) async {
     calls.add('loadProfile');
     _check();
+    if (profileError != null) throw AccountException(profileError!);
     final p = profiles[id];
     if (p == null) return null;
     return Profile(

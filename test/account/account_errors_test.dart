@@ -47,6 +47,40 @@ void main() {
       m(const AuthApiException('x', statusCode: '422', code: 'email_exists')),
       AccountError.emailTaken,
     );
+    expect(
+      m(const AuthApiException('x', statusCode: '422', code: 'same_password')),
+      AccountError.samePassword,
+    );
+    expect(
+      m(
+        AuthWeakPasswordException(message: 'x', statusCode: '422', reasons: []),
+      ),
+      AccountError.weakPassword,
+    );
+    expect(
+      m(
+        const AuthApiException(
+          'x',
+          statusCode: '429',
+          code: 'over_email_send_rate_limit',
+        ),
+      ),
+      AccountError.tooManyRequests,
+    );
+    expect(
+      m(
+        const AuthApiException(
+          'x',
+          statusCode: '429',
+          code: 'over_request_rate_limit',
+        ),
+      ),
+      AccountError.tooManyRequests,
+    );
+    expect(
+      m(const AuthApiException('x', statusCode: '429')),
+      AccountError.tooManyRequests,
+    );
     // The sign-up trigger's unique violation reaches us as a 500.
     expect(
       m(
