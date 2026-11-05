@@ -422,13 +422,24 @@ class CloudSync {
   }
 
   /// Gives [rows] fresh stamps from this device (its clock first put back
-  /// from the future), keeping their content.
+  /// from the future), keeping their content. A row changed here since the
+  /// page was read (another clock) is left alone: that edit has its own,
+  /// newer stamp and goes up as it is.
   Future<void> _restamp(List<SyncRow> rows) async {
     if (_stamp.clampFutureClock()) {
       AppLog.w('Cloud sync: put a clock from the future back to now');
     }
+    var n = 0;
     await _db.transaction(() async {
       for (final r in rows) {
+        final stored = await _db
+            .customSelect(
+              'SELECT clock FROM ${r.table.wire} WHERE id = ?',
+              variables: [Variable.withString(r.id)],
+            )
+            .getSingleOrNull();
+        if (stored?.read<String>('clock') != r.clock) continue;
+        n++;
         final st = await _stamp.next(id: r.id);
         await _db
             .into(r.table.info(_db))
@@ -439,7 +450,7 @@ class CloudSync {
             );
       }
     });
-    AppLog.w('Cloud sync: restamped ${rows.length} rows with clocks ahead');
+    if (n > 0) AppLog.w('Cloud sync: restamped $n rows with clocks ahead');
   }
 
   /// Pulls and applies every server row past the pull watermark; after each

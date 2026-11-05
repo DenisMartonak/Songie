@@ -528,6 +528,34 @@ void main() {
       expect(await a.sync.hasUnsent(), isFalse);
     });
 
+    test('an edit made during a refused push is not replaced by the '
+        'restamp', () async {
+      server.nowMs = () => _nowMs;
+      final a = await dev();
+      _nowMs += 3 * day;
+      final id = await a.newPlaylist('Old name');
+      _nowMs -= 3 * day;
+      var edited = false;
+      a.remote.duringPush = () async {
+        if (edited) return;
+        edited = true;
+        await a.lib.renamePlaylist(id, 'Edited');
+      };
+      // Run 1: refused; the edited row is left alone. The edit itself was
+      // stamped while the clock was still ahead, so run 2 restamps it and
+      // run 3 sends it.
+      await a.start('u1');
+      await a.sync.syncNow();
+      await a.sync.syncNow();
+      final row = await (a.db.select(
+        a.db.playlists,
+      )..where((p) => p.id.equals(id))).getSingle();
+      expect(edited, isTrue);
+      expect(row.name, 'Edited');
+      expect(server.rowsOf('u1')['playlists/$id']!['name'], 'Edited');
+      expect(await a.sync.hasUnsent(), isFalse);
+    });
+
     test('a device whose clock is a day ahead shows clockWrong and keeps '
         'pulling', () async {
       server.nowMs = () => _nowMs;
