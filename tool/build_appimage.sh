@@ -14,7 +14,7 @@
 #                            finds lib/ and data/ next to its executable)
 #   usr/lib/                 libmpv and its media libraries, and libcurl
 #                            (needed by opt/songies/lib/libsentry.so), by
-#                            linuxdeploy
+#                            linuxdeploy; OpenSSL comes from the host
 #   usr/share/applications/  linux/packaging/songies.desktop
 #   usr/share/icons/...      the app icon
 #
@@ -78,6 +78,9 @@ EXCLUDES=(
   'libavahi-*'
   'libsystemd*'
   'libwayland-*' 'libxkbcommon*'
+  # OpenSSL (pulled in by libcurl): a bundled copy would load first and
+  # shadow the host's newer, patched one. Every supported host has OpenSSL 3.
+  'libssl.so*' 'libcrypto.so*'
 )
 
 # fetch <url> <sha256> <file>: download once into the cache and verify.
