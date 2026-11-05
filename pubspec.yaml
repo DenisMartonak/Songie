@@ -101,11 +101,28 @@ dev_dependencies:
   drift_dev: ^2.35.1
   build_runner: ^2.16.2
   fake_async: ^1.3.3
+  # Uploads debug symbols to Sentry from the release workflow
+  # (docs/releasing.md, "Sentry crash reports").
+  sentry_dart_plugin: ^3.4.0
 
 # smtc_windows 1.1.0 is generated with flutter_rust_bridge 2.11.1 and refuses to
 # initialise against a newer runtime ("codegen version should be the same").
 dependency_overrides:
   flutter_rust_bridge: 2.11.1
+
+# sentry_dart_plugin (`dart run sentry_dart_plugin`, release workflow only).
+# The project, release and auth token come from the environment variables
+# SENTRY_PROJECT, SENTRY_RELEASE and SENTRY_AUTH_TOKEN. The organization token
+# carries the Sentry region (EU), so no url is set here.
+sentry:
+  org: denis-martonak
+  upload_debug_symbols: true
+  upload_source_maps: false
+  upload_sources: false
+  # Where `--split-debug-info` puts the Dart symbols (build/symbols/<platform>).
+  symbols_path: build/symbols
+  # No repository integration in Sentry: do not try to attach commits.
+  commits: false
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

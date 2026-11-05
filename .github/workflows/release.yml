@@ -13,6 +13,12 @@
 # Secrets (repository secrets, docs/releasing.md step 3) are read only via
 # env: and never printed: SONGIES_KEYSTORE_BASE64, SONGIES_KEYSTORE_PASSWORD,
 # SONGIES_KEY_ALIAS, SONGIES_KEY_PASSWORD.
+#
+# Crash reports (docs/releasing.md, "Sentry crash reports"): only a tag push
+# builds the app with the Sentry DSN and release name, so manual builds never
+# report. Each platform job then uploads its debug symbols with the
+# SENTRY_AUTH_TOKEN secret and the SENTRY_PROJECT variable; without the token
+# the upload is skipped with a warning and the release goes on.
 name: Release
 
 on:
@@ -31,6 +37,9 @@ env:
   FLUTTER_VERSION: 3.47.8
   # A tag push publishes; a manual run only builds.
   IS_RELEASE: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
+  # Public by design (it only allows sending events). Passed to the build
+  # only when IS_RELEASE is true.
+  SONGIES_SENTRY_DSN: https://c4edb51cf9cf17f0bd516e1b2af6168c@o4512375882579968.ingest.de.sentry.io/4512376083841104
 
 jobs:
   checks:
@@ -39,6 +48,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       build: ${{ steps.version.outputs.build }}
+      sentry_release: ${{ steps.sentry.outputs.release }}
     steps:
       - uses: actions/checkout@v4
 
@@ -89,6 +99,18 @@ jobs:
           dart tool/check_release_version.dart "${args[@]}" >> "$GITHUB_OUTPUT"
           cat "$RUNNER_TEMP/release/version.json"
 
+      - name: Name the Sentry release
+        id: sentry
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUILD: ${{ steps.version.outputs.build }}
+        run: |
+          # songies@X.Y.Z+N from pubspec.yaml: the same name in the app
+          # (--dart-define=SENTRY_RELEASE) and in the symbol upload.
+          release="songies@$VERSION+$BUILD"
+          echo "Sentry release: $release"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
       - uses: actions/upload-artifact@v4
         with:
           name: version-json
@@ -101,6 +123,7 @@ jobs:
     timeout-minutes: 60
     env:
       VERSION: ${{ needs.checks.outputs.version }}
+      SENTRY_RELEASE: ${{ needs.checks.outputs.sentry_release }}
     steps:
       - name: Require the signing secrets for a release
         if: env.IS_RELEASE == 'true'
@@ -150,7 +173,31 @@ jobs:
           SONGIES_KEYSTORE_PASSWORD: ${{ secrets.SONGIES_KEYSTORE_PASSWORD }}
           SONGIES_KEY_ALIAS: ${{ secrets.SONGIES_KEY_ALIAS }}
           SONGIES_KEY_PASSWORD: ${{ secrets.SONGIES_KEY_PASSWORD }}
-        run: flutter build apk --release
+        run: |
+          args=(--release --split-debug-info=build/symbols/android)
+          if [[ "$IS_RELEASE" == true ]]; then
+            args+=(--dart-define="SENTRY_DSN=$SONGIES_SENTRY_DSN"
+              --dart-define="SENTRY_RELEASE=$SENTRY_RELEASE")
+          fi
+          flutter build apk "${args[@]}"
+
+      - name: Upload the debug symbols to Sentry
+        if: env.IS_RELEASE == 'true'
+        # Never fails the release: a missing token or a failed upload only
+        # warns (the crash reports then show unreadable stack traces).
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          if [[ -z "$SENTRY_AUTH_TOKEN" ]]; then
+            echo "::warning::SENTRY_AUTH_TOKEN not set; symbols not uploaded"
+            exit 0
+          fi
+          if ! dart run sentry_dart_plugin; then
+            echo "::warning::The Sentry symbol upload failed; the release goes on without it."
+          fi
 
       - name: Check the APK signer
         run: |
@@ -197,6 +244,7 @@ jobs:
     timeout-minutes: 60
     env:
       VERSION: ${{ needs.checks.outputs.version }}
+      SENTRY_RELEASE: ${{ needs.checks.outputs.sentry_release }}
     steps:
       - uses: actions/checkout@v4
 
@@ -205,11 +253,12 @@ jobs:
           sudo apt-get update
           # Flutter Linux toolchain and GTK; libmpv (media_kit, bundled into
           # the AppImage); libsecret (flutter_secure_storage); WebKitGTK 4.1
-          # and libsoup 3 (desktop_webview_window).
+          # and libsoup 3 (desktop_webview_window); libcurl (sentry-native's
+          # HTTP transport, sentry_flutter).
           sudo apt-get install -y --no-install-recommends \
             clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
             libstdc++-12-dev libmpv-dev libsecret-1-dev \
-            libwebkit2gtk-4.1-dev libsoup-3.0-dev file
+            libwebkit2gtk-4.1-dev libsoup-3.0-dev libcurl4-openssl-dev file
 
       - uses: subosito/flutter-action@v2
         with:
@@ -217,7 +266,32 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      - run: flutter build linux --release
+      - name: Build the Linux bundle
+        run: |
+          args=(--release --split-debug-info=build/symbols/linux)
+          if [[ "$IS_RELEASE" == true ]]; then
+            args+=(--dart-define="SENTRY_DSN=$SONGIES_SENTRY_DSN"
+              --dart-define="SENTRY_RELEASE=$SENTRY_RELEASE")
+          fi
+          flutter build linux "${args[@]}"
+
+      - name: Upload the debug symbols to Sentry
+        if: env.IS_RELEASE == 'true'
+        # Never fails the release: a missing token or a failed upload only
+        # warns (the crash reports then show unreadable stack traces).
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          if [[ -z "$SENTRY_AUTH_TOKEN" ]]; then
+            echo "::warning::SENTRY_AUTH_TOKEN not set; symbols not uploaded"
+            exit 0
+          fi
+          if ! dart run sentry_dart_plugin; then
+            echo "::warning::The Sentry symbol upload failed; the release goes on without it."
+          fi
 
       - name: Build the AppImage
         run: tool/build_appimage.sh "$VERSION"
@@ -234,6 +308,7 @@ jobs:
     timeout-minutes: 60
     env:
       VERSION: ${{ needs.checks.outputs.version }}
+      SENTRY_RELEASE: ${{ needs.checks.outputs.sentry_release }}
     defaults:
       run:
         shell: pwsh
@@ -246,7 +321,35 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      - run: flutter build windows --release
+      - name: Build the Windows app
+        run: |
+          $flutterArgs = @('build', 'windows', '--release', '--split-debug-info=build/symbols/windows')
+          if ($env:IS_RELEASE -eq 'true') {
+            $flutterArgs += "--dart-define=SENTRY_DSN=$env:SONGIES_SENTRY_DSN"
+            $flutterArgs += "--dart-define=SENTRY_RELEASE=$env:SENTRY_RELEASE"
+          }
+          flutter @flutterArgs
+          if ($LASTEXITCODE -ne 0) { throw "flutter build failed ($LASTEXITCODE)" }
+
+      - name: Upload the debug symbols to Sentry
+        if: env.IS_RELEASE == 'true'
+        # Never fails the release: a missing token or a failed upload only
+        # warns (the crash reports then show unreadable stack traces).
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          if (-not $env:SENTRY_AUTH_TOKEN) {
+            Write-Output '::warning::SENTRY_AUTH_TOKEN not set; symbols not uploaded'
+            exit 0
+          }
+          dart run sentry_dart_plugin
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output '::warning::The Sentry symbol upload failed; the release goes on without it.'
+          }
+          exit 0
 
       - name: Install Inno Setup
         run: |

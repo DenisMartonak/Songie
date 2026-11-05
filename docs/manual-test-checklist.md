@@ -261,7 +261,7 @@ Needs a GitHub repo (public, or a public test repo for the test-build item) and 
 - [ ] The AppImage on a clean Fedora/Nobara (or one without libmpv installed): it starts and plays music, so libmpv is bundled correctly.
 - [ ] AppImage in a read-only folder (for example `chmod a-w` on the folder): an update offers "Open download page" instead of replacing itself.
 - [ ] Test build against a public test repo: build with `--dart-define=SONGIES_UPDATE_REPO=<you>/<test-repo>`, put a release with higher version there, and check the app finds and offers it. (A normal build looks at `DenisMartonak/Songie`.)
-- [ ] The secret scan before going public: run `tool/scan_secrets.sh` and read every finding. Today it reports 2 known false positives (the plan doc quoting the key pattern, and Chromium's `'peanuts'` constant in `test/innertube/browser_cookies_test.dart`). Anything else is new. Then work through the list in releasing.md section 9.
+- [ ] The secret scan before going public: run `tool/scan_secrets.sh` and read every finding. Today it reports 2 known false positives (the plan doc quoting the key pattern, and Chromium's `'peanuts'` constant in `test/innertube/browser_cookies_test.dart`). Anything else is new. Then work through the list in releasing.md section 10.
 
 ## Age-restricted songs
 
