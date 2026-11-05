@@ -69,9 +69,11 @@ create trigger profiles_set_updated_at
 -- or taken username raises (not-null, check or unique violation), so the
 -- sign-up fails and no account exists without a profile.
 --
--- A sign-up that was never confirmed and whose last code has expired (codes
--- last 1 hour) gives its username up: that user is deleted first (the
--- profile goes by cascade), so a mistyped email can't hold a name for good.
+-- A sign-up that was never confirmed, never signed in, and whose last code
+-- has expired (codes last 1 hour) gives its username up: that user is
+-- deleted first (the profile goes by cascade), so a mistyped email can't
+-- hold a name for good. The 1 hour must match the dashboard's email OTP
+-- expiry (3600 s); change both together.
 -- A re-sign-up with the same email doesn't come here: Supabase Auth only
 -- sends a new code to the existing user and keeps its username.
 create function public.handle_new_user()
@@ -89,6 +91,7 @@ begin
     and lower(p.username) = name
     and u.id <> new.id
     and u.email_confirmed_at is null
+    and u.last_sign_in_at is null
     and coalesce(u.confirmation_sent_at, u.created_at)
       < now() - interval '1 hour';
 
@@ -106,8 +109,8 @@ create trigger on_auth_user_created
 -- Username availability (callable signed out; reveals only true/false) -----
 
 -- Lowercases the name first, as the sign-up trigger does. A name held only
--- by a never-confirmed sign-up whose last code expired counts as free, as
--- the sign-up trigger frees it.
+-- by a never-confirmed, never-signed-in sign-up whose last code expired
+-- counts as free, as the sign-up trigger frees it.
 create function public.username_available(name text)
 returns boolean
 language sql
@@ -124,6 +127,7 @@ as $$
         where lower(p.username) = lower(name)
           and not (
             u.email_confirmed_at is null
+            and u.last_sign_in_at is null
             and coalesce(u.confirmation_sent_at, u.created_at)
               < now() - interval '1 hour'
           )

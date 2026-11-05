@@ -27,7 +27,7 @@ Either way it creates the `profiles` table, the sign-up trigger, the `username_a
 1. Under Authentication, Sign In / Providers, in the user sign-up settings: allow new users to sign up, and turn Confirm email on.
 2. On the same page open the Email provider: it is on.
 3. In the Email provider: minimum password length 8.
-4. In the Email provider: email OTP expiration 3600 seconds (1 hour).
+4. In the Email provider: email OTP expiration 3600 seconds (1 hour). The migration's sign-up trigger and `username_available` free an unconfirmed sign-up's username after `interval '1 hour'`; that must match this expiry, so change both together (a new migration for the SQL).
 5. In the Email provider: email OTP length 6.
 6. Save.
 
@@ -80,7 +80,7 @@ The SMTP password stays in the dashboard only; never put it in the repo.
 ## 5. Things to know
 
 - Accounts come only from the app: a new account needs a username in its sign-up data, so the dashboard's Add user (and any anonymous or OAuth sign-up, if those are ever turned on) fails with a database error. That's on purpose; create test accounts from the app.
-- Unconfirmed sign-ups: a sign-up whose code was never entered keeps its username for 1 hour after its last code was sent. After that, the name counts as free, and the next sign-up that picks it deletes the old unconfirmed account. Supabase itself never deletes unconfirmed accounts. Signing up again with the same unconfirmed email only sends a new code; Supabase keeps the first username and password.
+- Unconfirmed sign-ups: a sign-up whose code was never entered (and that never signed in) keeps its username for 1 hour after its last code was sent, the email OTP expiry from step 4. After that, the name counts as free, and the next sign-up that picks it deletes the old unconfirmed account. Supabase itself never deletes unconfirmed accounts. Signing up again with the same unconfirmed email only sends a new code; Supabase keeps the first username and password, so once the code is entered the app sets the password and username typed at that sign-up (if the name was taken meanwhile, it keeps the old one and says so).
 - Clearing an unconfirmed sign-up by hand (for example, to free its email or username sooner): open Authentication, Users, find the address (an unconfirmed user shows as waiting for verification, with no confirmed date), open the row's menu (the three dots) and choose Delete user. Its profile goes with it. Only do this for accounts that were never confirmed.
 - Pausing: a free project pauses after 7 days without activity. Songies keeps working signed out while it's paused. Restore it from the dashboard (the project page shows a Restore button).
 - The app's keys: the project URL is on the dashboard's Connect button (and under Project Settings, Data API); the publishable key is under Project Settings, API Keys. Both are public by design and live in `lib/account/supabase_config.dart`.
