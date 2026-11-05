@@ -329,6 +329,14 @@ Phone (Android), desktop Linux and Windows. First do the one-time setup in `docs
 - [ ] Delete account: the confirmation reads "Delete your account? Your username and picture are removed. Your music on this device stays."; afterwards you're signed out, your library is untouched, the user is gone from Authentication → Users, and the username can be signed up again.
 - [ ] Database rules (review the migration; the dashboard SQL editor runs as the owner and skips them): a signed-in user can't change someone else's profile or upload outside their own `<user id>/` folder in `avatars`. In the SQL editor, `select public.username_available('somename');` returns only true or false.
 
+## Cloud sync
+
+Two devices (phone and desktop) signed in to the same account, and a second account. First apply `supabase/migrations/20261106120000_cloud_sync.sql` (see `docs/supabase.md`).
+- [ ] In the dashboard, Database, Publications: `supabase_realtime` lists `sync_rows`. Storage shows a private `sync-files` bucket.
+- [ ] Table Editor, `sync_rows`: after signing in on a device with a library, rows appear for that user only (`user_id` is theirs), one per synced row.
+- [ ] Database rules (review the migration; the SQL editor runs as the owner and skips them): a signed-in user can read only their own `sync_rows`, can't insert, change or delete them except through `push_rows`, and can touch only their own `<user id>/` folder in `sync-files`.
+- [ ] Delete account: that user's `sync_rows` and `sync-files/<user id>/` folder are gone; the other account's rows stay.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.

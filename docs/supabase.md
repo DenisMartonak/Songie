@@ -18,9 +18,20 @@ npx supabase@3 db push --remote
 2. `link` connects the repo folder to the project. If it asks for the database password, use the one you set when you created the project (you can reset it in the dashboard under Project Settings, Database). The CLI keeps the link in `supabase/.temp/`, which is git-ignored. Never write the password into the repo.
 3. `db push --remote` applies the migrations in `supabase/migrations/` to the project. Without `--remote`, CLI version 3 pushes to a local database instead.
 
-Or by hand: open the dashboard, SQL Editor, New query, paste the whole of `supabase/migrations/20261105120000_accounts.sql`, and press Run. It should finish with "Success. No rows returned".
+Or by hand: open the dashboard, SQL Editor, New query, paste the whole of `supabase/migrations/20261105120000_accounts.sql`, and press Run. It should finish with "Success. No rows returned". Then do the same with each later file in `supabase/migrations/`, oldest first (the file names start with the date).
 
-Either way it creates the `profiles` table, the sign-up trigger, the `username_available` and `delete_my_account` functions, and the public `avatars` storage bucket with its rules. Run it only once; a second run fails because the table already exists. Later migrations go in the same folder and are pushed the same way.
+Either way the first migration creates the `profiles` table, the sign-up trigger, the `username_available` and `delete_my_account` functions, and the public `avatars` storage bucket with its rules. Run each migration only once; a second run fails because its tables already exist. Later migrations go in the same folder and are pushed the same way (`db push --remote` applies only the ones the project doesn't have yet).
+
+### Cloud sync (`20261106120000_cloud_sync.sql`)
+
+The second migration adds what cloud sync needs:
+
+- The `sync_rows` table: every synced row of every account (tracks, playlists and their entries, YouTube "seen" marks, themes, fonts, lyrics, listens), one row per account, table and id. A signed-in user can read only their own rows and can't write the table directly.
+- `push_rows` (upload up to 500 rows; a row replaces the stored one only when its clock is newer) and `pull_rows` (the rows changed since the last pull, 500 at a time).
+- Realtime for `sync_rows`, so a change on one device reaches the others while they run. The migration turns this on (it adds the table to the `supabase_realtime` publication); there's nothing to switch on in the dashboard. Under Database, Publications, `supabase_realtime` should list `sync_rows`.
+- The private `sync-files` storage bucket for font files and artwork that can't be fetched again, each user only inside their own `<user id>/` folder.
+
+Deleting an account (`delete_my_account`) deletes its `sync_rows` too; the app deletes the user's `sync-files` folder first.
 
 ## 2. Email sign-in settings
 
@@ -82,6 +93,7 @@ The SMTP password stays in the dashboard only; never put it in the repo.
 - Accounts come only from the app: a new account needs a username in its sign-up data, so the dashboard's Add user (and any anonymous or OAuth sign-up, if those are ever turned on) fails with a database error. That's on purpose; create test accounts from the app.
 - Unconfirmed sign-ups: a sign-up whose code was never entered (and that never signed in) keeps its username for 1 hour after its last code was sent, the email OTP expiry from step 4. After that, the name counts as free, and the next sign-up that picks it deletes the old unconfirmed account. Supabase itself never deletes unconfirmed accounts. Signing up again with the same unconfirmed email only sends a new code; Supabase keeps the first username and password, so once the code is entered the app sets the password and username typed at that sign-up (if the name was taken meanwhile, it keeps the old one and says so).
 - Clearing an unconfirmed sign-up by hand (for example, to free its email or username sooner): open Authentication, Users, find the address (an unconfirmed user shows as waiting for verification, with no confirmed date), open the row's menu (the three dots) and choose Delete user. Its profile goes with it. Only do this for accounts that were never confirmed.
+- Free-tier limits: 500 MB database and 1 GB file storage. Synced rows take roughly 1 KB each, indexes included: a test with 10,000 tracks plus 50,000 listens used about 52 MB of database, so a heavy library fits several times over. Playlist entries, themes and lyrics add a little more (lyrics are the biggest per row). Font files and artwork count against the 1 GB storage. Check usage under Project Settings, Usage (or the Reports page).
 - Pausing: a free project pauses after 7 days without activity. Songies keeps working signed out while it's paused. Restore it from the dashboard (the project page shows a Restore button).
 - The app's keys: the project URL is on the dashboard's Connect button (and under Project Settings, Data API); the publishable key is under Project Settings, API Keys. Both are public by design and live in `lib/account/supabase_config.dart`.
 - Never put the service-role key (or the secret key) in the app or in the repo. It bypasses every rule above. Songies doesn't need it: account deletion goes through `delete_my_account`.
