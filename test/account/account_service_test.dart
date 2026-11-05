@@ -252,18 +252,23 @@ void main() {
     expect(backend.files, isEmpty);
   });
 
-  test(
-    'deleteAccount deletes files, calls delete_my_account, ends SignedOut',
-    () async {
-      await signedInAs('a@b.c', 'den');
-      await service.changeAvatar(_png());
-      backend.calls.clear();
-      await service.deleteAccount();
-      expect(backend.calls, ['deleteAvatarFiles', 'deleteMyAccount', 'logOut']);
-      expect(backend.files, isEmpty);
-      expect(service.state, isA<SignedOut>());
-    },
-  );
+  test('deleteAccount clears the picture, deletes files, calls '
+      'delete_my_account, ends SignedOut', () async {
+    await signedInAs('a@b.c', 'den');
+    await service.changeAvatar(_png());
+    final id = (service.state as SignedIn).profile.id;
+    backend.calls.clear();
+    await service.deleteAccount();
+    expect(backend.calls, [
+      'setAvatarPath',
+      'deleteAvatarFiles',
+      'deleteMyAccount',
+      'logOut',
+    ]);
+    expect(backend.profiles[id]!.avatarPath, isNull);
+    expect(backend.files, isEmpty);
+    expect(service.state, isA<SignedOut>());
+  });
 
   test('profile actions while signed out throw', () async {
     await expectLater(service.changeUsername('abc'), throwsStateError);

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../account/account_service.dart';
+import '../../account/avatar_image.dart' show ImageTooBigException;
 import '../../core/log.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
@@ -22,7 +23,7 @@ import 'avatar.dart';
 typedef AvatarPick = ({int size, Uint8List? bytes});
 
 /// The biggest image file accepted as a picture (before shrinking).
-const int maxAvatarSourceBytes = 20 * 1024 * 1024;
+const int maxAvatarSourceBytes = 10 * 1024 * 1024;
 
 /// Asks the user for an image; null when cancelled. A provider so tests can
 /// replace the native dialog.
@@ -80,6 +81,8 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
       await action();
     } on AccountException catch (e) {
       error = e.error.message;
+    } on ImageTooBigException {
+      error = 'That image is too big';
     } on FormatException {
       error = "Couldn't read that image";
     } catch (e) {

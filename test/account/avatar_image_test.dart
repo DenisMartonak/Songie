@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:songies/account/avatar_image.dart';
 
+import 'image_fixtures.dart';
+
 void main() {
   test('avatarJpeg makes a 256x256 jpeg from a wide image, centre-cropped', () {
     // 600x200: red left third, green middle third, blue right third.
@@ -47,5 +49,19 @@ void main() {
     )!;
     final p = out.getPixel(128, 128);
     expect([p.r, p.g, p.b], everyElement(greaterThan(240)));
+  });
+
+  test('avatarJpeg refuses images over 40 megapixels from the header', () {
+    expect(kMaxAvatarPixels, 40000000);
+    expect(
+      () => avatarJpeg(hugePngHeader(8000, 6000)),
+      throwsA(isA<ImageTooBigException>()),
+    );
+    // A small header gets past the size check (and then fails to decode
+    // the made-up pixel data).
+    expect(
+      () => avatarJpeg(hugePngHeader(100, 100)),
+      throwsA(isNot(isA<ImageTooBigException>())),
+    );
   });
 }

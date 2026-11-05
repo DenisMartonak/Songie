@@ -271,9 +271,12 @@ class AccountService {
     if (p != null && _userId == id) _set(SignedIn(p));
   }
 
-  /// Deletes the user's pictures, then the account, then signs out.
+  /// Clears the picture, deletes its files, then the account, then signs
+  /// out. If the account can't be deleted, the profile never points at a
+  /// deleted file.
   Future<void> deleteAccount() async {
     final id = _signedIn.profile.id;
+    await _b.setAvatarPath(id, null);
     await _b.deleteAvatarFiles(id);
     await _b.deleteMyAccount();
     await logOut();
