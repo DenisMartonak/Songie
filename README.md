@@ -43,7 +43,7 @@ Get the latest version from the [Releases page](https://github.com/DenisMartonak
 
 | Platform | File | Notes |
 | --- | --- | --- |
-| Android 7+ | `songies-X.Y.Z.apk` | Allow installing from your browser or file manager when asked. |
+| Android 8+ | `songies-X.Y.Z.apk` | Allow installing from your browser or file manager when asked. |
 | Windows 10/11 (64-bit) | `songies-X.Y.Z-windows-setup.exe` | SmartScreen may warn about an unknown publisher: More info, then Run anyway. |
 | Linux (x86_64) | `songies-X.Y.Z-x86_64.AppImage` | `chmod +x` it and keep it in a folder you can write to, so updates can replace it. |
 
