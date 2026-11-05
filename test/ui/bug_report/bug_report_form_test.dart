@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -25,6 +26,7 @@ void main() {
   late Directory tmp;
   late List<http.BaseRequest> requests;
   late int status;
+  Completer<void>? hold;
   late DateTime clock;
   late Screenshot? pick;
 
@@ -52,7 +54,10 @@ void main() {
     tester.view.physicalSize = Size(width, 1600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final client = MockClient((r) async => http.Response('', status));
+    final client = MockClient((r) async {
+      await hold?.future;
+      return http.Response('', status);
+    });
     final recording = _Recording(client, requests);
     await tester.pumpWidget(
       h.app(
@@ -204,13 +209,13 @@ void main() {
       'an 8 MB image is refused', (tester) async {
     await pump(tester);
     await openForm(tester);
-    pick = (fileName: 'big.png', bytes: Uint8List(8 * 1024 * 1024));
+    pick = (fileName: 'big.png', size: 8 * 1024 * 1024, bytes: null);
     await tester.tap(find.byKey(const Key('bugReport.attach')));
     await settle(tester);
     expect(find.text('That image is too big'), findsOneWidget);
     expect(find.byKey(const Key('bugReport.thumbnail')), findsNothing);
 
-    pick = (fileName: 'ok.png', bytes: Uint8List(100));
+    pick = (fileName: 'ok.png', size: 100, bytes: Uint8List(100));
     await tester.tap(find.byKey(const Key('bugReport.attach')));
     await settle(tester);
     expect(find.byKey(const Key('bugReport.thumbnail')), findsOneWidget);
@@ -281,6 +286,29 @@ void main() {
       findsOneWidget,
     );
     expect(requests, hasLength(1));
+  });
+
+  uiTest('the form cannot be dismissed while sending, and a success closes '
+      'only the form', (tester) async {
+    hold = Completer<void>();
+    await pump(tester);
+    await openForm(tester);
+    await fill(tester);
+    await tester.tap(find.byKey(const Key('bugReport.send')));
+    await flush(tester);
+    // Barrier tap, Esc and system back all leave the form open.
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.binding.handlePopRoute();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(BugReportForm), findsOneWidget);
+    hold!.complete();
+    await afterSend(tester);
+    expect(find.byType(BugReportForm), findsNothing);
+    expect(find.byType(SettingsPage), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10));
   });
 
   uiTest('desktop width opens a dialog, phone width a full page', (

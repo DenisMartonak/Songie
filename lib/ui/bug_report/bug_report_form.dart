@@ -17,7 +17,8 @@ import '../island/island_host.dart';
 import '../shell/adaptive_shell.dart' show phoneBreakpoint;
 
 /// A picked screenshot: its file name and bytes.
-typedef Screenshot = ({String fileName, Uint8List bytes});
+/// [bytes] is null when the file is over [maxScreenshotBytes]: it is not read.
+typedef Screenshot = ({String fileName, int size, Uint8List? bytes});
 
 /// Asks the user for one image; null when cancelled. A provider so tests can
 /// replace the native dialog.
@@ -32,7 +33,13 @@ final screenshotPickerProvider = Provider<ScreenshotPicker>(
     );
     final path = file?.path;
     if (path == null) return null;
-    return (fileName: file!.name, bytes: await File(path).readAsBytes());
+    final f = File(path);
+    final size = await f.length();
+    return (
+      fileName: file!.name,
+      size: size,
+      bytes: size > maxScreenshotBytes ? null : await f.readAsBytes(),
+    );
   },
 );
 
@@ -45,6 +52,8 @@ Future<void> showBugReportForm(BuildContext context) {
   if (MediaQuery.sizeOf(context).width >= phoneBreakpoint) {
     return showDialog<void>(
       context: context,
+      // Cancel closes it; a stray tap must not drop a report being typed.
+      barrierDismissible: false,
       builder: (_) => Dialog(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
@@ -74,7 +83,7 @@ class BugReportForm extends ConsumerStatefulWidget {
 class _BugReportFormState extends ConsumerState<BugReportForm> {
   final _description = TextEditingController();
   final _name = TextEditingController();
-  Screenshot? _screenshot;
+  ({String fileName, Uint8List bytes})? _screenshot;
   bool _sending = false;
   String? _error;
 
@@ -106,16 +115,18 @@ class _BugReportFormState extends ConsumerState<BugReportForm> {
     final islands = Islands.of(context);
     final shot = await ref.read(screenshotPickerProvider)();
     if (!mounted || shot == null) return;
-    if (shot.bytes.length > maxScreenshotBytes) {
+    final bytes = shot.bytes;
+    if (bytes == null || shot.size > maxScreenshotBytes) {
       islands.show('That image is too big', kind: IslandKind.failure);
       return;
     }
-    setState(() => _screenshot = shot);
+    setState(() => _screenshot = (fileName: shot.fileName, bytes: bytes));
   }
 
   Future<void> _send() async {
     final islands = Islands.of(context);
     final navigator = Navigator.of(context);
+    final route = ModalRoute.of(context);
     final settings = ref.read(settingsRepositoryProvider);
     final sender = ref.read(bugReportSenderProvider);
     final readDevice = ref.read(deviceSummaryProvider);
@@ -148,7 +159,8 @@ class _BugReportFormState extends ConsumerState<BugReportForm> {
     if (result == BugReportSendResult.sent) {
       await settings.setString(kBugReportName, name.isEmpty ? null : name);
       islands.show('Bug report sent', kind: IslandKind.success);
-      navigator.pop();
+      // Only close our own route; never whatever is on top by now.
+      if (route != null && route.isCurrent) navigator.pop();
       return;
     }
     if (!mounted) return;
@@ -164,120 +176,125 @@ class _BugReportFormState extends ConsumerState<BugReportForm> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final shot = _screenshot;
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Report a bug', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 16),
-          TextField(
-            key: const Key('bugReport.description'),
-            controller: _description,
-            enabled: !_sending,
-            minLines: 4,
-            maxLines: 8,
-            maxLength: 4000,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-              labelText: 'What happened?',
-              alignLabelWithHint: true,
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            key: const Key('bugReport.name'),
-            controller: _name,
-            enabled: !_sending,
-            maxLength: 100,
-            decoration: const InputDecoration(
-              labelText: 'Your name (optional)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (shot == null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                key: const Key('bugReport.attach'),
-                onPressed: _sending ? null : _attach,
-                icon: const Icon(Icons.image_outlined),
-                label: const Text('Attach screenshot'),
+    return PopScope(
+      canPop: !_sending,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Report a bug', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 16),
+            TextField(
+              key: const Key('bugReport.description'),
+              controller: _description,
+              enabled: !_sending,
+              minLines: 4,
+              maxLines: 8,
+              maxLength: 4000,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'What happened?',
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(),
               ),
-            )
-          else
-            Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.memory(
-                    shot.bytes,
-                    key: const Key('bugReport.thumbnail'),
-                    width: 56,
-                    height: 56,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const SizedBox(
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('bugReport.name'),
+              controller: _name,
+              enabled: !_sending,
+              maxLength: 100,
+              decoration: const InputDecoration(
+                labelText: 'Your name (optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (shot == null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('bugReport.attach'),
+                  onPressed: _sending ? null : _attach,
+                  icon: const Icon(Icons.image_outlined),
+                  label: const Text('Attach screenshot'),
+                ),
+              )
+            else
+              Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.memory(
+                      shot.bytes,
+                      key: const Key('bugReport.thumbnail'),
                       width: 56,
                       height: 56,
-                      child: Icon(Icons.image_outlined),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const SizedBox(
+                        width: 56,
+                        height: 56,
+                        child: Icon(Icons.image_outlined),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(shot.fileName, overflow: TextOverflow.ellipsis),
-                ),
-                IconButton(
-                  key: const Key('bugReport.removeScreenshot'),
-                  tooltip: 'Remove screenshot',
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(shot.fileName, overflow: TextOverflow.ellipsis),
+                  ),
+                  IconButton(
+                    key: const Key('bugReport.removeScreenshot'),
+                    tooltip: 'Remove screenshot',
+                    onPressed: _sending
+                        ? null
+                        : () => setState(() => _screenshot = null),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 8),
+            Text(
+              "Includes the app version, your device and the app's log.",
+              style: TextStyle(color: colors.mutedText, fontSize: 12),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                key: const Key('bugReport.error'),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  key: const Key('bugReport.cancel'),
                   onPressed: _sending
                       ? null
-                      : () => setState(() => _screenshot = null),
-                  icon: const Icon(Icons.close_rounded),
+                      : () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  key: const Key('bugReport.send'),
+                  onPressed: _canSend ? _send : null,
+                  child: _sending
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Send'),
                 ),
               ],
             ),
-          const SizedBox(height: 8),
-          Text(
-            "Includes the app version, your device and the app's log.",
-            style: TextStyle(color: colors.mutedText, fontSize: 12),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              key: const Key('bugReport.error'),
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
           ],
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                key: const Key('bugReport.cancel'),
-                onPressed: _sending ? null : () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                key: const Key('bugReport.send'),
-                onPressed: _canSend ? _send : null,
-                child: _sending
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Send'),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
