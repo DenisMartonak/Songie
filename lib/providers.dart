@@ -47,6 +47,8 @@ import 'theme/cover_palette.dart';
 import 'theme/font_service.dart';
 import 'theme/image_palette.dart';
 import 'theme/theme_repository.dart';
+import 'sync/cloud/cloud_sync.dart';
+import 'sync/cloud/sync_status.dart';
 import 'sync/device_identity.dart';
 import 'sync/discovery.dart';
 import 'sync/file_transfer.dart';
@@ -511,6 +513,31 @@ final accountServiceProvider = Provider<AccountService>(
 /// The account state, starting with the current one.
 final accountStateProvider = StreamProvider<AccountState>(
   (ref) => ref.watch(accountServiceProvider).states,
+);
+
+/// Cloud sync with the signed-in account; made once in `main()`.
+final cloudSyncProvider = Provider<CloudSync>(
+  (ref) => _unwired('cloudSyncProvider'),
+);
+
+/// Starts cloud sync when an account signs in and stops it when it signs
+/// out. `main()` reads it once; it lives as long as the app.
+final cloudSyncFollowerProvider = Provider<void>((ref) {
+  final sync = ref.watch(cloudSyncProvider);
+  ref.listen(accountStateProvider, (_, next) {
+    switch (next.value) {
+      case SignedIn(:final profile):
+        unawaited(sync.start(profile.id));
+      case SignedOut():
+        unawaited(sync.stop());
+      case null:
+    }
+  }, fireImmediately: true);
+});
+
+/// Cloud sync's state, for Settings → Account.
+final cloudSyncStatusProvider = StreamProvider<SyncStatus>(
+  (ref) => ref.watch(cloudSyncProvider).status,
 );
 
 final ytSessionStoreProvider = Provider<YtSessionStore>(

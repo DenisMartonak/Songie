@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import '../core/hlc.dart';
@@ -42,6 +43,13 @@ class SyncStamp {
   int _seq;
 
   final String deviceId;
+
+  final _writes = StreamController<void>.broadcast();
+
+  /// Fires (asynchronously) each time [next] or [nextMany] hands out stamps:
+  /// a local write to a synced table is landing. Not for [reserve], which
+  /// only applies rows that came from elsewhere.
+  Stream<void> get writes => _writes.stream;
 
   /// Loads (or, on first run, creates) this device's id and clock state.
   static Future<SyncStamp> load(AppDatabase db, {int Function()? nowMs}) async {
@@ -152,6 +160,7 @@ class SyncStamp {
   }
 
   void _issue(List<(int, String)> stamps) {
+    _writes.add(null);
     final at = _nowMs();
     for (final (seq, id) in stamps) {
       _issued.add((seq, id, at));

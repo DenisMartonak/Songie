@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import 'package:window_manager/window_manager.dart';
 import 'package:just_audio/just_audio.dart'
     show AndroidEqualizer, AudioPipeline;
@@ -67,6 +68,8 @@ import 'player/track_resolver.dart';
 import 'player/equalizer.dart';
 import 'providers.dart';
 import 'router.dart';
+import 'sync/cloud/cloud_remote.dart';
+import 'sync/cloud/cloud_sync.dart';
 import 'sync/device_identity.dart';
 import 'theme/font_service.dart';
 import 'theme/theme_repository.dart';
@@ -309,6 +312,18 @@ Future<void> main() async {
     PendingAccountBackend(connectSupabase(SettingsSessionMarker(settings))),
     network: network.changes,
   );
+  // Cloud sync: follows the account (see cloudSyncFollowerProvider); signed
+  // out it never touches Supabase, so the client is read only when needed.
+  final cloudSync = CloudSync(
+    db: db,
+    stamp: stamp,
+    remote: SupabaseCloudRemote(() => Supabase.instance.client),
+    settings: settings,
+    network: network.changes,
+    fontsDir: paths.fonts,
+    // Placeholder until the merge-or-start-empty question has its dialog.
+    askMerge: () async => true,
+  );
 
   final navigatorKey = GlobalKey<NavigatorState>();
   final router = buildRouter(navigatorKey: navigatorKey);
@@ -353,8 +368,10 @@ Future<void> main() async {
       statsRepositoryProvider.overrideWithValue(StatsRepository(db)),
       initialThemeSpecProvider.overrideWithValue(initialTheme),
       accountServiceProvider.overrideWithValue(accounts),
+      cloudSyncProvider.overrideWithValue(cloudSync),
     ],
   );
+  container.read(cloudSyncFollowerProvider);
   // Reads two device-local settings only: no keyring, no network, no timer.
   // Awaited, so the first Home load already knows whether to go signed in.
   await container.read(ytAuthProvider.notifier).load();

@@ -43,6 +43,22 @@ const kYtSignedIn = 'yt_signed_in';
 /// so a signed-out start never touches it. Device-local.
 const kAccountSignedIn = 'account_signed_in';
 
+/// Cloud sync: the last local seq pushed to an account, under
+/// `cloud_push_seq:<account id>`. Device-local.
+const kCloudPushSeqPrefix = 'cloud_push_seq:';
+
+/// Cloud sync: the last server seq pulled from an account, under
+/// `cloud_pull_seq:<account id>`. Device-local.
+const kCloudPullSeqPrefix = 'cloud_pull_seq:';
+
+/// Cloud sync: when a sync with an account last finished (ms since the
+/// epoch), under `cloud_last_synced:<account id>`. Device-local.
+const kCloudLastSyncedPrefix = 'cloud_last_synced:';
+
+/// Cloud sync: the account last signed in on this device, so signing in as
+/// another one asks to merge or start empty. Device-local.
+const kCloudLastAccount = 'cloud_last_account';
+
 /// The equalizer preset (an `EqPreset` name). Device-local, Off by default.
 const kEqPreset = 'eq_preset';
 
