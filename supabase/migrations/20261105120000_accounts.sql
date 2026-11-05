@@ -89,6 +89,7 @@ create trigger on_auth_user_created
 
 -- Username availability (callable signed out; reveals only true/false) -----
 
+-- Lowercases the name first, as the sign-up trigger does.
 create function public.username_available(name text)
 returns boolean
 language sql
@@ -97,7 +98,7 @@ security definer
 set search_path = ''
 as $$
   select coalesce(
-    name ~ '^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$'
+    lower(name) ~ '^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$'
       and not exists (
         select 1 from public.profiles p
         where lower(p.username) = lower(name)
