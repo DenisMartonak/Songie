@@ -19,6 +19,7 @@ class FakeAccountBackend implements AccountBackend {
   String goodCode = '123456';
   AccountError? signUpError;
   AccountError? uploadError;
+  AccountError? resendError;
   AccountError? everythingError;
 
   /// Only profile loads fail with this.
@@ -82,6 +83,7 @@ class FakeAccountBackend implements AccountBackend {
   Future<void> resendSignup(String email) async {
     calls.add('resendSignup');
     _check();
+    if (resendError != null) throw AccountException(resendError!);
   }
 
   @override

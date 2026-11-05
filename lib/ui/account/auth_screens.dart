@@ -66,6 +66,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       : _Step.logIn;
   bool _busy = false;
   bool _usernameTaken = false;
+  bool _showPassword = false;
 
   /// An action's failure, shown above the buttons.
   String? _error;
@@ -165,7 +166,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           if (step == AuthStep.done) {
             signedIn();
           } else if (mounted) {
+            // A log-in sends no code; send one. If that's refused (too
+            // many tries), the step still opens with the error.
             _go(_Step.confirm, note: AccountError.emailNotConfirmed.message);
+            await service.resendSignup(email);
           }
         case _Step.confirm:
           await service.verifySignup(email, _code.text);
@@ -174,17 +178,37 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           await service.sendReset(email);
           if (mounted) _go(_Step.reset);
         case _Step.reset:
-          await service.resetPassword(email, _code.text, _password.text);
+          try {
+            await service.resetPassword(email, _code.text, _password.text);
+          } on AccountException catch (e) {
+            // The code was used up before the password was refused.
+            if ((e.error == AccountError.samePassword ||
+                    e.error == AccountError.weakPassword) &&
+                mounted) {
+              setState(() {
+                _code.clear();
+                _note = 'Send a new code, then try another password.';
+              });
+            }
+            rethrow;
+          }
           signedIn();
       }
     });
   }
 
+  /// "Send a new code": the sign-up code on the confirm step, the reset
+  /// code on the reset step.
   Future<void> _resend() async {
     final service = ref.read(accountServiceProvider);
     final email = _email.text;
+    final step = _step;
     await _run(() async {
-      await service.resendSignup(email);
+      if (step == _Step.reset) {
+        await service.sendReset(email);
+      } else {
+        await service.resendSignup(email);
+      }
       if (mounted) setState(() => _note = 'We sent a new code.');
     });
   }
@@ -222,145 +246,177 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       canPop: !_busy,
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            if (intro != null) ...[
-              const SizedBox(height: 8),
-              Text(intro, style: TextStyle(color: colors.mutedText)),
-            ],
-            if (_note != null) ...[
-              const SizedBox(height: 8),
-              Text(_note!, style: TextStyle(color: colors.text)),
-            ],
-            const SizedBox(height: 16),
-            if (askEmail) ...[
-              TextField(
-                key: const Key('auth.email'),
-                controller: _email,
-                enabled: !_busy,
-                keyboardType: TextInputType.emailAddress,
-                autofillHints: const [AutofillHints.email],
-                autocorrect: false,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: changed,
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (_step == _Step.signUp) ...[
-              UsernameField(
-                fieldKey: const Key('auth.username'),
-                controller: _username,
-                enabled: !_busy,
-                onChanged: () => setState(() {}),
-                onTaken: (taken) => setState(() => _usernameTaken = taken),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (askCode) ...[
-              TextField(
-                key: const Key('auth.code'),
-                controller: _code,
-                enabled: !_busy,
-                keyboardType: TextInputType.number,
-                autofillHints: const [AutofillHints.oneTimeCode],
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(6),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'Code',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: changed,
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (askPassword)
-              TextField(
-                key: const Key('auth.password'),
-                controller: _password,
-                enabled: !_busy,
-                obscureText: true,
-                autofillHints: [
-                  _step == _Step.logIn
-                      ? AutofillHints.password
-                      : AutofillHints.newPassword,
-                ],
-                decoration: InputDecoration(
-                  labelText: _step == _Step.reset ? 'New password' : 'Password',
-                  helperText: _step == _Step.logIn ? null : kPasswordHint,
-                  border: const OutlineInputBorder(),
-                ),
-                onChanged: changed,
-                onSubmitted: (_) => _submit(),
-              ),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _error!,
-                key: const Key('auth.error'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-            const SizedBox(height: 8),
-            Wrap(
-              children: [
-                if (_step == _Step.signUp)
-                  _Link(
-                    key: const Key('auth.toLogIn'),
-                    label: 'I have an account',
-                    onPressed: _busy ? null : () => _go(_Step.logIn),
-                  ),
-                if (_step == _Step.logIn) ...[
-                  _Link(
-                    key: const Key('auth.forgot'),
-                    label: 'Forgot password?',
-                    onPressed: _busy ? null : () => _go(_Step.forgot),
-                  ),
-                  _Link(
-                    key: const Key('auth.toSignUp'),
-                    label: 'Create an account',
-                    onPressed: _busy ? null : () => _go(_Step.signUp),
-                  ),
-                ],
-                if (_step == _Step.confirm)
-                  _Link(
-                    key: const Key('auth.resend'),
-                    label: 'Send the code again',
-                    onPressed: _busy ? null : _resend,
-                  ),
+        child: AutofillGroup(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              if (intro != null) ...[
+                const SizedBox(height: 8),
+                Text(intro, style: TextStyle(color: colors.mutedText)),
               ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  key: const Key('auth.cancel'),
-                  onPressed: _busy ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+              if (_note != null) ...[
+                const SizedBox(height: 8),
+                Text(_note!, style: TextStyle(color: colors.text)),
+              ],
+              const SizedBox(height: 16),
+              if (askEmail) ...[
+                TextField(
+                  key: const Key('auth.email'),
+                  controller: _email,
+                  enabled: !_busy,
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.email],
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: changed,
                 ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  key: const Key('auth.submit'),
-                  onPressed: _canSubmit ? _submit : null,
-                  child: _busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(action),
+                const SizedBox(height: 12),
+              ],
+              if (_step == _Step.signUp) ...[
+                UsernameField(
+                  fieldKey: const Key('auth.username'),
+                  controller: _username,
+                  enabled: !_busy,
+                  onChanged: () => setState(() {}),
+                  onTaken: (taken) => setState(() => _usernameTaken = taken),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (askCode) ...[
+                TextField(
+                  key: const Key('auth.code'),
+                  controller: _code,
+                  enabled: !_busy,
+                  keyboardType: TextInputType.number,
+                  autofillHints: const [AutofillHints.oneTimeCode],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(6),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Code',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: changed,
+                  onSubmitted: (_) => _submit(),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (askPassword)
+                TextField(
+                  key: const Key('auth.password'),
+                  controller: _password,
+                  enabled: !_busy,
+                  obscureText: !_showPassword,
+                  autofillHints: [
+                    _step == _Step.logIn
+                        ? AutofillHints.password
+                        : AutofillHints.newPassword,
+                  ],
+                  decoration: InputDecoration(
+                    labelText: _step == _Step.reset
+                        ? 'New password'
+                        : 'Password',
+                    helperText: _step == _Step.logIn ? null : kPasswordHint,
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      key: const Key('auth.showPassword'),
+                      tooltip: _showPassword
+                          ? 'Hide password'
+                          : 'Show password',
+                      icon: Icon(
+                        _showPassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      onPressed: () =>
+                          setState(() => _showPassword = !_showPassword),
+                    ),
+                  ),
+                  onChanged: changed,
+                  onSubmitted: (_) => _submit(),
+                ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  key: const Key('auth.error'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ],
-            ),
-          ],
+              const SizedBox(height: 8),
+              Wrap(
+                children: [
+                  if (_step == _Step.signUp)
+                    _Link(
+                      key: const Key('auth.toLogIn'),
+                      label: 'I have an account',
+                      onPressed: _busy ? null : () => _go(_Step.logIn),
+                    ),
+                  if (_step == _Step.logIn) ...[
+                    _Link(
+                      key: const Key('auth.forgot'),
+                      label: 'Forgot password?',
+                      onPressed: _busy ? null : () => _go(_Step.forgot),
+                    ),
+                    _Link(
+                      key: const Key('auth.toSignUp'),
+                      label: 'Create an account',
+                      onPressed: _busy ? null : () => _go(_Step.signUp),
+                    ),
+                  ],
+                  if (_step == _Step.confirm || _step == _Step.reset)
+                    _Link(
+                      key: const Key('auth.resend'),
+                      label: 'Send a new code',
+                      onPressed: _busy ? null : _resend,
+                    ),
+                  if (_step == _Step.confirm)
+                    _Link(
+                      key: const Key('auth.differentEmail'),
+                      label: 'Use a different email',
+                      onPressed: _busy
+                          ? null
+                          : () => _go(
+                              _Step.signUp,
+                              note:
+                                  'Your first sign-up holds that username for '
+                                  'an hour. Pick another one, or try again '
+                                  'later.',
+                            ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    key: const Key('auth.cancel'),
+                    onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    key: const Key('auth.submit'),
+                    onPressed: _canSubmit ? _submit : null,
+                    child: _busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(action),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

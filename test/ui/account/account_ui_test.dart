@@ -15,6 +15,7 @@ import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 
 import '../../account/fake_account_backend.dart';
+import '../../account/image_fixtures.dart';
 import '../../helpers/ui_harness.dart';
 
 /// Holds log-ins until [gate] completes.
@@ -193,7 +194,8 @@ void main() {
     }
 
     // Not confirmed yet: the code screen, saying why.
-    h.accountBackend.everythingError = AccountError.emailNotConfirmed;
+    h.accountBackend.everythingError = null;
+    await h.accounts.signUp('den@x.com', 'password1', 'den');
     await tapAndSettle(tester, key('auth.submit'));
     expect(find.text(AccountError.emailNotConfirmed.message), findsOneWidget);
     expect(key('auth.code'), findsOneWidget);
@@ -224,6 +226,137 @@ void main() {
     expect(h.accountBackend.users['den@x.com']!.password, 'newpassword');
   });
 
+  uiTest('the code step can go back to sign-up with the fields kept, and '
+      '"Send a new code" resends', (tester) async {
+    await pumpAccount(tester);
+    await tapAndSettle(tester, key('account.signUp'));
+    await type(tester, key('auth.email'), 'den@x.con');
+    await type(tester, key('auth.username'), 'den');
+    await type(tester, key('auth.password'), 'password1');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tapAndSettle(tester, key('auth.submit'));
+    expect(key('auth.code'), findsOneWidget);
+
+    expect(find.text('Send a new code'), findsOneWidget);
+    await tapAndSettle(tester, key('auth.resend'));
+    expect(h.accountBackend.calls.last, 'resendSignup');
+    expect(find.text('We sent a new code.'), findsOneWidget);
+
+    await tapAndSettle(tester, key('auth.differentEmail'));
+    expect(find.text('Use a different email'), findsNothing);
+    expect(key('auth.code'), findsNothing);
+    String text(String k) => tester.widget<TextField>(key(k)).controller!.text;
+    expect(text('auth.email'), 'den@x.con');
+    expect(text('auth.username'), 'den');
+    expect(text('auth.password'), 'password1');
+    // Why the same username may be refused for now.
+    expect(
+      find.text(
+        'Your first sign-up holds that username for an hour. Pick another '
+        'one, or try again later.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  uiTest('logging in unconfirmed sends a new code and opens the code step; a '
+      'refused resend shows inline', (tester) async {
+    await h.accounts.signUp('den@x.com', 'password1', 'den');
+    await pumpAccount(tester);
+    await tapAndSettle(tester, key('account.logIn'));
+    await type(tester, key('auth.email'), 'den@x.com');
+    await type(tester, key('auth.password'), 'password1');
+    await tapAndSettle(tester, key('auth.submit'));
+    expect(key('auth.code'), findsOneWidget);
+    expect(h.accountBackend.calls.sublist(h.accountBackend.calls.length - 2), [
+      'logIn',
+      'resendSignup',
+    ]);
+    expect(key('auth.error'), findsNothing);
+
+    // Again, with the resend refused: still the code step, with the error.
+    await tapAndSettle(tester, key('auth.cancel'));
+    await tapAndSettle(tester, key('account.logIn'));
+    await type(tester, key('auth.email'), 'den@x.com');
+    await type(tester, key('auth.password'), 'password1');
+    h.accountBackend.resendError = AccountError.tooManyRequests;
+    await tapAndSettle(tester, key('auth.submit'));
+    expect(key('auth.code'), findsOneWidget);
+    expect(
+      tester.widget<Text>(key('auth.error')).data,
+      AccountError.tooManyRequests.message,
+    );
+  });
+
+  uiTest('a refused new password clears the used-up code and offers "Send a '
+      'new code"', (tester) async {
+    await signedIn('den@x.com', 'den');
+    await h.accounts.logOut();
+    await pumpAccount(tester);
+    await tapAndSettle(tester, key('account.logIn'));
+    await tapAndSettle(tester, key('auth.forgot'));
+    await type(tester, key('auth.email'), 'den@x.com');
+    await tapAndSettle(tester, key('auth.submit'));
+
+    h.accountBackend.updatePasswordError = AccountError.samePassword;
+    await type(tester, key('auth.code'), h.accountBackend.goodCode);
+    await type(tester, key('auth.password'), 'password1');
+    await tapAndSettle(tester, key('auth.submit'));
+    expect(
+      tester.widget<Text>(key('auth.error')).data,
+      AccountError.samePassword.message,
+    );
+    expect(
+      find.text('Send a new code, then try another password.'),
+      findsOneWidget,
+    );
+    expect(tester.widget<TextField>(key('auth.code')).controller!.text, '');
+    expect(tester.widget<FilledButton>(key('auth.submit')).onPressed, isNull);
+
+    h.accountBackend.updatePasswordError = null;
+    h.accountBackend.calls.clear();
+    await tapAndSettle(tester, key('auth.resend'));
+    expect(h.accountBackend.calls, ['sendReset']);
+    expect(find.text('We sent a new code.'), findsOneWidget);
+
+    await type(tester, key('auth.code'), h.accountBackend.goodCode);
+    await type(tester, key('auth.password'), 'newpassword');
+    await tapAndSettle(tester, key('auth.submit'));
+    expect(find.text('Signed in'), findsOneWidget);
+    expect(h.accountBackend.users['den@x.com']!.password, 'newpassword');
+  });
+
+  uiTest('forms autofill as a group, passwords can be shown, and Enter in the '
+      'code field submits', (tester) async {
+    await pumpAccount(tester);
+    await tapAndSettle(tester, key('account.signUp'));
+    expect(find.byType(AutofillGroup), findsOneWidget);
+    List<String>? hints(String k) =>
+        tester.widget<TextField>(key(k)).autofillHints?.toList();
+    expect(hints('auth.email'), [AutofillHints.email]);
+    expect(hints('auth.username'), [AutofillHints.newUsername]);
+    expect(hints('auth.password'), [AutofillHints.newPassword]);
+
+    bool hidden() => tester.widget<TextField>(key('auth.password')).obscureText;
+    expect(hidden(), isTrue);
+    await tapAndSettle(tester, key('auth.showPassword'));
+    expect(hidden(), isFalse);
+    await tapAndSettle(tester, key('auth.showPassword'));
+    expect(hidden(), isTrue);
+
+    await type(tester, key('auth.email'), 'den@x.com');
+    await type(tester, key('auth.username'), 'den');
+    await type(tester, key('auth.password'), 'password1');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tapAndSettle(tester, key('auth.submit'));
+    expect(hints('auth.code'), [AutofillHints.oneTimeCode]);
+
+    await tester.enterText(key('auth.code'), h.accountBackend.goodCode);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.text('Signed in'), findsOneWidget);
+  });
+
   uiTest('change username and change / remove picture update the section and '
       'the top-bar avatar', (tester) async {
     await signedIn('den@x.com', 'den');
@@ -252,9 +385,29 @@ void main() {
     expect(inTop(find.text('N')), findsOneWidget);
 
     // Too big a file is refused before it is read.
-    pick = (size: 21 * 1024 * 1024, bytes: null);
+    expect(maxAvatarSourceBytes, 10 * 1024 * 1024);
+    pick = (size: 11 * 1024 * 1024, bytes: null);
     await tapAndSettle(tester, key('account.changePicture'));
     expect(find.text('That image is too big'), findsOneWidget);
+    expect(h.accountBackend.calls, isNot(contains('uploadAvatar')));
+
+    // So is a small file with too many pixels.
+    pick = (size: 100, bytes: hugePngHeader(8000, 6000));
+    await tester.tap(key('account.changePicture'));
+    await tester.pump();
+    // The earlier message clears while the picture is read.
+    expect(key('account.error'), findsNothing);
+    for (var i = 0; i < 20 && key('account.error').evaluate().isEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+    await settle(tester);
+    expect(
+      tester.widget<Text>(key('account.error')).data,
+      'That image is too big',
+    );
     expect(h.accountBackend.calls, isNot(contains('uploadAvatar')));
 
     // Change picture.
