@@ -332,7 +332,8 @@ Phone (Android), desktop Linux and Windows. First do the one-time setup in `docs
 ## Cloud sync
 
 Two devices (phone and desktop) signed in to the same account, and a second account. First apply `supabase/migrations/20261106120000_cloud_sync.sql` (see `docs/supabase.md`).
-- [ ] In the dashboard, Database, Publications: `supabase_realtime` lists `sync_rows`. Storage shows a private `sync-files` bucket.
+- [ ] In the dashboard, Database, Publications: `supabase_realtime` does **not** list `sync_rows`. Storage shows a private `sync-files` bucket (10 MB limit, fonts and images only).
+- [ ] Realtime: with both devices open, add a song to a playlist on one; it appears on the other within seconds without a restart. In the dashboard, Realtime, Inspector, join the private channel `sync:<user id>` (as that user): each push shows a `changed` message with only a `server_seq`. Joining another user's `sync:<id>` as yourself is refused.
 - [ ] Table Editor, `sync_rows`: after signing in on a device with a library, rows appear for that user only (`user_id` is theirs), one per synced row.
 - [ ] Database rules (review the migration; the SQL editor runs as the owner and skips them): a signed-in user can read only their own `sync_rows`, can't insert, change or delete them except through `push_rows`, and can touch only their own `<user id>/` folder in `sync-files`.
 - [ ] Delete account: that user's `sync_rows` and `sync-files/<user id>/` folder are gone; the other account's rows stay.
