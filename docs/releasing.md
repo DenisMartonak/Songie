@@ -87,6 +87,17 @@ Release builds are made with `--split-debug-info`, so a stack trace in the app's
 
 The crash reporter needs the libcurl headers to build. Install them once: `sudo dnf install libcurl-devel` (Fedora/Nobara) or `sudo apt install libcurl4-openssl-dev` (Debian/Ubuntu). The workflow installs them on GitHub by itself.
 
+## 4b. Bug reports (once)
+
+The Report a bug form in Settings sends a report to a Discord channel through a webhook. The webhook address is a secret: anyone who has it can post to the channel. It is never in the repo.
+
+1. In Discord open the channel for reports, then Edit Channel, Integrations, Webhooks, New Webhook. Copy the webhook URL.
+2. On GitHub open the repo, then Settings, Secrets and variables, Actions, New repository secret: `SONGIES_BUG_WEBHOOK`, the URL from step 1. (Already done for this repo.)
+3. Every build the workflow makes (a tag push and a manual run) gets the address. A build without the secret, and anything you build yourself, hides Report a bug.
+4. If the address leaks or the channel gets spammed: delete the webhook in Discord, make a new one, update the `SONGIES_BUG_WEBHOOK` secret, and make a new release. Old installs keep the old address and stop working until people update.
+
+Android needs version 8.0 or newer (the crash reporter requires it).
+
 ## 5. Make a release (every time)
 
 1. Pick the new version, for example `1.1.0`.

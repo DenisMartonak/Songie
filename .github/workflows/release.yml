@@ -12,7 +12,9 @@
 #
 # Secrets (repository secrets, docs/releasing.md step 3) are read only via
 # env: and never printed: SONGIES_KEYSTORE_BASE64, SONGIES_KEYSTORE_PASSWORD,
-# SONGIES_KEY_ALIAS, SONGIES_KEY_PASSWORD.
+# SONGIES_KEY_ALIAS, SONGIES_KEY_PASSWORD, SONGIES_BUG_WEBHOOK. The bug
+# report webhook goes into every build below (tag and manual) when set;
+# without it the app hides Report a bug.
 #
 # Crash reports (docs/releasing.md, "Sentry crash reports"): only a tag push
 # builds the app with the Sentry DSN and release name, so manual builds never
@@ -172,6 +174,7 @@ jobs:
 
       - name: Build the APK
         env:
+          SONGIES_BUG_WEBHOOK: ${{ secrets.SONGIES_BUG_WEBHOOK }}
           SONGIES_KEYSTORE_PASSWORD: ${{ secrets.SONGIES_KEYSTORE_PASSWORD }}
           SONGIES_KEY_ALIAS: ${{ secrets.SONGIES_KEY_ALIAS }}
           SONGIES_KEY_PASSWORD: ${{ secrets.SONGIES_KEY_PASSWORD }}
@@ -180,6 +183,9 @@ jobs:
           if [[ "$IS_RELEASE" == true ]]; then
             args+=(--dart-define="SENTRY_DSN=$SONGIES_SENTRY_DSN"
               --dart-define="SENTRY_RELEASE=$SENTRY_RELEASE")
+          fi
+          if [[ -n "$SONGIES_BUG_WEBHOOK" ]]; then
+            args+=(--dart-define="BUG_REPORT_WEBHOOK=$SONGIES_BUG_WEBHOOK")
           fi
           flutter build apk "${args[@]}"
 
@@ -285,11 +291,16 @@ jobs:
           cache: true
 
       - name: Build the Linux bundle
+        env:
+          SONGIES_BUG_WEBHOOK: ${{ secrets.SONGIES_BUG_WEBHOOK }}
         run: |
           args=(--release --split-debug-info=build/symbols/linux)
           if [[ "$IS_RELEASE" == true ]]; then
             args+=(--dart-define="SENTRY_DSN=$SONGIES_SENTRY_DSN"
               --dart-define="SENTRY_RELEASE=$SENTRY_RELEASE")
+          fi
+          if [[ -n "$SONGIES_BUG_WEBHOOK" ]]; then
+            args+=(--dart-define="BUG_REPORT_WEBHOOK=$SONGIES_BUG_WEBHOOK")
           fi
           flutter build linux "${args[@]}"
 
@@ -356,11 +367,16 @@ jobs:
           cache: true
 
       - name: Build the Windows app
+        env:
+          SONGIES_BUG_WEBHOOK: ${{ secrets.SONGIES_BUG_WEBHOOK }}
         run: |
           $flutterArgs = @('build', 'windows', '--release', '--split-debug-info=build/symbols/windows')
           if ($env:IS_RELEASE -eq 'true') {
             $flutterArgs += "--dart-define=SENTRY_DSN=$env:SONGIES_SENTRY_DSN"
             $flutterArgs += "--dart-define=SENTRY_RELEASE=$env:SENTRY_RELEASE"
+          }
+          if ($env:SONGIES_BUG_WEBHOOK) {
+            $flutterArgs += "--dart-define=BUG_REPORT_WEBHOOK=$env:SONGIES_BUG_WEBHOOK"
           }
           flutter @flutterArgs
           if ($LASTEXITCODE -ne 0) { throw "flutter build failed ($LASTEXITCODE)" }

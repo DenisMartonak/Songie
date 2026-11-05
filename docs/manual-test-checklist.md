@@ -301,6 +301,14 @@ Use `S4-2QqwHf5c` ("HOMOŠLERKY (Full Song)").
 - [ ] Android: same, through the phone's equalizer.
 - [ ] The preset survives a restart and applies to the next song, a YouTube stream and a downloaded file alike.
 
+## Report a bug
+
+- [ ] A release build (from the workflow) shows Settings → Report a bug; a local debug build without the webhook hides it.
+- [ ] Sending with a description under 10 characters is refused; a longer one sends.
+- [ ] The report arrives in the Discord channel with the app version, device, log and screenshot.
+- [ ] A report that contains @everyone or @here in the description fires no mention or notification.
+- [ ] The form cannot be closed while it is sending.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.
