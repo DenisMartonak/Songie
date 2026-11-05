@@ -50,6 +50,10 @@ const kDiscordPresence = 'discord_presence';
 /// default.
 const kCrashReports = 'crash_reports';
 
+/// A random id sent with crash reports so Sentry can count the devices a
+/// problem hits. Device-local; never the sync device identity.
+const kCrashInstallId = 'crash_install_id';
+
 /// Set once YouTube songs flagged unavailable before age-restricted songs had
 /// their own error were unflagged for one more check. Device-local.
 const kUnavailableRecheckDone = 'unavailable_recheck_done';

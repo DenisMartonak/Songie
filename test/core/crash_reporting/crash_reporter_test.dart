@@ -1,7 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:songies/core/crash_reporting/crash_reporter.dart';
+import 'package:songies/data/settings_repository.dart';
+
+import '../../helpers/test_db.dart';
 
 /// A fake SDK: counts starts and closes, and lets a test hold a start open.
 class _FakeSdk {
@@ -142,6 +147,57 @@ void main() {
     await r.applySetting(true);
     expect(r.running, isTrue);
     expect(starts, 2);
+  });
+
+  test('after a failed start, repeated on values do not retry', () async {
+    var starts = 0;
+    final r = CrashReporter(
+      built: true,
+      start: () async {
+        starts++;
+        throw StateError('no');
+      },
+      close: () async {},
+    );
+    await r.applySetting(true);
+    await r.applySetting(true);
+    expect(starts, 1);
+    final setting = StreamController<bool>();
+    r.follow(setting.stream);
+    setting
+      ..add(true)
+      ..add(true)
+      ..add(true);
+    await pumpEventQueue();
+    expect(starts, 1, reason: 'only a change from off to on retries');
+    setting
+      ..add(false)
+      ..add(true);
+    await pumpEventQueue();
+    expect(starts, 2);
+    await r.dispose();
+    await setting.close();
+  });
+
+  test('configureSentry keeps the native database in the app data folder', () {
+    final root = p.join('data', 'songies');
+    final o = SentryFlutterOptions();
+    configureSentry(o, dataRoot: root);
+    expect(o.nativeDatabasePath, p.join(root, 'sentry'));
+    expect(o.sendDefaultPii, isFalse);
+    expect(o.environment, 'production');
+    expect(o.beforeSend, isNotNull);
+    expect(o.beforeBreadcrumb, isNotNull);
+  });
+
+  test('crashInstallId is made once and then reused', () async {
+    final db = testDb();
+    addTearDown(db.close);
+    final settings = SettingsRepository(db);
+    final id = await crashInstallId(settings);
+    expect(id, matches(RegExp(r'^[0-9a-f-]{36}$')));
+    expect(await settings.getString(kCrashInstallId), id);
+    expect(await crashInstallId(settings), id);
   });
 
   test(

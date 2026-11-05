@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:path/path.dart' as p;
 import 'package:sentry_flutter/sentry_flutter.dart';
 
+import '../../data/settings_repository.dart';
+import '../ids.dart';
 import '../log.dart';
 import 'crash_config.dart';
 import 'scrub.dart';
@@ -17,10 +20,17 @@ class CrashReporter {
   });
 
   /// The reporter for this build: Sentry, started only in a release build
-  /// with a DSN.
-  factory CrashReporter.sentry() => CrashReporter(
+  /// with a DSN. Sentry keeps its files under [dataRoot], and reports carry
+  /// the install id kept in [settings].
+  factory CrashReporter.sentry({
+    required String dataRoot,
+    required SettingsRepository settings,
+  }) => CrashReporter(
     built: crashReportingBuilt(),
-    start: startSentry,
+    start: () async => startSentry(
+      dataRoot: dataRoot,
+      installId: await crashInstallId(settings),
+    ),
     close: Sentry.close,
   );
 
@@ -30,6 +40,9 @@ class CrashReporter {
 
   bool _wanted = false;
   bool _running = false;
+
+  /// The last start failed; only a change from off to on tries again.
+  bool _failed = false;
   Future<void>? _busy;
   StreamSubscription<bool>? _sub;
 
@@ -40,7 +53,8 @@ class CrashReporter {
   /// has caught up with the latest setting.
   Future<void> applySetting(bool on) {
     _wanted = on;
-    if (_busy == null && (!_built || _running == _wanted)) {
+    if (!on) _failed = false;
+    if (_busy == null && (!_built || _running == _wanted || _failed)) {
       return Future.value();
     }
     return _busy ??= _settle();
@@ -57,8 +71,9 @@ class CrashReporter {
             _running = true;
           } catch (e, s) {
             AppLog.w('Crash reporting did not start', e, s);
+            _failed = true;
             // The SDK may be partly up; close it so "stopped" is true. The
-            // next switch on tries again.
+            // next switch from off to on tries again.
             try {
               await _close();
             } catch (e, s) {
@@ -100,11 +115,33 @@ class CrashReporter {
   }
 }
 
-/// Starts Sentry with nothing personal: scrubbed events, only navigation,
+/// This device's random crash report id, made on first use and kept in
+/// [settings].
+Future<String> crashInstallId(SettingsRepository settings) async {
+  final stored = await settings.getString(kCrashInstallId);
+  if (stored != null && stored.isNotEmpty) return stored;
+  final id = newId();
+  await settings.setString(kCrashInstallId, id);
+  return id;
+}
+
+/// Starts Sentry (see [configureSentry]) and tags every report, native
+/// crashes included, with [installId] as the only user field.
+Future<void> startSentry({
+  required String dataRoot,
+  required String installId,
+}) async {
+  await SentryFlutter.init((o) => configureSentry(o, dataRoot: dataRoot));
+  await Sentry.configureScope((s) => s.setUser(SentryUser(id: installId)));
+}
+
+/// Sentry options with nothing personal: scrubbed events, only navigation,
 /// player and lifecycle breadcrumbs, no screenshots and no tracing. Native
-/// crashes (with minidumps) and Android ANRs are reported.
-Future<void> startSentry() => SentryFlutter.init((o) {
+/// crashes (with minidumps) and Android ANRs are reported. On desktop the
+/// native crash files live in `<dataRoot>/sentry`, not the working folder.
+void configureSentry(SentryFlutterOptions o, {required String dataRoot}) {
   o
+    ..nativeDatabasePath = p.join(dataRoot, 'sentry')
     ..dsn = kSentryDsn
     ..release = kSentryRelease
     ..environment = 'production'
@@ -120,4 +157,4 @@ Future<void> startSentry() => SentryFlutter.init((o) {
     ..enableAutoNativeBreadcrumbs = false
     ..enableUserInteractionBreadcrumbs = false
     ..enableAppLifecycleBreadcrumbs = true;
-});
+}

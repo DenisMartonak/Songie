@@ -121,7 +121,10 @@ Future<void> main() async {
   // setting is on. The setting lives in the database, so crashes before it
   // opens aren't reported. Started after the log handlers, so Sentry hands
   // errors on to them.
-  final crashReporter = CrashReporter.sentry();
+  final crashReporter = CrashReporter.sentry(
+    dataRoot: paths.root.path,
+    settings: settings,
+  );
   await crashReporter.applySetting(
     await settings.getBool(kCrashReports, fallback: true),
   );
