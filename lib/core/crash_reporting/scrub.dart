@@ -8,6 +8,13 @@ final _pathStart = RegExp(
   r'|(?<![\w:/.~-])(?:~/|/(?:home|storage|sdcard|root|Users|var|opt|proc|data|tmp|media|mnt|run/media)/)',
 );
 
+/// A web URL: its scheme and host, with any user info before the host, then
+/// the path, query and fragment, which may hold ids or the user's IP.
+final _webUrl = RegExp(
+  r'''\b(https?://)(?:[^/\s?#@'"`<>]*@)?([^/\s?#'"`<>]*)([^\s'"`<>]*)''',
+  caseSensitive: false,
+);
+
 /// Breadcrumb categories worth keeping; the last is the SDK's own lifecycle one.
 const _keptCategories = {'navigation', 'player', 'app.lifecycle'};
 
@@ -38,8 +45,17 @@ int _pathEnd(String text, int from, int start, int? nextStart) {
   return line;
 }
 
-/// Replaces absolute file paths in [text] with `<path>`.
-String scrubPaths(String text) {
+/// Keeps only the scheme and host of web URLs in [text]: everything after
+/// the host becomes `<redacted>`.
+String _scrubUrls(String text) => text.replaceAllMapped(
+  _webUrl,
+  (m) => '${m[1]}${m[2]}${m[3]!.isEmpty ? '' : '/<redacted>'}',
+);
+
+/// Replaces absolute file paths in [text] with `<path>`, and the path and
+/// query of web URLs with `<redacted>`.
+String scrubPaths(String input) {
+  final text = _scrubUrls(input);
   final out = StringBuffer();
   var pos = 0;
   final starts = _pathStart.allMatches(text).toList();
@@ -96,8 +112,13 @@ void _scrubStackTrace(SentryStackTrace? trace) {
   }
 }
 
-/// `beforeSend`: hides file paths in everything the event carries as text,
-/// keeps only the breadcrumbs `filterBreadcrumb` allows, and removes the user,
+/// The last part of a POSIX or Windows [path]: a module's name without the
+/// folders, which may hold the user name. Symbols match on debug and code ids.
+String _baseName(String path) => path.split(RegExp(r'[/\\]')).last;
+
+/// `beforeSend`: hides file paths and URL paths in everything the event
+/// carries as text, keeps only the breadcrumbs `filterBreadcrumb` allows and
+/// the file names of debug images, keeps only the user's id, and removes the
 /// server name and request data.
 SentryEvent? scrubEvent(SentryEvent event, Hint hint) {
   for (final e in event.exceptions ?? const <SentryException>[]) {
@@ -135,7 +156,15 @@ SentryEvent? scrubEvent(SentryEvent event, Hint hint) {
   final extra = event.extra;
   if (extra != null) _scrubMap(extra);
   _scrubMap(event.contexts);
-  event.user = null;
+  // Only the random per-install id stays, so Sentry can count devices.
+  final userId = event.user?.id;
+  event.user = userId == null ? null : SentryUser(id: userId);
+  for (final image in event.debugMeta?.images ?? const <DebugImage>[]) {
+    final codeFile = image.codeFile;
+    if (codeFile != null) image.codeFile = _baseName(codeFile);
+    final debugFile = image.debugFile;
+    if (debugFile != null) image.debugFile = _baseName(debugFile);
+  }
   event.serverName = null;
   event.request = null;
   return event;

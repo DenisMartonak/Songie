@@ -75,14 +75,35 @@ void main() {
     expect(scrubPaths('content://media/external/audio/media/12'), '<path>');
   });
 
-  test('scrubPaths leaves URLs and package URIs alone', () {
+  test('scrubPaths leaves package URIs and route templates alone', () {
     for (final t in [
-      'https://api.x.com/v1/a',
       'package:songies/data/repo.dart',
-      'http://h/home/x',
+      'dart:async/zone.dart',
+      'https://api.x.com',
     ]) {
       expect(scrubPaths(t), t);
     }
+  });
+
+  test('scrubPaths keeps only the scheme and host of web URLs', () {
+    expect(
+      scrubPaths(
+        'HttpException: Connection closed, uri = '
+        'https://rr3---sn-abc.googlevideo.com/videoplayback?id=o-x&ip=1.2.3.4',
+      ),
+      'HttpException: Connection closed, uri = '
+      'https://rr3---sn-abc.googlevideo.com/<redacted>',
+    );
+    expect(
+      scrubPaths('GET http://i.ytimg.com/vi/dQw4w9WgXcQ/hq.jpg failed'),
+      'GET http://i.ytimg.com/<redacted> failed',
+    );
+    expect(scrubPaths("'https://h/home/x' x"), "'https://h/<redacted>' x");
+    expect(
+      scrubPaths('https://u:pw@h.com:8080?q=1'),
+      'https://h.com:8080/<redacted>',
+    );
+    expect(scrubPaths('HTTPS://H.com/a#b'), 'HTTPS://H.com/<redacted>');
   });
 
   test(
@@ -146,11 +167,63 @@ void main() {
     final out = scrubEvent(event, Hint())!;
     expect(out.exceptions!.single.value, 'bad <path>');
     expect(out.message!.formatted, 'open <path>');
-    expect(out.user, isNull);
+    expect(out.user!.id, 'u');
     expect(out.serverName, isNull);
     expect(out.request, isNull);
     expect(out.breadcrumbs!.single.message, 'at <path>');
     expect(out.breadcrumbs!.single.data, {'p': '<path>', 'n': 3});
+  });
+
+  test('scrubEvent keeps only the user id', () {
+    final event = SentryEvent(
+      user: SentryUser(
+        id: 'install-1',
+        username: 'denis',
+        email: 'd@x.com',
+        ipAddress: '1.2.3.4',
+        name: 'Denis',
+        data: {'home': '/home/denis'},
+      ),
+    );
+    final user = scrubEvent(event, Hint())!.user!;
+    expect(user.toJson(), {'id': 'install-1'});
+    expect(
+      scrubEvent(SentryEvent(user: SentryUser(username: 'd')), Hint())!.user,
+      isNull,
+    );
+  });
+
+  test('scrubEvent keeps only the file names of debug images', () {
+    final event = SentryEvent(
+      debugMeta: DebugMeta(
+        images: [
+          DebugImage(
+            type: 'pe',
+            codeFile:
+                r'C:\Users\Denis\AppData\Local\Programs\Songies\songies.exe',
+            debugFile: r'C:\Users\Denis\build\songies.pdb',
+            debugId: 'abc',
+            codeId: 'def',
+          ),
+          DebugImage(
+            type: 'elf',
+            codeFile: '/home/denis/Apps/Songies.AppImage/lib/libmpv.so.2',
+          ),
+          DebugImage(type: 'elf', codeFile: 'libc.so.6'),
+          DebugImage(type: 'macho'),
+        ],
+      ),
+    );
+    final images = scrubEvent(event, Hint())!.debugMeta!.images;
+    expect(images.map((i) => i.codeFile), [
+      'songies.exe',
+      'libmpv.so.2',
+      'libc.so.6',
+      null,
+    ]);
+    expect(images.first.debugFile, 'songies.pdb');
+    expect(images.first.debugId, 'abc');
+    expect(images.first.codeId, 'def');
   });
 
   test(
