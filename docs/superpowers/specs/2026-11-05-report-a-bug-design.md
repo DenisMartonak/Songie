@@ -57,11 +57,8 @@ report can't ping anyone. *(Claude's call.)*
 
 ## Where it starts
 
-- A **Report a bug** item in Settings.
-- The same item in the app's ⋯ / overflow menu (on desktop: the sidebar
-  or title-bar menu, wherever app-level items like Settings live; on
-  phones: the equivalent app menu). *(Builder picks the exact spot in the
-  existing UI.)*
+- **Only in Settings**, as a "Report a bug" button directly above "Check
+  for updates" (in About). *(Decided by the user.)*
 - No shake-to-report.
 
 The one-line notice ("Includes the app version, your device and the app's

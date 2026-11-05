@@ -4,7 +4,7 @@
 
 **Goal:** Friends can send a bug report (description, optional name, optional screenshot, version, device, scrubbed log) from Songies to the user's Discord channel.
 
-**Architecture:** A pure `lib/bug_report/` unit builds the report (device info, log, size limits) and posts it to a Discord webhook through an injectable `http.Client`; a form (dialog on wide layouts, page on phones) collects the input; entry points in Settings and the desktop sidebar appear only when the webhook define is built in. The release workflow passes the webhook from a GitHub secret.
+**Architecture:** A pure `lib/bug_report/` unit builds the report (device info, log, size limits) and posts it to a Discord webhook through an injectable `http.Client`; a form (dialog on wide layouts, page on phones) collects the input; a Report a bug button in Settings, just above Check for updates, appears only when the webhook define is built in. The release workflow passes the webhook from a GitHub secret.
 
 **Tech Stack:** Flutter, `http` (MultipartRequest; `package:http/testing` MockClient in tests), existing `file_picker`, existing islands, existing `scrubPaths`.
 
@@ -85,8 +85,7 @@ test('appVersion and appBuild match pubspec.yaml', ...); // extend the existing 
 **Files:**
 - Create: `lib/ui/bug_report/bug_report_form.dart` (`showBugReportForm(BuildContext, WidgetRef)`; dialog ≥ 720 px, full-screen page below)
 - Modify: `lib/providers.dart` (or wherever app providers live): `bugReportSenderProvider` (real `http.Client`), `screenshotPickerProvider` (wraps `FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['png','jpg','jpeg','webp'], withData: true)`; replaceable in tests), `deviceSummaryProvider`.
-- Modify: `lib/ui/settings/settings_page.dart` (a "Help" section with a "Report a bug" `ListTile`, key `settings.reportBug`, above Logs; only when `bugReportsBuilt()`)
-- Modify: `lib/ui/shell/sidebar.dart` (a "Report a bug" nav item, key `sidebar.reportBug`, icon `Icons.bug_report_outlined`, just above Settings; only when `bugReportsBuilt()`; collapsed shows the icon with a tooltip)
+- Modify: `lib/ui/settings/settings_page.dart` — in `_AboutSection`, a "Report a bug" button (key `settings.reportBug`, icon `Icons.bug_report_outlined`, same `TextButton.icon` style as Check for updates) directly **above** `_CheckForUpdates`; only when `bugReportsBuilt()`. This is the only entry point (the user decided).
 - Test: `test/ui/bug_report/bug_report_form_test.dart`
 
 **Interfaces:**
@@ -97,7 +96,8 @@ test('appVersion and appBuild match pubspec.yaml', ...); // extend the existing 
 
 ```dart
 uiTest('no Report a bug entry when the webhook is not built in', ...);
-uiTest('Settings and the desktop sidebar open the form', ...);
+uiTest('Settings shows Report a bug directly above Check for updates and it opens the form', ...);
+  // getRect(reportBug).bottom <= getRect(checkForUpdates).top, same column
 uiTest('Send is disabled until the description has 10 characters', ...);
 uiTest('the name is prefilled from the last report', ...);
 uiTest('attaching a screenshot shows a thumbnail that can be removed; a 8 MB image is refused', ...);
@@ -110,7 +110,7 @@ uiTest('phone width opens a full page, desktop width a dialog', ...);
 - [ ] **Step 2: Run** `flutter test test/ui/bug_report/` → FAIL.
 - [ ] **Step 3: Implement** the form and entry points with the exact copy from Global Constraints; save the name on a successful send.
 - [ ] **Step 4: Run** `flutter test test/ui/` (form, settings, sidebar, shell tests) and the full `flutter test` (stats "… under 500 ms" timing tests can flake under load) → PASS; analyze clean.
-- [ ] **Step 5: Commit** `feat: a Report a bug form in Settings and the sidebar`
+- [ ] **Step 5: Commit** `feat: a Report a bug form in Settings`
 
 ### Task 3: Release workflow and docs
 
@@ -120,5 +120,5 @@ uiTest('phone width opens a full page, desktop width a dialog', ...);
 - Modify: `docs/manual-test-checklist.md` — a release build shows Report a bug; a report arrives in Discord with version, device, log and screenshot; no @mentions fire; a local debug build hides it.
 
 - [ ] **Step 1: Edit** the workflow and docs as above.
-- [ ] **Step 2: Validate** — `python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' .github/workflows/release.yml`; read each changed build step; `grep -rn "discord.com/api/webhooks" .` finds nothing in tracked files (`git grep`).
+- [ ] **Step 2: Validate** — `python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' .github/workflows/release.yml`; read each changed build step; `git grep -nE "discord(app)?\.com/api/webhooks/[0-9]"` finds nothing in tracked files.
 - [ ] **Step 3: Commit** `build: release builds can send bug reports`
