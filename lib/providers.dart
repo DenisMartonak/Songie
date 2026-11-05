@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:http/http.dart' as http;
 
+import 'account/account_service.dart';
 import 'bug_report/bug_report.dart';
 import 'bug_report/bug_report_sender.dart';
 import 'core/app_version.dart';
@@ -500,6 +501,16 @@ final runtimePrompterProvider = Provider<RuntimePrompter>(
 
 final ytImportServiceProvider = Provider<YtImportService>(
   (ref) => _unwired('ytImportServiceProvider'),
+);
+
+/// Accounts (Supabase); made in `main()`.
+final accountServiceProvider = Provider<AccountService>(
+  (ref) => _unwired('accountServiceProvider'),
+);
+
+/// The account state, starting with the current one.
+final accountStateProvider = StreamProvider<AccountState>(
+  (ref) => ref.watch(accountServiceProvider).states,
 );
 
 final ytSessionStoreProvider = Provider<YtSessionStore>(

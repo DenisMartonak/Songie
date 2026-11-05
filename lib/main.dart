@@ -9,6 +9,8 @@ import 'package:window_manager/window_manager.dart';
 import 'package:just_audio/just_audio.dart'
     show AndroidEqualizer, AudioPipeline;
 
+import 'account/account_backend.dart';
+import 'account/account_service.dart';
 import 'app.dart';
 import 'core/app_version.dart';
 import 'core/connectivity.dart';
@@ -299,6 +301,11 @@ Future<void> main() async {
     AppLog.e('Device identity unavailable', e, s);
   }
 
+  // Accounts: Supabase starts in the background (it reads the session from
+  // the keyring), so a slow keyring or no network never holds up the first
+  // frame. If it fails, the app runs signed out.
+  final accounts = AccountService(PendingAccountBackend(connectSupabase()));
+
   final navigatorKey = GlobalKey<NavigatorState>();
   final router = buildRouter(navigatorKey: navigatorKey);
   try {
@@ -341,6 +348,7 @@ Future<void> main() async {
       themeRepositoryProvider.overrideWithValue(themes),
       statsRepositoryProvider.overrideWithValue(StatsRepository(db)),
       initialThemeSpecProvider.overrideWithValue(initialTheme),
+      accountServiceProvider.overrideWithValue(accounts),
     ],
   );
   // Reads two device-local settings only: no keyring, no network, no timer.
