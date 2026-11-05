@@ -60,6 +60,13 @@ just sign up/login, username changing, profile picture changing".
   account never exists without a username. If someone else took the name
   in the meantime, sign-up fails and the form says "That username was just
   taken". *(Claude's calls.)*
+- A sign-up that is never confirmed holds its username only until its
+  last code expires (1 hour): after that the name counts as free, and the
+  next sign-up that takes it deletes the stale unconfirmed account first.
+  The code step has "Use a different email" (back to sign-up, fields
+  kept) and "Send a new code". Signing up again with the same unconfirmed
+  email only sends a new code: Supabase keeps the first username and
+  password. *(Claude's calls.)*
 - Signing up with an email that already has an account: Supabase answers
   without an error but with no identities; the form says "That email
   already has an account. Log in, or reset your password." *(Claude's
@@ -70,10 +77,12 @@ just sign up/login, username changing, profile picture changing".
 
 - Log in with email + password. Supabase refuses an unconfirmed email
   with an "email not confirmed" error; the app then asks for the code
-  (with "Send a new code"). Wrong email or password: "Wrong email or
+  (with "Send a new code"), sending one right away. Wrong email or password: "Wrong email or
   password."
 - "Forgot password?" → enter email → a 6-digit code arrives → enter code
-  and a new password → logged in.
+  and a new password → logged in. The code is used up even when the new
+  password is refused (same as the old one, or too weak), so that step
+  clears the code and offers "Send a new code".
 - Log out from the Account section; the session is forgotten on this
   device.
 - The session is kept on the device so you stay logged in across restarts,

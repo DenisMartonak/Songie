@@ -68,15 +68,31 @@ create trigger profiles_set_updated_at
 -- Runs in the same transaction as the auth.users insert. A missing, invalid
 -- or taken username raises (not-null, check or unique violation), so the
 -- sign-up fails and no account exists without a profile.
+--
+-- A sign-up that was never confirmed and whose last code has expired (codes
+-- last 1 hour) gives its username up: that user is deleted first (the
+-- profile goes by cascade), so a mistyped email can't hold a name for good.
+-- A re-sign-up with the same email doesn't come here: Supabase Auth only
+-- sends a new code to the existing user and keeps its username.
 create function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  name text := lower(new.raw_user_meta_data ->> 'username');
 begin
-  insert into public.profiles (id, username)
-  values (new.id, lower(new.raw_user_meta_data ->> 'username'));
+  delete from auth.users u
+  using public.profiles p
+  where p.id = u.id
+    and lower(p.username) = name
+    and u.id <> new.id
+    and u.email_confirmed_at is null
+    and coalesce(u.confirmation_sent_at, u.created_at)
+      < now() - interval '1 hour';
+
+  insert into public.profiles (id, username) values (new.id, name);
   return new;
 end;
 $$;
@@ -89,7 +105,9 @@ create trigger on_auth_user_created
 
 -- Username availability (callable signed out; reveals only true/false) -----
 
--- Lowercases the name first, as the sign-up trigger does.
+-- Lowercases the name first, as the sign-up trigger does. A name held only
+-- by a never-confirmed sign-up whose last code expired counts as free, as
+-- the sign-up trigger frees it.
 create function public.username_available(name text)
 returns boolean
 language sql
@@ -100,8 +118,15 @@ as $$
   select coalesce(
     lower(name) ~ '^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$'
       and not exists (
-        select 1 from public.profiles p
+        select 1
+        from public.profiles p
+        join auth.users u on u.id = p.id
         where lower(p.username) = lower(name)
+          and not (
+            u.email_confirmed_at is null
+            and coalesce(u.confirmation_sent_at, u.created_at)
+              < now() - interval '1 hour'
+          )
       ),
     false
   );

@@ -80,6 +80,8 @@ The SMTP password stays in the dashboard only; never put it in the repo.
 ## 5. Things to know
 
 - Accounts come only from the app: a new account needs a username in its sign-up data, so the dashboard's Add user (and any anonymous or OAuth sign-up, if those are ever turned on) fails with a database error. That's on purpose; create test accounts from the app.
+- Unconfirmed sign-ups: a sign-up whose code was never entered keeps its username for 1 hour after its last code was sent. After that, the name counts as free, and the next sign-up that picks it deletes the old unconfirmed account. Supabase itself never deletes unconfirmed accounts. Signing up again with the same unconfirmed email only sends a new code; Supabase keeps the first username and password.
+- Clearing an unconfirmed sign-up by hand (for example, to free its email or username sooner): open Authentication, Users, find the address (an unconfirmed user shows as waiting for verification, with no confirmed date), open the row's menu (the three dots) and choose Delete user. Its profile goes with it. Only do this for accounts that were never confirmed.
 - Pausing: a free project pauses after 7 days without activity. Songies keeps working signed out while it's paused. Restore it from the dashboard (the project page shows a Restore button).
 - The app's keys: the project URL is on the dashboard's Connect button (and under Project Settings, Data API); the publishable key is under Project Settings, API Keys. Both are public by design and live in `lib/account/supabase_config.dart`.
 - Never put the service-role key (or the secret key) in the app or in the repo. It bypasses every rule above. Songies doesn't need it: account deletion goes through `delete_my_account`.
