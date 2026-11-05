@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:songies/account/account_service.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/library/library_repository.dart';
@@ -19,6 +20,7 @@ import 'package:songies/ui/settings/storage_usage.dart';
 import 'package:songies/ui/shell/window_controls.dart';
 import 'package:songies/ui/widgets/page_surface.dart';
 
+import '../account/fake_account_backend.dart';
 import '../helpers/fake_audio_backend.dart';
 
 class _Resolver extends TrackResolver {
@@ -80,6 +82,10 @@ void main() {
             (ref) async => const StorageUsage(artBytes: 0, databaseBytes: 0),
           ),
           deviceIdProvider.overrideWithValue('0123456789abcdef'),
+          // Settings and the shell show the account.
+          accountServiceProvider.overrideWithValue(
+            AccountService(FakeAccountBackend()),
+          ),
           // The YouTube section reads these.
           ytDlpVersionProvider.overrideWith((ref) async => null),
           wifiOnlySettingProvider.overrideWith((ref) => Stream.value(false)),

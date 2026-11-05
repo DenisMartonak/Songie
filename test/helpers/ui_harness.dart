@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:go_router/go_router.dart';
+import 'package:songies/account/account_service.dart';
 import 'package:songies/core/paths.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
@@ -29,6 +30,7 @@ import 'package:songies/ui/island/island_host.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/youtube/ytdlp_client.dart';
 
+import '../account/fake_account_backend.dart';
 import 'fake_audio_backend.dart';
 
 import 'package:songies/innertube/yt_sign_in.dart';
@@ -214,6 +216,12 @@ class UiHarness {
   /// The network the app thinks it is on.
   final FakeNetworkStatus network = FakeNetworkStatus();
 
+  /// The account server; replaceable before the app is pumped.
+  late FakeAccountBackend accountBackend = FakeAccountBackend();
+
+  /// Accounts over [accountBackend], made on first use.
+  late final AccountService accounts = AccountService(accountBackend);
+
   /// How often the UI asked for the notification permission.
   int permissionAsks = 0;
 
@@ -258,6 +266,7 @@ class UiHarness {
     // queued in the player, and dispose() waits for the queue to drain.
     unawaited(player.dispose());
     innertube.dispose();
+    unawaited(accounts.dispose());
     await db.close();
   }
 
@@ -306,6 +315,7 @@ class UiHarness {
     networkStatusProvider.overrideWithValue(network),
     jsRuntimeProvider.overrideWith((ref) async => jsRuntime),
     denoInstallerProvider.overrideWithValue(denoInstaller),
+    accountServiceProvider.overrideWithValue(accounts),
   ];
 
   /// An app showing [routes], starting at [initialLocation]; with

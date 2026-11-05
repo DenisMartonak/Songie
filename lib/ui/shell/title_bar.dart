@@ -7,10 +7,12 @@ import 'package:window_manager/window_manager.dart';
 import '../../core/log.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../account/avatar.dart';
 import 'window_controls.dart';
 
 /// The desktop window's custom title bar: app name, the global search field
-/// (Ctrl+K) and the window buttons. Dragging anywhere else moves the window.
+/// (Ctrl+K), the account avatar and the window buttons. Dragging anywhere
+/// else moves the window.
 class TitleBar extends ConsumerWidget {
   const TitleBar({
     required this.searchController,
@@ -73,8 +75,12 @@ class TitleBar extends ConsumerWidget {
                 ),
               ),
               ExcludeFocus(
-                child: _WindowButtons(
-                  controls: ref.watch(windowControlsProvider),
+                child: Row(
+                  children: [
+                    const AccountButton(),
+                    const SizedBox(width: 8),
+                    _WindowButtons(controls: ref.watch(windowControlsProvider)),
+                  ],
                 ),
               ),
             ],

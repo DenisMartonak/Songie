@@ -13,6 +13,7 @@ import '../../library/library_scanner.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../../update/update_controller.dart';
+import '../account/account_section.dart';
 import '../library/add_folder_flow.dart';
 import '../motion/motion.dart';
 import '../bug_report/bug_report_form.dart';
@@ -46,8 +47,8 @@ final logSaverProvider = Provider<LogSaver>(
   },
 );
 
-/// Music folders, appearance, YouTube, downloads, sync, storage, the log
-/// and About.
+/// Account, music folders, appearance, YouTube, downloads, sync, storage,
+/// the log and About.
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -88,6 +89,7 @@ class SettingsPage extends ConsumerWidget {
               ],
             ),
           ),
+          const AccountSection(),
           const _FoldersSection(),
           const PlaybackSettingsSection(),
           const _AppearanceSection(),

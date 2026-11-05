@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:songies/account/account_service.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/innertube/ytm_models.dart';
@@ -31,6 +32,7 @@ import 'package:songies/ui/ytm/ytm_playlist_page.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
 
+import 'account/fake_account_backend.dart';
 import 'helpers/fake_audio_backend.dart';
 
 class _NoTracks extends TrackResolver {
@@ -64,6 +66,10 @@ Future<GoRouter> pumpRouter(
           (ref) async => const StorageUsage(artBytes: 0, databaseBytes: 0),
         ),
         deviceIdProvider.overrideWithValue('0123456789abcdef'),
+        // Settings shows the account.
+        accountServiceProvider.overrideWithValue(
+          AccountService(FakeAccountBackend()),
+        ),
         // The YouTube section reads these.
         ytDlpVersionProvider.overrideWith((ref) async => null),
         wifiOnlySettingProvider.overrideWith((ref) => Stream.value(false)),

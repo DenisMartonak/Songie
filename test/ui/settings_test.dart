@@ -87,6 +87,17 @@ void main() {
     await settle(tester);
   }
 
+  /// Scrolls Settings until [target] is on screen.
+  Future<void> reveal(WidgetTester tester, Finder target) async {
+    await tester.scrollUntilVisible(
+      target,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(target);
+    await tester.pump();
+  }
+
   Finder rescan(String path) => find.byKey(Key('settings.rescan.$path'));
   Finder remove(String path) => find.byKey(Key('settings.remove.$path'));
 
@@ -125,6 +136,20 @@ void main() {
       },
     );
   }
+
+  uiTest('Settings starts with Account: Sign up and Log in when signed out', (
+    tester,
+  ) async {
+    await pumpSettings(tester);
+    final titles = tester
+        .widgetList<SettingsSectionTitle>(find.byType(SettingsSectionTitle))
+        .map((t) => t.title)
+        .toList();
+    expect(titles.first, 'Account');
+    expect(titles[1], 'Music folders');
+    expect(find.widgetWithText(FilledButton, 'Sign up'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Log in'), findsOneWidget);
+  });
 
   group('music folders', () {
     uiTest('lists each folder; Rescan scans that folder through the queue', (
@@ -368,6 +393,7 @@ void main() {
         },
       );
 
+      await reveal(tester, find.byKey(const Key('settings.exportLog')));
       await tester.tap(find.byKey(const Key('settings.exportLog')));
       await settle(tester);
 
@@ -388,6 +414,7 @@ void main() {
         },
       );
 
+      await reveal(tester, find.byKey(const Key('settings.exportLog')));
       await tester.tap(find.byKey(const Key('settings.exportLog')));
       await settle(tester);
       expect(utf8.decode(saved!), 'old\nnew\n');
@@ -403,6 +430,7 @@ void main() {
         },
       );
 
+      await reveal(tester, find.byKey(const Key('settings.exportLog')));
       await tester.tap(find.byKey(const Key('settings.exportLog')));
       await settle(tester);
       expect(find.text('No log yet'), findsOneWidget);
@@ -422,6 +450,7 @@ void main() {
         },
       );
 
+      await reveal(tester, find.byKey(const Key('settings.exportLog')));
       await tester.tap(find.byKey(const Key('settings.exportLog')));
       await settle(tester);
       expect(find.text('Log saved'), findsNothing);
@@ -562,6 +591,7 @@ void main() {
       tester,
     ) async {
       await pumpSettings(tester);
+      await reveal(tester, find.text(appVersion));
 
       expect(find.text(appVersion), findsOneWidget);
       final id = h.stamp.deviceId;

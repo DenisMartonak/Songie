@@ -35,6 +35,10 @@ import 'package:songies/ui/shell/sidebar.dart';
 import 'package:songies/ui/shell/window_controls.dart';
 import 'package:songies/ui/island/island_host.dart';
 
+import 'package:songies/account/account_service.dart';
+import 'package:songies/ui/account/avatar.dart';
+
+import '../account/fake_account_backend.dart';
 import '../helpers/fake_audio_backend.dart';
 
 Track track(String id) => Track(
@@ -147,6 +151,9 @@ void main() {
             (ref) async => const StorageUsage(artBytes: 0, databaseBytes: 0),
           ),
           deviceIdProvider.overrideWithValue('0123456789abcdef'),
+          accountServiceProvider.overrideWithValue(
+            AccountService(FakeAccountBackend()),
+          ),
           // The YouTube section reads these.
           ytDlpVersionProvider.overrideWith((ref) async => null),
           wifiOnlySettingProvider.overrideWith((ref) => Stream.value(false)),
@@ -688,6 +695,60 @@ void main() {
       await tester.enterText(field, 'abc');
       await tester.pumpAndSettle();
       expect(router.state.uri.path, '/search');
+    });
+
+    testWidgets('desktop top bar shows the avatar between search and the '
+        'window buttons; tapping opens Settings', (tester) async {
+      await pumpApp(tester, desktop);
+      final avatar = find.byKey(const Key('shell.account'));
+      expect(
+        find.descendant(of: find.byType(TitleBar), matching: avatar),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: find.byKey(const Key('sidebar')), matching: avatar),
+        findsNothing,
+      );
+      final rect = tester.getRect(avatar);
+      final search = tester.getRect(find.byKey(const Key('shell.search')));
+      final minimize = tester.getRect(find.byKey(const Key('window.minimize')));
+      expect(rect.left, greaterThan(search.right));
+      expect(rect.right, lessThanOrEqualTo(minimize.left));
+      expect(rect.center.dy, closeTo(minimize.center.dy, 1));
+      // Signed out: a person icon saying what it does.
+      expect(find.byTooltip('Log in'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: avatar,
+          matching: find.byIcon(Icons.person_outline_rounded),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(avatar);
+      await tester.pumpAndSettle();
+      expect(router.state.uri.path, '/settings');
+      expect(
+        tester
+            .widgetList<SettingsSectionTitle>(find.byType(SettingsSectionTitle))
+            .first
+            .title,
+        'Account',
+      );
+    });
+
+    testWidgets('without a custom title bar the avatar sits at the end of the '
+        'search row', (tester) async {
+      await pumpApp(tester, desktop, customTitleBar: false);
+      final avatar = find.byKey(const Key('shell.account'));
+      expect(avatar, findsOneWidget);
+      expect(find.byType(AccountAvatar), findsOneWidget);
+      final rect = tester.getRect(avatar);
+      final search = tester.getRect(find.byKey(const Key('shell.search')));
+      expect(rect.left, greaterThan(search.right));
+      expect(rect.center.dy, closeTo(search.center.dy, 1));
+      // At the right end of the main pane (8 px gap, 16 px padding).
+      expect(rect.right, closeTo(desktop.width - 8 - 16, 1));
     });
 
     testWidgets('title bar is present when the flag is on', (tester) async {

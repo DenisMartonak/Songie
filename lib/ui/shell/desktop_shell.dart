@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../player/runtime_prompter.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../account/avatar.dart';
 import '../downloads/downloads_banner.dart';
 import '../island/island_host.dart';
 import '../lyrics/lyrics_panel.dart';
@@ -310,8 +311,8 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   }
 }
 
-/// The search field at the top of the main pane, for windows without a custom
-/// title bar.
+/// The search field at the top of the main pane, with the account avatar at
+/// its right end, for windows without a custom title bar.
 class _SearchRow extends StatelessWidget {
   const _SearchRow({
     required this.controller,
@@ -330,21 +331,30 @@ class _SearchRow extends StatelessWidget {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: ShellSearchField.maxWidth,
+      child: Row(
+        children: [
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: ShellSearchField.maxWidth,
+                ),
+                child: ShellSearchField(
+                  controller: controller,
+                  focusNode: focus,
+                  onChanged: onChanged,
+                  onSubmitted: onChanged,
+                  onTapOutside: onTapOutside,
+                  colors: colors,
+                ),
+              ),
+            ),
           ),
-          child: ShellSearchField(
-            controller: controller,
-            focusNode: focus,
-            onChanged: onChanged,
-            onSubmitted: onChanged,
-            onTapOutside: onTapOutside,
-            colors: colors,
-          ),
-        ),
+          const SizedBox(width: 8),
+          // Not focusable, as the rest of the chrome.
+          const ExcludeFocus(child: AccountButton()),
+        ],
       ),
     );
   }
