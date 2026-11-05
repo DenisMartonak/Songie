@@ -8,15 +8,15 @@ user likes. **Liner's license is source-available and forbids copying its
 code** into other projects: take the ideas and layouts only, and build them in
 Songies' own code and style.
 
-Released so far: **1.1.3** (equalizer, Favorites, queue fix, shelf arrows).
+Released so far: **1.2.0** (star by the title, island notifications, crash reporting, Report a bug; Android 8.0+).
 
-## 1. Star next to the title (quick) — done (on main, untagged)
+## 1. Star next to the title (quick) — done (1.2.0)
 
 In the desktop player bar the Favorites star sits at the right edge of the
 song area; move it right after the title text (as Liner's heart does, see
 the bottom-left of `roadmap/playlist-page.png`).
 
-## 2. Island notifications — done (on main, untagged)
+## 2. Island notifications — done (1.2.0)
 
 Replace the bottom snack bars (errors, "Added to queue", "Added to
 playlist", …) with a small pill that pops up just above the player bar
@@ -25,7 +25,7 @@ shows a short message (with an icon, and an action such as Undo or Retry
 when there is one), and shrinks away. One at a time; a new one replaces the
 old. All existing `PageSnackBars` calls move over to it.
 
-## 3. Crash reporting — done (on main, untagged)
+## 3. Crash reporting — done (1.2.0)
 
 Goal: see crashes from the user's devices, per device and OS, to fix them.
 Firebase Crashlytics only supports Android/iOS/macOS, so it would miss
@@ -33,7 +33,7 @@ Linux and Windows. **Decided: Sentry** (free Developer plan, 1 user, 5k
 errors/month), which covers every Flutter platform. Opt-out
 switch in Settings; no personal data in reports.
 
-## 4. Report a bug
+## 4. Report a bug — done (1.2.0)
 
 A **Report a bug** item (Settings and the help/⋯ menu): a short form (what
 happened, optional screenshot, recent app log attached, app version, OS,
