@@ -1,3 +1,5 @@
+import 'dart:math' show min;
+
 import 'package:drift/drift.dart';
 
 import '../core/fractional_index.dart';
@@ -589,6 +591,23 @@ class LibraryRepository {
     return (_db.select(_db.tracks)
           ..where((t) => t.id.equals(id) & t.deleted.equals(false)))
         .getSingleOrNull();
+  }
+
+  /// The live (not deleted) rows among [ids], by id; unknown ids are absent.
+  Future<Map<String, Track>> tracksByIds(List<String> ids) async {
+    final want = ids.toSet().toList();
+    final out = <String, Track>{};
+    // Chunked to stay well under SQLite's bound-variable limit.
+    for (var i = 0; i < want.length; i += 500) {
+      final chunk = want.sublist(i, min(i + 500, want.length));
+      final rows = await (_db.select(
+        _db.tracks,
+      )..where((t) => t.id.isIn(chunk) & t.deleted.equals(false))).get();
+      for (final t in rows) {
+        out[t.id] = t;
+      }
+    }
+    return out;
   }
 
   // --- helpers -------------------------------------------------------------

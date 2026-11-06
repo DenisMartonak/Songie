@@ -640,6 +640,19 @@ void main() {
     });
   });
 
+  group('tracksByIds', () {
+    test('returns live rows only', () async {
+      await insertTracks(['t1', 't2', 't3']);
+      await (db.update(db.tracks)..where((t) => t.id.equals('t2'))).write(
+        const TracksCompanion(deleted: Value(true)),
+      );
+      final found = await repo.tracksByIds(['t1', 't2', 't3', 'nope', 't1']);
+      expect(found.keys.toSet(), {'t1', 't3'});
+      expect(found['t3']?.id, 't3');
+      expect(await repo.tracksByIds(const []), isEmpty);
+    });
+  });
+
   test('database errors become Err(io) instead of throwing', () async {
     await db.customStatement('DROP TABLE playlists');
     final r = await repo.createPlaylist('x');
