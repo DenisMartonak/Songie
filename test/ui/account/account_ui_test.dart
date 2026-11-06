@@ -524,8 +524,9 @@ void main() {
     await tapAndSettle(tester, key('account.delete'));
     expect(
       find.text(
-        'Delete your account? Your username and picture are removed. '
-        'Your music on this device stays.',
+        'Delete your account? Your username, picture and synced library in '
+        'the cloud are removed, and your other devices stop syncing. Your '
+        'music on this device stays.',
       ),
       findsOneWidget,
     );

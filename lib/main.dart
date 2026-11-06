@@ -312,11 +312,6 @@ Future<void> main() async {
     // Registers fonts that arrived; the theme asks again (registrations).
     onFontsArrived: fonts.loadImported,
   );
-  final accounts = AccountService(
-    PendingAccountBackend(connectSupabase(SettingsSessionMarker(settings))),
-    network: network.changes,
-    deleteSyncFiles: cloudFiles.deleteAll,
-  );
   final navigatorKey = GlobalKey<NavigatorState>();
   final cloudSync = CloudSync(
     db: db,
@@ -328,8 +323,19 @@ Future<void> main() async {
     fontsDir: paths.fonts,
     // Signing in as another account than last time: asked on the app's
     // navigator once it is up.
-    askMerge: (cancelled) =>
-        askMergeOrStartEmpty(navigatorKey, cancelled: cancelled),
+    askMerge: (cancelled, unsent) => askMergeOrStartEmpty(
+      navigatorKey,
+      cancelled: cancelled,
+      unsent: unsent,
+    ),
+  );
+  final accounts = AccountService(
+    PendingAccountBackend(connectSupabase(SettingsSessionMarker(settings))),
+    network: network.changes,
+    deleteSyncFiles: cloudFiles.deleteAll,
+    // Stopped first, so it can't upload files while they are deleted.
+    stopSync: cloudSync.stop,
+    startSync: cloudSync.start,
   );
 
   final router = buildRouter(navigatorKey: navigatorKey);

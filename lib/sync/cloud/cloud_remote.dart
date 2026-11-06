@@ -5,7 +5,15 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/hlc.dart';
 import '../sync_row.dart';
+
+/// The shape of the synced rows this app writes, sent with every row as
+/// `fmt`. Bump it when a synced table's columns change: the server then
+/// keeps a newer-format row from being overwritten by an older app, and an
+/// older app leaves such rows for after its update (see [PulledRow]). The
+/// drift schema version it came with.
+const kRowFormat = 10;
 
 /// The server couldn't be reached (no network, a timeout).
 class CloudOffline implements Exception {
@@ -27,6 +35,10 @@ enum CloudRejection {
 
   /// A clock is more than a day ahead of the server's.
   clockAhead,
+
+  /// The database can't store a value of a row (a Postgres data exception,
+  /// SQLSTATE class 22, such as a NUL in text).
+  badData,
 }
 
 /// `push_rows` refused the page because of one or more of its rows.
@@ -47,8 +59,8 @@ abstract class CloudRemote {
   Future<int> push(List<SyncRow> rows);
 
   /// Up to [max] rows written after server seq [after], oldest first, each
-  /// with its server seq.
-  Future<List<(int serverSeq, SyncRow row)>> pull(int after, {int max = 500});
+  /// with its server seq and format.
+  Future<List<PulledRow>> pull(int after, {int max = 500});
 
   /// Fires when [userId]'s rows may have changed (and when the live
   /// connection is (re)made, since a message may have been missed). Only a
@@ -116,28 +128,83 @@ CloudRejection? rejectionOf(String message) {
   return null;
 }
 
-/// The row as one element of `push_rows`. The local seq stays on the device.
+/// One pulled row: its server seq and format, and the row itself, or null
+/// when this app can't read it (a newer format, or data it can't decode).
+/// Such a row is left for after an app update; the rest of its page applies.
+class PulledRow {
+  const PulledRow(this.serverSeq, this.fmt, this.row);
+
+  final int serverSeq;
+  final int fmt;
+  final SyncRow? row;
+}
+
+/// Postgres text and jsonb can't hold NUL, so strings in a row's data go up
+/// with NUL as this private use character followed by '0', and the
+/// character itself followed by 'E'.
+const _esc = '\uE000';
+
+final _toEscape = RegExp('[\u0000$_esc]');
+final _escaped = RegExp('$_esc([0E])');
+
+Object? _escapeNul(Object? v) => switch (v) {
+  String s => s.replaceAllMapped(
+    _toEscape,
+    (m) => m[0] == '\u0000' ? '${_esc}0' : '${_esc}E',
+  ),
+  Map<dynamic, dynamic> m => {
+    for (final e in m.entries) e.key: _escapeNul(e.value),
+  },
+  List<dynamic> l => [for (final e in l) _escapeNul(e)],
+  _ => v,
+};
+
+Object? _unescapeNul(Object? v) => switch (v) {
+  String s => s.replaceAllMapped(
+    _escaped,
+    (m) => m[1] == '0' ? '\u0000' : _esc,
+  ),
+  Map<dynamic, dynamic> m => {
+    for (final e in m.entries) e.key: _unescapeNul(e.value),
+  },
+  List<dynamic> l => [for (final e in l) _unescapeNul(e)],
+  _ => v,
+};
+
+/// The row as one element of `push_rows`, with its format and NUL escaped
+/// in its data. The local seq stays on the device.
 Map<String, Object?> rowToServer(SyncRow r) => {
   'tbl': r.table.wire,
   'id': r.id,
   'clock': r.clock,
   'origin_device': r.originDevice,
   'deleted': r.deleted,
-  'data': {...r.data}..remove('localSeq'),
+  'fmt': kRowFormat,
+  'data': _escapeNul({...r.data}..remove('localSeq')),
 };
 
-/// A `sync_rows` row as a [SyncRow]; the stamp columns win over `data`.
-(int, SyncRow) rowFromServer(Map<String, dynamic> m) {
-  final data = Map<String, Object?>.from(m['data'] as Map)
-    ..['id'] = m['id']
-    ..['clock'] = m['clock']
-    ..['originDevice'] = m['origin_device']
-    ..['deleted'] = m['deleted']
-    ..['localSeq'] = 0;
-  return (
-    (m['server_seq'] as num).toInt(),
-    SyncRow(SyncTable.fromWire(m['tbl'] as String), data),
-  );
+/// A `sync_rows` row as a [PulledRow]; the stamp columns win over `data`.
+/// A row without `fmt` counts as [kRowFormat]. A format older than
+/// [kRowFormat] is where a later app upgrades old rows.
+PulledRow rowFromServer(Map<String, dynamic> m) {
+  final seq = (m['server_seq'] as num).toInt();
+  final fmt = (m['fmt'] as num?)?.toInt() ?? kRowFormat;
+  if (fmt > kRowFormat) return PulledRow(seq, fmt, null);
+  try {
+    final data = Map<String, Object?>.from(_unescapeNul(m['data']) as Map)
+      ..['id'] = m['id'] as String
+      ..['clock'] = m['clock'] as String
+      ..['originDevice'] = m['origin_device'] as String
+      ..['deleted'] = m['deleted'] as bool
+      ..['localSeq'] = 0;
+    final row = SyncRow(SyncTable.fromWire(m['tbl'] as String), data);
+    // Decodes now, so it can't fail later inside the page's transaction.
+    Hlc.parse(row.clock);
+    row.toInsertable(0);
+    return PulledRow(seq, fmt, row);
+  } catch (_) {
+    return PulledRow(seq, fmt, null);
+  }
 }
 
 /// [CloudRemote] on Supabase: the `push_rows` and `pull_rows` functions and
@@ -162,25 +229,28 @@ class SupabaseCloudRemote implements CloudRemote {
       );
       return (n as num).toInt();
     } on PostgrestException catch (e) {
-      // `raise exception` in push_rows arrives as P0001 with its message.
-      final reason = e.code == 'P0001' ? rejectionOf(e.message) : null;
+      // `raise exception` in push_rows arrives as P0001 with its message; a
+      // value Postgres can't store as a data exception (class 22).
+      final reason = e.code == 'P0001'
+          ? rejectionOf(e.message)
+          : (e.code?.startsWith('22') ?? false)
+          ? CloudRejection.badData
+          : null;
       if (reason == null) rethrow;
       throw CloudRejected(reason);
     }
   });
 
   @override
-  Future<List<(int, SyncRow)>> pull(int after, {int max = 500}) => _net(
-    () async {
-      final res = await _client().rpc<List<dynamic>>(
-        'pull_rows',
-        params: {'after': after, 'max': max},
-      );
-      return [
-        for (final m in res) rowFromServer(Map<String, dynamic>.from(m as Map)),
-      ];
-    },
-  );
+  Future<List<PulledRow>> pull(int after, {int max = 500}) => _net(() async {
+    final res = await _client().rpc<List<dynamic>>(
+      'pull_rows',
+      params: {'after': after, 'max': max},
+    );
+    return [
+      for (final m in res) rowFromServer(Map<String, dynamic>.from(m as Map)),
+    ];
+  });
 
   @override
   Stream<void> changes(String userId) {

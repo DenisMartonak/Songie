@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 
+import '../lyrics/lyrics.dart';
 import 'tables.dart';
 
 part 'database.g.dart';
@@ -32,7 +33,7 @@ class AppDatabase extends _$AppDatabase {
       AppDatabase(NativeDatabase.createInBackground(f));
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -72,10 +73,31 @@ class AppDatabase extends _$AppDatabase {
       }
       // Home-network sync's paired devices, gone with it.
       if (from < 9) await m.deleteTable('peers');
+      if (from < 10) await _upgradeCreditMarkers();
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
       await customStatement('PRAGMA journal_mode = WAL');
     },
   );
+
+  /// Plain lyrics stored a NUL before their credit line, which the server
+  /// (Postgres) refuses; swaps it for today's marker. Not restamped: rows of
+  /// the old form never reached a server (cloud sync came with schema 10).
+  Future<void> _upgradeCreditMarkers() async {
+    // hex() sees past a NUL, unlike most of SQLite's text functions;
+    // 006372656469743A is "\0credit:".
+    final rows = await customSelect(
+      "SELECT id, body FROM lyrics WHERE kind = 'plain' "
+      "AND instr(hex(body), '006372656469743A') > 0",
+    ).get();
+    for (final r in rows) {
+      final body = upgradeCreditMarker(r.read<String>('body'));
+      if (body == null) continue;
+      await customStatement('UPDATE lyrics SET body = ? WHERE id = ?', [
+        body,
+        r.read<String>('id'),
+      ]);
+    }
+  }
 }

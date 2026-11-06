@@ -120,6 +120,13 @@ stays (or moves) as needed. *(Claude's call on what to keep.)*
   newer (done in a database function so two devices can't overwrite each
   other out of order). `server_seq` lets a device ask "what changed since
   I last pulled". *(Shape is Claude's call; builder may refine.)*
+- Each row carries `fmt`, the app's row format. The server never lets an
+  older format overwrite a newer one; a device that pulls a row it can't
+  read (newer format, or data it can't decode) skips it, notes the lowest
+  such `server_seq` and moves on, shows "Update Songies to keep syncing"
+  for a newer format, and after an app update pulls from that seq again
+  (and, if a newer format was seen, pushes everything again). NUL, which
+  Postgres can't store, goes up escaped.
 - Storage bucket for synced files (fonts, non-YouTube artwork), private,
   per-user folders.
 - Account deletion (step 1's `delete_my_account`) also deletes the user's

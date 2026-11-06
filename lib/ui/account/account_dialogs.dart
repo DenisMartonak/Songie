@@ -139,8 +139,9 @@ Future<bool> confirmDeleteAccount(BuildContext context) async {
     builder: (context) => AlertDialog(
       title: const Text('Delete account'),
       content: const Text(
-        'Delete your account? Your username and picture are removed. '
-        'Your music on this device stays.',
+        'Delete your account? Your username, picture and synced library in '
+        'the cloud are removed, and your other devices stop syncing. Your '
+        'music on this device stays.',
       ),
       actions: [
         TextButton(
@@ -198,9 +199,13 @@ Future<bool> confirmLogOutWithUnsent(BuildContext context) async {
 /// dismissed, and if it is taken away unanswered it is asked again. When
 /// [cancelled] completes (signed out meanwhile) the dialog closes and the
 /// answer is true, which sync then ignores.
+///
+/// With [unsent] (changes made here that the other account hasn't got),
+/// Start empty asks again before they go; Back returns to the question.
 Future<bool> askMergeOrStartEmpty(
   GlobalKey<NavigatorState> navigator, {
   Future<void>? cancelled,
+  bool unsent = false,
 }) async {
   var gone = false;
   Route<bool>? open;
@@ -225,7 +230,20 @@ Future<bool> askMergeOrStartEmpty(
       final merge = await nav.push(route);
       open = null;
       if (gone) break;
-      if (merge != null) return merge;
+      if (merge == true || (merge == false && !unsent)) return merge!;
+      if (merge == false && context.mounted) {
+        final sure = open = DialogRoute<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const _DeleteUnsentDialog(),
+        );
+        final delete = await nav.push(sure);
+        open = null;
+        if (gone) break;
+        if (delete == true) return false;
+        // Back (or taken away): the first question again.
+        continue;
+      }
     }
     await WidgetsBinding.instance.endOfFrame;
   }
@@ -255,6 +273,41 @@ class _MergeDialog extends StatelessWidget {
             key: const Key('account.merge'),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Merge'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Start empty would delete changes the other account hasn't got.
+class _DeleteUnsentDialog extends StatelessWidget {
+  const _DeleteUnsentDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: const Text('Start empty'),
+        content: const Text(
+          'Changes made on this device since you left the other account '
+          'will be deleted.',
+        ),
+        actions: [
+          TextButton(
+            key: const Key('account.startEmptyBack'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Back'),
+          ),
+          FilledButton(
+            key: const Key('account.deleteUnsent'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete them'),
           ),
         ],
       ),

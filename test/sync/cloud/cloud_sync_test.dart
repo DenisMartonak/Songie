@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull, isNotNull;
@@ -10,6 +11,7 @@ import 'package:songies/data/sync_stamp.dart';
 import 'package:songies/library/favorites.dart';
 import 'package:songies/library/library_repository.dart';
 import 'package:songies/core/result.dart';
+import 'package:songies/sync/cloud/cloud_remote.dart';
 import 'package:songies/sync/cloud/cloud_sync.dart';
 import 'package:songies/sync/cloud/sync_status.dart';
 
@@ -36,7 +38,7 @@ class _Dev {
 
   static Future<_Dev> make(
     FakeServer server, {
-    Future<bool> Function(Future<void> cancelled)? askMerge,
+    Future<bool> Function(Future<void> cancelled, bool unsent)? askMerge,
     Stream<NetworkKind>? network,
     Directory? fontsDir,
     Duration pushDelay = const Duration(hours: 1),
@@ -115,7 +117,7 @@ void main() {
   final devs = <_Dev>[];
 
   Future<_Dev> dev({
-    Future<bool> Function(Future<void> cancelled)? askMerge,
+    Future<bool> Function(Future<void> cancelled, bool unsent)? askMerge,
     Stream<NetworkKind>? network,
     Directory? fontsDir,
     Duration pushDelay = const Duration(hours: 1),
@@ -365,7 +367,7 @@ void main() {
     var asked = 0;
     final a = await dev(
       fontsDir: fontsDir,
-      askMerge: (_) async {
+      askMerge: (_, _) async {
         asked++;
         return false;
       },
@@ -412,7 +414,7 @@ void main() {
 
     // Back to u1: asked again; Merge keeps everything and sends it up.
     await a.sync.stop();
-    final b = await dev(askMerge: (_) async => true);
+    final b = await dev(askMerge: (_, _) async => true);
     await b.newPlaylist('Mine');
     await b.settings.setString('cloud_last_account', 'u2');
     await b.start('u1');
@@ -426,7 +428,7 @@ void main() {
     final answers = <Completer<bool>>[];
     final cancels = <Future<void>>[];
     final a = await dev(
-      askMerge: (cancelled) {
+      askMerge: (cancelled, _) {
         cancels.add(cancelled);
         answers.add(Completer<bool>());
         return answers.last.future;
@@ -673,5 +675,184 @@ void main() {
       await a.start('u1');
       expect(a.remote.pushCalls, 0);
     });
+  });
+
+  group('final review', () {
+    Future<void> addLyrics(_Dev d, String id, String body) async {
+      final st = await d.stamp.next(id: id);
+      await d.db
+          .into(d.db.lyrics)
+          .insert(
+            LyricsCompanion.insert(
+              id: id,
+              clock: st.clock,
+              originDevice: st.originDevice,
+              localSeq: st.localSeq,
+              kind: 'plain',
+              body: body,
+              fetchedAt: DateTime(2026),
+            ),
+          );
+    }
+
+    test('a row with a NUL in it goes up and comes down unchanged', () async {
+      final a = await dev();
+      final b = await dev();
+      await addLyrics(a, 't1', 'la\n\u0000credit:Me');
+      await a.start('u1');
+      expect(a.sync.current.phase, SyncPhase.idle);
+      expect(server.rowsOf('u1').keys, ['lyrics/t1']);
+      await b.start('u1');
+      final row = await b.db.select(b.db.lyrics).getSingle();
+      expect(row.body, 'la\n\u0000credit:Me');
+    });
+
+    test('a row Postgres cannot store is skipped; the rest of the page goes '
+        'up', () async {
+      final a = await dev();
+      final ids = [for (var i = 0; i < 7; i++) await a.newPlaylist('P$i')];
+      server.badDataIds.add(ids[3]);
+      await a.start('u1');
+      expect(server.rowsOf('u1').keys.toSet(), {
+        for (final id in ids)
+          if (id != ids[3]) 'playlists/$id',
+      });
+      expect(a.remote.pushCalls, greaterThan(1));
+      expect(a.sync.current.phase, SyncPhase.idle);
+      expect(await a.sync.hasUnsent(), isFalse);
+      // Later edits still go up.
+      await a.newPlaylist('Later');
+      await a.sync.syncNow();
+      expect(server.rowsOf('u1'), hasLength(7));
+    });
+
+    Map<String, dynamic> themeWire(
+      String id, {
+      int fmt = kRowFormat,
+      Map<String, dynamic>? data,
+    }) => {
+      'tbl': 'themes',
+      'id': id,
+      'clock': '1800000000000-00000-other',
+      'origin_device': 'other',
+      'deleted': false,
+      'fmt': fmt,
+      'data': data ?? {'name': 'Night', 'specJson': '{}'},
+    };
+
+    Future<Map<String, dynamic>?> parked(_Dev d, String uid) async {
+      final v = await d.settings.getString('$kCloudParkedPrefix$uid');
+      return v == null ? null : jsonDecode(v) as Map<String, dynamic>;
+    }
+
+    test('a row of a newer format is left for after an update; the rest of '
+        'its page applies and the status asks for the update', () async {
+      final a = await dev();
+      final b = await dev();
+      await a.start('u1');
+      final seq = server.putRaw('u1', themeWire('th1', fmt: kRowFormat + 1));
+      await a.newPlaylist('From A');
+      await a.sync.syncNow();
+      await b.start('u1');
+      expect(await b.liveNames(), ['From A']);
+      expect(await b.db.select(b.db.themes).get(), isEmpty);
+      expect(b.sync.current.phase, SyncPhase.updateNeeded);
+      expect(b.sync.current.lastSynced, isNotNull);
+      expect(await parked(b, 'u1'), {
+        'fmt': kRowFormat,
+        'seq': seq,
+        'newer': true,
+      });
+      // Not pulled again and again: the watermark moved past it.
+      final before = b.remote.pullCalls;
+      await b.sync.syncNow();
+      expect(b.remote.pullCalls, before + 1);
+      expect(b.sync.current.phase, SyncPhase.updateNeeded);
+    });
+
+    test('a row that does not decode is left out; sync goes on', () async {
+      final a = await dev();
+      final b = await dev();
+      await a.start('u1');
+      final seq = server.putRaw('u1', themeWire('th1', data: {'name': 'x'}));
+      await a.newPlaylist('From A');
+      await a.sync.syncNow();
+      await b.start('u1');
+      expect(await b.liveNames(), ['From A']);
+      expect(b.sync.current.phase, SyncPhase.idle);
+      expect(await parked(b, 'u1'), {
+        'fmt': kRowFormat,
+        'seq': seq,
+        'newer': false,
+      });
+      await b.newPlaylist('From B');
+      await b.sync.syncNow();
+      await a.sync.syncNow();
+      expect(await a.liveNames(), ['From A', 'From B']);
+    });
+
+    test('after an app update, parked rows come down again and everything '
+        'goes up again', () async {
+      final b = await dev();
+      // Parked by an older version of the app, which then also may have had
+      // a push dropped by the server's format rule.
+      final seq = server.putRaw('u1', themeWire('th1'));
+      final p1 = await b.newPlaylist('Kept here');
+      await b.settings.setString(
+        '$kCloudPushSeqPrefix'
+            'u1',
+        '1000',
+      );
+      await b.settings.setString(
+        '$kCloudPullSeqPrefix'
+            'u1',
+        '$seq',
+      );
+      await b.settings.setString(
+        '$kCloudParkedPrefix'
+        'u1',
+        jsonEncode({'fmt': kRowFormat - 1, 'seq': seq, 'newer': true}),
+      );
+      await b.settings.setString(kCloudLastAccount, 'u1');
+      await b.start('u1');
+      expect(
+        [for (final t in await b.db.select(b.db.themes).get()) t.id],
+        ['th1'],
+      );
+      expect(server.rowsOf('u1').keys, contains('playlists/$p1'));
+      expect(await parked(b, 'u1'), isNull);
+      expect(b.sync.current.phase, SyncPhase.idle);
+    });
+
+    test('a parked row from an earlier seq keeps the lowest seq', () async {
+      final a = await dev();
+      final b = await dev();
+      final s1 = server.putRaw('u1', themeWire('th1', fmt: kRowFormat + 1));
+      await b.start('u1');
+      server.putRaw('u1', themeWire('th2', fmt: kRowFormat + 1));
+      await a.start('u1');
+      await b.sync.syncNow();
+      expect((await parked(b, 'u1'))!['seq'], s1);
+    });
+  });
+
+  test('the merge question is told whether changes made here since the '
+      'other account would go with Start empty', () async {
+    final told = <bool>[];
+    final a = await dev(
+      askMerge: (_, unsent) async {
+        told.add(unsent);
+        return true;
+      },
+    );
+    await a.newPlaylist('Up in u1');
+    await a.start('u1');
+    await a.sync.stop();
+    await a.start('u2');
+    await a.sync.stop();
+    // Made while signed out, after leaving u2.
+    await a.newPlaylist('Not up anywhere');
+    await a.start('u1');
+    expect(told, [false, true]);
   });
 }

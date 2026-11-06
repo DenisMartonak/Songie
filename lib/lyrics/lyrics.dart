@@ -20,7 +20,25 @@ class LyricLine {
   int get hashCode => Object.hash(time, text);
 }
 
-const _plainCreditPrefix = '\u0000credit:';
+/// Starts YouTube's credit line at the end of a stored plain body. A private
+/// use character, so no lyrics contain it (and Postgres takes it, unlike NUL).
+const _plainCreditPrefix = '\uE001credit:';
+
+/// The marker stored before schema 10; still read.
+const _oldPlainCreditPrefix = '\u0000credit:';
+
+/// [body] with the old NUL credit marker swapped for today's, or null when
+/// it has none.
+String? upgradeCreditMarker(String body) {
+  final at = body.lastIndexOf(_oldPlainCreditPrefix);
+  if (at < 0 || (at > 0 && body[at - 1] != '\n')) return null;
+  return body.replaceRange(
+    at,
+    at + _oldPlainCreditPrefix.length,
+    _plainCreditPrefix,
+  );
+}
+
 final _byTag = RegExp(r'^\[by:(.*)\]$');
 
 /// Lyrics for one track. [lines] is used for synced, [text] for plain, and
@@ -60,6 +78,7 @@ class TrackLyrics {
           credit: credit,
         );
       case 'plain':
+        body = upgradeCreditMarker(body) ?? body;
         var text = body;
         String? credit;
         final at = body.lastIndexOf(_plainCreditPrefix);

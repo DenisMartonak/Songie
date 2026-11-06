@@ -29,8 +29,26 @@ void main() {
       text: 'a\nb',
       credit: 'Source: Nobody',
     );
-    expect(l.toStored().body, 'a\nb\n\u0000credit:Source: Nobody');
+    expect(l.toStored().body, 'a\nb\n\uE001credit:Source: Nobody');
+    expect(l.toStored().body, isNot(contains('\u0000')));
     expect(roundTrip(l), l);
+  });
+
+  test('plain lyrics stored with the old NUL credit marker still read', () {
+    final l = TrackLyrics.fromStored(
+      'plain',
+      'a\nb\n\u0000credit:Source: Nobody',
+      'youtube',
+    );
+    expect(l.text, 'a\nb');
+    expect(l.credit, 'Source: Nobody');
+    expect(TrackLyrics.fromStored('plain', '\u0000credit:X', null).text, '');
+  });
+
+  test('upgradeCreditMarker swaps the old marker for the new one', () {
+    expect(upgradeCreditMarker('a\n\u0000credit:Me'), 'a\n\uE001credit:Me');
+    expect(upgradeCreditMarker('\u0000credit:Me'), '\uE001credit:Me');
+    expect(upgradeCreditMarker('no marker'), isNull);
   });
 
   test('plain without credit round trips', () {

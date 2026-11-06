@@ -419,6 +419,51 @@ void main() {
     ]);
   });
 
+  test(
+    'deleteAccount stops cloud sync before deleting the synced files',
+    () async {
+      await service.dispose();
+      service = AccountService(
+        backend,
+        deleteSyncFiles: (uid) async =>
+            backend.calls.add('deleteSyncFiles $uid'),
+        stopSync: () async => backend.calls.add('stopSync'),
+        startSync: (uid) async => backend.calls.add('startSync $uid'),
+      );
+      await signedInAs('a@b.c', 'den');
+      final id = (service.state as SignedIn).profile.id;
+      backend.calls.clear();
+      await service.deleteAccount();
+      expect(backend.calls, [
+        'stopSync',
+        'deleteSyncFiles $id',
+        'setAvatarPath',
+        'deleteAvatarFiles',
+        'deleteMyAccount',
+        'logOut',
+      ]);
+    },
+  );
+
+  test('a failed account deletion starts cloud sync again', () async {
+    await service.dispose();
+    service = AccountService(
+      backend,
+      deleteSyncFiles: (_) async => throw const CloudOffline(),
+      stopSync: () async => backend.calls.add('stopSync'),
+      startSync: (uid) async => backend.calls.add('startSync $uid'),
+    );
+    await signedInAs('a@b.c', 'den');
+    final id = (service.state as SignedIn).profile.id;
+    backend.calls.clear();
+    await expectLater(
+      service.deleteAccount(),
+      _throwsAccount(AccountError.offline),
+    );
+    expect(backend.calls, ['stopSync', 'startSync $id']);
+    expect(service.state, isA<SignedIn>());
+  });
+
   test('synced files that cannot be deleted keep the account', () async {
     await service.dispose();
     service = AccountService(

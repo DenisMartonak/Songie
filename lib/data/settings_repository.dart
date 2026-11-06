@@ -59,6 +59,12 @@ const kCloudLastSyncedPrefix = 'cloud_last_synced:';
 /// an account, under `cloud_files_pending:<account id>`. Device-local.
 const kCloudFilesPendingPrefix = 'cloud_files_pending:';
 
+/// Cloud sync: pulled rows this app couldn't read, left for after an app
+/// update, under `cloud_parked:<account id>`: JSON `{fmt, seq, newer}`, the
+/// app's row format then, the lowest such server seq, and whether any was
+/// of a newer format. Device-local.
+const kCloudParkedPrefix = 'cloud_parked:';
+
 /// Cloud sync: the account last signed in on this device, so signing in as
 /// another one asks to merge or start empty. Device-local.
 const kCloudLastAccount = 'cloud_last_account';

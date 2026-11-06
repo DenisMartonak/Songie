@@ -55,10 +55,14 @@ class AccountService {
   ///
   /// [deleteSyncFiles] deletes the account's synced files (the
   /// `sync-files/<user id>/` folder) when the account is deleted.
+  /// [stopSync] stops cloud sync first, so it can't upload files again
+  /// meanwhile; [startSync] starts it again when the deletion fails.
   AccountService(
     this._b, {
     Stream<NetworkKind>? network,
     this._deleteSyncFiles,
+    this._stopSync,
+    this._startSync,
   }) {
     _sub = _b.userIdChanges.listen((id) {
       // A confirmed sign-up counts once its password is set.
@@ -77,6 +81,8 @@ class AccountService {
 
   final AccountBackend _b;
   final Future<void> Function(String userId)? _deleteSyncFiles;
+  final Future<void> Function()? _stopSync;
+  final Future<void> Function(String userId)? _startSync;
   late final StreamSubscription<String?> _sub;
   final _changes = StreamController<AccountState>.broadcast();
   AccountState _state = const SignedOut();
@@ -345,13 +351,25 @@ class AccountService {
     if (p != null && _userId == id) _set(SignedIn(p));
   }
 
-  /// Deletes the synced files, clears the picture and deletes its files,
-  /// then the account, then signs out. If the synced files can't be
-  /// deleted, nothing else is touched (none are left without an owner); if
-  /// the account can't be deleted, the profile never points at a deleted
-  /// file.
+  /// Stops cloud sync, deletes the synced files, clears the picture and
+  /// deletes its files, then the account, then signs out. If the synced
+  /// files can't be deleted, nothing else is touched (none are left without
+  /// an owner); if the account can't be deleted, the profile never points
+  /// at a deleted file. On a failure cloud sync starts again.
   Future<void> deleteAccount() async {
     final id = _signedIn.profile.id;
+    await _stopSync?.call();
+    try {
+      await _deleteAccount(id);
+    } catch (_) {
+      final start = _startSync;
+      if (start != null && _userId == id) unawaited(start(id));
+      rethrow;
+    }
+    await logOut();
+  }
+
+  Future<void> _deleteAccount(String id) async {
     final deleteSyncFiles = _deleteSyncFiles;
     if (deleteSyncFiles != null) {
       try {
@@ -366,7 +384,6 @@ class AccountService {
     await _b.setAvatarPath(id, null);
     await _b.deleteAvatarFiles(id);
     await _b.deleteMyAccount();
-    await logOut();
   }
 
   Future<void> dispose() async {

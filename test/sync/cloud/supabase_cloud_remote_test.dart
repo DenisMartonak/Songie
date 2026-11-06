@@ -95,6 +95,17 @@ void main() {
         CloudRejection.invalidRow,
       ),
     );
+    // Postgres data exceptions (class 22): a value it can't store.
+    for (final code in ['22P05', '22021']) {
+      expect(
+        await refusal('unsupported Unicode escape sequence', code: code),
+        isA<CloudRejected>().having(
+          (e) => e.reason,
+          'reason',
+          CloudRejection.badData,
+        ),
+      );
+    }
     expect(await refusal('not signed in'), isA<PostgrestException>());
     expect(
       await refusal('JWT expired', code: 'PGRST301'),
@@ -136,10 +147,87 @@ void main() {
         ),
       ),
     );
-    final (seq, row) = (await remote.pull(0)).single;
-    expect(seq, 42);
+    final pulled = (await remote.pull(0)).single;
+    expect(pulled.serverSeq, 42);
+    // A row from before formats were recorded counts as the first one.
+    expect(pulled.fmt, kRowFormat);
+    final row = pulled.row!;
     expect(row.table, SyncTable.themes);
     expect(row.clock, '1800000000001-00000-x');
     expect(row.deleted, isTrue);
+  });
+
+  test('push sends the row format and escapes NUL in strings', () async {
+    late Map<String, dynamic> body;
+    final remote = remoteOn(
+      MockClient((r) async {
+        body = jsonDecode(r.body) as Map<String, dynamic>;
+        return http.Response('1', 200, request: r);
+      }),
+    );
+    final row = SyncRow(SyncTable.lyrics, {
+      'id': 't1',
+      'clock': '1800000000000-00000-dev',
+      'originDevice': 'dev',
+      'deleted': false,
+      'localSeq': 3,
+      'kind': 'plain',
+      'body': 'la\n\u0000credit:X \uE000 end',
+      'source': 'youtube',
+      'fetchedAt': 5,
+    });
+    await remote.push([row]);
+    final sent = (body['rows'] as List).single as Map<String, dynamic>;
+    expect(sent['fmt'], kRowFormat);
+    final data = sent['data'] as Map<String, dynamic>;
+    expect(data['body'], isNot(contains('\u0000')));
+    expect(data['source'], 'youtube');
+  });
+
+  test('rowFromServer undoes the NUL escaping of rowToServer', () {
+    final row = SyncRow(SyncTable.lyrics, {
+      'id': 't1',
+      'clock': '1800000000000-00000-dev',
+      'originDevice': 'dev',
+      'deleted': false,
+      'localSeq': 3,
+      'kind': 'plain',
+      'body': '\u0000a\uE000\uE0000\u0000\u0000\uE000E\uE000',
+      'source': null,
+      'fetchedAt': 5,
+    });
+    final wire =
+        jsonDecode(jsonEncode(rowToServer(row))) as Map<String, dynamic>;
+    expect(jsonEncode(wire), isNot(contains(r'\u0000')));
+    final back = rowFromServer({...wire, 'server_seq': 1});
+    expect(back.row!.data['body'], row.data['body']);
+    expect(back.row!.data['source'], isNull);
+    expect(back.row!.data['fetchedAt'], 5);
+  });
+
+  test('pull leaves out rows this app cannot read, keeping their seq', () {
+    Map<String, dynamic> theme(
+      int seq, {
+      int? fmt,
+      Map<String, dynamic>? data,
+    }) => {
+      'tbl': 'themes',
+      'id': 'th$seq',
+      'clock': '1800000000001-00000-x',
+      'origin_device': 'x',
+      'deleted': false,
+      'server_seq': seq,
+      'fmt': ?fmt,
+      'data': data ?? {'name': 'N', 'specJson': '{}'},
+    };
+    final ok = rowFromServer(theme(1, fmt: kRowFormat));
+    expect(ok.row, isNotNull);
+    final newer = rowFromServer(theme(2, fmt: kRowFormat + 1));
+    expect((newer.serverSeq, newer.fmt, newer.row), (2, kRowFormat + 1, null));
+    // A required column missing.
+    final broken = rowFromServer(theme(3, data: {'name': 'N'}));
+    expect((broken.serverSeq, broken.row), (3, null));
+    final unknownTable = rowFromServer({...theme(4), 'tbl': 'moods'});
+    expect((unknownTable.serverSeq, unknownTable.row), (4, null));
   });
 }

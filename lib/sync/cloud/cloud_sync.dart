@@ -43,7 +43,7 @@ class CloudSync {
     required this._remote,
     required this._settings,
     Stream<NetworkKind>? network,
-    Future<bool> Function(Future<void> cancelled)? askMerge,
+    Future<bool> Function(Future<void> cancelled, bool unsent)? askMerge,
     this._fontsDir,
     this._files,
     this._pushDelay = const Duration(seconds: 3),
@@ -54,7 +54,7 @@ class CloudSync {
     _netSub = network?.listen(_onNetwork, onError: (Object _) {});
   }
 
-  static Future<bool> _merge(Future<void> _) async => true;
+  static Future<bool> _merge(Future<void> _, bool _) async => true;
 
   final AppDatabase _db;
   final SyncStamp _stamp;
@@ -63,8 +63,9 @@ class CloudSync {
 
   /// Asks merge (true) or start empty (false); `cancelled` completes when
   /// the question is no longer wanted (signed out, or another sign-in), and
-  /// the answer is then ignored.
-  final Future<bool> Function(Future<void> cancelled) _askMerge;
+  /// the answer is then ignored. `unsent`: this device has changes the
+  /// account signed in last hasn't got, which start empty would delete.
+  final Future<bool> Function(Future<void> cancelled, bool unsent) _askMerge;
 
   /// The open merge question's cancel signal.
   Completer<void>? _asking;
@@ -126,6 +127,7 @@ class CloudSync {
   static String _pullKey(String uid) => '$kCloudPullSeqPrefix$uid';
   static String _syncedKey(String uid) => '$kCloudLastSyncedPrefix$uid';
   static String _filesKey(String uid) => '$kCloudFilesPendingPrefix$uid';
+  static String _parkedKey(String uid) => '$kCloudParkedPrefix$uid';
   static String _key(SyncRow r) => '${r.table.wire}/${r.id}';
 
   /// Starts syncing for [userId] and returns once the first sync is done.
@@ -146,7 +148,10 @@ class CloudSync {
       final asking = _asking = Completer<void>();
       // Waiting for the answer shows as syncing (Sync now off).
       _setStatus(SyncStatus(SyncPhase.syncing, lastSynced: _status.lastSynced));
-      final merge = await _askMerge(asking.future);
+      // Signed out here, so this is about the account signed in last.
+      final unsent = await hasUnsent();
+      if (gen != _gen) return;
+      final merge = await _askMerge(asking.future, unsent);
       if (identical(_asking, asking)) _asking = null;
       if (gen != _gen) return;
       if (!merge) await wipeForNewAccount();
@@ -154,6 +159,7 @@ class CloudSync {
       // come down.
       await _settings.setString(_pushKey(userId), null);
       await _settings.setString(_pullKey(userId), null);
+      await _settings.setString(_parkedKey(userId), null);
     }
     await _settings.setString(kCloudLastAccount, userId);
     final ms = int.tryParse(
@@ -332,8 +338,12 @@ class CloudSync {
     _pushFailed = false;
     _clockWrong = false;
     try {
+      await _retryParked(uid);
+      _check(gen);
       await _pushSafe(uid, gen);
       await _pullAll(uid, gen);
+      _check(gen);
+      final updateNeeded = (await _readParked(uid))?.newer ?? false;
       _check(gen);
       // Never throws; offline it stops quietly and catches up next run.
       final files = await _files?.reconcile(uid, cancelled: () => gen != _gen);
@@ -363,7 +373,8 @@ class CloudSync {
         at.millisecondsSinceEpoch.toString(),
       );
       _check(gen);
-      _setStatus(SyncStatus(SyncPhase.idle, lastSynced: at));
+      final phase = updateNeeded ? SyncPhase.updateNeeded : SyncPhase.idle;
+      _setStatus(SyncStatus(phase, lastSynced: at));
     } on _Stopped {
       return;
     } on CloudOffline catch (e) {
@@ -504,6 +515,10 @@ class CloudSync {
 
   /// Pulls and applies every server row past the pull watermark; after each
   /// page, pushes what applying it changed here (merged rows).
+  ///
+  /// Rows this app can't read (a newer format, or data that doesn't decode)
+  /// aren't applied but parked ([_park]); the rest of the page applies and
+  /// the watermark moves past them, so they never hold up sync.
   Future<void> _pullAll(String uid, int gen) async {
     var after = await _getInt(_pullKey(uid));
     while (true) {
@@ -511,12 +526,33 @@ class CloudSync {
       final page = await _remote.pull(after, max: kCloudPageSize);
       _check(gen);
       if (page.isEmpty) return;
-      final rows = [for (final (_, r) in page) r];
-      final last = page.last.$1;
+      final rows = <SyncRow>[];
+      int? lowest;
+      var left = 0;
+      var newer = false;
+      for (final p in page) {
+        if (p.row case final row?) {
+          rows.add(row);
+          continue;
+        }
+        left++;
+        lowest ??= p.serverSeq;
+        if (p.fmt > kRowFormat) newer = true;
+      }
+      final last = page.last.serverSeq;
       await _db.transaction(() async {
-        await RowApplier(_db, _stamp, now: _now).apply(rows);
+        if (rows.isNotEmpty) {
+          await RowApplier(_db, _stamp, now: _now).apply(rows);
+        }
+        if (lowest != null) await _park(uid, lowest, newer: newer);
         await _settings.setString(_pullKey(uid), '$last');
       });
+      if (left > 0) {
+        AppLog.w(
+          'Cloud sync: left $left rows this app '
+          "can't read for after an update${newer ? ' (newer format)' : ''}",
+        );
+      }
       after = last;
       await _markOnServer(uid, rows);
       await _pushSafe(uid, gen);
@@ -551,6 +587,58 @@ class CloudSync {
         if (clocks[id] == clock) _onServer['${t.wire}/$id'] = clock;
       }
     }
+  }
+
+  /// The parked rows of [uid]'s account, if any.
+  Future<({int fmt, int seq, bool newer})?> _readParked(String uid) async {
+    final v = await _settings.getString(_parkedKey(uid));
+    if (v == null) return null;
+    try {
+      final m = jsonDecode(v) as Map<String, dynamic>;
+      return (
+        fmt: m['fmt'] as int,
+        seq: m['seq'] as int,
+        newer: m['newer'] as bool,
+      );
+    } catch (_) {
+      // Unreadable: retried as if from an older app.
+      return (fmt: 0, seq: 1, newer: true);
+    }
+  }
+
+  /// Notes that rows from server seq [seq] on weren't applied: keeps the
+  /// lowest such seq, and whether any was of a [newer] format.
+  Future<void> _park(String uid, int seq, {required bool newer}) async {
+    final old = await _readParked(uid);
+    await _settings.setString(
+      _parkedKey(uid),
+      jsonEncode({
+        'fmt': kRowFormat,
+        'seq': old == null || seq < old.seq ? seq : old.seq,
+        'newer': newer || (old?.newer ?? false),
+      }),
+    );
+  }
+
+  /// Once the app reads a newer row format than when rows were parked (it
+  /// was updated), they come down again: the pull watermark goes back to
+  /// just before the lowest (rows pulled twice apply as no-ops). When any
+  /// was of a newer format, everything here goes up again too: the server
+  /// keeps a newer-format row over an older app's edit, which can now go up
+  /// in the new format.
+  Future<void> _retryParked(String uid) async {
+    final parked = await _readParked(uid);
+    if (parked == null || parked.fmt >= kRowFormat) return;
+    final pulled = await _getInt(_pullKey(uid));
+    await _db.transaction(() async {
+      if (parked.seq - 1 < pulled) {
+        await _settings.setString(_pullKey(uid), '${parked.seq - 1}');
+      }
+      if (parked.newer) await _settings.setString(_pushKey(uid), null);
+      await _settings.setString(_parkedKey(uid), null);
+    });
+    if (parked.newer) _onServer.clear();
+    AppLog.i('Cloud sync: pulling rows left for after an update again');
   }
 
   void _onNetwork(NetworkKind kind) {

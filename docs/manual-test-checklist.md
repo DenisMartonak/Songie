@@ -306,7 +306,7 @@ Phone (Android), desktop Linux and Windows. First do the one-time setup in `docs
 - [ ] Desktop: the top-bar avatar sits right of the search field and left of the window buttons (or at the right end of the search row without the custom title bar), and opens Settings → Account; signed out it is a person icon with a "Log in" tooltip.
 - [ ] Log out, then restart: still signed out. Log in, then restart: still signed in.
 - [ ] Airplane mode (or the Supabase project paused): the app starts and plays music; account actions say "Couldn't reach the server. Check your connection."
-- [ ] Delete account: the confirmation reads "Delete your account? Your username and picture are removed. Your music on this device stays."; afterwards you're signed out, your library is untouched, the user is gone from Authentication → Users, and the username can be signed up again.
+- [ ] Delete account: the confirmation reads "Delete your account? Your username, picture and synced library in the cloud are removed, and your other devices stop syncing. Your music on this device stays."; afterwards you're signed out, your library is untouched, the user is gone from Authentication → Users, and the username can be signed up again.
 - [ ] Database rules (review the migration; the dashboard SQL editor runs as the owner and skips them): a signed-in user can't change someone else's profile or upload outside their own `<user id>/` folder in `avatars`. In the SQL editor, `select public.username_available('somename');` returns only true or false.
 
 ## Cloud sync

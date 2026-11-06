@@ -78,7 +78,7 @@ void main() {
     expect(await db.select(db.playHistory).get(), hasLength(1));
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 9);
+    expect(version.data.values.single, 10);
   });
 
   test('a v2 database opened with v3 code gains yt_seen and keeps data', () async {
@@ -138,7 +138,7 @@ void main() {
       throwsA(anything),
     );
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 9);
+    expect(version.data.values.single, 10);
   });
 
   test(
@@ -182,7 +182,7 @@ void main() {
       expect(pref.downloadEnabled, isFalse);
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 9);
+      expect(version.data.values.single, 10);
     },
   );
 
@@ -232,7 +232,7 @@ void main() {
     expect(await db.select(db.themes).get(), hasLength(1));
     expect((await db.select(db.fonts).getSingle()).family, 'Fira');
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 9);
+    expect(version.data.values.single, 10);
   });
 
   test(
@@ -254,7 +254,7 @@ void main() {
       addTearDown(db.close);
       expect(await db.select(db.lyrics).get(), isEmpty);
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 9);
+      expect(version.data.values.single, 10);
     },
   );
 
@@ -283,7 +283,7 @@ void main() {
           .get();
       expect(idx, hasLength(1));
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 9);
+      expect(version.data.values.single, 10);
     },
   );
 
@@ -308,7 +308,7 @@ void main() {
       contains('listens_local_seq'),
     );
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 9);
+    expect(version.data.values.single, 10);
   });
   test('v8 to v9 drops peers and keeps every other table\'s rows', () async {
     final dir = await Directory.systemTemp.createTemp('songies_migration');
@@ -395,6 +395,38 @@ void main() {
     expect(peers, isEmpty);
     expect(await counts(db), before);
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 9);
+    expect(version.data.values.single, 10);
+  });
+
+  test('v9 to v10 rewrites the NUL credit marker in plain lyrics', () async {
+    final dir = await Directory.systemTemp.createTemp('songies_migration');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File('${dir.path}/songies.db');
+
+    final first = AppDatabase.open(file);
+    for (final (id, kind, body) in [
+      ('t1', 'plain', 'la\n\u0000credit:Source: Me'),
+      ('t2', 'plain', 'no credit'),
+      ('t3', 'synced', '[00:01.00]x\n[by:Me]'),
+    ]) {
+      await first.customStatement(
+        'INSERT INTO lyrics (id, clock, origin_device, local_seq, kind, body, '
+        "fetched_at) VALUES (?, 'c', 'dev', 7, ?, ?, 0)",
+        [id, kind, body],
+      );
+    }
+    await first.customStatement('PRAGMA user_version = 9');
+    await first.close();
+
+    final db = AppDatabase.open(file);
+    addTearDown(db.close);
+    final rows = {for (final r in await db.select(db.lyrics).get()) r.id: r};
+    expect(rows['t1']!.body, 'la\ncredit:Source: Me');
+    // Not restamped: no device has pushed a row of the old form yet.
+    expect(rows['t1']!.localSeq, 7);
+    expect(rows['t2']!.body, 'no credit');
+    expect(rows['t3']!.body, '[00:01.00]x\n[by:Me]');
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data.values.single, 10);
   });
 }

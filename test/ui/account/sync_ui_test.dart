@@ -207,6 +207,42 @@ void main() {
     expect(answer, isTrue);
   });
 
+  uiTest('Start empty with changes made here since the other account asks '
+      'again before deleting them', (tester) async {
+    final navigator = GlobalKey<NavigatorState>();
+    const question =
+        'This device has a library from another account. Merge it into '
+        'this account, or start empty?';
+    const warning =
+        'Changes made on this device since you left the other account will '
+        'be deleted.';
+    await pumpAccount(tester, navigatorKey: navigator);
+    bool? answer;
+    unawaited(
+      askMergeOrStartEmpty(navigator, unsent: true).then((v) => answer = v),
+    );
+    await settle(tester);
+    await tester.tap(find.text('Start empty'));
+    await settle(tester);
+    expect(find.text(warning), findsOneWidget);
+    expect(find.text(question), findsNothing);
+
+    // Back: the first question again.
+    await tester.tap(find.text('Back'));
+    await settle(tester);
+    expect(find.text(warning), findsNothing);
+    expect(find.text(question), findsOneWidget);
+    expect(answer, isNull);
+
+    await tester.tap(find.text('Start empty'));
+    await settle(tester);
+    await tester.tap(find.text('Delete them'));
+    await settle(tester);
+    expect(find.text(warning), findsNothing);
+    expect(find.text(question), findsNothing);
+    expect(answer, isFalse);
+  });
+
   uiTest('the merge question goes away when sync cancels it (signed out)', (
     tester,
   ) async {

@@ -54,6 +54,7 @@ String syncPhaseText(SyncPhase phase) => switch (phase) {
   SyncPhase.offline => 'Waiting for internet',
   SyncPhase.error => "Couldn't sync. Will try again.",
   SyncPhase.clockWrong => "Can't sync: this device's date and time are wrong.",
+  SyncPhase.updateNeeded => 'Update Songies to keep syncing',
 };
 
 /// Settings → Account: Sign up and Log in when signed out; the picture,

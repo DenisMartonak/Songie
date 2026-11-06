@@ -6,9 +6,12 @@
 -- Synced rows ------------------------------------------------------------------
 
 -- One row per synced drift row of an account. `data` is the drift row's
--- toJson(); tbl, id, clock, origin_device and deleted repeat its stamp so the
--- server can compare clocks without reading the JSON. server_seq grows on
--- every insert and update, so a device asks "what changed after the last
+-- toJson() (NUL in strings escaped by the app, as jsonb can't hold it); tbl,
+-- id, clock, origin_device and deleted repeat its stamp so the server can
+-- compare clocks without reading the JSON. fmt is the shape of `data`, the
+-- app's row format (kRowFormat in lib/sync/cloud/cloud_remote.dart), so an
+-- older app never overwrites a newer-format row. server_seq grows on every
+-- insert and update, so a device asks "what changed after the last
 -- server_seq I pulled".
 create sequence public.sync_rows_server_seq;
 
@@ -20,6 +23,7 @@ create table public.sync_rows (
   clock text not null,
   origin_device text not null,
   deleted boolean not null,
+  fmt integer not null check (fmt > 0),
   data jsonb not null,
   -- Set by the sync_rows_stamp trigger below.
   server_seq bigint not null,
@@ -80,10 +84,13 @@ revoke all on sequence public.sync_rows_server_seq from anon, authenticated;
 -- Push -------------------------------------------------------------------------
 
 -- Upserts up to 500 rows for the caller. Each element of `rows` is
--- {tbl, id, clock, origin_device, deleted, data}; a user_id in it is ignored
--- (the caller's auth.uid() is always used). A row is written only when it is
--- new or its clock is newer than the stored one, so devices can't overwrite
--- each other out of order. Returns how many rows were written.
+-- {tbl, id, clock, origin_device, deleted, fmt, data}; a user_id in it is
+-- ignored (the caller's auth.uid() is always used). A row is written only
+-- when it is new or its clock is newer than the stored one, so devices can't
+-- overwrite each other out of order, and never over a stored row of a newer
+-- fmt (an older app would drop the fields it doesn't know; that app sees the
+-- newer row when it pulls, asks for an update, and after it pushes its rows
+-- again). Returns how many rows were written.
 --
 -- Clocks compare as text in the "C" (byte) collation: the packed HLC has a
 -- fixed-width zero-padded wall time and counter, then the device id, so byte
@@ -133,9 +140,11 @@ begin
       or e.r ->> 'clock' !~ '^[0-9]{13}-[0-9]{5}-.+$'
       or jsonb_typeof(e.r -> 'origin_device') is distinct from 'string'
       or jsonb_typeof(e.r -> 'deleted') is distinct from 'boolean'
+      or jsonb_typeof(e.r -> 'fmt') is distinct from 'number'
+      or e.r ->> 'fmt' !~ '^[1-9][0-9]{0,8}$'
       or jsonb_typeof(e.r -> 'data') is distinct from 'object'
   ) then
-    raise exception 'invalid row in push (tbl, id, clock, origin_device, deleted or data)';
+    raise exception 'invalid row in push (tbl, id, clock, origin_device, deleted, fmt or data)';
   end if;
   if exists (
     select 1
@@ -156,7 +165,7 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('sync_rows:' || uid::text, 0));
 
   insert into public.sync_rows as s
-    (user_id, tbl, id, clock, origin_device, deleted, data)
+    (user_id, tbl, id, clock, origin_device, deleted, fmt, data)
   -- The same row twice in one push: keep the newest clock (an upsert can't
   -- touch one row twice).
   select distinct on (e.r ->> 'tbl', e.r ->> 'id')
@@ -166,6 +175,7 @@ begin
     e.r ->> 'clock',
     e.r ->> 'origin_device',
     (e.r -> 'deleted')::boolean,
+    (e.r ->> 'fmt')::integer,
     e.r -> 'data'
   from jsonb_array_elements(rows) as e (r)
   order by e.r ->> 'tbl', e.r ->> 'id', (e.r ->> 'clock') collate "C" desc
@@ -173,8 +183,10 @@ begin
     set clock = excluded.clock,
         origin_device = excluded.origin_device,
         deleted = excluded.deleted,
+        fmt = excluded.fmt,
         data = excluded.data
-    where excluded.clock collate "C" > s.clock collate "C";
+    where excluded.clock collate "C" > s.clock collate "C"
+      and excluded.fmt >= s.fmt;
 
   get diagnostics written = row_count;
   return written;
@@ -284,7 +296,10 @@ values (
 on conflict (id) do nothing;
 
 -- Everything only inside the caller's own folder. Select is needed too:
--- Storage's update and delete read the row first.
+-- Storage's update and delete read the row first. Uploads also need the
+-- caller's profile, which goes with the account (on delete cascade): a
+-- device whose token outlives a deleted account (tokens last up to an hour)
+-- can't put files back into the folder the app emptied.
 create policy "sync-files: users read their own folder"
   on storage.objects for select
   to authenticated
@@ -299,6 +314,7 @@ create policy "sync-files: users upload to their own folder"
   with check (
     bucket_id = 'sync-files'
     and (storage.foldername(name))[1] = (select auth.uid())::text
+    and exists (select 1 from public.profiles p where p.id = (select auth.uid()))
   );
 
 create policy "sync-files: users update their own files"
@@ -311,6 +327,7 @@ create policy "sync-files: users update their own files"
   with check (
     bucket_id = 'sync-files'
     and (storage.foldername(name))[1] = (select auth.uid())::text
+    and exists (select 1 from public.profiles p where p.id = (select auth.uid()))
   );
 
 create policy "sync-files: users delete their own files"

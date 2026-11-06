@@ -22,10 +22,24 @@ class FakeServer {
   /// Row ids the server refuses as invalid.
   final rejectIds = <String>{};
 
+  /// Row ids Postgres can't store (a data exception, like 22P05).
+  final badDataIds = <String>{};
+
+  /// The rows' format as pushed (a device on another app version).
+  int Function(Map<String, Object?> wire) fmtOf = (w) => w['fmt']! as int;
+
   int write(String user, List<SyncRow> rows) {
     // All or nothing, checked in push_rows' order.
     if (rows.any((r) => rejectIds.contains(r.id))) {
       throw const CloudRejected(CloudRejection.invalidRow);
+    }
+    // jsonb refuses \u0000 anywhere in the request.
+    if (rows.any(
+      (r) =>
+          badDataIds.contains(r.id) ||
+          jsonEncode(rowToServer(r)).contains(r'\u0000'),
+    )) {
+      throw const CloudRejected(CloudRejection.badData);
     }
     final now = nowMs?.call();
     if (now != null &&
@@ -38,12 +52,16 @@ class FakeServer {
       // Through JSON, as jsonb would.
       final wire =
           jsonDecode(jsonEncode(rowToServer(r))) as Map<String, dynamic>;
+      wire['fmt'] = fmtOf(wire);
       final key = '${r.table.wire}/${r.id}';
       final old = mine[key];
       if (old != null &&
-          Hlc.parse(wire['clock'] as String)
-                  .compareTo(Hlc.parse(old.$2['clock'] as String)) <=
-              0) {
+          (Hlc.parse(wire['clock'] as String)
+                      .compareTo(Hlc.parse(old.$2['clock'] as String)) <=
+                  0 ||
+              // A row of a newer format stays (an older app would drop
+              // its new fields).
+              (old.$2['fmt'] as int) > (wire['fmt'] as int))) {
         continue;
       }
       mine[key] = (++_seq, {...wire, 'server_seq': _seq});
@@ -53,7 +71,18 @@ class FakeServer {
     return written;
   }
 
-  List<(int, SyncRow)> read(String user, int after, int max) {
+  /// Stores [wire] (a `push_rows` element) as is, as another app version
+  /// might have written it; returns its server seq.
+  int putRaw(String user, Map<String, dynamic> wire) {
+    final key = '${wire['tbl']}/${wire['id']}';
+    _rows.putIfAbsent(user, () => {})[key] = (
+      ++_seq,
+      {...wire, 'server_seq': _seq},
+    );
+    return _seq;
+  }
+
+  List<PulledRow> read(String user, int after, int max) {
     final rows =
         (_rows[user]?.values ?? const <(int, Map<String, dynamic>)>[])
             .where((e) => e.$1 > after)
@@ -226,7 +255,7 @@ class FakeRemote implements CloudRemote {
   }
 
   @override
-  Future<List<(int, SyncRow)>> pull(int after, {int max = 500}) async {
+  Future<List<PulledRow>> pull(int after, {int max = 500}) async {
     pullCalls++;
     await Future<void>.delayed(Duration.zero);
     if (offline) throw const CloudOffline();

@@ -15,6 +15,10 @@ enum SyncPhase {
   /// The server refuses this device's changes because its date and time are
   /// more than a day ahead; changes still come down.
   clockWrong,
+
+  /// Another device runs a newer Songies: some of its changes wait here
+  /// until this app is updated. Everything else syncs.
+  updateNeeded,
 }
 
 /// Cloud sync's state for the account screen.
