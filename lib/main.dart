@@ -67,6 +67,7 @@ import 'player/stream_source.dart';
 import 'player/track_resolver.dart';
 import 'player/equalizer.dart';
 import 'providers.dart';
+import 'remote/remote_channel.dart';
 import 'router.dart';
 import 'sync/cloud/cloud_files.dart';
 import 'sync/cloud/cloud_remote.dart';
@@ -379,9 +380,18 @@ Future<void> main() async {
       initialThemeSpecProvider.overrideWithValue(initialTheme),
       accountServiceProvider.overrideWithValue(accounts),
       cloudSyncProvider.overrideWithValue(cloudSync),
+      // Remote control: joins `remote:<user id>` while signed in (see
+      // remoteHostFollowerProvider); signed out it never touches Supabase.
+      remoteChannelProvider.overrideWithValue(
+        (userId) =>
+            SupabaseRemoteChannel(() => Supabase.instance.client, userId),
+      ),
     ],
   );
   container.read(cloudSyncFollowerProvider);
+  // Listened to, not read: an unlistened provider is paused and would not
+  // follow the account.
+  container.listen(remoteHostFollowerProvider, (_, _) {});
   // Reads two device-local settings only: no keyring, no network, no timer.
   // Awaited, so the first Home load already knows whether to go signed in.
   await container.read(ytAuthProvider.notifier).load();

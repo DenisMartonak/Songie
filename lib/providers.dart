@@ -40,6 +40,12 @@ import 'player/radio_controller.dart';
 import 'player/runtime_prompter.dart';
 import 'player/eq_presets.dart';
 import 'player/equalizer.dart';
+import 'remote/device_name.dart';
+import 'remote/player_view.dart';
+import 'remote/remote_channel.dart';
+import 'remote/remote_controller.dart';
+import 'remote/remote_host.dart';
+import 'remote/remote_protocol.dart';
 import 'stats/stats_models.dart';
 import 'stats/stats_repository.dart';
 import 'theme/app_theme.dart';
@@ -490,6 +496,243 @@ final cloudSyncFollowerProvider = Provider<void>((ref) {
 final cloudSyncStatusProvider = StreamProvider<SyncStatus>(
   (ref) => ref.watch(cloudSyncProvider).status,
 );
+
+// --- Remote control --------------------------------------------------------
+
+/// Makes the `remote:<user id>` channel for a signed-in account; overridden
+/// in `main()`.
+final remoteChannelProvider = Provider<RemoteChannel Function(String userId)>(
+  (ref) => _unwired('remoteChannelProvider'),
+);
+
+/// The name other devices see for this one.
+final remoteDeviceNameProvider = FutureProvider<String>((ref) {
+  final settings = ref.watch(settingsRepositoryProvider);
+  return remoteDeviceName(
+    storedName: () => settings.getString(kDeviceName),
+    isAndroid: ref.watch(isAndroidProvider),
+    readDevice: ref.watch(deviceSummaryProvider),
+    hostname: Platform.localHostname,
+  );
+});
+
+/// The signed-in account's id; null signed out (or while it loads).
+final _remoteUserIdProvider = Provider<String?>(
+  (ref) => switch (ref.watch(accountStateProvider).value) {
+    SignedIn(:final profile) => profile.id,
+    _ => null,
+  },
+);
+
+/// One account's remote control: the channel, this device's host and the
+/// controller. Made on sign-in; disposed on sign-out or an account change,
+/// which leaves the channel and ends any link.
+class _RemoteSession {
+  _RemoteSession({
+    required this.channel,
+    required this.deviceId,
+    required PlayerService player,
+    required Future<Map<String, Track>> Function(List<String> ids) lookup,
+  }) : _player = player,
+       _lookup = lookup,
+       controller = RemoteController(
+         channel: channel,
+         deviceId: deviceId,
+         lookup: lookup,
+       ) {
+    _wasPlaying = player.state.playing;
+    _playerSub = player.states.listen(_onPlayer);
+  }
+
+  final RemoteChannel channel;
+  final String deviceId;
+  final RemoteController controller;
+  final PlayerService _player;
+  final Future<Map<String, Track>> Function(List<String> ids) _lookup;
+  late final StreamSubscription<PlayerState> _playerSub;
+  late bool _wasPlaying;
+  RemoteHost? _host;
+  bool _disposed = false;
+
+  /// P3: local playback starting (anything but the remote view's own
+  /// controls, which never touch this player) ends the remote view.
+  void _onPlayer(PlayerState s) {
+    final started = s.playing && !_wasPlaying;
+    _wasPlaying = s.playing;
+    if (started && controller.link != null) controller.deselect();
+  }
+
+  /// Joins the channel as [name].
+  Future<void> start(String name) async {
+    if (_disposed || _host != null) return;
+    final host = _host = RemoteHost(
+      channel: channel,
+      player: _player,
+      presence: (s) => RemotePresence(
+        deviceId: deviceId,
+        name: name,
+        platform: Platform.operatingSystem,
+        appVersion: appVersion,
+        playing: s.playing,
+        title: s.current?.title,
+      ),
+      lookup: _lookup,
+    );
+    await host.start();
+  }
+
+  void dispose() {
+    _disposed = true;
+    unawaited(_playerSub.cancel());
+    controller.deselect(RemoteEndReason.signedOut);
+    controller.dispose();
+    final host = _host;
+    if (host != null) unawaited(host.stop());
+  }
+}
+
+final _remoteSessionProvider = Provider<_RemoteSession?>((ref) {
+  final userId = ref.watch(_remoteUserIdProvider);
+  if (userId == null) return null;
+  final library = ref.watch(libraryRepositoryProvider);
+  final session = _RemoteSession(
+    channel: ref.watch(remoteChannelProvider)(userId),
+    deviceId: ref.watch(deviceIdProvider),
+    player: ref.watch(playerServiceProvider),
+    lookup: library.tracksByIds,
+  );
+  ref.onDispose(session.dispose);
+  unawaited(
+    ref.read(remoteDeviceNameProvider.future).then(session.start).catchError((
+      Object e,
+      StackTrace s,
+    ) {
+      AppLog.w('remote: starting the host failed', e, s);
+    }),
+  );
+  return session;
+});
+
+/// Joins the remote channel when an account signs in (this device's host and
+/// controller) and leaves it on sign-out or an account change. `main()`
+/// listens to it once (a read alone would leave it paused); it lives as long
+/// as the app.
+final remoteHostFollowerProvider = Provider<void>((ref) {
+  // A listener, not just a read, so the session follows the account even
+  // while nothing else watches it.
+  ref.listen(_remoteSessionProvider, (_, _) {}, fireImmediately: true);
+});
+
+/// Controls another device; null signed out.
+final remoteControllerProvider = Provider<RemoteController?>(
+  (ref) => ref.watch(_remoteSessionProvider)?.controller,
+);
+
+/// The other devices online on the account (this one excluded), incompatible
+/// ones included; empty signed out.
+final remoteDevicesProvider = StreamProvider<List<RemotePresence>>((ref) {
+  final session = ref.watch(_remoteSessionProvider);
+  if (session == null) return Stream.value(const []);
+  final channel = session.channel;
+  List<RemotePresence> others(List<RemotePresence> all) => [
+    for (final p in all)
+      if (p.deviceId != session.deviceId) p,
+  ];
+  return Stream<List<RemotePresence>>.multi((c) {
+    final sub = channel.presences.listen(
+      (all) => c.addSync(others(all)),
+      onError: c.addErrorSync,
+      onDone: c.closeSync,
+    );
+    c.addSync(others(channel.present));
+    c.onCancel = sub.cancel;
+  });
+});
+
+/// The device being controlled and how the link stands; null for This
+/// device. Consumers switch on this, not only on the view's states.
+final remoteLinkProvider = StreamProvider<RemoteLink?>((ref) {
+  final controller = ref.watch(remoteControllerProvider);
+  if (controller == null) return Stream.value(null);
+  return Stream<RemoteLink?>.multi((c) {
+    final sub = controller.links.listen(
+      c.addSync,
+      onError: c.addErrorSync,
+      onDone: c.closeSync,
+    );
+    c.addSync(controller.link);
+    c.onCancel = sub.cancel;
+  });
+});
+
+/// Each link that ended, with its device (for the island). A stream, not a
+/// StreamProvider, so the same device ending twice the same way is told
+/// twice. Signed out it never emits.
+final remoteEndedProvider = Provider<Stream<(RemotePresence, RemoteEndReason)>>(
+  (ref) {
+    final controller = ref.watch(remoteControllerProvider);
+    if (controller == null) return const Stream.empty();
+    return Stream<(RemotePresence, RemoteEndReason)>.multi((c) {
+      // The link is already null when its end is reported: remember the
+      // last device linked.
+      var device = controller.link?.device;
+      final links = controller.links.listen((l) {
+        if (l != null) device = l.device;
+      });
+      final ended = controller.ended.listen((reason) {
+        final d = device;
+        if (d != null) c.addSync((d, reason));
+      }, onDone: c.closeSync);
+      c.onCancel = () async {
+        await links.cancel();
+        await ended.cancel();
+      };
+    });
+  },
+);
+
+/// What the player UI shows and commands: the device being controlled while
+/// a link exists, else this device's player.
+final playerViewProvider = Provider<PlayerView>((ref) {
+  final player = ref.watch(playerServiceProvider);
+  final controller = ref.watch(remoteControllerProvider);
+  final linked = ref.watch(remoteLinkProvider.select((l) => l.value != null));
+  if (controller != null && linked) {
+    final sync = ref.watch(cloudSyncProvider);
+    return RemotePlayerView(controller, sync.syncNow);
+  }
+  return LocalPlayerView(player);
+});
+
+/// The view's state, starting with its current value (as
+/// [playerStateProvider]).
+final playerViewStateProvider = StreamProvider<PlayerState>((ref) {
+  final view = ref.watch(playerViewProvider);
+  return Stream<PlayerState>.multi((c) {
+    final sub = view.states.listen(
+      c.addSync,
+      onError: c.addErrorSync,
+      onDone: c.closeSync,
+    );
+    c.addSync(view.state);
+    c.onCancel = sub.cancel;
+  });
+});
+
+/// Starts controlling [device]: pauses this device's playback first, so the
+/// two don't play at once.
+Future<void> selectRemote(
+  PlayerService local,
+  RemoteController controller,
+  RemotePresence device,
+) async {
+  try {
+    await local.pause();
+  } on Object catch (e, s) {
+    AppLog.w('remote: pausing before select failed', e, s);
+  }
+  await controller.select(device);
+}
 
 final ytSessionStoreProvider = Provider<YtSessionStore>(
   (ref) => _unwired('ytSessionStoreProvider'),
