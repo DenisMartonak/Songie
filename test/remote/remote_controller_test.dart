@@ -1,0 +1,405 @@
+import 'package:fake_async/fake_async.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:songies/data/database.dart';
+import 'package:songies/player/player_service.dart';
+import 'package:songies/remote/remote_channel.dart';
+import 'package:songies/remote/remote_controller.dart';
+import 'package:songies/remote/remote_protocol.dart';
+
+import '../helpers/fake_remote_hub.dart';
+
+Track track(String id) => Track(
+  id: id,
+  clock: '0000000000001-00000-dev',
+  originDevice: 'dev',
+  deleted: false,
+  localSeq: 1,
+  source: 'local',
+  title: 'Title $id',
+  artist: 'Artist',
+  durationMs: 0,
+  unavailable: false,
+  searchText: 'title $id artist',
+);
+
+RemotePresence presenceOf(String id) => RemotePresence(
+  deviceId: id,
+  name: 'Device $id',
+  platform: 'linux',
+  appVersion: '1.0.0',
+  playing: false,
+);
+
+/// A host on [hub] as device 'h' that answers `hello` with [reply] (none
+/// while it is null) and records the commands it gets.
+class ScriptedHost {
+  ScriptedHost(this.hub, this.now) : channel = hub.channelFor('h') {
+    channel.join(presenceOf('h'));
+    channel.messages.listen((m) {
+      switch (m) {
+        case RemoteHello(:final to) when to == 'h':
+          final r = reply;
+          if (r != null) send(r);
+        case RemoteCommand(:final to) when to == 'h':
+          commands.add(m);
+        default:
+          break;
+      }
+    });
+  }
+
+  final FakeRemoteHub hub;
+  final int Function() now;
+  final RemoteChannel channel;
+  RemoteState? reply;
+  final commands = <RemoteCommand>[];
+
+  void send(RemoteState s) => channel.send(s);
+}
+
+RemoteState stateOf({
+  String from = 'h',
+  int epoch = 1,
+  int offset = 0,
+  int index = 0,
+  List<String> queue = const ['a', 'b', 'c'],
+  bool playing = true,
+  int positionMs = 10000,
+  required int atMs,
+  int? durationMs = 200000,
+  double volume = 1,
+  bool shuffle = false,
+  RepeatMode repeat = RepeatMode.off,
+}) => RemoteState(
+  from: from,
+  epoch: epoch,
+  offset: offset,
+  index: index,
+  queue: queue,
+  playing: playing,
+  buffering: false,
+  shuffle: shuffle,
+  positionMs: positionMs,
+  atMs: atMs,
+  durationMs: durationMs,
+  volume: volume,
+  repeat: repeat,
+);
+
+class Rig {
+  Rig(this.async) {
+    host = ScriptedHost(hub, now);
+    hub.channelFor('c').join(presenceOf('c'));
+    for (final id in ['a', 'b', 'c', 'd']) {
+      library[id] = track(id);
+    }
+    ctl = RemoteController(
+      channel: hub.channelFor('c'),
+      deviceId: 'c',
+      lookup: (want) async => {
+        for (final id in want)
+          if (library[id] != null) id: library[id]!,
+      },
+      nowMs: now,
+      newId: () => 'cmd${_n++}',
+    );
+    ctl.links.listen(links.add);
+    ctl.ended.listen(ended.add);
+    async.flushMicrotasks();
+  }
+
+  final FakeAsync async;
+  final hub = FakeRemoteHub();
+  final library = <String, Track>{};
+  late final ScriptedHost host;
+  late final RemoteController ctl;
+  final links = <RemoteLink?>[];
+  final ended = <RemoteEndReason>[];
+  var _n = 0;
+
+  int now() => 1000000 + async.elapsed.inMilliseconds;
+
+  List<RemoteHello> get hellos => hub.sent.whereType<RemoteHello>().toList();
+
+  List<RemoteCommand> get commands =>
+      hub.sent.whereType<RemoteCommand>().toList();
+
+  /// Selects 'h' with [reply] as its answer to hello.
+  void connect(RemoteState? reply) {
+    host.reply = reply;
+    ctl.select(presenceOf('h'));
+    async.flushMicrotasks();
+  }
+
+  void flush() => async.flushMicrotasks();
+}
+
+void ctlTest(String name, void Function(Rig r) body) {
+  test(name, () {
+    fakeAsync((async) {
+      final r = Rig(async);
+      body(r);
+      r.ctl.deselect();
+      async.flushMicrotasks();
+    });
+  });
+}
+
+void main() {
+  setUp(() {
+    final original = debugPrint;
+    debugPrint = (String? message, {int? wrapWidth}) {};
+    addTearDown(() => debugPrint = original);
+  });
+
+  ctlTest('hello on select, connected on first state', (r) {
+    r.host.reply = null;
+    r.ctl.select(presenceOf('h'));
+    r.flush();
+    expect(r.hellos.map((h) => h.to), ['h']);
+    expect(r.ctl.link?.status, RemoteLinkStatus.connecting);
+    expect(r.ctl.link?.device.deviceId, 'h');
+
+    r.host.send(stateOf(atMs: r.now()));
+    r.flush();
+    expect(r.ctl.link?.status, RemoteLinkStatus.connected);
+    expect(r.links.map((l) => l?.status), [
+      RemoteLinkStatus.connecting,
+      RemoteLinkStatus.connected,
+    ]);
+    final s = r.ctl.state;
+    expect(s.queue.map((t) => t.id), ['a', 'b', 'c']);
+    expect(s.index, 0);
+    expect(s.playing, isTrue);
+    expect(s.position, const Duration(seconds: 10));
+    expect(s.duration, const Duration(seconds: 200));
+  });
+
+  ctlTest('no answer in 5 s ends with noAnswer', (r) {
+    r.connect(null);
+    r.async.elapse(const Duration(milliseconds: 4900));
+    expect(r.ctl.link?.status, RemoteLinkStatus.connecting);
+    expect(r.ended, isEmpty);
+    r.async.elapse(const Duration(milliseconds: 200));
+    expect(r.ended, [RemoteEndReason.noAnswer]);
+    expect(r.ctl.link, isNull);
+    expect(r.links.last, isNull);
+  });
+
+  ctlTest('position runs on while playing and stops at the duration', (r) {
+    r.connect(stateOf(atMs: r.now(), positionMs: 10000, durationMs: 12000));
+    expect(r.ctl.state.position, const Duration(seconds: 10));
+    final emitted = <PlayerState>[];
+    r.ctl.states.listen(emitted.add);
+    r.async.elapse(const Duration(seconds: 1));
+    expect(r.ctl.state.position, const Duration(seconds: 11));
+    expect(emitted, isNotEmpty);
+    expect(emitted.last.position, const Duration(seconds: 11));
+    r.async.elapse(const Duration(seconds: 2));
+    expect(r.ctl.state.position, const Duration(seconds: 12));
+  });
+
+  ctlTest('position runs on uncapped below the duration', (r) {
+    r.connect(stateOf(atMs: r.now(), positionMs: 10000));
+    r.async.elapse(const Duration(seconds: 3));
+    expect(r.ctl.state.position, const Duration(seconds: 13));
+  });
+
+  ctlTest('paused position stays', (r) {
+    r.connect(stateOf(atMs: r.now(), playing: false));
+    final emitted = <PlayerState>[];
+    r.ctl.states.listen(emitted.add);
+    r.async.elapse(const Duration(seconds: 3));
+    expect(r.ctl.state.position, const Duration(seconds: 10));
+    expect(emitted, isEmpty);
+  });
+
+  ctlTest('optimistic seek then corrected by the next state', (r) {
+    r.connect(stateOf(atMs: r.now()));
+    r.ctl.seek(const Duration(seconds: 50));
+    expect(r.ctl.state.position, const Duration(seconds: 50));
+    r.flush();
+    final seek = r.commands.single;
+    expect(seek.op, RemoteOp.seek);
+    expect(seek.to, 'h');
+    expect(seek.args, {'ms': 50000});
+    r.async.elapse(const Duration(seconds: 1));
+    expect(r.ctl.state.position, const Duration(seconds: 51));
+
+    // The host could not seek: its state says 11 s.
+    r.host.send(stateOf(atMs: r.now(), positionMs: 11000));
+    r.flush();
+    expect(r.ctl.state.position, const Duration(seconds: 11));
+  });
+
+  ctlTest('optimistic transport and settings', (r) {
+    r.connect(stateOf(atMs: r.now()));
+    r.ctl.pause();
+    expect(r.ctl.state.playing, isFalse);
+    r.ctl.togglePlay();
+    expect(r.ctl.state.playing, isTrue);
+    r.ctl.next();
+    expect(r.ctl.state.index, 1);
+    expect(r.ctl.state.position, Duration.zero);
+    r.ctl.previous();
+    r.ctl.previous();
+    expect(r.ctl.state.index, 0);
+    r.ctl.setVolume(0.5);
+    r.ctl.setShuffle(true);
+    r.ctl.setRepeat(RepeatMode.one);
+    expect(r.ctl.state.volume, 0.5);
+    expect(r.ctl.state.shuffle, isTrue);
+    expect(r.ctl.state.repeat, RepeatMode.one);
+    r.flush();
+    expect(r.commands.map((c) => c.op), [
+      RemoteOp.pause,
+      RemoteOp.toggle,
+      RemoteOp.next,
+      RemoteOp.previous,
+      RemoteOp.previous,
+      RemoteOp.volume,
+      RemoteOp.shuffle,
+      RemoteOp.repeat,
+    ]);
+    expect(r.commands[6].args, {'on': true});
+    expect(r.commands[7].args, {'mode': 'one'});
+    expect({for (final c in r.commands) c.id}.length, r.commands.length);
+  });
+
+  ctlTest('queue adds wait for the host', (r) {
+    r.connect(stateOf(atMs: r.now()));
+    r.ctl.addToEnd(['d']);
+    r.ctl.addNext(['d']);
+    r.ctl.playTracks(['c', 'd'], startIndex: 1, sourcePlaylistId: 'p');
+    r.flush();
+    expect(r.ctl.state.queue.map((t) => t.id), ['a', 'b', 'c']);
+    expect(r.commands.map((c) => c.op), [
+      RemoteOp.addToEnd,
+      RemoteOp.addNext,
+      RemoteOp.playTracks,
+    ]);
+    expect(r.commands[2].args, {
+      'ids': ['c', 'd'],
+      'start': 1,
+      'playlist': 'p',
+    });
+  });
+
+  ctlTest('offset keeps indexes absolute', (r) {
+    final window = [for (var i = 0; i < 10; i++) 'w$i'];
+    r.connect(
+      stateOf(
+        atMs: r.now(),
+        epoch: 7,
+        offset: 1000,
+        index: 1003,
+        queue: window,
+      ),
+    );
+    expect(r.ctl.state.index, 3);
+    r.ctl.removeAt(5);
+    expect(r.ctl.state.queue.map((t) => t.id), [
+      for (final id in window)
+        if (id != 'w5') id,
+    ]);
+    expect(r.ctl.state.index, 3);
+    r.flush();
+    final remove = r.commands.single;
+    expect(remove.op, RemoteOp.remove);
+    expect(remove.epoch, 7);
+    expect(remove.args, {'index': 1005, 'track': 'w5'});
+
+    r.ctl.playAt(2);
+    expect(r.ctl.state.index, 2);
+    r.ctl.move(0, 4);
+    expect(r.ctl.state.queue[4].id, 'w0');
+    expect(r.ctl.state.current?.id, 'w2');
+    r.flush();
+    expect(r.commands[1].args, {'index': 1002, 'track': 'w2'});
+    expect(r.commands[1].epoch, 7);
+    expect(r.commands[2].op, RemoteOp.move);
+    expect(r.commands[2].args, {'from': 1000, 'to': 1004, 'track': 'w0'});
+    expect(r.commands[2].epoch, 7);
+  });
+
+  ctlTest('unknown ids show as Unknown song', (r) {
+    r.connect(stateOf(atMs: r.now(), queue: ['a', 'zz']));
+    final q = r.ctl.state.queue;
+    expect(q[0].title, 'Title a');
+    expect(q[1].id, 'zz');
+    expect(q[1].title, 'Unknown song');
+    expect(q[1].artist, '');
+    expect(q[1].source, kRemoteUnknownSource);
+  });
+
+  ctlTest('presence lost shows lost and ends after 15 s', (r) {
+    r.connect(stateOf(atMs: r.now()));
+    r.hub.drop('h');
+    r.flush();
+    expect(r.ctl.link?.status, RemoteLinkStatus.lost);
+    r.async.elapse(const Duration(milliseconds: 14900));
+    expect(r.ended, isEmpty);
+    r.async.elapse(const Duration(milliseconds: 200));
+    expect(r.ended, [RemoteEndReason.lost]);
+    expect(r.ctl.link, isNull);
+  });
+
+  ctlTest('presence returns within 15 s', (r) {
+    r.connect(stateOf(atMs: r.now()));
+    expect(r.hellos, hasLength(1));
+    r.hub.drop('h');
+    r.flush();
+    expect(r.ctl.link?.status, RemoteLinkStatus.lost);
+    r.async.elapse(const Duration(seconds: 10));
+    r.host.reply = stateOf(atMs: r.now(), positionMs: 20000);
+    r.hub.restore('h');
+    r.flush();
+    expect(r.hellos, hasLength(2));
+    expect(r.ctl.link?.status, RemoteLinkStatus.connected);
+    expect(r.ctl.state.position, const Duration(seconds: 20));
+    r.async.elapse(const Duration(seconds: 20));
+    expect(r.ended, isEmpty);
+    expect(r.ctl.link?.status, RemoteLinkStatus.connected);
+  });
+
+  ctlTest('states from another device are ignored', (r) {
+    r.connect(null);
+    r.hub.channelFor('x').join(presenceOf('x'));
+    r.hub.channelFor('x').send(stateOf(from: 'x', atMs: r.now()));
+    r.flush();
+    expect(r.ctl.link?.status, RemoteLinkStatus.connecting);
+    expect(r.ctl.state.queue, isEmpty);
+
+    r.host.send(stateOf(atMs: r.now(), queue: ['a']));
+    r.flush();
+    r.hub.channelFor('x').send(stateOf(from: 'x', atMs: r.now()));
+    r.flush();
+    expect(r.ctl.state.queue.map((t) => t.id), ['a']);
+  });
+
+  ctlTest('deselect stops the ticker and sends nothing more', (r) {
+    r.connect(stateOf(atMs: r.now()));
+    final emitted = <PlayerState>[];
+    r.ctl.states.listen(emitted.add);
+    r.ctl.deselect();
+    r.flush();
+    expect(r.ended, [RemoteEndReason.deselected]);
+    expect(r.ctl.link, isNull);
+    r.hub.sent.clear();
+    emitted.clear();
+    r.async.elapse(const Duration(seconds: 3));
+    expect(emitted, isEmpty);
+    r.ctl.play();
+    r.ctl.seek(const Duration(seconds: 1));
+    r.ctl.removeAt(0);
+    r.ctl.addToEnd(['a']);
+    r.host.send(stateOf(atMs: r.now()));
+    r.flush();
+    r.async.elapse(const Duration(seconds: 6));
+    expect(r.hub.sent.whereType<RemoteCommand>(), isEmpty);
+    expect(r.hub.sent.whereType<RemoteHello>(), isEmpty);
+    expect(emitted, isEmpty);
+    expect(r.ended, [RemoteEndReason.deselected]);
+  });
+}
