@@ -34,6 +34,10 @@ The second migration adds what cloud sync needs:
 
 Deleting an account (`delete_my_account`) deletes its `sync_rows` too. The user's `sync-files` folder is deleted by the app just before, with cloud sync on that device stopped first; if that fails, the account is not deleted and sync starts again.
 
+### Remote control (`20261107120000_remote_control.sql`)
+
+The third migration adds two rules on `realtime.messages` and nothing else (no table, nothing stored). A signed-in user can join, receive on and send on (Broadcast and Presence) only the private channel `remote:<their user id>`; that is how a user's devices see each other and control each other's playback. The `sync:<user id>` topic and its rule are unchanged. There's nothing to switch on in the dashboard.
+
 ## 2. Email sign-in settings
 
 1. Under Authentication, Sign In / Providers, in the user sign-up settings: allow new users to sign up, and turn Confirm email on.

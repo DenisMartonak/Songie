@@ -319,6 +319,11 @@ Two devices (phone and desktop) signed in to the same account, and a second acco
 - [ ] Upgrade from a version with Sync devices (database schema 8): the app opens with the library, playlists and settings intact; Settings has no Sync devices entry, the desktop sidebar has none, and the old `sync` folder under the app data folder is gone.
 - [ ] Delete account: that user's `sync_rows` and `sync-files/<user id>/` folder are gone; the other account's rows stay.
 
+## Remote control
+
+Two accounts (A and B). First apply `supabase/migrations/20261107120000_remote_control.sql` (see `docs/supabase.md`).
+- [ ] Database rules (the SQL editor skips them, so test as a signed-in user, e.g. in the Realtime Inspector or with two user tokens): as user A, sending or joining on `remote:<B's user id>` is refused, and on `remote:<A's user id>` it works. `supabase_realtime` lists no new table.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.
