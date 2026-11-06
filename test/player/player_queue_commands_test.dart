@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:drift/drift.dart' show Value;
@@ -38,6 +39,19 @@ class _Resolver extends TrackResolver {
 }
 
 List<String> ids(List<Track> q) => [for (final t in q) t.id];
+
+/// Like [_Resolver], but while [gate] is set every resolve waits for it,
+/// which holds the player's command lock.
+class _GatedResolver extends _Resolver {
+  Completer<void>? gate;
+
+  @override
+  Future<Result<AudioSourceRef>> resolve(Track t) async {
+    final g = gate;
+    if (g != null) await g.future;
+    return super.resolve(t);
+  }
+}
 
 void main() {
   late FakeAudioBackend backend;
@@ -172,5 +186,98 @@ void main() {
     await player.addToQueue([x]);
     await player.addToQueue([y]);
     expect(player.queueEpoch, e1);
+  });
+  group('checked edits', () {
+    test('removeAtIf removes only on a matching epoch and id', () async {
+      await player.playQueue(ten);
+      final e = player.stateEpoch;
+      expect(await player.removeAtIf(2, 't3', e), isFalse);
+      expect(await player.removeAtIf(2, 't2', e + 1), isFalse);
+      expect(await player.removeAtIf(10, 't2', e), isFalse);
+      expect(await player.removeAtIf(-1, 't2', e), isFalse);
+      expect(player.state.queue, hasLength(10));
+      expect(await player.removeAtIf(2, 't2', e), isTrue);
+      expect(ids(player.state.queue), isNot(contains('t2')));
+      expect(player.state.queue, hasLength(9));
+    });
+
+    test('playAtIf plays only on a matching epoch and id', () async {
+      await player.playQueue(ten);
+      final e = player.stateEpoch;
+      expect(await player.playAtIf(4, 't5', e), isFalse);
+      expect(await player.playAtIf(4, 't4', e - 1), isFalse);
+      expect(player.state.current?.id, 't0');
+      expect(await player.playAtIf(4, 't4', e), isTrue);
+      expect(player.state.current?.id, 't4');
+    });
+
+    test('moveIf moves only on a matching epoch, id and target', () async {
+      await player.playQueue(ten.take(3).toList());
+      final e = player.stateEpoch;
+      expect(player.moveIf(0, 2, 't1', e), isFalse);
+      expect(player.moveIf(0, 2, 't0', e + 1), isFalse);
+      expect(player.moveIf(0, 3, 't0', e), isFalse);
+      expect(player.moveIf(0, -1, 't0', e), isFalse);
+      expect(ids(player.state.queue), ['t0', 't1', 't2']);
+      expect(player.moveIf(1, 1, 't1', e), isTrue);
+      expect(player.moveIf(0, 2, 't0', e), isTrue);
+      expect(ids(player.state.queue), ['t1', 't2', 't0']);
+      expect(player.state.current?.id, 't0');
+    });
+
+    group('behind commands still in the lock', () {
+      late _GatedResolver resolver;
+      late PlayerService gated;
+
+      setUp(() {
+        resolver = _GatedResolver();
+        gated = PlayerService(FakeAudioBackend(), resolver, random: Random(3));
+      });
+      tearDown(() => gated.dispose());
+
+      Future<void> holdLock() async {
+        resolver.gate = Completer<void>();
+        unawaited(gated.next());
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      void releaseLock() {
+        resolver.gate!.complete();
+        resolver.gate = null;
+      }
+
+      test('checks the queue a pending removeAt left', () async {
+        await gated.playQueue(ten.take(5).toList());
+        final e = gated.stateEpoch;
+        await holdLock();
+        unawaited(gated.removeAt(0));
+        final missed = gated.removeAtIf(2, 't2', e);
+        final hit = gated.removeAtIf(1, 't2', e);
+        releaseLock();
+        expect(await missed, isFalse);
+        expect(await hit, isTrue);
+        expect(ids(gated.state.queue), ['t1', 't3', 't4']);
+      });
+
+      test('stateEpoch waits for a pending playQueue to land', () async {
+        await gated.playQueue(ten.take(3).toList());
+        final old = gated.stateEpoch;
+        expect(old, gated.queueEpoch);
+        await holdLock();
+        final pending = gated.playQueue([x, y]);
+        expect(gated.queueEpoch, old + 1);
+        expect(gated.stateEpoch, old);
+        expect(ids(gated.state.queue), ['t0', 't1', 't2']);
+        final newEpochOldId = gated.removeAtIf(1, 't1', old + 1);
+        final oldEpoch = gated.playAtIf(0, 't0', old);
+        releaseLock();
+        await pending;
+        expect(await newEpochOldId, isFalse);
+        expect(await oldEpoch, isFalse);
+        expect(gated.stateEpoch, old + 1);
+        expect(ids(gated.state.queue), ['x', 'y']);
+        expect(gated.state.current?.id, 'x');
+      });
+    });
   });
 }

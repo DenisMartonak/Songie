@@ -261,6 +261,7 @@ class PlayerService {
   _Entry? _prefetchedFor;
 
   int _queueEpoch = 0;
+  int _stateEpoch = 0;
 
   Stream<PlayerState> get states => _controller.stream;
   PlayerState get state => _state;
@@ -275,6 +276,11 @@ class PlayerService {
   /// (radio) tell whether it is still the one playing.
   int get queueEpoch => _queueEpoch;
 
+  /// The [queueEpoch] of the queue in [state]. Lags [queueEpoch] while a
+  /// [playQueue] waits behind earlier commands, so a snapshot of [state] and
+  /// [stateEpoch] always belong together (the remote host publishes them).
+  int get stateEpoch => _stateEpoch;
+
   // --- commands -------------------------------------------------------------
 
   Future<void> playQueue(
@@ -282,15 +288,17 @@ class PlayerService {
     int startIndex = 0,
     String? sourcePlaylistId,
   }) {
-    _queueEpoch++;
-    return _playQueue(tracks, startIndex, sourcePlaylistId);
+    final epoch = ++_queueEpoch;
+    return _playQueue(tracks, startIndex, sourcePlaylistId, epoch);
   }
 
   Future<void> _playQueue(
     List<Track> tracks,
     int startIndex,
     String? sourcePlaylistId,
+    int epoch,
   ) => _locked(() async {
+    _stateEpoch = epoch;
     _engineFailures = 0;
     _failedStarts = 0;
     final entries = [for (final t in tracks) _Entry(t)];
@@ -453,14 +461,50 @@ class PlayerService {
     _emit(_state.copyWith(volume: v));
   });
 
-  Future<void> playAt(int index) => _locked(() async {
+  Future<void> playAt(int index) => _locked(() => _playAtNow(index));
+
+  /// [playAt], only if the queue is still the one of [epoch] (a
+  /// [stateEpoch]) and still holds [id] at [index] when its turn comes.
+  /// Returns whether it played.
+  Future<bool> playAtIf(int index, String id, int epoch) =>
+      _lockedIf(index, id, epoch, () => _playAtNow(index));
+
+  Future<void> _playAtNow(int index) async {
     _engineFailures = 0;
     _failedStarts = 0;
     if (index < 0 || index >= _queue.length) return;
     await _startFirstPlayable(_candidates(index, wrap: _wraps));
-  });
+  }
 
-  Future<void> removeAt(int index) => _locked(() async {
+  Future<void> removeAt(int index) => _locked(() => _removeAtNow(index));
+
+  /// [removeAt], only if the queue is still the one of [epoch] (a
+  /// [stateEpoch]) and still holds [id] at [index] when its turn comes.
+  /// Returns whether it removed.
+  Future<bool> removeAtIf(int index, String id, int epoch) =>
+      _lockedIf(index, id, epoch, () => _removeAtNow(index));
+
+  bool _holds(int index, String id, int epoch) =>
+      epoch == _stateEpoch &&
+      index >= 0 &&
+      index < _queue.length &&
+      _queue[index].track.id == id;
+
+  Future<bool> _lockedIf(
+    int index,
+    String id,
+    int epoch,
+    Future<void> Function() body,
+  ) async {
+    var held = false;
+    await _locked(() async {
+      held = _holds(index, id, epoch);
+      if (held) await body();
+    });
+    return held;
+  }
+
+  Future<void> _removeAtNow(int index) async {
     if (index < 0 || index >= _queue.length) return;
     _failedStarts = 0;
     final current = _state.index;
@@ -502,7 +546,7 @@ class PlayerService {
     } else {
       await _endOfQueue();
     }
-  });
+  }
 
   // --- synchronous state edits ---------------------------------------------
 
@@ -524,6 +568,22 @@ class PlayerService {
   void move(int from, int to) {
     final n = _queue.length;
     if (from < 0 || from >= n || to < 0 || to >= n || from == to) return;
+    _moveNow(from, to);
+  }
+
+  /// [move], only if the queue is the one of [epoch] (a [stateEpoch]), holds
+  /// [id] at [from] and [to] is in range. Synchronous, so the check and the
+  /// edit see the same queue. Returns whether it moved (moving to the same
+  /// place counts).
+  bool moveIf(int from, int to, String id, int epoch) {
+    if (!_holds(from, id, epoch) || to < 0 || to >= _queue.length) {
+      return false;
+    }
+    if (from != to) _moveNow(from, to);
+    return true;
+  }
+
+  void _moveNow(int from, int to) {
     final current = _currentEntry;
     _queue.insert(to, _queue.removeAt(from));
     _emit(

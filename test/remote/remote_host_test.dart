@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:fake_async/fake_async.dart';
@@ -30,9 +31,15 @@ Track track(String id) => Track(
 );
 
 class _Resolver extends TrackResolver {
+  /// While set, every resolve waits for it: holds the player's lock.
+  Completer<void>? gate;
+
   @override
-  Future<Result<AudioSourceRef>> resolve(Track t) async =>
-      Ok(FileSource('/music/${t.id}.mp3'));
+  Future<Result<AudioSourceRef>> resolve(Track t) async {
+    final g = gate;
+    if (g != null) await g.future;
+    return Ok(FileSource('/music/${t.id}.mp3'));
+  }
 
   @override
   Future<void> prefetch(Track t) async {}
@@ -86,7 +93,7 @@ RemotePresence _presenceOf(String id) => RemotePresence(
 class Rig {
   Rig(this.async, {bool controller = true}) {
     backend = FakeAudioBackend();
-    player = PlayerService(backend, _Resolver(), random: Random(3));
+    player = PlayerService(backend, resolver, random: Random(3));
     channel = SpyChannel(hub.channelFor('h'));
     ctl = hub.channelFor('c');
     host = RemoteHost(
@@ -100,9 +107,15 @@ class Rig {
         playing: s.playing,
         title: s.current?.title,
       ),
-      lookup: (want) async => {
-        for (final id in want)
-          if (library[id] != null) id: library[id]!,
+      lookup: (want) async {
+        if (failLookups > 0) {
+          failLookups--;
+          throw StateError('database busy');
+        }
+        return {
+          for (final id in want)
+            if (library[id] != null) id: library[id]!,
+        };
       },
       nowMs: () => 1000000 + async.elapsed.inMilliseconds,
     );
@@ -117,6 +130,10 @@ class Rig {
   final FakeAsync async;
   final hub = FakeRemoteHub();
   final library = <String, Track>{};
+  final resolver = _Resolver();
+
+  /// How many lookups still throw before they work again.
+  var failLookups = 0;
   late final FakeAudioBackend backend;
   late final PlayerService player;
   late final SpyChannel channel;
@@ -563,7 +580,7 @@ void main() {
     expect(r.states, isNotEmpty);
   });
 
-  test('a lookup that throws answers with state', () {
+  test('a lookup that always throws answers with state after 5 s', () {
     fakeAsync((async) {
       final hub = FakeRemoteHub();
       final player = PlayerService(FakeAudioBackend(), _Resolver());
@@ -588,7 +605,8 @@ void main() {
               },
             ),
           );
-      async.elapse(const Duration(milliseconds: 300));
+      async.elapse(const Duration(milliseconds: 5300));
+      expect(player.state.queue, isEmpty);
       expect(hub.sent.whereType<RemoteState>(), hasLength(1));
       host.stop();
       player.dispose();
@@ -630,5 +648,132 @@ void main() {
     expect(r.ctl.present.map((p) => p.deviceId), ['c']);
     r.async.elapse(const Duration(seconds: 10));
     expect(r.states, isEmpty);
+  });
+  group('edits checked when their turn comes', () {
+    hostTest('a local removeAt held in the lock shifts nothing remote', (r) {
+      r.playQueue(['a', 'b', 'c', 'd', 'e']);
+      final epoch = r.player.queueEpoch;
+      // A slow start holds the player's lock; a local swipe of 'a' waits in
+      // it while the controller removes 'c', which it saw at index 2.
+      r.resolver.gate = Completer<void>();
+      r.player.next();
+      r.async.flushMicrotasks();
+      r.player.removeAt(0);
+      r.command(RemoteOp.remove, {'index': 2, 'track': 'c'}, epoch);
+      expect(ids(r.player.state.queue), ['a', 'b', 'c', 'd', 'e']);
+      r.resolver.gate!.complete();
+      r.resolver.gate = null;
+      r.async.elapse(const Duration(milliseconds: 300));
+      // Index 2 now holds 'd': the remote remove is a no-op, never 'd'.
+      expect(ids(r.player.state.queue), ['b', 'c', 'd', 'e']);
+      expect(r.states, isNotEmpty);
+      expect(r.states.last.queue, ['b', 'c', 'd', 'e']);
+    });
+
+    hostTest('a pending playQueue is never matched by old indexes', (r) {
+      r.playQueue(['a', 'b', 'c']);
+      final old = r.player.queueEpoch;
+      r.resolver.gate = Completer<void>();
+      r.player.next();
+      r.async.flushMicrotasks();
+      r.player.playQueue([track('x'), track('y'), track('z')]);
+      expect(r.player.queueEpoch, old + 1);
+
+      // State sent while the new queue waits keeps the old epoch with the
+      // old queue.
+      r.hub.sent.clear();
+      r.ctl.send(const RemoteHello(to: 'h'));
+      r.async.flushMicrotasks();
+      expect(r.states.single.epoch, old);
+      expect(r.states.single.queue, ['a', 'b', 'c']);
+
+      // A controller pairing the new epoch with an old index, and one with
+      // the old epoch: neither touches the new queue.
+      r.command(RemoteOp.remove, {'index': 1, 'track': 'b'}, old + 1);
+      r.command(RemoteOp.playAt, {'index': 2, 'track': 'c'}, old + 1);
+      r.command(RemoteOp.move, {'from': 0, 'to': 2, 'track': 'a'}, old + 1);
+      r.command(RemoteOp.remove, {'index': 2, 'track': 'c'}, old);
+      r.resolver.gate!.complete();
+      r.resolver.gate = null;
+      r.async.elapse(const Duration(milliseconds: 300));
+      expect(ids(r.player.state.queue), ['x', 'y', 'z']);
+      expect(r.player.state.current?.id, 'x');
+      expect(r.states.last.epoch, old + 1);
+      expect(r.states.last.queue, ['x', 'y', 'z']);
+    });
+  });
+
+  group('seeks', () {
+    hostTest('a small seek while paused sends state', (r) {
+      r.playQueue(['a']);
+      r.player.pause();
+      r.settle();
+      r.player.seek(const Duration(seconds: 1));
+      r.async.elapse(const Duration(milliseconds: 300));
+      expect(r.states, hasLength(1));
+      expect(r.states.single.positionMs, 1000);
+    });
+
+    hostTest('ticks send nothing; a 1 s seek while playing does', (r) {
+      r.playQueue(['a']);
+      var pos = Duration.zero;
+      for (var i = 0; i < 10; i++) {
+        r.async.elapse(const Duration(milliseconds: 200));
+        pos += const Duration(milliseconds: 200);
+        r.backend.setPosition(pos);
+      }
+      r.async.elapse(const Duration(milliseconds: 100));
+      expect(r.states, isEmpty);
+      r.player.seek(pos + const Duration(seconds: 1));
+      r.async.elapse(const Duration(milliseconds: 300));
+      expect(r.states, hasLength(1));
+      expect(r.states.single.positionMs, pos.inMilliseconds + 1000);
+    });
+  });
+
+  hostTest('a transient lookup error is retried', (r) {
+    r.playQueue(['a', 'b']);
+    r.failLookups = 2;
+    r.command(RemoteOp.addNext, {
+      'ids': ['c'],
+    });
+    r.async.elapse(const Duration(milliseconds: 600));
+    expect(ids(r.player.state.queue), ['a', 'b']);
+    r.async.elapse(const Duration(milliseconds: 500));
+    expect(ids(r.player.state.queue), ['a', 'c', 'b']);
+  });
+
+  test('a presence that throws leaves the host stopped, ready to retry', () {
+    fakeAsync((async) {
+      final hub = FakeRemoteHub();
+      final player = PlayerService(FakeAudioBackend(), _Resolver());
+      var calls = 0;
+      final host = RemoteHost(
+        channel: hub.channelFor('h'),
+        player: player,
+        presence: (s) {
+          if (calls++ == 0) throw StateError('no device name yet');
+          return _presenceOf('h');
+        },
+        lookup: (_) async => const {},
+      );
+      final ctl = hub.channelFor('c')..join(_presenceOf('c'));
+      host.start();
+      async.flushMicrotasks();
+      expect(ctl.present.map((p) => p.deviceId), ['c']);
+      ctl.send(const RemoteHello(to: 'h'));
+      async.flushMicrotasks();
+      expect(hub.sent.whereType<RemoteState>(), isEmpty);
+
+      host.start();
+      async.flushMicrotasks();
+      expect(ctl.present.map((p) => p.deviceId), containsAll(['h', 'c']));
+      ctl.send(const RemoteHello(to: 'h'));
+      async.flushMicrotasks();
+      expect(hub.sent.whereType<RemoteState>(), hasLength(1));
+      host.stop();
+      player.dispose();
+      async.flushMicrotasks();
+    });
   });
 }

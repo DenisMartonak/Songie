@@ -28,9 +28,10 @@ class RemoteHost {
   static const Duration retryEvery = Duration(milliseconds: 500);
   static const Duration retryFor = Duration(seconds: 5);
 
-  /// A position change larger than this between two player states is a
-  /// seek (worth a state message), not playback ticking along.
-  static const Duration _seekJump = Duration(seconds: 2);
+  /// How far the position may stray from where playback alone would have
+  /// taken it (since the previous player state, by the wall clock) before it
+  /// counts as a seek worth a state message. Covers engine tick jitter.
+  static const Duration seekTolerance = Duration(milliseconds: 400);
 
   final RemoteChannel _channel;
   final PlayerService _player;
@@ -47,16 +48,25 @@ class RemoteHost {
   Future<void> _tail = Future<void>.value();
 
   PlayerState? _last;
+  int _lastAtMs = 0;
   bool? _presencePlaying;
   String? _presenceTrack;
 
   Future<void> start() async {
     if (_running) return;
-    _running = true;
     final s = _player.state;
-    final me = _presence(s);
+    final RemotePresence me;
+    try {
+      me = _presence(s);
+    } on Object catch (e, st) {
+      // Stay stopped; a later start() can try again.
+      AppLog.w('remote host: presence failed, not starting', e, st);
+      return;
+    }
+    _running = true;
     _me = me.deviceId;
     _last = s;
+    _lastAtMs = _nowMs();
     _presencePlaying = s.playing;
     _presenceTrack = s.current?.id;
     _stateSub = _player.states.listen(_onPlayer);
@@ -95,7 +105,10 @@ class RemoteHost {
     if (!_running) return;
     try {
       final previous = _last;
+      final now = _nowMs();
+      final elapsed = Duration(milliseconds: now - _lastAtMs);
       _last = s;
+      _lastAtMs = now;
       final trackId = s.current?.id;
       if (s.playing != _presencePlaying || trackId != _presenceTrack) {
         _presencePlaying = s.playing;
@@ -108,7 +121,7 @@ class RemoteHost {
       } else if (_heartbeat == null) {
         _armHeartbeat();
       }
-      if (previous == null || _differs(previous, s)) _schedule();
+      if (previous == null || _differs(previous, s, elapsed)) _schedule();
     } on Object catch (e, st) {
       AppLog.w('remote host: player change failed', e, st);
     }
@@ -122,16 +135,20 @@ class RemoteHost {
     }
   }
 
-  /// Whether [b] says something a controller can't work out from [a]
-  /// (position ticks and buffer progress are left to its own clock).
-  static bool _differs(PlayerState a, PlayerState b) {
+  /// Whether [b], [elapsed] after [a], says something a controller can't
+  /// work out from [a]: position ticks and buffer progress are left to its
+  /// own clock, but a seek (any jump away from where playback would be) is
+  /// not.
+  static bool _differs(PlayerState a, PlayerState b, Duration elapsed) {
     if (!identical(a.queue, b.queue)) {
       if (a.queue.length != b.queue.length) return true;
       for (var i = 0; i < a.queue.length; i++) {
         if (a.queue[i].id != b.queue[i].id) return true;
       }
     }
-    final jump = (a.position - b.position).abs();
+    final advancing = a.playing && !a.buffering;
+    final expected = a.position + (advancing ? elapsed : Duration.zero);
+    final jump = (b.position - expected).abs();
     return a.index != b.index ||
         a.playing != b.playing ||
         a.buffering != b.buffering ||
@@ -140,7 +157,7 @@ class RemoteHost {
         a.shuffle != b.shuffle ||
         a.repeat != b.repeat ||
         a.notice != b.notice ||
-        jump > _seekJump;
+        jump > seekTolerance;
   }
 
   // --- sending -------------------------------------------------------------
@@ -195,7 +212,9 @@ class RemoteHost {
     final notice = s.notice;
     return RemoteState(
       from: _me!,
-      epoch: _player.queueEpoch,
+      // The epoch of the queue in this snapshot, not one still waiting to
+      // land, so a controller never pairs a new epoch with old indexes.
+      epoch: _player.stateEpoch,
       offset: offset,
       index: s.index,
       queue: [for (var i = offset; i < end; i++) s.queue[i].id],
@@ -246,6 +265,8 @@ class RemoteHost {
   Future<void> _apply(RemoteCommand c) async {
     final a = c.args;
     final p = _player;
+    // Present for playAt/remove/move (decode requires it there).
+    final epoch = c.epoch ?? -1;
     switch (c.op) {
       case RemoteOp.play:
         await p.play();
@@ -269,18 +290,20 @@ class RemoteHost {
           if (p.state.repeat == mode) break;
           p.cycleRepeat();
         }
+      // Checked by the player when the edit's turn comes (inside its lock),
+      // so an edit still queued there can't shift the index under it. On a
+      // mismatch nothing changes; fresh state follows as for any command.
       case RemoteOp.playAt:
-        final index = a['index']! as int;
-        if (_holds(c, index)) await p.playAt(index);
+        await p.playAtIf(a['index']! as int, a['track']! as String, epoch);
       case RemoteOp.remove:
-        final index = a['index']! as int;
-        if (_holds(c, index)) await p.removeAt(index);
+        await p.removeAtIf(a['index']! as int, a['track']! as String, epoch);
       case RemoteOp.move:
-        final from = a['from']! as int;
-        final to = a['to']! as int;
-        if (_holds(c, from) && to >= 0 && to < p.state.queue.length) {
-          p.move(from, to);
-        }
+        p.moveIf(
+          a['from']! as int,
+          a['to']! as int,
+          a['track']! as String,
+          epoch,
+        );
       case RemoteOp.playTracks:
         await _playTracks(
           a['ids']! as List<String>,
@@ -294,16 +317,6 @@ class RemoteHost {
         final tracks = await _tracks(a['ids']! as List<String>);
         if (_running && tracks.isNotEmpty) await p.appendToQueue(tracks);
     }
-  }
-
-  /// Whether the queue the controller saw is still the one playing and
-  /// still has the id it saw at [index].
-  bool _holds(RemoteCommand c, int index) {
-    final q = _player.state.queue;
-    return c.epoch == _player.queueEpoch &&
-        index >= 0 &&
-        index < q.length &&
-        q[index].id == c.args['track'];
   }
 
   Future<void> _playTracks(
@@ -340,6 +353,7 @@ class RemoteHost {
 
   /// Looks [ids] up, retrying the unknown ones every [retryEvery] for up to
   /// [retryFor] (a song the controller just stored may not have synced yet).
+  /// A lookup that throws counts as finding nothing on that try.
   Future<Map<String, Track>> _lookupAll(List<String> ids) async {
     final want = ids.toSet();
     final found = <String, Track>{};
@@ -349,10 +363,15 @@ class RemoteHost {
         for (final id in want)
           if (!found.containsKey(id)) id,
       ];
-      final got = await _lookup(missing);
-      for (final id in missing) {
-        final t = got[id];
-        if (t != null) found[id] = t;
+      try {
+        final got = await _lookup(missing);
+        for (final id in missing) {
+          final t = got[id];
+          if (t != null) found[id] = t;
+        }
+      } on Object catch (e, st) {
+        // A transient failure (e.g. the database busy): keep retrying.
+        AppLog.w('remote host: lookup failed (try ${attempt + 1})', e, st);
       }
       if (found.length == want.length || attempt >= tries || !_running) {
         return found;
