@@ -12,6 +12,7 @@ class FakeRemoteHub {
   final _dropped = <String>{};
 
   /// Every message sent through the hub, in order (as the sender made it).
+  /// Sends from dropped or unjoined devices are not recorded.
   final List<RemoteMessage> sent = [];
 
   RemoteChannel channelFor(String deviceId) =>

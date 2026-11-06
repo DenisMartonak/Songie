@@ -81,12 +81,16 @@ void main() {
     await a.send(const RemoteHello(to: 'b'));
     await _settle();
     expect(gotB, hasLength(1));
+    await b.send(const RemoteHello(to: 'a'));
+    await _settle();
+    expect(gotA, hasLength(1));
   });
 
   test('leave removes presence', () async {
     await b.leave();
     await _settle();
     expect(a.present.map((p) => p.deviceId).toSet(), {'a', 'c'});
+    expect(b.present, isEmpty);
     await a.send(const RemoteHello(to: 'b'));
     await _settle();
     expect(gotB, isEmpty);

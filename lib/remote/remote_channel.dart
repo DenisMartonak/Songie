@@ -64,10 +64,11 @@ class SupabaseRemoteChannel implements RemoteChannel {
     for (final event in const ['state', 'command', 'hello']) {
       channel.onBroadcast(
         event: event,
-        callback: (payload) => _onBroadcast(event, payload),
+        callback: (payload) => _onBroadcast(channel, event, payload),
       );
     }
     channel.subscribe((status, error) {
+      if (channel != _channel) return;
       try {
         if (status == RealtimeSubscribeStatus.subscribed) {
           final mine = _me;
@@ -83,7 +84,10 @@ class SupabaseRemoteChannel implements RemoteChannel {
 
   Future<void> _track(RealtimeChannel channel, RemotePresence me) async {
     try {
-      await channel.track(me.toJson());
+      final res = await channel.track(me.toJson());
+      if (res != ChannelResponse.ok) {
+        AppLog.w('remote channel: track answered ${res.name}');
+      }
     } on Object catch (e, s) {
       AppLog.w('remote channel: track failed', e, s);
     }
@@ -97,6 +101,7 @@ class SupabaseRemoteChannel implements RemoteChannel {
   }
 
   void _onSync(RealtimeChannel channel) {
+    if (channel != _channel) return;
     try {
       final byDevice = <String, RemotePresence>{};
       for (final s in channel.presenceState()) {
@@ -112,7 +117,12 @@ class SupabaseRemoteChannel implements RemoteChannel {
     }
   }
 
-  void _onBroadcast(String event, Map<String, dynamic> message) {
+  void _onBroadcast(
+    RealtimeChannel channel,
+    String event,
+    Map<String, dynamic> message,
+  ) {
+    if (channel != _channel) return;
     try {
       // The client hands over the envelope; the message is under `payload`.
       final inner = message['payload'];
@@ -131,7 +141,13 @@ class SupabaseRemoteChannel implements RemoteChannel {
     final channel = _channel;
     if (channel == null) return;
     try {
-      await channel.sendBroadcastMessage(event: m.event, payload: m.toJson());
+      final res = await channel.sendBroadcastMessage(
+        event: m.event,
+        payload: m.toJson(),
+      );
+      if (res != ChannelResponse.ok) {
+        AppLog.w('remote channel: send answered ${res.name}');
+      }
     } on Object catch (e, s) {
       AppLog.w('remote channel: send failed', e, s);
     }
@@ -142,6 +158,7 @@ class SupabaseRemoteChannel implements RemoteChannel {
     final channel = _channel;
     _channel = null;
     _present = const [];
+    if (!_presences.isClosed) _presences.add(_present);
     if (channel == null) return;
     try {
       await _client().removeChannel(channel);
