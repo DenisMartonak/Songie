@@ -97,9 +97,12 @@ class Rig {
     ctl = RemoteController(
       channel: hub.channelFor('c'),
       deviceId: 'c',
-      lookup: (want) async => {
-        for (final id in want)
-          if (library[id] != null) id: library[id]!,
+      lookup: (want) async {
+        if (failLookups) throw StateError('database busy');
+        return {
+          for (final id in want)
+            if (library[id] != null) id: library[id]!,
+        };
       },
       nowMs: now,
       newId: () => 'cmd${_n++}',
@@ -112,6 +115,7 @@ class Rig {
   final FakeAsync async;
   final hub = FakeRemoteHub();
   final library = <String, Track>{};
+  var failLookups = false;
   late final ScriptedHost host;
   late final RemoteController ctl;
   final links = <RemoteLink?>[];
@@ -135,7 +139,17 @@ class Rig {
   void flush() => async.flushMicrotasks();
 }
 
-void ctlTest(String name, void Function(Rig r) body) {
+/// Log lines printed during the current test (AppLog has no file in tests,
+/// so its warnings go to [debugPrint]).
+final logs = <String>[];
+
+/// Runs [body] on a fresh [Rig]; fails if anything was logged other than
+/// lines matching one of [expectLogs].
+void ctlTest(
+  String name,
+  void Function(Rig r) body, {
+  List<Pattern> expectLogs = const [],
+}) {
   test(name, () {
     fakeAsync((async) {
       final r = Rig(async);
@@ -143,13 +157,21 @@ void ctlTest(String name, void Function(Rig r) body) {
       r.ctl.deselect();
       async.flushMicrotasks();
     });
+    final unexpected = [
+      for (final l in logs)
+        if (!expectLogs.any((p) => l.contains(p))) l,
+    ];
+    expect(unexpected, isEmpty, reason: 'unexpected log lines');
   });
 }
 
 void main() {
   setUp(() {
+    logs.clear();
     final original = debugPrint;
-    debugPrint = (String? message, {int? wrapWidth}) {};
+    debugPrint = (String? message, {int? wrapWidth}) {
+      if (message != null) logs.add(message);
+    };
     addTearDown(() => debugPrint = original);
   });
 
@@ -402,4 +424,72 @@ void main() {
     expect(emitted, isEmpty);
     expect(r.ended, [RemoteEndReason.deselected]);
   });
+  ctlTest('previous mid-song restarts the current one, as the host does', (r) {
+    r.connect(stateOf(atMs: r.now(), index: 1, positionMs: 10000));
+    r.ctl.previous();
+    expect(r.ctl.state.index, 1);
+    expect(r.ctl.state.position, Duration.zero);
+
+    r.async.elapse(const Duration(seconds: 2));
+    expect(r.ctl.state.position, const Duration(seconds: 2));
+    r.ctl.previous();
+    expect(r.ctl.state.index, 0);
+    expect(r.ctl.state.position, Duration.zero);
+    r.flush();
+    expect(r.commands.map((c) => c.op), [RemoteOp.previous, RemoteOp.previous]);
+  });
+
+  ctlTest('position runs on from arrival, whatever the host clock says', (r) {
+    // The host's clock is 1 s behind this one (or the state took 1 s).
+    r.connect(stateOf(atMs: r.now() - 1000, positionMs: 10000));
+    expect(r.ctl.state.position, const Duration(seconds: 10));
+    r.async.elapse(const Duration(seconds: 1));
+    expect(r.ctl.state.position, const Duration(seconds: 11));
+  });
+
+  ctlTest('while lost, commands are neither sent nor guessed', (r) {
+    r.connect(stateOf(atMs: r.now()));
+    r.hub.drop('h');
+    r.flush();
+    expect(r.ctl.link?.status, RemoteLinkStatus.lost);
+    final before = r.ctl.state;
+    r.ctl.pause();
+    r.ctl.seek(const Duration(seconds: 50));
+    r.ctl.next();
+    r.ctl.setVolume(0.2);
+    r.ctl.removeAt(0);
+    r.ctl.addToEnd(['d']);
+    r.flush();
+    expect(r.ctl.state.playing, before.playing);
+    expect(r.ctl.state.position, before.position);
+    expect(r.ctl.state.index, before.index);
+    expect(r.ctl.state.volume, before.volume);
+    expect(r.ctl.state.queue, hasLength(3));
+    // Nothing went out (a dropped sender's messages are not recorded
+    // either, so check the controller asked for nothing).
+    r.hub.restore('h');
+    r.flush();
+    expect(r.commands, isEmpty);
+  });
+
+  ctlTest('select and deselect emit the empty state', (r) {
+    final emitted = <PlayerState>[];
+    r.ctl.states.listen(emitted.add);
+    r.connect(stateOf(atMs: r.now()));
+    expect(emitted.first.queue, isEmpty);
+    expect(emitted.last.queue, hasLength(3));
+    r.ctl.deselect();
+    r.flush();
+    expect(emitted.last.queue, isEmpty);
+    expect(emitted.last.index, -1);
+    expect(r.ctl.state.queue, isEmpty);
+  });
+
+  ctlTest('a failing lookup shows placeholders and logs it', (r) {
+    r.failLookups = true;
+    r.connect(stateOf(atMs: r.now(), queue: ['a']));
+    expect(r.ctl.state.queue.single.title, 'Unknown song');
+    expect(r.ctl.link?.status, RemoteLinkStatus.connected);
+    expect(logs.where((l) => l.contains('lookup failed')), hasLength(1));
+  }, expectLogs: ['remote controller: lookup failed']);
 }

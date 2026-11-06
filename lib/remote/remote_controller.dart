@@ -51,11 +51,6 @@ class RemoteController {
   static const Duration lostTimeout = Duration(seconds: 15);
   static const Duration tick = Duration(milliseconds: 250);
 
-  /// The most a state's `at_ms` may lie behind this device's clock and
-  /// still count as transit time; beyond it (or ahead of it) the clocks
-  /// disagree and the position runs on from when the state arrived.
-  static const int _maxLagMs = 2000;
-
   final RemoteChannel _channel;
   final String _deviceId;
   final Future<Map<String, Track>> Function(List<String> ids) _lookup;
@@ -121,6 +116,7 @@ class RemoteController {
   Future<void> select(RemotePresence device) async {
     if (device.deviceId == _deviceId) return;
     _teardown();
+    _emitReset();
     _setLink(RemoteLink(device, RemoteLinkStatus.connecting));
     _messageSub = _channel.messages.listen(_onMessage);
     _presenceSub = _channel.presences.listen(_onPresences);
@@ -132,6 +128,7 @@ class RemoteController {
   void deselect([RemoteEndReason reason = RemoteEndReason.deselected]) {
     if (_link == null) return;
     _teardown();
+    _emitReset();
     _setLink(null);
     if (!_ended.isClosed) _ended.add(reason);
   }
@@ -143,6 +140,11 @@ class RemoteController {
     _links.close();
     _states.close();
     _ended.close();
+  }
+
+  /// Tells [states] the view is empty again, as [state] now says.
+  void _emitReset() {
+    if (!_states.isClosed) _states.add(_view);
   }
 
   void _teardown() {
@@ -260,9 +262,6 @@ class RemoteController {
       _known = known;
       _remote = s;
 
-      final advancing = s.playing && !s.buffering;
-      var lag = arrivedMs - s.atMs;
-      if (lag < 0 || lag > _maxLagMs) lag = 0;
       final duration = s.durationMs == null
           ? null
           : Duration(milliseconds: s.durationMs!);
@@ -273,10 +272,11 @@ class RemoteController {
         index: index >= 0 && index < queue.length ? index : -1,
         playing: s.playing,
         buffering: s.buffering,
-        position: _capped(
-          Duration(milliseconds: s.positionMs + (advancing ? lag : 0)),
-          duration,
-        ),
+        // Runs on from when the state arrived here, not from its `at_ms`:
+        // the two devices' clocks can differ by seconds, while transit
+        // takes a fraction of one. `at_ms` stays on the wire for that
+        // reason only (it is the host's clock).
+        position: _capped(Duration(milliseconds: s.positionMs), duration),
         duration: duration,
         shuffle: s.shuffle,
         repeat: s.repeat,
@@ -356,7 +356,7 @@ class RemoteController {
     int? epoch,
   ]) async {
     final l = _link;
-    if (l == null) return;
+    if (l == null || !_canCommand) return;
     await _send(
       RemoteCommand(
         to: l.device.deviceId,
@@ -367,6 +367,11 @@ class RemoteController {
       ),
     );
   }
+
+  /// Commands go out (and change the view) only while the device is there:
+  /// not without a link, nor while it is lost.
+  bool get _canCommand =>
+      _link != null && _link!.status != RemoteLinkStatus.lost;
 
   static Duration? _durationOf(Track t) =>
       t.durationMs > 0 ? Duration(milliseconds: t.durationMs) : null;
@@ -379,25 +384,25 @@ class RemoteController {
   );
 
   Future<void> play() {
-    if (_link == null) return Future.value();
+    if (!_canCommand) return Future.value();
     _guess((s) => s.copyWith(playing: true));
     return _command(RemoteOp.play);
   }
 
   Future<void> pause() {
-    if (_link == null) return Future.value();
+    if (!_canCommand) return Future.value();
     _guess((s) => s.copyWith(playing: false));
     return _command(RemoteOp.pause);
   }
 
   Future<void> togglePlay() {
-    if (_link == null) return Future.value();
+    if (!_canCommand) return Future.value();
     _guess((s) => s.copyWith(playing: !s.playing));
     return _command(RemoteOp.toggle);
   }
 
   Future<void> next() {
-    if (_link == null) return Future.value();
+    if (!_canCommand) return Future.value();
     final s = _view;
     if (s.index >= 0 && s.index + 1 < s.queue.length) {
       _guess((s) => _startAt(s, s.index + 1));
@@ -406,36 +411,44 @@ class RemoteController {
   }
 
   Future<void> previous() {
-    if (_link == null) return Future.value();
-    final s = _view;
-    if (s.index > 0 && s.index < s.queue.length) {
-      _guess((s) => _startAt(s, s.index - 1));
+    if (!_canCommand) return Future.value();
+    final s = state;
+    if (s.index >= 0 && s.index < s.queue.length) {
+      // As the host: back one only near the start of a song that has one
+      // before it; otherwise the current one starts over.
+      final restart =
+          s.index == 0 || s.position > PlayerService.restartThreshold;
+      _guess(
+        (s) => restart
+            ? s.copyWith(position: Duration.zero)
+            : _startAt(s, s.index - 1),
+      );
     }
     return _command(RemoteOp.previous);
   }
 
   Future<void> seek(Duration d) {
-    if (_link == null) return Future.value();
+    if (!_canCommand) return Future.value();
     final p = d.isNegative ? Duration.zero : d;
     _guess((s) => s.copyWith(position: _capped(p, s.duration)));
     return _command(RemoteOp.seek, {'ms': p.inMilliseconds});
   }
 
   Future<void> setVolume(double volume) {
-    if (_link == null || volume.isNaN) return Future.value();
+    if (!_canCommand || volume.isNaN) return Future.value();
     final v = volume.clamp(0.0, 1.0);
     _guess((s) => s.copyWith(volume: v));
     return _command(RemoteOp.volume, {'v': v});
   }
 
   Future<void> setShuffle(bool on) {
-    if (_link == null) return Future.value();
+    if (!_canCommand) return Future.value();
     _guess((s) => s.copyWith(shuffle: on));
     return _command(RemoteOp.shuffle, {'on': on});
   }
 
   Future<void> setRepeat(RepeatMode mode) {
-    if (_link == null) return Future.value();
+    if (!_canCommand) return Future.value();
     _guess((s) => s.copyWith(repeat: mode));
     return _command(RemoteOp.repeat, {'mode': mode.name});
   }
@@ -444,7 +457,7 @@ class RemoteController {
   Future<void> playAt(int index) {
     final r = _remote;
     final q = _view.queue;
-    if (_link == null || r == null || index < 0 || index >= q.length) {
+    if (!_canCommand || r == null || index < 0 || index >= q.length) {
       return Future.value();
     }
     final id = q[index].id;
@@ -459,7 +472,7 @@ class RemoteController {
   Future<void> removeAt(int index) {
     final r = _remote;
     final q = _view.queue;
-    if (_link == null || r == null || index < 0 || index >= q.length) {
+    if (!_canCommand || r == null || index < 0 || index >= q.length) {
       return Future.value();
     }
     final id = q[index].id;
@@ -491,7 +504,7 @@ class RemoteController {
   Future<void> move(int from, int to) {
     final r = _remote;
     final n = _view.queue.length;
-    if (_link == null ||
+    if (!_canCommand ||
         r == null ||
         from < 0 ||
         from >= n ||
