@@ -3,4 +3,4 @@
 const String appVersion = '1.3.0';
 
 /// The build number after the `+` in pubspec.yaml's `version:` (a test checks it).
-const String appBuild = '8';
+const String appBuild = '9';
