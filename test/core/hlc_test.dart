@@ -100,13 +100,35 @@ void main() {
     expect(t.counter, 5);
   });
 
-  test('tick throws StateError instead of overflowing the counter', () {
+  test('tick spills into the next millisecond when the counter is full', () {
     final c = HlcClock(
       'd',
       last: Hlc(wallMs: 9000, counter: 99999, deviceId: 'd'),
       nowMs: () => 1000,
     );
-    expect(c.tick, throwsStateError);
+    final t = c.tick();
+    expect(t.wallMs, 9001);
+    expect(t.counter, 0);
+    expect(t.compareTo(Hlc(wallMs: 9000, counter: 99999, deviceId: 'd')), 1);
+    expect(t.pack(), '0000000009001-00000-d');
+  });
+
+  test('receive spills into the next millisecond when the counter is full', () {
+    final c = HlcClock('d', nowMs: () => 1000);
+    final r = c.receive(Hlc(wallMs: 9000, counter: 99999, deviceId: 'x'));
+    expect(r.wallMs, 9001);
+    expect(r.counter, 0);
+  });
+
+  test('100,000 ticks at a fixed wall time stay strictly increasing', () {
+    final c = HlcClock('d', nowMs: () => 5000);
+    var prev = c.tick();
+    for (var i = 0; i < 100001; i++) {
+      final t = c.tick();
+      expect(t.pack().compareTo(prev.pack()), greaterThan(0));
+      prev = t;
+    }
+    expect(prev.wallMs, 5001);
   });
 
   test('receive advances past a remote clock from the future', () {

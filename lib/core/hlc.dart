@@ -105,9 +105,11 @@ class HlcClock {
     return _last = _make(wall, counter);
   }
 
+  /// A full counter (more than 99,999 values in one millisecond) spills into
+  /// the next millisecond, so values stay increasing and packable.
   Hlc _make(int wall, int counter) {
     if (counter > _maxCounter) {
-      throw StateError('HLC counter overflow at wall=$wall');
+      return Hlc(wallMs: wall + 1, counter: 0, deviceId: deviceId);
     }
     return Hlc(wallMs: wall, counter: counter, deviceId: deviceId);
   }
