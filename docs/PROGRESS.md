@@ -2,6 +2,13 @@
 
 _Last updated: 2026-10-31_
 
+## Remote control (roadmap 5, step 3) — in progress, Tasks 1–5 of 8 done
+
+- **Branch:** `remote-control` (worktree `.worktrees/remote-control`). Spec: [remote control design](superpowers/specs/2026-11-06-remote-control-design.md). Plan: [remote control plan](superpowers/plans/2026-11-06-remote-control.md). Session log: [remote-control-session-log.md](remote-control-session-log.md). Not pushed or merged.
+- **Status:** protocol, channel and RLS migration, host, controller, and the player view with its wiring are done and reviewed. Next: Task 6 (player UI reads the view), then the devices picker and the Play on… menus. Nothing is visible in the UI yet.
+- **To resume:**
+  > Continue the remote-control plan on branch `remote-control` in `.worktrees/remote-control`, with subagent-driven development, from Task 6. Read docs/remote-control-session-log.md first. Don't merge or push.
+
 ## Plan 11 (packaging and in-app updates) — done, reviewed
 
 - **Branch:** `plan-11-packaging`. Spec: [packaging design](superpowers/specs/2026-10-31-songies-packaging-design.md). Plan: [Plan 11](superpowers/plans/2026-10-31-songies-plan-11-packaging.md). Session log: [plan-11-session-log.md](plan-11-session-log.md). Guide: [releasing.md](releasing.md). Nothing is pushed or merged.
