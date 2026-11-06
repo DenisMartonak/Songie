@@ -230,4 +230,17 @@ void main() {
     final unknownTable = rowFromServer({...theme(4), 'tbl': 'moods'});
     expect((unknownTable.serverSeq, unknownTable.row), (4, null));
   });
+
+  test('broadcastSeq reads the server seq of a changed message', () {
+    expect(broadcastSeq({'server_seq': 7}), 7);
+    expect(
+      broadcastSeq({
+        'type': 'broadcast',
+        'event': 'changed',
+        'payload': {'server_seq': 8},
+      }),
+      8,
+    );
+    expect(broadcastSeq({'event': 'changed'}), isNull);
+  });
 }

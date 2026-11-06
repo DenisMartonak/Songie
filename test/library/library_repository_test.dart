@@ -92,6 +92,39 @@ void main() {
   });
 
   group('watchPlaylists', () {
+    test('a burst of writes re-runs the summaries a few times, not once per '
+        'write, and ends on the last state', () async {
+      final seen = <int>[];
+      final sub = watchPlaylistSummaries(
+        db,
+        every: const Duration(milliseconds: 100),
+      ).listen((l) => seen.add(l.length));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(seen, [0]);
+      // A scan: a write per file, quickly.
+      for (var i = 0; i < 40; i++) {
+        await db.insertTrack(trackRow(id: 't$i'));
+        await newPlaylist('P$i');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await sub.cancel();
+      expect(seen.length, lessThan(10));
+      expect(seen.last, 40);
+    });
+
+    test('a single write still shows at once', () async {
+      final seen = <int>[];
+      final sub = watchPlaylistSummaries(
+        db,
+        every: const Duration(seconds: 10),
+      ).listen((l) => seen.add(l.length));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await newPlaylist('P');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await sub.cancel();
+      expect(seen, [0, 1]);
+    });
+
     test('sorts by name case-insensitively and hides deleted', () async {
       await newPlaylist('banana');
       await newPlaylist('Apple');

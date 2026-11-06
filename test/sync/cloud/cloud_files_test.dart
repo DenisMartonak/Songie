@@ -103,6 +103,19 @@ class _Dev {
         ),
       );
 
+  /// This device has a file for [trackId], so the track shows here.
+  Future<void> addLocalFile(String trackId) => db
+      .into(db.localFiles)
+      .insert(
+        LocalFilesCompanion.insert(
+          trackId: trackId,
+          path: '/music/$trackId.mp3',
+          state: 'present',
+          bytes: 1,
+          mtimeMs: 1,
+        ),
+      );
+
   File fontFile(String hash, String ext) =>
       File(p.join(fonts.path, '$hash.$ext'));
   File artFile(String ref) => File(p.join(art.path, ref));
@@ -292,6 +305,7 @@ void main() {
         expect(a.remote.uploads, hasLength(3));
 
         await rows(b);
+        await b.addLocalFile('t1');
         await b.files.reconcile(_uid);
         for (final r in ['$h1.jpg', 'yt2-$h2.jpg', '$h3.jpg']) {
           expect(b.artFile(r).readAsBytesSync(), _jpeg(r));
@@ -300,6 +314,30 @@ void main() {
         expect(b.remote.uploads, isEmpty);
       },
     );
+
+    test('art of a local track not shown here is not downloaded; its '
+        "listens' art and playlist covers are", () async {
+      final b = dev('b');
+      // A's local songs, whose files never came here.
+      await b.addTrack('t1', art: '$h1.jpg');
+      await b.addTrack('t2', art: '$h2.jpg');
+      await b.addListen('l1', 't2', '$h2.jpg');
+      await b.addPlaylist('p1', 'yt2-$h3.jpg');
+      for (final r in ['$h1.jpg', '$h2.jpg', 'yt2-$h3.jpg']) {
+        server.files['$_uid/art/$r'] = (_jpeg(r), 'image/jpeg');
+      }
+      await b.files.reconcile(_uid);
+      expect(b.remote.downloads.toSet(), {
+        '$_uid/art/$h2.jpg',
+        '$_uid/art/yt2-$h3.jpg',
+      });
+      expect(b.artFile('$h1.jpg').existsSync(), isFalse);
+
+      // Once its file is here, the track shows and its art comes down.
+      await b.addLocalFile('t1');
+      await b.files.reconcile(_uid);
+      expect(b.artFile('$h1.jpg').readAsBytesSync(), _jpeg('$h1.jpg'));
+    });
 
     test('a deleted track keeps its art off the bucket', () async {
       final a = dev('a');

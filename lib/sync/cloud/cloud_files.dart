@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/log.dart';
 import '../../data/database.dart';
+import '../../library/library_repository.dart' show shownHereSql;
 import 'cloud_remote.dart';
 
 /// The files synced rows point at that can't be had again elsewhere, kept in
@@ -82,9 +83,10 @@ class CloudFiles {
     try {
       final fonts = await _fontNames();
       final art = await _artRefs();
-      for (final (kind, names, dir, type) in [
-        ('font', fonts, _fontsDir, _fontType),
-        ('art', art, _artDir, (String _) => 'image/jpeg'),
+      final artShown = await _artRefs(shownHereOnly: true);
+      for (final (kind, names, dir, type, wanted) in [
+        ('font', fonts, _fontsDir, _fontType, fonts),
+        ('art', art, _artDir, (String _) => 'image/jpeg', artShown),
       ]) {
         if (names.isEmpty) continue;
         if (stop()) return const FilesOutcome(pending: null);
@@ -94,6 +96,8 @@ class CloudFiles {
           if (stop()) return const FilesOutcome(pending: null);
           final file = File(p.join(dir.path, name));
           final down = there.contains(name);
+          // Only what shows here comes down.
+          if (down && !wanted.contains(name)) continue;
           if (down ? await file.exists() : !await file.exists()) continue;
           final size = down ? 0 : await file.length();
           // The bucket refuses files over 10 MB: they stay on this device.
@@ -244,20 +248,27 @@ class CloudFiles {
   }
 
   /// The art refs of live rows that YouTube can't give again: local tracks,
-  /// listens of local tracks, and playlist covers (always picked by the
-  /// user), checked.
-  Future<Set<String>> _artRefs() async {
+  /// listens of local tracks, and playlist covers, checked. With
+  /// [shownHereOnly], local tracks only when they show on this device
+  /// ([shownHereSql]); listens show in the stats either way.
+  ///
+  /// A playlist's cover_ref is only ever set by picking a picture (Change
+  /// cover); a YouTube playlist's own art isn't stored there. Picked covers
+  /// are stored square-cropped, hence their `yt2-` prefix, so the prefix
+  /// can't (and needn't) tell them apart.
+  Future<Set<String>> _artRefs({bool shownHereOnly = false}) async {
     final rows = await _db
         .customSelect(
-          "SELECT artwork_ref AS ref FROM tracks WHERE deleted = 0 "
-          "AND source = 'local' AND artwork_ref IS NOT NULL "
+          "SELECT t.artwork_ref AS ref FROM tracks t WHERE t.deleted = 0 "
+          "AND t.source = 'local' AND t.artwork_ref IS NOT NULL "
+          '${shownHereOnly ? 'AND $shownHereSql ' : ''}'
           'UNION SELECT cover_ref AS ref FROM playlists WHERE deleted = 0 '
           'AND cover_ref IS NOT NULL '
           'UNION SELECT l.artwork_ref AS ref FROM listens l '
           'JOIN tracks t ON t.id = l.track_id '
           "WHERE l.deleted = 0 AND t.source = 'local' "
           'AND l.artwork_ref IS NOT NULL',
-          readsFrom: {_db.tracks, _db.playlists, _db.listens},
+          readsFrom: {_db.tracks, _db.playlists, _db.listens, _db.localFiles},
         )
         .get();
     return {

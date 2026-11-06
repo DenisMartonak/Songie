@@ -11,7 +11,7 @@ import 'package:songies/sync/sync_row.dart';
 class FakeServer {
   final _rows = <String, Map<String, (int, Map<String, dynamic>)>>{};
   var _seq = 0;
-  final _topics = <String, StreamController<void>>{};
+  final _topics = <String, StreamController<int?>>{};
 
   /// Whether a push that wrote rows tells the user's devices (Realtime).
   bool notify = false;
@@ -67,7 +67,7 @@ class FakeServer {
       mine[key] = (++_seq, {...wire, 'server_seq': _seq});
       written++;
     }
-    if (written > 0 && notify) broadcast(user);
+    if (written > 0 && notify) broadcast(user, _seq);
     return written;
   }
 
@@ -100,12 +100,14 @@ class FakeServer {
       e.key: e.value.$2['data'] as Map<String, dynamic>,
   };
 
-  Stream<void> topic(String user) =>
-      _topics.putIfAbsent(user, StreamController<void>.broadcast).stream;
+  Stream<int?> topic(String user) =>
+      _topics.putIfAbsent(user, StreamController<int?>.broadcast).stream;
 
-  /// A Realtime message to [user]'s devices.
-  void broadcast(String user) =>
-      _topics.putIfAbsent(user, StreamController<void>.broadcast).add(null);
+  /// A Realtime message to [user]'s devices, with the new highest server
+  /// seq (or none, as when the connection is made).
+  void broadcast(String user, [int? serverSeq]) => _topics
+      .putIfAbsent(user, StreamController<int?>.broadcast)
+      .add(serverSeq);
 
   /// The `sync-files` bucket: path to bytes and content type.
   final files = <String, (Uint8List, String)>{};
@@ -266,7 +268,7 @@ class FakeRemote implements CloudRemote {
   var live = false;
 
   @override
-  Stream<void> changes(String userId) {
+  Stream<int?> changes(String userId) {
     changesCalls++;
     live = true;
     return server.topic(userId);

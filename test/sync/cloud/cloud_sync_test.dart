@@ -11,6 +11,7 @@ import 'package:songies/data/sync_stamp.dart';
 import 'package:songies/library/favorites.dart';
 import 'package:songies/library/library_repository.dart';
 import 'package:songies/core/result.dart';
+import 'package:songies/sync/cloud/cloud_files.dart';
 import 'package:songies/sync/cloud/cloud_remote.dart';
 import 'package:songies/sync/cloud/cloud_sync.dart';
 import 'package:songies/sync/cloud/sync_status.dart';
@@ -44,6 +45,7 @@ class _Dev {
     Duration pushDelay = const Duration(hours: 1),
     int clockOffsetMs = 0,
     Duration stopWait = const Duration(seconds: 45),
+    CloudFiles Function(AppDatabase db, FakeRemote remote)? files,
   }) async {
     final db = testDb();
     final stamp = await SyncStamp.load(db, nowMs: () => _nowMs + clockOffsetMs);
@@ -57,6 +59,7 @@ class _Dev {
       network: network,
       askMerge: askMerge,
       fontsDir: fontsDir,
+      files: files?.call(db, remote),
       pushDelay: pushDelay,
       now: () => DateTime.fromMillisecondsSinceEpoch(_nowMs + clockOffsetMs),
       stopWait: stopWait,
@@ -123,6 +126,7 @@ void main() {
     Duration pushDelay = const Duration(hours: 1),
     int clockOffsetMs = 0,
     Duration stopWait = const Duration(seconds: 45),
+    CloudFiles Function(AppDatabase db, FakeRemote remote)? files,
   }) async {
     final d = await _Dev.make(
       server,
@@ -132,6 +136,7 @@ void main() {
       pushDelay: pushDelay,
       clockOffsetMs: clockOffsetMs,
       stopWait: stopWait,
+      files: files,
     );
     devs.add(d);
     return d;
@@ -855,4 +860,94 @@ void main() {
     await a.start('u1');
     expect(told, [false, true]);
   });
+
+  group('fewer calls', () {
+    test('the Realtime echo of rows this device already pulled starts no '
+        'sync; another device still pulls', () async {
+      server.notify = true;
+      final a = await dev();
+      final b = await dev();
+      await a.start('u1');
+      await b.start('u1');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      a.remote.pullCalls = 0;
+      b.remote.pullCalls = 0;
+      await a.newPlaylist('Live');
+      await a.sync.syncNow();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(a.remote.pullCalls, 1);
+      expect(b.remote.pullCalls, 1);
+      expect(await b.liveNames(), ['Live']);
+    });
+
+    test('files are reconciled on start and when rows that point at files '
+        'changed, not on every run', () async {
+      var reconciles = 0;
+      final tmp = await Directory.systemTemp.createTemp('cloud_files_due');
+      addTearDown(() => tmp.delete(recursive: true));
+      CloudFiles files(AppDatabase db, FakeRemote remote) =>
+          _CountingFiles(db, remote, tmp, () => reconciles++);
+      final a = await dev(files: files);
+      final b = await dev(files: files);
+      await a.start('u1');
+      expect(reconciles, 1);
+      await a.sync.syncNow();
+      expect(reconciles, 1);
+      // A playlist edit here.
+      await a.newPlaylist('P');
+      await a.sync.syncNow();
+      expect(reconciles, 2);
+      // Lyrics point at no file.
+      final st = await a.stamp.next(id: 't1');
+      await a.db
+          .into(a.db.lyrics)
+          .insert(
+            LyricsCompanion.insert(
+              id: 't1',
+              clock: st.clock,
+              originDevice: st.originDevice,
+              localSeq: st.localSeq,
+              kind: 'plain',
+              body: 'la',
+              fetchedAt: DateTime(2026),
+            ),
+          );
+      await a.sync.syncNow();
+      expect(reconciles, 2);
+      // Files still to go up.
+      await a.settings.setString('cloud_files_pending:u1', '1');
+      await a.sync.syncNow();
+      expect(reconciles, 3);
+      await a.sync.syncNow();
+      expect(reconciles, 3);
+
+      // A pulled playlist on another device.
+      await b.start('u1');
+      final atStart = reconciles;
+      await b.sync.syncNow();
+      expect(reconciles, atStart);
+      await a.newPlaylist('Q');
+      await a.sync.syncNow();
+      final before = reconciles;
+      await b.sync.syncNow();
+      expect(reconciles, before + 1);
+    });
+  });
+}
+
+/// [CloudFiles] that only counts reconciles.
+class _CountingFiles extends CloudFiles {
+  _CountingFiles(AppDatabase db, FakeRemote remote, Directory dir, this._on)
+    : super(db: db, remote: remote, fontsDir: dir, artDir: dir);
+
+  final void Function() _on;
+
+  @override
+  Future<FilesOutcome> reconcile(
+    String userId, {
+    bool Function()? cancelled,
+  }) async {
+    _on();
+    return const FilesOutcome(pending: false);
+  }
 }

@@ -6,6 +6,7 @@ import '../core/text_normalize.dart';
 import '../data/database.dart';
 import '../data/db_guard.dart';
 import '../data/sync_stamp.dart';
+import '../data/throttled_watch.dart';
 import 'favorites.dart';
 
 /// The longest playlist name, in UTF-16 code units.
@@ -74,10 +75,18 @@ Expression<bool> shownHere(AppDatabase db, $TracksTable tracks) =>
         ..where(db.localFiles.trackId.equalsExp(tracks.id)),
     );
 
+/// How often the playlist summaries re-run at most while writes keep coming
+/// (a library scan writes a row per file).
+const kPlaylistSummariesEvery = Duration(milliseconds: 250);
+
 /// Live playlists with their entry count, total duration and cover, ordered
 /// by name (case-insensitive). Shared by the playlist list and playlist search.
-/// Entries hidden on this device ([shownHereSql]) count for nothing.
-Stream<List<PlaylistSummary>> watchPlaylistSummaries(AppDatabase db) {
+/// Entries hidden on this device ([shownHereSql]) count for nothing. Re-runs
+/// at most once per [every] during a burst of writes.
+Stream<List<PlaylistSummary>> watchPlaylistSummaries(
+  AppDatabase db, {
+  Duration every = kPlaylistSummariesEvery,
+}) {
   const liveEntries =
       'FROM playlist_entries e JOIN tracks t ON t.id = e.track_id '
       'WHERE e.playlist_id = p.id AND e.deleted = 0 AND t.deleted = 0 '
@@ -91,7 +100,12 @@ Stream<List<PlaylistSummary>> watchPlaylistSummaries(AppDatabase db) {
     'FROM playlists p WHERE p.deleted = 0',
     readsFrom: {db.playlists, db.playlistEntries, db.tracks, db.localFiles},
   );
-  return query.watch().map((rows) {
+  return throttledWatch(
+    db,
+    {db.playlists, db.playlistEntries, db.tracks, db.localFiles},
+    query.get,
+    every: every,
+  ).map((rows) {
     final list = [
       for (final r in rows)
         PlaylistSummary(

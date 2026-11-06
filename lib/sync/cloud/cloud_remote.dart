@@ -62,10 +62,10 @@ abstract class CloudRemote {
   /// with its server seq and format.
   Future<List<PulledRow>> pull(int after, {int max = 500});
 
-  /// Fires when [userId]'s rows may have changed (and when the live
-  /// connection is (re)made, since a message may have been missed). Only a
-  /// hint to pull.
-  Stream<void> changes(String userId);
+  /// Fires when [userId]'s rows may have changed, with the new highest
+  /// server seq the message carries, and with null when the live connection
+  /// is (re)made (a message may have been missed). Only a hint to pull.
+  Stream<int?> changes(String userId);
 
   /// Drops the live connection.
   Future<void> close();
@@ -207,6 +207,15 @@ PulledRow rowFromServer(Map<String, dynamic> m) {
   }
 }
 
+/// The server seq in a `changed` Broadcast message (sync_rows_notify), at
+/// the top or under `payload`; null when it has none.
+int? broadcastSeq(Map<String, dynamic> message) {
+  final inner = message['payload'];
+  final seq =
+      message['server_seq'] ?? (inner is Map ? inner['server_seq'] : null);
+  return seq is num ? seq.toInt() : null;
+}
+
 /// [CloudRemote] on Supabase: the `push_rows` and `pull_rows` functions and
 /// the private Broadcast topic `sync:<user id>`.
 class SupabaseCloudRemote implements CloudRemote {
@@ -253,9 +262,9 @@ class SupabaseCloudRemote implements CloudRemote {
   });
 
   @override
-  Stream<void> changes(String userId) {
-    late final StreamController<void> out;
-    out = StreamController<void>(
+  Stream<int?> changes(String userId) {
+    late final StreamController<int?> out;
+    out = StreamController<int?>(
       onListen: () {
         unawaited(_drop());
         _channel = _client()
@@ -263,7 +272,10 @@ class SupabaseCloudRemote implements CloudRemote {
               'sync:$userId',
               opts: const RealtimeChannelConfig(private: true),
             )
-            .onBroadcast(event: 'changed', callback: (_) => out.add(null))
+            .onBroadcast(
+              event: 'changed',
+              callback: (m) => out.add(broadcastSeq(m)),
+            )
             .subscribe((status, _) {
               if (status == RealtimeSubscribeStatus.subscribed) out.add(null);
             });

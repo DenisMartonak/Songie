@@ -82,7 +82,7 @@ class CloudSync {
 
   late final StreamSubscription<void> _writesSub;
   StreamSubscription<NetworkKind>? _netSub;
-  StreamSubscription<void>? _changesSub;
+  StreamSubscription<int?>? _changesSub;
   Timer? _pushTimer;
 
   /// The signed-in account; null when signed out.
@@ -99,6 +99,17 @@ class CloudSync {
   /// A [stop] still tidying up; [start] waits for it.
   Future<void>? _stopping;
   bool _again = false;
+
+  /// The highest server seq pulled for the signed-in account.
+  int _pulled = 0;
+
+  /// The highest server seq a Realtime message named during a run; after
+  /// it, one more run follows only if the run didn't pull that far.
+  int _heard = 0;
+
+  /// Whether the next run reconciles files: on start, and after rows that
+  /// point at files changed, or a reconcile that didn't finish.
+  bool _filesDue = true;
 
   /// Set during a run: a push failed (shown as error once the pull is done).
   bool _pushFailed = false;
@@ -166,8 +177,13 @@ class CloudSync {
       await _settings.getString(_syncedKey(userId)) ?? '',
     );
     if (gen != _gen) return;
+    final pulled = await _getInt(_pullKey(userId));
+    if (gen != _gen) return;
     _uid = userId;
     _onServer.clear();
+    _pulled = pulled;
+    _heard = 0;
+    _filesDue = true;
     _setStatus(
       SyncStatus(
         _offline ? SyncPhase.offline : SyncPhase.idle,
@@ -176,7 +192,7 @@ class CloudSync {
     );
     _changesSub = _remote
         .changes(userId)
-        .listen((_) => unawaited(syncNow()), onError: (Object _) {});
+        .listen(_onChange, onError: (Object _) {});
     await syncNow();
   }
 
@@ -241,6 +257,21 @@ class CloudSync {
       return running;
     }
     return _running = _loop();
+  }
+
+  /// A Realtime message: syncs unless it names rows already pulled (such as
+  /// the echo of this device's own push). During a run that decision waits
+  /// for the run's pull.
+  void _onChange(int? seq) {
+    if (_uid == null) return;
+    if (seq != null) {
+      if (seq <= _pulled) return;
+      if (_running != null) {
+        if (seq > _heard) _heard = seq;
+        return;
+      }
+    }
+    unawaited(syncNow());
   }
 
   /// A local write to a synced table: pushes after [pushDelay] without
@@ -320,6 +351,8 @@ class CloudSync {
       do {
         _again = false;
         await _runOnce(_uid!, _gen);
+        if (_heard > _pulled) _again = true;
+        _heard = 0;
       } while (_again && _uid != null && identical(_runToken, token));
     } finally {
       if (identical(_runToken, token)) {
@@ -346,8 +379,20 @@ class CloudSync {
       final updateNeeded = (await _readParked(uid))?.newer ?? false;
       _check(gen);
       // Never throws; offline it stops quietly and catches up next run.
-      final files = await _files?.reconcile(uid, cancelled: () => gen != _gen);
+      final due = _filesDue || await _settings.getString(_filesKey(uid)) == '1';
       _check(gen);
+      _filesDue = false;
+      final files = due
+          ? await _files?.reconcile(uid, cancelled: () => gen != _gen)
+          : null;
+      _check(gen);
+      if (files != null &&
+          (files.pending == null ||
+              files.more ||
+              files.failed ||
+              files.offline)) {
+        _filesDue = true;
+      }
       if (files?.pending case final pending?) {
         await _settings.setString(_filesKey(uid), pending ? '1' : null);
         _check(gen);
@@ -429,7 +474,10 @@ class CloudSync {
           send.add(r);
         }
       }
-      if (send.isNotEmpty) await _pushRows(send);
+      if (send.isNotEmpty) {
+        if (send.any((r) => _pointsAtFiles.contains(r.table))) _filesDue = true;
+        await _pushRows(send);
+      }
       final next = page.next;
       final to = next == null || next > high ? high : next;
       if (to > seq) {
@@ -540,6 +588,7 @@ class CloudSync {
         if (p.fmt > kRowFormat) newer = true;
       }
       final last = page.last.serverSeq;
+      if (rows.any((r) => _pointsAtFiles.contains(r.table))) _filesDue = true;
       await _db.transaction(() async {
         if (rows.isNotEmpty) {
           await RowApplier(_db, _stamp, now: _now).apply(rows);
@@ -554,6 +603,7 @@ class CloudSync {
         );
       }
       after = last;
+      if (last > _pulled) _pulled = last;
       await _markOnServer(uid, rows);
       await _pushSafe(uid, gen);
       if (page.length < kCloudPageSize) return;
@@ -660,6 +710,14 @@ class CloudSync {
   void _check(int gen) {
     if (gen != _gen) throw const _Stopped();
   }
+
+  /// The tables whose rows point at synced files (fonts and art).
+  static const _pointsAtFiles = {
+    SyncTable.fonts,
+    SyncTable.playlists,
+    SyncTable.tracks,
+    SyncTable.listens,
+  };
 
   static bool _tooBig(SyncRow r) =>
       utf8.encode(jsonEncode(rowToServer(r)['data'])).length > _maxRowBytes;
