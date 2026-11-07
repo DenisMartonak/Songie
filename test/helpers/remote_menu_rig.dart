@@ -47,13 +47,14 @@ class RemoteMenuRig {
         ),
       );
 
-  /// Keeps the online devices loaded, as the devices button does in the app.
-  /// Call after the app is pumped.
+  /// Mirrors main.dart, which listens to remoteHostFollowerProvider for the
+  /// life of the app (that keeps the online devices loaded). Call after the
+  /// app is pumped.
   Future<void> watchDevices(WidgetTester tester) async {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(Scaffold).first),
     );
-    final sub = container.listen(remoteDevicesProvider, (_, _) {});
+    final sub = container.listen(remoteHostFollowerProvider, (_, _) {});
     addTearDown(sub.close);
     await flush(tester);
   }

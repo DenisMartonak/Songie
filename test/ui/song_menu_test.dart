@@ -13,6 +13,7 @@ import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/ui/home/home_page.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
+import 'package:songies/ui/remote/devices_button.dart';
 import 'package:songies/ui/search/search_page.dart';
 import 'package:songies/library/favorites.dart';
 import 'package:songies/ui/widgets/artwork.dart';
@@ -759,6 +760,9 @@ void main() {
     ) async {
       await rig.join('d1', 'Desk');
       await openRecent(tester);
+      // Phone layout, no devices button mounted: the app-wide follower keeps
+      // the devices loaded.
+      expect(find.byType(DevicesButton), findsNothing);
       expect(find.text('Play on Desk'), findsOneWidget);
       expect(find.text('Add to queue on Desk'), findsOneWidget);
       await choose(tester, 'playOn.d1');

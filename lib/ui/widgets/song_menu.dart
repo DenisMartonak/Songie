@@ -178,7 +178,8 @@ Future<void> showSongMenu(
   final islands = Islands.of(context);
   // The menu closes when an entry is chosen: the sends outlive `ref`.
   final container = ProviderScope.containerOf(context);
-  // The devices button keeps this provider alive; unloaded, none are offered.
+  // remoteHostFollowerProvider (listened to in main) keeps this loaded on
+  // every screen; unloaded, none are offered.
   final devices = playOnDevices(ref.read(remoteDevicesProvider).value);
   final playable = song.isYouTube && !song.unavailable;
   // Only Remove download needs it. Null where the app paths are not set up

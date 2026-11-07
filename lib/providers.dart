@@ -621,6 +621,9 @@ final remoteHostFollowerProvider = Provider<void>((ref) {
   // A listener, not just a read, so the session follows the account even
   // while nothing else watches it.
   ref.listen(_remoteSessionProvider, (_, _) {}, fireImmediately: true);
+  // Also keeps the online devices loaded, so the song and playlist menus
+  // (opened on any screen, with no devices button mounted) can offer Play on.
+  ref.listen(remoteDevicesProvider, (_, _) {}, fireImmediately: true);
 });
 
 /// Controls another device; null signed out.
