@@ -10,6 +10,7 @@ import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
 import 'package:songies/remote/remote_channel.dart';
+import 'package:songies/remote/remote_controller.dart';
 import 'package:songies/remote/remote_host.dart';
 import 'package:songies/remote/remote_protocol.dart';
 
@@ -462,6 +463,47 @@ void main() {
     expect(r.player.queueEpoch, epoch);
     r.async.elapse(const Duration(milliseconds: 300));
     expect(r.states, isNotEmpty);
+  });
+
+  group('a long list sent in windows arrives in order', () {
+    final many = [for (var i = 0; i < 5000; i++) 'id$i'];
+
+    RemoteController controllerOn(Rig r) {
+      for (final id in many) {
+        r.library[id] = track(id);
+      }
+      return RemoteController(
+        channel: r.hub.channelFor('c'),
+        deviceId: 'c',
+        lookup: (_) async => const {},
+      );
+    }
+
+    hostTest('addNext parts follow each other after the current song', (r) {
+      final ctl = controllerOn(r);
+      r.playQueue(['a', 'b']);
+      r.command(RemoteOp.addNext, {
+        'ids': ['q'],
+      });
+      r.library['q'] = track('q');
+      r.async.elapse(const Duration(seconds: 1));
+      expect(ids(r.player.state.queue), ['a', 'q', 'b']);
+      ctl.addNextOn(_presenceOf('h'), many);
+      r.async.elapse(const Duration(seconds: 1));
+      expect(r.hub.sent.whereType<RemoteCommand>().length, greaterThan(3));
+      expect(ids(r.player.state.queue), ['a', 'q', ...many, 'b']);
+      ctl.dispose();
+    });
+
+    hostTest('playTracks then addToEnd parts give the windowed list', (r) {
+      final ctl = controllerOn(r);
+      r.playQueue(['a']);
+      ctl.playTracksOn(_presenceOf('h'), many, startIndex: 2500);
+      r.async.elapse(const Duration(seconds: 1));
+      expect(ids(r.player.state.queue), many.sublist(1500));
+      expect(r.player.state.current?.id, 'id2500');
+      ctl.dispose();
+    });
   });
 
   group('unknown ids are retried until they arrive', () {

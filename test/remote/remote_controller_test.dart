@@ -175,10 +175,8 @@ void main() {
     addTearDown(() => debugPrint = original);
   });
 
-  ctlTest('sendTo commands a device without a link', (r) {
-    r.ctl.sendTo(presenceOf('h'), RemoteOp.addNext, {
-      'ids': ['a'],
-    });
+  ctlTest('addNextOn commands a device without a link', (r) {
+    r.ctl.addNextOn(presenceOf('h'), ['a']);
     r.flush();
     expect(r.ctl.link, isNull);
     expect(r.commands.single.to, 'h');
@@ -188,6 +186,83 @@ void main() {
     });
     expect(r.commands.single.id, 'cmd0');
     expect(r.commands.single.epoch, isNull);
+  });
+
+  group('long lists go in windows of $kRemoteQueueWindow ids', () {
+    final many = [for (var i = 0; i < 5000; i++) 'id$i'];
+
+    List<String> idsOf(RemoteCommand c) => c.args['ids']! as List<String>;
+
+    ctlTest('playTracks from deep in the list: the first message holds the '
+        'start song, the rest follow in order', (r) {
+      r.connect(stateOf(atMs: r.now()));
+      r.ctl.playTracks(many, startIndex: 2500, sourcePlaylistId: 'p1');
+      r.flush();
+      final sent = r.commands;
+      expect(sent.first.op, RemoteOp.playTracks);
+      final first = idsOf(sent.first);
+      expect(first.length, lessThanOrEqualTo(kRemoteQueueWindow));
+      expect(first[sent.first.args['start']! as int], 'id2500');
+      expect(sent.first.args['playlist'], 'p1');
+      for (final c in sent.skip(1)) {
+        expect(c.op, RemoteOp.addToEnd);
+        expect(idsOf(c).length, lessThanOrEqualTo(kRemoteQueueWindow));
+      }
+      // In order from the window's start (up to 1,000 songs before the
+      // start song) to the end of the list.
+      final all = [for (final c in sent) ...idsOf(c)];
+      final from = many.indexOf(first.first);
+      expect(from, 2500 - kRemoteQueueWindow ~/ 2);
+      expect(all, many.sublist(from));
+    });
+
+    ctlTest('playTracks near the start keeps the whole list', (r) {
+      r.connect(stateOf(atMs: r.now()));
+      r.ctl.playTracks(many, startIndex: 10);
+      r.flush();
+      final sent = r.commands;
+      expect(sent.first.args['start'], 10);
+      expect([for (final c in sent) ...idsOf(c)], many);
+      expect(sent, hasLength(3));
+    });
+
+    ctlTest('playTracks near the end fills the window from before', (r) {
+      r.connect(stateOf(atMs: r.now()));
+      r.ctl.playTracks(many, startIndex: 4990);
+      r.flush();
+      final sent = r.commands;
+      expect(sent, hasLength(1));
+      expect(idsOf(sent.single), many.sublist(5000 - kRemoteQueueWindow));
+      expect(idsOf(sent.single)[sent.single.args['start']! as int], 'id4990');
+    });
+
+    ctlTest('addNext and addToEnd are chunked in order', (r) {
+      r.connect(stateOf(atMs: r.now()));
+      r.ctl.addNext(many);
+      r.flush();
+      var sent = r.commands;
+      expect(sent.map((c) => c.op).toSet(), {RemoteOp.addNext});
+      expect(sent.map((c) => idsOf(c).length), [2000, 2000, 1000]);
+      expect([for (final c in sent) ...idsOf(c)], many);
+
+      r.hub.sent.clear();
+      r.ctl.addToEnd(many);
+      r.flush();
+      sent = r.commands;
+      expect(sent.map((c) => c.op).toSet(), {RemoteOp.addToEnd});
+      expect([for (final c in sent) ...idsOf(c)], many);
+    });
+
+    ctlTest('playTracksOn windows the same way without a link', (r) {
+      r.ctl.playTracksOn(presenceOf('h'), many, startIndex: 2500);
+      r.flush();
+      final sent = r.commands;
+      expect(r.ctl.link, isNull);
+      expect(sent.every((c) => c.to == 'h'), isTrue);
+      expect(sent.first.op, RemoteOp.playTracks);
+      expect(idsOf(sent.first)[sent.first.args['start']! as int], 'id2500');
+      expect([for (final c in sent) ...idsOf(c)], many.sublist(1500));
+    });
   });
 
   ctlTest('hello on select, connected on first state', (r) {

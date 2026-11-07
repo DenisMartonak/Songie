@@ -369,14 +369,21 @@ class RemoteController {
     RemoteCommand(to: to, id: _newId(), op: op, args: args, epoch: epoch),
   );
 
-  /// Sends [op] to [d] with no link needed (Play on / Add to queue on from a
-  /// menu): the device is not selected and the view does not change. It does
-  /// not sync; a caller sending track ids syncs first.
-  Future<void> sendTo(
+  /// Plays [ids] on [d] from [startIndex] with no link needed (Play on from
+  /// a menu): the device is not selected and the view does not change. It
+  /// does not sync; a caller sending track ids syncs first. Windowed as
+  /// [playTracks].
+  Future<void> playTracksOn(
     RemotePresence d,
-    RemoteOp op,
-    Map<String, Object?> args,
-  ) => _commandTo(d.deviceId, op, args);
+    List<String> ids, {
+    int startIndex = 0,
+    String? sourcePlaylistId,
+  }) => _playTracksTo(d.deviceId, ids, startIndex, sourcePlaylistId);
+
+  /// Queues [ids] after [d]'s current song with no link needed (Add to
+  /// queue on from a menu); as [playTracksOn] otherwise.
+  Future<void> addNextOn(RemotePresence d, List<String> ids) =>
+      _idsTo(d.deviceId, RemoteOp.addNext, ids);
 
   /// Commands go out (and change the view) only while the device is there:
   /// not without a link, nor while it is lost.
@@ -541,26 +548,67 @@ class RemoteController {
   }
 
   /// Plays [ids] on the host from [startIndex]; the view follows its state.
+  ///
+  /// A broadcast has a size cap, so a list over [kRemoteQueueWindow] ids
+  /// goes in parts: first a window of that many holding the start song
+  /// (from up to half a window before it, more near the end of the list),
+  /// then the rest after the window in [RemoteOp.addToEnd] parts, in order.
+  /// Songs before the window are left out, as the host's own window would
+  /// not show them either.
   Future<void> playTracks(
     List<String> ids, {
     int startIndex = 0,
     String? sourcePlaylistId,
   }) {
-    if (ids.isEmpty) return Future.value();
-    return _command(RemoteOp.playTracks, {
-      'ids': ids,
-      'start': startIndex,
+    final l = _link;
+    if (l == null || !_canCommand) return Future.value();
+    return _playTracksTo(l.device.deviceId, ids, startIndex, sourcePlaylistId);
+  }
+
+  /// Queued right after the current song (after songs queued before), in
+  /// parts of at most [kRemoteQueueWindow] ids sent in order: the host puts
+  /// each part after the queued songs before it, so the order holds.
+  Future<void> addNext(List<String> ids) {
+    final l = _link;
+    if (l == null || !_canCommand) return Future.value();
+    return _idsTo(l.device.deviceId, RemoteOp.addNext, ids);
+  }
+
+  /// Queued at the end, in parts as [addNext].
+  Future<void> addToEnd(List<String> ids) {
+    final l = _link;
+    if (l == null || !_canCommand) return Future.value();
+    return _idsTo(l.device.deviceId, RemoteOp.addToEnd, ids);
+  }
+
+  Future<void> _playTracksTo(
+    String to,
+    List<String> ids,
+    int startIndex,
+    String? sourcePlaylistId,
+  ) async {
+    if (ids.isEmpty) return;
+    const w = kRemoteQueueWindow;
+    final from = ids.length <= w
+        ? 0
+        : max(0, min(startIndex - w ~/ 2, ids.length - w));
+    final end = min(ids.length, from + w);
+    await _commandTo(to, RemoteOp.playTracks, {
+      'ids': ids.sublist(from, end),
+      'start': startIndex - from,
       'playlist': sourcePlaylistId,
     });
+    if (end < ids.length) {
+      await _idsTo(to, RemoteOp.addToEnd, ids.sublist(end));
+    }
   }
 
-  Future<void> addNext(List<String> ids) {
-    if (ids.isEmpty) return Future.value();
-    return _command(RemoteOp.addNext, {'ids': ids});
-  }
-
-  Future<void> addToEnd(List<String> ids) {
-    if (ids.isEmpty) return Future.value();
-    return _command(RemoteOp.addToEnd, {'ids': ids});
+  /// Sends [ids] as [op] in parts of at most [kRemoteQueueWindow], in order.
+  Future<void> _idsTo(String to, RemoteOp op, List<String> ids) async {
+    for (var i = 0; i < ids.length; i += kRemoteQueueWindow) {
+      await _commandTo(to, op, {
+        'ids': ids.sublist(i, min(ids.length, i + kRemoteQueueWindow)),
+      });
+    }
   }
 }

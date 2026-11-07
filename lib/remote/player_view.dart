@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../core/log.dart';
 import '../data/database.dart';
 import '../player/player_service.dart';
@@ -173,17 +175,28 @@ class RemotePlayerView implements PlayerView {
     await _controller.addToEnd(_ids(tracks));
   }
 
-  /// A failed sync still lets the command go: the host waits a little for
-  /// ids it lacks and the songs may well be there already.
-  Future<void> _sync() async {
-    try {
-      await _syncNow();
-    } on Object catch (e, s) {
-      AppLog.w('remote view: sync before sending failed', e, s);
-    }
-  }
+  Future<void> _sync() => syncBeforeSending(_syncNow);
 
   static List<String> _ids(List<Track> tracks) => [
     for (final t in tracks) t.id,
   ];
+}
+
+/// How long a send of track ids waits for the sync before it (P2). The sync
+/// can be one already running, which may take long; the host retries ids it
+/// lacks for 5 s, which covers songs still on their way.
+const Duration kSyncBeforeSendWait = Duration(seconds: 3);
+
+/// Runs [syncNow] before songs are sent to another device, waiting
+/// [kSyncBeforeSendWait] at most. A sync that fails or takes longer still
+/// lets the command go: the host may well have the songs already. Shared by
+/// the remote view and the menus' Play on.
+Future<void> syncBeforeSending(Future<void> Function() syncNow) async {
+  try {
+    await syncNow().timeout(kSyncBeforeSendWait);
+  } on TimeoutException {
+    AppLog.i('remote: sending without waiting longer for the sync');
+  } on Object catch (e, s) {
+    AppLog.w('remote: sync before sending failed', e, s);
+  }
 }

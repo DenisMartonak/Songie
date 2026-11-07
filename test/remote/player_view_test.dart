@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
@@ -199,6 +202,20 @@ void main() {
       syncError = StateError('offline');
       await view.addNext([track('a')]);
       expect(commands().single.op, RemoteOp.addNext);
+    });
+
+    test('a sync that never ends holds the command 3 s at most', () {
+      fakeAsync((async) {
+        final never = Completer<void>();
+        final slow = RemotePlayerView(controller, () => never.future);
+        var done = false;
+        slow.addNext([track('a')]).then((_) => done = true);
+        async.elapse(const Duration(milliseconds: 2900));
+        expect(commands(), isEmpty);
+        async.elapse(const Duration(milliseconds: 200));
+        expect(done, isTrue);
+        expect(commands().single.op, RemoteOp.addNext);
+      });
     });
 
     test('transport calls go to the controller', () async {
