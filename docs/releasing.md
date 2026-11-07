@@ -101,7 +101,7 @@ The Report a bug form in Settings sends a report to a Discord channel through a 
 1. Pick the new version, for example `1.1.0`.
 2. The version is written in two places. Change both:
    - `version:` in `pubspec.yaml`, for example `version: 1.1.0+2`
-   - `appVersion` in `lib/core/app_version.dart`, for example `'1.1.0'`
+   - `appVersion` and `appBuild` in `lib/core/app_version.dart`, for example `'1.1.0'` and `'2'` (the number after the `+`)
 3. The number after the `+` is the build number. It must go up on every release (1, 2, 3, ...). Android refuses to install a lower one over a higher one, and the workflow fails if it did not go up.
 4. Commit and push the change.
 5. Tag and push the tag. The tag must be `v` plus the version exactly:
