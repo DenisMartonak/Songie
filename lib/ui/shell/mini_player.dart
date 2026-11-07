@@ -7,12 +7,14 @@ import '../../router.dart';
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
 import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
+import '../../remote/remote_controller.dart' show RemoteLink;
 import '../remote/remote_strip.dart' show remoteStripText;
 import '../widgets/artwork.dart';
 
 /// The phone's mini-player: 48 high with an 8 px side margin, filled with the
 /// theme's mini-player tint and a 2 px accent progress line along the bottom.
-/// Renders nothing while the queue is empty. Tapping it opens Now Playing;
+/// Renders nothing while the queue is empty, unless another device is
+/// controlled: then it says which. Tapping it opens Now Playing;
 /// swiping it left or right skips to the next or previous track, the content
 /// following the finger. A track change crossfades the art and slides the
 /// titles in from the side the swipe came from.
@@ -100,7 +102,10 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     final track = ref.watch(
       playerViewStateProvider.select((s) => s.value?.current),
     );
-    if (track == null) return const SizedBox.shrink();
+    final link = ref.watch(remoteLinkProvider).value;
+    if (track == null) {
+      return link == null ? const SizedBox.shrink() : _linkOnly(link);
+    }
     if (track.id != _shownTrackId) {
       // A swipe's direction applies to the change it caused, once.
       _direction = _shownTrackId == null ? 0 : _pendingDirection;
@@ -112,7 +117,6 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     final playing = ref.watch(
       playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
-    final link = ref.watch(remoteLinkProvider).value;
     final trackKey = ValueKey(track.id);
 
     return Padding(
@@ -230,6 +234,47 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                   color: colors.text.withAlpha(51),
                   alignment: Alignment.centerLeft,
                   child: const _Progress(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  /// Another device is controlled and plays nothing (or is still being
+  /// reached): the pill tells which device, and opens Now Playing (with its
+  /// devices button) as usual.
+  Widget _linkOnly(RemoteLink link) {
+    _shownTrackId = null;
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: MiniPlayer.sideMargin),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => openNowPlaying(GoRouter.of(context)),
+        child: Container(
+          key: const Key('miniPlayer.pill'),
+          height: MiniPlayer.height,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: colors.miniPlayer,
+            borderRadius: BorderRadius.circular(colors.radius),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.devices_rounded, size: 20, color: colors.accent),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  remoteStripText(link),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],

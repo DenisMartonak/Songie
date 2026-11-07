@@ -328,7 +328,7 @@ class UiHarness {
   /// [disableAnimations], as under the system's "remove animations".
   Widget app({
     required String initialLocation,
-    required List<GoRoute> routes,
+    required List<RouteBase> routes,
     ThemeSpec theme = ThemeSpec.builtInDefault,
     List<Override> extraOverrides = const [],
     bool disableAnimations = false,

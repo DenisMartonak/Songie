@@ -760,9 +760,6 @@ void main() {
     ) async {
       await rig.join('d1', 'Desk');
       await openRecent(tester);
-      // Phone layout, no devices button mounted: the app-wide follower keeps
-      // the devices loaded.
-      expect(find.byType(DevicesButton), findsNothing);
       expect(find.text('Play on Desk'), findsOneWidget);
       expect(find.text('Add to queue on Desk'), findsOneWidget);
       await choose(tester, 'playOn.d1');
@@ -777,6 +774,20 @@ void main() {
       expect(h.cloudSync.syncNowCalls, 1);
       expect(queueIds(), isEmpty);
       expect(find.text('Playing on Desk'), findsOneWidget);
+    });
+
+    uiTest('offered where no devices button is mounted (Search)', (
+      tester,
+    ) async {
+      await rig.join('d1', 'Desk');
+      await real(tester, () => h.addTrack('t1', title: 'One More Time'));
+      extra = rig.overrides;
+      await pumpSearch(tester, 'one more');
+      await rig.watchDevices(tester);
+      // The app-wide follower keeps the devices loaded.
+      expect(find.byType(DevicesButton), findsNothing);
+      await longPress(tester, find.byKey(const Key('search.song.t1')));
+      expect(find.text('Play on Desk'), findsOneWidget);
     });
 
     uiTest('Add to queue on Desk sends addNext', (tester) async {

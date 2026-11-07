@@ -23,9 +23,11 @@ class PhoneShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    final hasMini = ref.watch(
-      playerStateProvider.select((s) => s.value?.current != null),
-    );
+    // Also while another device is controlled, whatever its queue: the mini
+    // player then says which device ("Connecting to …", "Playing on …").
+    final hasMini =
+        ref.watch(remoteLinkProvider.select((l) => l.value != null)) ||
+        ref.watch(playerStateProvider.select((s) => s.value?.current != null));
     final downloading = ref.watch(downloadsActiveProvider);
     final banner = ref.watch(downloadsBannerVisibleProvider);
     final media = MediaQuery.of(context);
