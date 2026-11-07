@@ -8,6 +8,7 @@ import '../../providers.dart';
 import '../../youtube/yt_models.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
+import '../remote/remote_islands.dart';
 
 /// What the user is told for a [PlayerState.error]. [notice] supplies the last
 /// failure's reason for [PlayerService.tooManyFailuresError].
@@ -44,7 +45,8 @@ bool _needsSignIn(String reason) =>
       _ => false,
     };
 
-/// Shows an island whenever the player reports a new error or skips a song.
+/// Shows an island whenever the player reports a new error or skips a song
+/// (and, through [RemoteEndedIslands], when a remote link ends).
 class PlayerErrorIslands extends ConsumerWidget {
   const PlayerErrorIslands({required this.child, super.key});
 
@@ -84,6 +86,7 @@ class PlayerErrorIslands extends ConsumerWidget {
         );
       },
     );
-    return child;
+    // The same single host tells when a remote link ends.
+    return RemoteEndedIslands(child: child);
   }
 }

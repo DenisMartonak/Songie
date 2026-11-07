@@ -7,6 +7,7 @@ import '../../router.dart';
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
 import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
+import '../remote/remote_strip.dart' show remoteStripText;
 import '../widgets/artwork.dart';
 
 /// The phone's mini-player: 48 high with an 8 px side margin, filled with the
@@ -111,6 +112,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     final playing = ref.watch(
       playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
+    final link = ref.watch(remoteLinkProvider).value;
     final trackKey = ValueKey(track.id);
 
     return Padding(
@@ -185,7 +187,10 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                                 child: _Titles(
                                   key: trackKey,
                                   title: track.title,
-                                  artist: track.artist,
+                                  // While remote, the strip's text.
+                                  artist: link == null
+                                      ? track.artist
+                                      : remoteStripText(link),
                                   colors: colors,
                                 ),
                               ),

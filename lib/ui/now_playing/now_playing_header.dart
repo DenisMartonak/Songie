@@ -5,6 +5,8 @@ import '../../providers.dart';
 import '../../remote/remote_controller.dart' show kRemoteUnknownSource;
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
+import '../remote/devices_button.dart';
+import '../remote/remote_strip.dart';
 import '../widgets/song_menu.dart';
 
 /// The page's top row: a close button (a chevron on a phone, an X on the
@@ -52,40 +54,48 @@ class NowPlayingHeader extends ConsumerWidget {
             color: colors.text,
             size: 24,
           );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-      child: Row(
-        children: [
-          wide ? more : close,
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  source == null ? 'NOW PLAYING' : 'PLAYING FROM',
-                  style: TextStyle(
-                    color: colors.text.withAlpha(179),
-                    fontSize: 11,
-                    letterSpacing: 1,
-                  ),
-                ),
-                if (source != null)
-                  Text(
-                    source,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+    final devices = DevicesButton(iconSize: 24, color: colors.text);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Row(
+            children: [
+              wide ? more : close,
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      source == null ? 'NOW PLAYING' : 'PLAYING FROM',
+                      style: TextStyle(
+                        color: colors.text.withAlpha(179),
+                        fontSize: 11,
+                        letterSpacing: 1,
+                      ),
                     ),
-                  ),
-              ],
-            ),
+                    if (source != null)
+                      Text(
+                        source,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.text,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              devices,
+              wide ? close : more,
+            ],
           ),
-          wide ? close : more,
-        ],
-      ),
+        ),
+        const RemoteStrip(),
+      ],
     );
   }
 }

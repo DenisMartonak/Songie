@@ -11,6 +11,8 @@ import '../../remote/remote_controller.dart' show kRemoteUnknownSource;
 import '../../router.dart';
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
+import '../remote/devices_button.dart';
+import '../remote/remote_strip.dart';
 import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
 import '../widgets/artwork.dart';
 import '../widgets/favorite_star.dart';
@@ -32,28 +34,34 @@ class PlayerBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    return SizedBox(
-      key: const Key('playerBar'),
-      height: height,
-      child: ColoredBox(
-        key: const Key('playerBar.background'),
-        color: Color.lerp(colors.surface, colors.miniPlayer, _tintBlend)!,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: LayoutBuilder(
-            builder: (context, box) {
-              final middle = (box.maxWidth * 0.4).clamp(300.0, 620.0);
-              return Row(
-                children: [
-                  const Expanded(child: _NowPlaying()),
-                  SizedBox(width: middle, child: const _Transport()),
-                  const Expanded(child: _QueueAndVolume()),
-                ],
-              );
-            },
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const RemoteStrip(),
+        SizedBox(
+          key: const Key('playerBar'),
+          height: height,
+          child: ColoredBox(
+            key: const Key('playerBar.background'),
+            color: Color.lerp(colors.surface, colors.miniPlayer, _tintBlend)!,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  final middle = (box.maxWidth * 0.4).clamp(300.0, 620.0);
+                  return Row(
+                    children: [
+                      const Expanded(child: _NowPlaying()),
+                      SizedBox(width: middle, child: const _Transport()),
+                      const Expanded(child: _QueueAndVolume()),
+                    ],
+                  );
+                },
+              ),
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -380,6 +388,7 @@ class _QueueAndVolume extends ConsumerWidget {
           selectedIcon: const Icon(Icons.lyrics),
           onPressed: () => ref.read(lyricsPanelOpenProvider.notifier).toggle(),
         ),
+        const DevicesButton(),
         IconButton(
           key: const Key('playerBar.queue'),
           tooltip: 'Queue',
