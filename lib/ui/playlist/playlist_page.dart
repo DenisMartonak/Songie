@@ -458,6 +458,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     unawaited(
       sendIdsTo(
         ProviderScope.containerOf(context),
+        Islands.of(context),
         device,
         ids: [for (final r in rows) r.track.id],
         play: play,

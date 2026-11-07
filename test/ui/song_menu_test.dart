@@ -776,6 +776,7 @@ void main() {
       });
       expect(h.cloudSync.syncNowCalls, 1);
       expect(queueIds(), isEmpty);
+      expect(find.text('Playing on Desk'), findsOneWidget);
     });
 
     uiTest('Add to queue on Desk sends addNext', (tester) async {
@@ -789,6 +790,7 @@ void main() {
         'ids': ['t1'],
       });
       expect(queueIds(), isEmpty);
+      expect(find.text('Added to queue on Desk'), findsOneWidget);
     });
 
     uiTest('an incompatible device gets no entry', (tester) async {

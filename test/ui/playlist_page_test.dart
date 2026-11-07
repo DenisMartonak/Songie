@@ -207,6 +207,7 @@ void main() {
       });
       expect(h.cloudSync.syncNowCalls, 1);
       expect(h.player.state.queue, isEmpty);
+      expect(find.text('Playing on Desk'), findsOneWidget);
     });
 
     uiTest('Add to queue on Desk sends addNext with the ids', (tester) async {
@@ -221,6 +222,7 @@ void main() {
       expect(c.args, {
         'ids': ['t1', 't2', 't3'],
       });
+      expect(find.text('Added to queue on Desk'), findsOneWidget);
     });
   });
 

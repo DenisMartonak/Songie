@@ -307,6 +307,7 @@ Future<void> showSongMenu(
       if (await track() case final t?) {
         await sendIdsTo(
           container,
+          islands,
           chosen.$4!,
           ids: [t.id],
           play: action == SongMenuAction.playOn,
