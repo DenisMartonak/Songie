@@ -388,9 +388,9 @@ Future<void> main() async {
       ),
     ],
   );
-  container.read(cloudSyncFollowerProvider);
-  // Listened to, not read: an unlistened provider is paused and would not
-  // follow the account.
+  // Both listened to, not read: an unlistened provider is paused and would
+  // not follow the account.
+  container.listen(cloudSyncFollowerProvider, (_, _) {});
   container.listen(remoteHostFollowerProvider, (_, _) {});
   // Reads two device-local settings only: no keyring, no network, no timer.
   // Awaited, so the first Home load already knows whether to go signed in.

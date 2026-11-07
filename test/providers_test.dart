@@ -347,4 +347,54 @@ void main() {
       expect(channelUsers, ['u1']);
     });
   });
+
+  group('cloud sync follower', () {
+    test('listened to as main() does, it follows a later sign-in and '
+        'sign-out', () async {
+      final db = testDb();
+      final stamp = await SyncStamp.load(db);
+      final sync = _RecordingSync(db, stamp);
+      final changes = StreamController<AccountState>.broadcast();
+      final container = ProviderContainer(
+        overrides: [
+          cloudSyncProvider.overrideWithValue(sync),
+          accountStateProvider.overrideWith(
+            (ref) => Stream<AccountState>.multi((c) {
+              c.addSync(const SignedOut());
+              final sub = changes.stream.listen(c.addSync);
+              c.onCancel = sub.cancel;
+            }),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await changes.close();
+        await sync.dispose();
+        await db.close();
+      });
+      // As main(): nothing else watches the account here.
+      container.listen(cloudSyncFollowerProvider, (_, _) {});
+      await pumpEventQueue();
+      changes.add(signedIn('u1'));
+      await pumpEventQueue();
+      expect(sync.calls, contains('start(u1)'));
+      changes.add(const SignedOut());
+      await pumpEventQueue();
+      expect(sync.calls.last, 'stop');
+    });
+  });
+}
+
+/// Records start/stop instead of syncing.
+class _RecordingSync extends FakeCloudSync {
+  _RecordingSync(super.db, super.stamp);
+
+  final calls = <String>[];
+
+  @override
+  Future<void> start(String userId) async => calls.add('start($userId)');
+
+  @override
+  Future<void> stop() async => calls.add('stop');
 }

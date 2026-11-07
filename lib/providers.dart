@@ -478,7 +478,8 @@ final cloudSyncProvider = Provider<CloudSync>(
 );
 
 /// Starts cloud sync when an account signs in and stops it when it signs
-/// out. `main()` reads it once; it lives as long as the app.
+/// out. `main()` listens to it once (a read alone would leave it paused); it
+/// lives as long as the app.
 final cloudSyncFollowerProvider = Provider<void>((ref) {
   final sync = ref.watch(cloudSyncProvider);
   ref.listen(accountStateProvider, (_, next) {
