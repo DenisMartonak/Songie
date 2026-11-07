@@ -43,18 +43,27 @@ const Object _thisDevice = Object();
 /// bottom sheet on a phone. Picking a device controls it; This device goes
 /// back to this one.
 Future<void> showDevicesPicker(BuildContext context, WidgetRef ref) async {
-  final controller = ref.read(remoteControllerProvider);
+  // The widget that opened the picker can go while it is open (the strip
+  // when the link ends): use the container, which outlives it.
+  final container = ProviderScope.containerOf(context);
+  final controller = container.read(remoteControllerProvider);
   if (controller == null) return;
-  final devices = ref.read(remoteDevicesProvider).value ?? const [];
-  final link = ref.read(remoteLinkProvider).value;
+  final devices = container.read(remoteDevicesProvider).value ?? const [];
+  final link = container.read(remoteLinkProvider).value;
   final choice = MediaQuery.sizeOf(context).width < phoneBreakpoint
       ? await _sheet(context, devices, link?.device.deviceId)
       : await _popup(context, devices, link?.device.deviceId);
   if (choice == null) return;
+  // Another account (or none) since the picker opened: do nothing.
+  if (container.read(remoteControllerProvider) != controller) return;
   if (choice == _thisDevice) {
     controller.deselect();
   } else if (choice is RemotePresence) {
-    await selectRemote(ref.read(playerServiceProvider), controller, choice);
+    await selectRemote(
+      container.read(playerServiceProvider),
+      controller,
+      choice,
+    );
   }
 }
 

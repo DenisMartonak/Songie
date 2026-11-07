@@ -295,4 +295,46 @@ void main() {
     expect(find.text("Device o didn't answer"), findsOneWidget);
     await tester.pump(const Duration(seconds: 10));
   });
+
+  testWidgets('picking after the link ended under the open picker works', (
+    tester,
+  ) async {
+    await join(_device('o'));
+    await join(_device('p'));
+    await pump(tester);
+    await open(tester);
+    await pick(tester, 'o');
+    await settle(tester);
+    hub.drop('o');
+    await flush(tester);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.byKey(const Key('remote.strip')));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byKey(const Key('devices.thisDevice')), findsOneWidget);
+    // The link ends and the strip (which opened the picker) goes.
+    await tester.pump(const Duration(seconds: 16));
+    expect(find.byKey(const Key('remote.strip')), findsNothing);
+    expect(find.byKey(const Key('devices.thisDevice')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('devices.device.p')));
+    await tester.pump();
+    await flush(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.text('Playing on Device p'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('picking after the account changed does nothing', (tester) async {
+    await join(_device('o'));
+    await pump(tester);
+    await open(tester);
+    account.add(const SignedOut());
+    await flush(tester);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byKey(const Key('devices.device.o')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('devices.device.o')));
+    await tester.pump();
+    await flush(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('remote.strip')), findsNothing);
+  });
 }
