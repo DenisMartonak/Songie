@@ -37,7 +37,7 @@ class _NowPlayingScrubberState extends ConsumerState<NowPlayingScrubber> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final motion = Motion.of(context);
-    final state = ref.watch(playerStateProvider).value;
+    final state = ref.watch(playerViewStateProvider).value;
     final total = state?.duration ?? Duration.zero;
     final seekable = state?.current != null && total > Duration.zero;
     double fractionOf(Duration d) => seekable
@@ -100,7 +100,7 @@ class _NowPlayingScrubberState extends ConsumerState<NowPlayingScrubber> {
                 onChanged: seekable ? (v) => setState(() => _drag = v) : null,
                 onChangeEnd: (v) {
                   setState(() => _drag = null);
-                  ref.read(playerServiceProvider).seek(total * v);
+                  ref.read(playerViewProvider).seek(total * v);
                 },
               ),
             ),
@@ -135,18 +135,18 @@ class NowPlayingControls extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    final player = ref.read(playerServiceProvider);
+    final player = ref.read(playerViewProvider);
     final hasTrack = ref.watch(
-      playerStateProvider.select((s) => s.value?.current != null),
+      playerViewStateProvider.select((s) => s.value?.current != null),
     );
     final playing = ref.watch(
-      playerStateProvider.select((s) => s.value?.playing ?? false),
+      playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
     final shuffle = ref.watch(
-      playerStateProvider.select((s) => s.value?.shuffle ?? false),
+      playerViewStateProvider.select((s) => s.value?.shuffle ?? false),
     );
     final repeat = ref.watch(
-      playerStateProvider.select((s) => s.value?.repeat ?? RepeatMode.off),
+      playerViewStateProvider.select((s) => s.value?.repeat ?? RepeatMode.off),
     );
     final idle = colors.text.withAlpha(179);
 
@@ -191,7 +191,11 @@ class NowPlayingControls extends ConsumerWidget {
             RepeatMode.one => 'Repeat: one',
           },
           color: repeat == RepeatMode.off ? idle : colors.accent,
-          onPressed: player.cycleRepeat,
+          onPressed: () => player.setRepeat(switch (repeat) {
+            RepeatMode.off => RepeatMode.all,
+            RepeatMode.all => RepeatMode.one,
+            RepeatMode.one => RepeatMode.off,
+          }),
         ),
       ],
     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database.dart';
 import '../../providers.dart';
+import '../../remote/remote_controller.dart' show kRemoteUnknownSource;
 import '../../theme/app_theme.dart';
 import '../motion/equalizer_bars.dart';
 import '../motion/pressable.dart';
@@ -27,13 +28,13 @@ class NowPlayingQueue extends ConsumerWidget {
     // rebuild the list on every position tick, which can rebuild a swiped-away
     // row before the queue update that removes it arrives.
     final queue =
-        ref.watch(playerStateProvider.select((s) => s.value?.queue)) ??
+        ref.watch(playerViewStateProvider.select((s) => s.value?.queue)) ??
         const <Track>[];
     final playingIndex = ref.watch(
-      playerStateProvider.select((s) => s.value?.index ?? -1),
+      playerViewStateProvider.select((s) => s.value?.index ?? -1),
     );
     final playing = ref.watch(
-      playerStateProvider.select((s) => s.value?.playing ?? false),
+      playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
     if (queue.isEmpty) {
       return Center(
@@ -43,7 +44,7 @@ class NowPlayingQueue extends ConsumerWidget {
         ),
       );
     }
-    final player = ref.read(playerServiceProvider);
+    final player = ref.read(playerViewProvider);
     final keys = _slotKeys(queue);
     final bottom = MediaQuery.paddingOf(context).bottom;
     // Upcoming rows start after the playing one; row i is queue[first + i].
@@ -61,11 +62,7 @@ class NowPlayingQueue extends ConsumerWidget {
               current: true,
               playing: playing,
               onTap: () => player.playAt(playingIndex),
-              menu: songMenuOpeners(
-                context,
-                ref,
-                MenuSong.track(queue[playingIndex]),
-              ),
+              menu: _menu(context, ref, queue[playingIndex]),
             ),
           ),
         ],
@@ -95,7 +92,7 @@ class NowPlayingQueue extends ConsumerWidget {
                   current: false,
                   playing: playing,
                   onTap: () => player.playAt(q),
-                  menu: songMenuOpeners(context, ref, MenuSong.track(queue[q])),
+                  menu: _menu(context, ref, queue[q]),
                 ),
               );
             },
@@ -105,6 +102,15 @@ class NowPlayingQueue extends ConsumerWidget {
       ],
     );
   }
+
+  /// The song menu of a row; none for a song this device doesn't have.
+  static SongMenuOpeners? _menu(
+    BuildContext context,
+    WidgetRef ref,
+    Track track,
+  ) => track.source == kRemoteUnknownSource
+      ? null
+      : songMenuOpeners(context, ref, MenuSong.track(track));
 
   /// A key per slot that stays with its song when the list is reordered; the
   /// same song queued twice gets distinct keys.
@@ -166,7 +172,7 @@ class _QueueRow extends StatelessWidget {
   final VoidCallback onTap;
 
   /// Opens the song menu.
-  final SongMenuOpeners menu;
+  final SongMenuOpeners? menu;
 
   @override
   Widget build(BuildContext context) {
@@ -176,8 +182,8 @@ class _QueueRow extends StatelessWidget {
       type: MaterialType.transparency,
       child: Pressable(
         onTap: onTap,
-        onLongPress: menu.onLongPress,
-        onSecondaryTapUp: menu.onSecondaryTapUp,
+        onLongPress: menu?.onLongPress,
+        onSecondaryTapUp: menu?.onSecondaryTapUp,
         child: SizedBox(
           height: NowPlayingQueue.rowHeight,
           child: Padding(

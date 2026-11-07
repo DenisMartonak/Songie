@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers.dart';
+import '../../remote/remote_controller.dart' show kRemoteUnknownSource;
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
 import '../widgets/song_menu.dart';
@@ -23,7 +24,7 @@ class NowPlayingHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final sourceId = ref.watch(
-      playerStateProvider.select((s) => s.value?.sourcePlaylistId),
+      playerViewStateProvider.select((s) => s.value?.sourcePlaylistId),
     );
     final playlists = ref.watch(playlistsProvider).value ?? const [];
     final source = sourceId == null
@@ -41,9 +42,9 @@ class NowPlayingHeader extends ConsumerWidget {
       onPressed: onClose,
     );
     final track = ref.watch(
-      playerStateProvider.select((s) => s.value?.current),
+      playerViewStateProvider.select((s) => s.value?.current),
     );
-    final Widget more = track == null
+    final Widget more = track == null || track.source == kRemoteUnknownSource
         ? const SizedBox(width: 48)
         : SongMenuButton(
             key: const Key('nowPlaying.more'),

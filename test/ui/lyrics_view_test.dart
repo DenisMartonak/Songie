@@ -85,7 +85,7 @@ void main() {
         initialLocation: '/',
         extraOverrides: [
           lyricsServiceProvider.overrideWithValue(service),
-          playerStateProvider.overrideWith((ref) => states.stream),
+          playerViewStateProvider.overrideWith((ref) => states.stream),
         ],
         routes: [
           GoRoute(

@@ -14,11 +14,11 @@ class LyricsStrip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final track = ref.watch(
-      playerStateProvider.select((s) => s.value?.current),
+      playerViewStateProvider.select((s) => s.value?.current),
     );
     if (track == null) return const SizedBox.shrink();
     final playing = ref.watch(
-      playerStateProvider.select((s) => s.value?.playing ?? false),
+      playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
     final colors = Theme.of(context).extension<SongiesColors>()!;
     return SizedBox(
@@ -65,7 +65,7 @@ class LyricsStrip extends ConsumerWidget {
               icon: Icon(
                 playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
               ),
-              onPressed: () => ref.read(playerServiceProvider).togglePlay(),
+              onPressed: () => ref.read(playerViewProvider).togglePlay(),
             ),
           ],
         ),

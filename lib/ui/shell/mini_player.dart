@@ -65,7 +65,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     if (skip) {
       final next = (velocity.abs() >= _skipVelocity ? velocity : _offset) < 0;
       _pendingDirection = next ? 1 : -1;
-      final player = ref.read(playerServiceProvider);
+      final player = ref.read(playerViewProvider);
       final before = player.state.current?.id;
       (next ? player.next() : player.previous()).whenComplete(() {
         // No track change (a restart, or the end of the queue): forget the
@@ -97,7 +97,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
   @override
   Widget build(BuildContext context) {
     final track = ref.watch(
-      playerStateProvider.select((s) => s.value?.current),
+      playerViewStateProvider.select((s) => s.value?.current),
     );
     if (track == null) return const SizedBox.shrink();
     if (track.id != _shownTrackId) {
@@ -109,7 +109,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final motion = Motion.of(context);
     final playing = ref.watch(
-      playerStateProvider.select((s) => s.value?.playing ?? false),
+      playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
     final trackKey = ValueKey(track.id);
 
@@ -210,7 +210,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                             : Icons.play_arrow_rounded,
                       ),
                       onPressed: () =>
-                          ref.read(playerServiceProvider).togglePlay(),
+                          ref.read(playerViewProvider).togglePlay(),
                     ),
                   ],
                 ),
@@ -286,7 +286,7 @@ class _Progress extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final fraction = ref.watch(
-      playerStateProvider.select((s) {
+      playerViewStateProvider.select((s) {
         final state = s.value;
         final total = state?.duration?.inMilliseconds ?? 0;
         if (state == null || total <= 0) return 0.0;

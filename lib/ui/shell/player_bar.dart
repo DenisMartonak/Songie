@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/database.dart' show Track;
 import '../../player/player_service.dart';
 import '../../providers.dart';
+import '../../remote/remote_controller.dart' show kRemoteUnknownSource;
 import '../../router.dart';
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
@@ -63,19 +64,21 @@ class _NowPlaying extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final track = ref.watch(
-      playerStateProvider.select((s) => s.value?.current),
+      playerViewStateProvider.select((s) => s.value?.current),
     );
     if (track == null) return const SizedBox.shrink();
     final colors = Theme.of(context).extension<SongiesColors>()!;
     // Right-click opens the playing song's menu at the pointer.
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onSecondaryTapUp: (d) => showSongMenu(
-        context,
-        ref,
-        MenuSong.track(track),
-        anchor: d.globalPosition & Size.zero,
-      ),
+      onSecondaryTapUp: track.source == kRemoteUnknownSource
+          ? null
+          : (d) => showSongMenu(
+              context,
+              ref,
+              MenuSong.track(track),
+              anchor: d.globalPosition & Size.zero,
+            ),
       child: _row(track, colors),
     );
   }
@@ -139,18 +142,18 @@ class _Transport extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    final player = ref.read(playerServiceProvider);
+    final player = ref.read(playerViewProvider);
     final hasTrack = ref.watch(
-      playerStateProvider.select((s) => s.value?.current != null),
+      playerViewStateProvider.select((s) => s.value?.current != null),
     );
     final playing = ref.watch(
-      playerStateProvider.select((s) => s.value?.playing ?? false),
+      playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
     final shuffle = ref.watch(
-      playerStateProvider.select((s) => s.value?.shuffle ?? false),
+      playerViewStateProvider.select((s) => s.value?.shuffle ?? false),
     );
     final repeat = ref.watch(
-      playerStateProvider.select((s) => s.value?.repeat ?? RepeatMode.off),
+      playerViewStateProvider.select((s) => s.value?.repeat ?? RepeatMode.off),
     );
 
     return Column(
@@ -199,7 +202,11 @@ class _Transport extends ConsumerWidget {
               color: repeat == RepeatMode.off
                   ? colors.mutedText
                   : colors.accent,
-              onPressed: player.cycleRepeat,
+              onPressed: () => player.setRepeat(switch (repeat) {
+                RepeatMode.off => RepeatMode.all,
+                RepeatMode.all => RepeatMode.one,
+                RepeatMode.one => RepeatMode.off,
+              }),
             ),
           ],
         ),
@@ -291,7 +298,7 @@ class _ScrubberState extends ConsumerState<_Scrubber> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    final state = ref.watch(playerStateProvider).value;
+    final state = ref.watch(playerViewStateProvider).value;
     final total = state?.duration ?? Duration.zero;
     final seekable = state?.current != null && total > Duration.zero;
     final fraction = seekable
@@ -335,7 +342,7 @@ class _ScrubberState extends ConsumerState<_Scrubber> {
               onChanged: seekable ? (v) => setState(() => _drag = v) : null,
               onChangeEnd: (v) {
                 setState(() => _drag = null);
-                ref.read(playerServiceProvider).seek(total * v);
+                ref.read(playerViewProvider).seek(total * v);
               },
             ),
           ),
@@ -357,7 +364,7 @@ class _QueueAndVolume extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final volume = ref.watch(
-      playerStateProvider.select((s) => s.value?.volume ?? 1.0),
+      playerViewStateProvider.select((s) => s.value?.volume ?? 1.0),
     );
     final lyricsOpen = ref.watch(lyricsPanelOpenProvider);
     return Row(
@@ -404,7 +411,7 @@ class _QueueAndVolume extends ConsumerWidget {
                 thumbColor: colors.text,
               ),
               value: volume,
-              onChanged: (v) => ref.read(playerServiceProvider).setVolume(v),
+              onChanged: (v) => ref.read(playerViewProvider).setVolume(v),
             ),
           ),
         ),

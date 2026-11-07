@@ -132,7 +132,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     final skeleton = !failed && (rows == null || (importing && rows.isEmpty));
 
     final (current, playing) = ref.watch(
-      playerStateProvider.select((s) {
+      playerViewStateProvider.select((s) {
         final state = s.value;
         return state?.sourcePlaylistId == _id
             ? (state?.current?.id, state?.playing ?? false)
@@ -255,8 +255,8 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     // Also for a row flagged missing: the file may be back, and the player
     // skips and reports it if it is not.
     return ref
-        .read(playerServiceProvider)
-        .playQueue(
+        .read(playerViewProvider)
+        .playTracks(
           [for (final r in rows) r.track],
           startIndex: index,
           sourcePlaylistId: _id,
@@ -264,9 +264,9 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
   }
 
   Future<void> _play(List<PlaylistTrack> rows, {required bool shuffle}) {
-    final player = ref.read(playerServiceProvider);
+    final player = ref.read(playerViewProvider);
     player.setShuffle(shuffle);
-    return player.playQueue(
+    return player.playTracks(
       [for (final r in rows) r.track],
       // Shuffle starts anywhere, not always on the first song.
       startIndex: shuffle ? Random().nextInt(rows.length) : 0,
@@ -298,7 +298,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
   }
 
   void _queue(PlaylistTrack row) {
-    ref.read(playerServiceProvider).addToQueue([row.track]);
+    ref.read(playerViewProvider).addNext([row.track]);
     Islands.of(context).show(
       'Added to queue',
       kind: IslandKind.success,

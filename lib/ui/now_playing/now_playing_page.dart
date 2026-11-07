@@ -578,7 +578,7 @@ class _BlurredCover extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final track = ref.watch(
-      playerStateProvider.select((s) => s.value?.current),
+      playerViewStateProvider.select((s) => s.value?.current),
     );
     return RepaintBoundary(
       child: ClipRect(
@@ -660,16 +660,16 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final motion = Motion.of(context);
     final track = ref.watch(
-      playerStateProvider.select((s) => s.value?.current),
+      playerViewStateProvider.select((s) => s.value?.current),
     );
     final index = ref.watch(
-      playerStateProvider.select((s) => s.value?.index ?? -1),
+      playerViewStateProvider.select((s) => s.value?.index ?? -1),
     );
     final length = ref.watch(
-      playerStateProvider.select((s) => s.value?.queue.length ?? 0),
+      playerViewStateProvider.select((s) => s.value?.queue.length ?? 0),
     );
     final playing = ref.watch(
-      playerStateProvider.select((s) => s.value?.playing ?? false),
+      playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
     if (track == null) {
       return Center(

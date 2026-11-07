@@ -11,6 +11,7 @@ import '../../lyrics/lyrics.dart';
 import '../../lyrics/lyrics_service.dart';
 import '../../player/player_service.dart';
 import '../../providers.dart';
+import '../../remote/remote_controller.dart' show kRemoteUnknownSource;
 import '../../theme/app_theme.dart';
 import '../../theme/contrast.dart';
 import '../motion/motion.dart';
@@ -45,12 +46,12 @@ class _LyricsViewState extends ConsumerState<LyricsView> {
     // Lookups happen only while a lyrics view is open: this is the one place
     // that prefetches.
     ref.listenManual<String?>(
-      playerStateProvider.select((s) => s.value?.upNext?.id),
+      playerViewStateProvider.select((s) => s.value?.upNext?.id),
       (_, next) {
         if (next == null) return;
-        ref
-            .read(lyricsServiceProvider)
-            .prefetch(ref.read(playerStateProvider).value?.upNext);
+        final upNext = ref.read(playerViewStateProvider).value?.upNext;
+        if (upNext?.source == kRemoteUnknownSource) return;
+        ref.read(lyricsServiceProvider).prefetch(upNext);
       },
       fireImmediately: true,
     );
@@ -59,8 +60,9 @@ class _LyricsViewState extends ConsumerState<LyricsView> {
 
   void _onNetwork(NetworkKind kind) {
     if (kind == NetworkKind.offline || !mounted) return;
-    final id = ref.read(playerStateProvider).value?.current?.id;
-    if (id == null) return;
+    final current = ref.read(playerViewStateProvider).value?.current;
+    final id = current?.id;
+    if (id == null || current?.source == kRemoteUnknownSource) return;
     if (ref.read(lyricsProvider(id)).value is LyricsOffline) {
       ref.invalidate(lyricsProvider(id));
     }
@@ -77,14 +79,23 @@ class _LyricsViewState extends ConsumerState<LyricsView> {
     // Everything is keyed by the current track: a lookup still running for
     // the previous song never reaches the screen.
     final id = ref.watch(
-      playerStateProvider.select((s) => s.value?.current?.id),
+      playerViewStateProvider.select((s) => s.value?.current?.id),
     );
     if (id == null) return const SizedBox.shrink();
+    final style = _LyricsStyle.of(context, widget.density);
+    // A song this device doesn't have has no lyrics to look up.
+    final unknown = ref.watch(
+      playerViewStateProvider.select(
+        (s) => s.value?.current?.source == kRemoteUnknownSource,
+      ),
+    );
+    if (unknown) {
+      return _Message(style: style, text: 'No lyrics found for this song');
+    }
     final async = ref.watch(lyricsProvider(id));
     final LyricsState state = async.isLoading
         ? const LyricsLoading()
         : async.value ?? const LyricsNone();
-    final style = _LyricsStyle.of(context, widget.density);
     return switch (state) {
       LyricsLoading() => _Loading(style: style),
       LyricsOffline() => _Message(
@@ -215,21 +226,22 @@ class _SyncedLyricsState extends ConsumerState<_SyncedLyrics> {
   int _indexAt(PlayerState? s) =>
       currentLineIndex(widget.lyrics.lines, s?.position ?? Duration.zero);
 
-  bool get _playing => ref.read(playerStateProvider).value?.playing ?? false;
+  bool get _playing =>
+      ref.read(playerViewStateProvider).value?.playing ?? false;
 
-  int get _current => _indexAt(ref.read(playerStateProvider).value);
+  int get _current => _indexAt(ref.read(playerViewStateProvider).value);
 
   @override
   void initState() {
     super.initState();
     ref.listenManual<int>(
-      playerStateProvider.select((s) => _indexAt(s.value)),
+      playerViewStateProvider.select((s) => _indexAt(s.value)),
       (_, next) {
         if (_following && _playing) _afterLayout(animate: true);
       },
     );
     ref.listenManual<bool>(
-      playerStateProvider.select((s) => s.value?.playing ?? false),
+      playerViewStateProvider.select((s) => s.value?.playing ?? false),
       (_, playing) {
         if (playing && _following) _afterLayout(animate: true);
       },
@@ -320,10 +332,10 @@ class _SyncedLyricsState extends ConsumerState<_SyncedLyrics> {
     final style = widget.style;
     final lines = widget.lyrics.lines;
     final current = ref.watch(
-      playerStateProvider.select((s) => _indexAt(s.value)),
+      playerViewStateProvider.select((s) => _indexAt(s.value)),
     );
     final playing = ref.watch(
-      playerStateProvider.select((s) => s.value?.playing ?? false),
+      playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
     if (!_placed) {
       _placed = true;
@@ -332,7 +344,7 @@ class _SyncedLyricsState extends ConsumerState<_SyncedLyrics> {
     // The highlight fades with the standard token, at once under reduced
     // motion or while paused.
     final fade = playing ? _motion.standard : Duration.zero;
-    final player = ref.read(playerServiceProvider);
+    final player = ref.read(playerViewProvider);
     return LayoutBuilder(
       builder: (context, constraints) => Listener(
         onPointerSignal: (e) {
@@ -455,7 +467,7 @@ class _Loading extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playing = ref.watch(
-      playerStateProvider.select((s) => s.value?.playing ?? false),
+      playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
     final bar = (style.line.fontSize ?? 16) * 0.9;
     return Padding(
