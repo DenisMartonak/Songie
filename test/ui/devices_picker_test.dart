@@ -152,6 +152,18 @@ void main() {
     expect(find.text('This device'), findsOneWidget);
   });
 
+  testWidgets('this device offline lists only This device and No other '
+      'devices online', (tester) async {
+    await join(_device('o'));
+    await pump(tester);
+    hub.drop(h.stamp.deviceId);
+    await flush(tester);
+    await open(tester);
+    expect(find.text('This device'), findsOneWidget);
+    expect(find.text('No other devices online'), findsOneWidget);
+    expect(find.text('Device o'), findsNothing);
+  });
+
   testWidgets('an old version is greyed with Update Songies to control this '
       'device', (tester) async {
     await join(_device('o', v: kRemoteProtocol + 1));

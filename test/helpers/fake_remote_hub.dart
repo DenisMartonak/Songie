@@ -19,6 +19,8 @@ class FakeRemoteHub {
       _channels.putIfAbsent(deviceId, () => _FakeChannel(this, deviceId));
 
   /// Takes [deviceId] off the network: gone from Presence, nothing in or out.
+  /// The dropped device itself then sees no one present, as
+  /// `SupabaseRemoteChannel` reports when its own connection drops.
   void drop(String deviceId) {
     _dropped.add(deviceId);
     _publish();

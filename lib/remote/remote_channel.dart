@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/log.dart';
@@ -28,8 +29,10 @@ abstract class RemoteChannel {
   Future<void> leave();
 }
 
-/// [RemoteChannel] on Supabase Realtime. Thin and not unit-tested, like
-/// `SupabaseCloudRemote.changes`; reconnecting is the client's own.
+/// [RemoteChannel] on Supabase Realtime. Thin, like
+/// `SupabaseCloudRemote.changes` (only [onStatus] and [join]'s ordering are
+/// unit-tested); reconnecting is the client's own. While this device is off
+/// the channel it reports no one present.
 class SupabaseRemoteChannel implements RemoteChannel {
   SupabaseRemoteChannel(this._client, this._userId);
 
@@ -51,9 +54,16 @@ class SupabaseRemoteChannel implements RemoteChannel {
   @override
   Stream<RemoteMessage> get messages => _messages.stream;
 
+  /// Bumped by every [join] and [leave], so a join still waiting for the
+  /// previous channel to go can tell it has been overtaken.
+  int _turn = 0;
+
   @override
   Future<void> join(RemotePresence me) async {
-    await leave();
+    final turn = ++_turn;
+    await _remove();
+    // A leave (the host stopping) or another join came meanwhile.
+    if (turn != _turn) return;
     _me = me;
     final channel = _client().channel(
       'remote:$_userId',
@@ -68,18 +78,30 @@ class SupabaseRemoteChannel implements RemoteChannel {
       );
     }
     channel.subscribe((status, error) {
-      if (channel != _channel) return;
-      try {
-        if (status == RealtimeSubscribeStatus.subscribed) {
-          final mine = _me;
-          if (mine != null) unawaited(_track(channel, mine));
-        } else if (error != null) {
-          AppLog.w('remote channel: $status', error);
-        }
-      } on Object catch (e, s) {
-        AppLog.w('remote channel: subscribe callback failed', e, s);
-      }
+      if (channel == _channel) onStatus(status, error);
     });
+  }
+
+  /// The channel's subscribe status changed. Subscribed (also after the
+  /// client rejoins by itself) announces this device again, and the
+  /// presence sync that follows brings the others back. Anything else means
+  /// this device is off the channel: no one is known to be online until then
+  /// (a controller shows its link lost; the picker shows no devices).
+  @visibleForTesting
+  void onStatus(RealtimeSubscribeStatus status, Object? error) {
+    try {
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        final channel = _channel;
+        final mine = _me;
+        if (channel != null && mine != null) unawaited(_track(channel, mine));
+        return;
+      }
+      AppLog.w('remote channel: ${status.name}', error);
+      _present = const [];
+      if (!_presences.isClosed) _presences.add(_present);
+    } on Object catch (e, s) {
+      AppLog.w('remote channel: subscribe callback failed', e, s);
+    }
   }
 
   Future<void> _track(RealtimeChannel channel, RemotePresence me) async {
@@ -154,7 +176,12 @@ class SupabaseRemoteChannel implements RemoteChannel {
   }
 
   @override
-  Future<void> leave() async {
+  Future<void> leave() {
+    _turn++;
+    return _remove();
+  }
+
+  Future<void> _remove() async {
     final channel = _channel;
     _channel = null;
     _present = const [];

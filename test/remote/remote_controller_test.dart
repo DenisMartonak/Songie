@@ -475,6 +475,41 @@ void main() {
     expect(r.ctl.link?.status, RemoteLinkStatus.connected);
   });
 
+  ctlTest('this device losing its own connection shows lost, and on its '
+      'return asks again with hello', (r) {
+    r.connect(stateOf(atMs: r.now()));
+    expect(r.hellos, hasLength(1));
+    r.hub.drop('c');
+    r.flush();
+    expect(r.hub.channelFor('c').present, isEmpty);
+    expect(r.ctl.link?.status, RemoteLinkStatus.lost);
+    r.async.elapse(const Duration(seconds: 5));
+    r.host.reply = stateOf(atMs: r.now(), positionMs: 42000, playing: false);
+    r.hub.restore('c');
+    r.flush();
+    expect(r.hellos, hasLength(2));
+    expect(r.ctl.link?.status, RemoteLinkStatus.connected);
+    expect(r.ctl.state.position, const Duration(seconds: 42));
+    r.async.elapse(const Duration(seconds: 20));
+    expect(r.ended, isEmpty);
+  });
+
+  ctlTest('losing the connection while connecting waits for the return, '
+      'not the hello timeout', (r) {
+    r.connect(null);
+    expect(r.ctl.link?.status, RemoteLinkStatus.connecting);
+    r.hub.drop('c');
+    r.flush();
+    expect(r.ctl.link?.status, RemoteLinkStatus.lost);
+    r.async.elapse(const Duration(seconds: 6));
+    expect(r.ended, isEmpty);
+    r.host.reply = stateOf(atMs: r.now());
+    r.hub.restore('c');
+    r.flush();
+    expect(r.hellos, hasLength(2));
+    expect(r.ctl.link?.status, RemoteLinkStatus.connected);
+  });
+
   ctlTest('states from another device are ignored', (r) {
     r.connect(null);
     r.hub.channelFor('x').join(presenceOf('x'));
