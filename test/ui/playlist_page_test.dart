@@ -14,6 +14,7 @@ import 'package:songies/library/art_cache.dart';
 import 'package:songies/library/library_repository.dart';
 import 'package:songies/library/library_scanner.dart';
 import 'package:songies/providers.dart';
+import 'package:songies/remote/remote_protocol.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/contrast.dart';
 import 'package:songies/theme/cover_palette.dart';
@@ -27,6 +28,7 @@ import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/widgets/artwork.dart';
 import 'package:songies/library/favorites.dart';
 
+import '../helpers/remote_menu_rig.dart';
 import '../helpers/test_db.dart';
 import '../helpers/ui_harness.dart';
 
@@ -159,6 +161,67 @@ void main() {
       ),
       findsNothing,
     );
+  });
+
+  group('Play on', () {
+    Future<void> menu(WidgetTester tester, RemoteMenuRig rig, String id) async {
+      await pumpPage(tester, id, extraOverrides: rig.overrides);
+      await tester.tap(find.byTooltip('More'));
+      await settle(tester);
+    }
+
+    uiTest('no Play on entries when alone', (tester) async {
+      final id = await threeSongs(tester);
+      await menu(tester, RemoteMenuRig(h), id);
+      expect(find.text('Add songs'), findsOneWidget);
+      expect(find.textContaining('Play on'), findsNothing);
+      expect(find.textContaining('Add to queue on'), findsNothing);
+    });
+
+    uiTest('an incompatible device gets no entry', (tester) async {
+      final id = await threeSongs(tester);
+      final rig = RemoteMenuRig(h);
+      await rig.join('d1', 'Desk');
+      await rig.join('d2', 'Old', v: kRemoteProtocol + 1);
+      await menu(tester, rig, id);
+      expect(find.text('Play on Desk'), findsOneWidget);
+      expect(find.text('Play on Old'), findsNothing);
+    });
+
+    uiTest('Play on Desk sends the playlist track ids and its id', (
+      tester,
+    ) async {
+      final id = await threeSongs(tester);
+      final rig = RemoteMenuRig(h);
+      await rig.join('d1', 'Desk');
+      await menu(tester, rig, id);
+      await tester.tap(find.text('Play on Desk'));
+      await settle(tester);
+      final c = rig.commands.single;
+      expect(c.to, 'd1');
+      expect(c.op, RemoteOp.playTracks);
+      expect(c.args, {
+        'ids': ['t1', 't2', 't3'],
+        'start': 0,
+        'playlist': id,
+      });
+      expect(h.cloudSync.syncNowCalls, 1);
+      expect(h.player.state.queue, isEmpty);
+    });
+
+    uiTest('Add to queue on Desk sends addNext with the ids', (tester) async {
+      final id = await threeSongs(tester);
+      final rig = RemoteMenuRig(h);
+      await rig.join('d1', 'Desk');
+      await menu(tester, rig, id);
+      await tester.tap(find.text('Add to queue on Desk'));
+      await settle(tester);
+      final c = rig.commands.single;
+      expect(c.op, RemoteOp.addNext);
+      expect(c.args, {
+        'ids': ['t1', 't2', 't3'],
+      });
+    });
   });
 
   group('cover', () {

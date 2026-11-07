@@ -3,9 +3,11 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/result.dart';
+import 'package:songies/remote/remote_protocol.dart';
 import 'package:songies/library/library_repository.dart';
 import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/ui/home/home_page.dart';
@@ -16,6 +18,7 @@ import 'package:songies/library/favorites.dart';
 import 'package:songies/ui/widgets/artwork.dart';
 import 'package:songies/ui/widgets/favorite_star.dart';
 
+import '../helpers/remote_menu_rig.dart';
 import '../helpers/test_db.dart';
 import '../helpers/ui_harness.dart';
 
@@ -30,8 +33,13 @@ const _lucky = YtmSong(
 
 void main() {
   late UiHarness h;
+  // Overrides for the next page pumped (a test's remote rig).
+  var extra = <Override>[];
 
-  setUp(() async => h = await UiHarness.create());
+  setUp(() async {
+    h = await UiHarness.create();
+    extra = [];
+  });
   tearDown(() => h.dispose());
 
   void phone(WidgetTester tester, [Size size = const Size(400, 900)]) {
@@ -131,6 +139,7 @@ void main() {
     phone(tester, const Size(400, 1600));
     await tester.pumpWidget(
       h.app(
+        extraOverrides: extra,
         initialLocation: '/home',
         routes: [
           GoRoute(
@@ -152,6 +161,7 @@ void main() {
     phone(tester);
     await tester.pumpWidget(
       h.app(
+        extraOverrides: extra,
         initialLocation: '/search',
         routes: [
           GoRoute(
@@ -714,6 +724,107 @@ void main() {
       await settle(tester);
       expect(find.text('Song t1'), findsNothing);
       expect(find.text('Song t2'), findsOneWidget);
+    });
+  });
+
+  group('Play on', () {
+    late RemoteMenuRig rig;
+
+    setUp(() => rig = RemoteMenuRig(h));
+
+    Future<void> openRecent(WidgetTester tester) async {
+      extra = rig.overrides;
+      await recents(tester);
+      await pumpHome(tester);
+      await rig.watchDevices(tester);
+      await longPress(tester, recentRow);
+    }
+
+    uiTest('no Play on entries when alone', (tester) async {
+      await openRecent(tester);
+      expect(find.textContaining('Play on'), findsNothing);
+      expect(find.textContaining('Add to queue on'), findsNothing);
+      expect(item('addToQueue'), findsOneWidget);
+    });
+
+    uiTest('no Play on entries when signed out', (tester) async {
+      rig = RemoteMenuRig(h, signedIn: false);
+      await rig.join('d1', 'Desk');
+      await openRecent(tester);
+      expect(find.textContaining('Play on'), findsNothing);
+    });
+
+    uiTest('Play on Desk sends playTracks with the song id to Desk', (
+      tester,
+    ) async {
+      await rig.join('d1', 'Desk');
+      await openRecent(tester);
+      expect(find.text('Play on Desk'), findsOneWidget);
+      expect(find.text('Add to queue on Desk'), findsOneWidget);
+      await choose(tester, 'playOn.d1');
+      final c = rig.commands.single;
+      expect(c.to, 'd1');
+      expect(c.op, RemoteOp.playTracks);
+      expect(c.args, {
+        'ids': ['t1'],
+        'start': 0,
+        'playlist': null,
+      });
+      expect(h.cloudSync.syncNowCalls, 1);
+      expect(queueIds(), isEmpty);
+    });
+
+    uiTest('Add to queue on Desk sends addNext', (tester) async {
+      await rig.join('d1', 'Desk');
+      await openRecent(tester);
+      await choose(tester, 'addToQueueOn.d1');
+      final c = rig.commands.single;
+      expect(c.to, 'd1');
+      expect(c.op, RemoteOp.addNext);
+      expect(c.args, {
+        'ids': ['t1'],
+      });
+      expect(queueIds(), isEmpty);
+    });
+
+    uiTest('an incompatible device gets no entry', (tester) async {
+      await rig.join('d1', 'Desk');
+      await rig.join('d2', 'Old', v: kRemoteProtocol + 1);
+      await openRecent(tester);
+      expect(find.text('Play on Desk'), findsOneWidget);
+      expect(find.text('Play on Old'), findsNothing);
+      expect(find.text('Add to queue on Old'), findsNothing);
+    });
+
+    uiTest('only the first three devices get entries', (tester) async {
+      for (final n in ['1', '2', '3', '4']) {
+        await rig.join('d$n', 'Dev$n');
+      }
+      await openRecent(tester);
+      expect(find.textContaining('Play on Dev'), findsNWidgets(3));
+    });
+
+    uiTest('a YouTube Music result is stored before it is sent', (
+      tester,
+    ) async {
+      extra = rig.overrides;
+      await rig.join('d1', 'Desk');
+      h.ytm.answer('lucky', YtmSearchKind.songs, [_lucky]);
+      await pumpSearch(tester, 'lucky');
+      await rig.watchDevices(tester);
+      await longPress(tester, find.byKey(const Key('ytm.song.v1')));
+      expect(h.ytStore.upserted, isEmpty);
+      await choose(tester, 'playOn.d1');
+      expect(h.ytStore.upserted, ['v1']);
+      final stored = await real(
+        tester,
+        () => (h.db.select(
+          h.db.tracks,
+        )..where((t) => t.ytVideoId.equals('v1'))).getSingle(),
+      );
+      final c = rig.commands.single;
+      expect(c.args['ids'], [stored.id]);
+      expect(h.cloudSync.syncNowCalls, 1);
     });
   });
 

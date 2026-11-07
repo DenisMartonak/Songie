@@ -2,12 +2,12 @@
 
 _Last updated: 2026-10-31_
 
-## Remote control (roadmap 5, step 3) — in progress, Tasks 1–5 of 8 done
+## Remote control (roadmap 5, step 3) — done, reviewed per task; whole-branch review and device checks pending
 
 - **Branch:** `remote-control` (worktree `.worktrees/remote-control`). Spec: [remote control design](superpowers/specs/2026-11-06-remote-control-design.md). Plan: [remote control plan](superpowers/plans/2026-11-06-remote-control.md). Session log: [remote-control-session-log.md](remote-control-session-log.md). Not pushed or merged.
-- **Status:** protocol, channel and RLS migration, host, controller, and the player view with its wiring are done and reviewed. Next: Task 6 (player UI reads the view), then the devices picker and the Play on… menus. Nothing is visible in the UI yet.
-- **To resume:**
-  > Continue the remote-control plan on branch `remote-control` in `.worktrees/remote-control`, with subagent-driven development, from Task 6. Read docs/remote-control-session-log.md first. Don't merge or push.
+- **What it does:** a signed-in device lists the account's other online devices (the devices button in the player bar), picks one, and controls it: play/pause, seek, volume, shuffle, repeat, and the queue (jump, reorder, remove). The player bar, Now Playing and queue follow the picked device, with a "Playing on <device>" strip. Song and playlist menus have "Play on <device>" and "Add to queue on <device>" (first 3 compatible online devices; none signed out or when alone); the library syncs first so the device has the songs. Devices on an older build are greyed.
+- **Status:** all 8 tasks done. Tests: 2,464 passing, `flutter analyze` clean. `flutter build apk --release` succeeds (85.7 MB). `flutter build linux --release` could not run on this PC: CMake fails with `The following required packages were not found: webkit2gtk-4.0` (from the `desktop_webview_window` plugin; this host has only a newer WebKitGTK), so no Linux bundle size. **Nothing has been run on a device.**
+- **Next:** apply `supabase/migrations/20261107120000_remote_control.sql`, then the Remote control section of the [manual checklist](manual-test-checklist.md) on two devices.
 
 ## Plan 11 (packaging and in-app updates) — done, reviewed
 

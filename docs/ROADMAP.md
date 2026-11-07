@@ -52,9 +52,9 @@ Big; built in stages, each released on its own:
 2. **Cloud sync of the library** — done. Postgres with row-level security
    (`lib/sync/cloud/`); the LAN peer-to-peer sync (pairing codes, mDNS) is
    removed, and paired devices sync again once signed in to one account.
-3. **Remote control** (Spotify Connect-like): see the user's other signed-in
-   devices, and play/pause/skip/change songs on one device from another,
-   through Supabase Realtime.
+3. **Remote control** (Spotify Connect-like) — done. See the user's other
+   signed-in devices, and play/pause/skip/change songs on one device from
+   another, through Supabase Realtime (`lib/remote/`).
 4. **Listen together**: a shared session others join by link/code; play,
    seek and queue stay in step across listeners.
 

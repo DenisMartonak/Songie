@@ -12,6 +12,7 @@ import '../../core/log.dart';
 import '../../core/result.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
+import '../../remote/remote_protocol.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/contrast.dart';
 import '../downloads/download_status_line.dart';
@@ -23,6 +24,7 @@ import '../library/pickers.dart';
 import '../motion/equalizer_bars.dart';
 import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
+import '../remote/play_on.dart';
 import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../island/island_controller.dart';
@@ -174,6 +176,8 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
             onPlay: () => _play(list, shuffle: false),
             onShuffle: () => _play(list, shuffle: true),
             onMenu: (action) => _onMenu(action, summary),
+            devices: playOnDevices(ref.watch(remoteDevicesProvider).value),
+            onSendTo: _sendTo,
           ),
         ),
         if (summary.source == 'yt' || list.any((r) => r.track.source == 'yt'))
@@ -445,6 +449,23 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
 
   // --- menu -----------------------------------------------------------------
 
+  /// Play on / Add to queue on [device] for the whole playlist.
+  void _sendTo(RemotePresence device, {required bool play}) {
+    final rows = _pending ?? ref.read(playlistTracksProvider(_id)).value;
+    if (rows == null || rows.isEmpty) return;
+    // The menu closes as it is chosen, and the sync takes a while: send from
+    // the container, not `ref`.
+    unawaited(
+      sendIdsTo(
+        ProviderScope.containerOf(context),
+        device,
+        ids: [for (final r in rows) r.track.id],
+        play: play,
+        sourcePlaylistId: _id,
+      ),
+    );
+  }
+
   Future<void> _onMenu(_MenuAction action, PlaylistSummary summary) async {
     switch (action) {
       case _MenuAction.rename:
@@ -535,6 +556,8 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
   }
 }
 
+typedef _SendTo = void Function(RemotePresence device, {required bool play});
+
 enum _MenuAction { rename, changeCover, removeCover, delete, addSongs }
 
 /// The hero's pinned top bar.
@@ -593,6 +616,8 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
     required this.onPlay,
     required this.onShuffle,
     required this.onMenu,
+    required this.devices,
+    required this.onSendTo,
   });
 
   /// The safe-area padding: the bar sits below [EdgeInsets.top], and the
@@ -609,6 +634,10 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
   final VoidCallback onPlay;
   final VoidCallback onShuffle;
   final ValueChanged<_MenuAction> onMenu;
+
+  /// The devices the menu offers Play on / Add to queue on.
+  final List<RemotePresence> devices;
+  final _SendTo onSendTo;
 
   double get topInset => insets.top;
 
@@ -688,6 +717,8 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
                         builtIn: summary.id == kFavoritesPlaylistId,
                         onShuffle: onShuffle,
                         onMenu: onMenu,
+                        devices: devices,
+                        onSendTo: onSendTo,
                       ),
                     ),
                   ],
@@ -848,6 +879,8 @@ class _HeroActions extends StatelessWidget {
     required this.builtIn,
     required this.onShuffle,
     required this.onMenu,
+    required this.devices,
+    required this.onSendTo,
   });
 
   final bool canPlay;
@@ -859,6 +892,8 @@ class _HeroActions extends StatelessWidget {
   final bool hasOwnCover;
   final VoidCallback onShuffle;
   final ValueChanged<_MenuAction> onMenu;
+  final List<RemotePresence> devices;
+  final _SendTo onSendTo;
 
   @override
   Widget build(BuildContext context) {
@@ -902,6 +937,18 @@ class _HeroActions extends StatelessWidget {
                 value: _MenuAction.addSongs,
                 child: Text('Add songs'),
               ),
+              for (final d in devices) ...[
+                PopupMenuItem(
+                  key: Key('playlist.playOn.${d.deviceId}'),
+                  onTap: () => onSendTo(d, play: true),
+                  child: Text('Play on ${d.name}'),
+                ),
+                PopupMenuItem(
+                  key: Key('playlist.addToQueueOn.${d.deviceId}'),
+                  onTap: () => onSendTo(d, play: false),
+                  child: Text('Add to queue on ${d.name}'),
+                ),
+              ],
               if (!builtIn)
                 const PopupMenuItem(
                   value: _MenuAction.delete,

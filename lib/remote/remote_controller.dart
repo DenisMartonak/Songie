@@ -357,16 +357,26 @@ class RemoteController {
   ]) async {
     final l = _link;
     if (l == null || !_canCommand) return;
-    await _send(
-      RemoteCommand(
-        to: l.device.deviceId,
-        id: _newId(),
-        op: op,
-        args: args,
-        epoch: epoch,
-      ),
-    );
+    await _commandTo(l.device.deviceId, op, args, epoch);
   }
+
+  Future<void> _commandTo(
+    String to,
+    RemoteOp op,
+    Map<String, Object?> args, [
+    int? epoch,
+  ]) => _send(
+    RemoteCommand(to: to, id: _newId(), op: op, args: args, epoch: epoch),
+  );
+
+  /// Sends [op] to [d] with no link needed (Play on / Add to queue on from a
+  /// menu): the device is not selected and the view does not change. It does
+  /// not sync; a caller sending track ids syncs first.
+  Future<void> sendTo(
+    RemotePresence d,
+    RemoteOp op,
+    Map<String, Object?> args,
+  ) => _commandTo(d.deviceId, op, args);
 
   /// Commands go out (and change the view) only while the device is there:
   /// not without a link, nor while it is lost.

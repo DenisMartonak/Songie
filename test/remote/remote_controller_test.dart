@@ -175,6 +175,21 @@ void main() {
     addTearDown(() => debugPrint = original);
   });
 
+  ctlTest('sendTo commands a device without a link', (r) {
+    r.ctl.sendTo(presenceOf('h'), RemoteOp.addNext, {
+      'ids': ['a'],
+    });
+    r.flush();
+    expect(r.ctl.link, isNull);
+    expect(r.commands.single.to, 'h');
+    expect(r.commands.single.op, RemoteOp.addNext);
+    expect(r.commands.single.args, {
+      'ids': ['a'],
+    });
+    expect(r.commands.single.id, 'cmd0');
+    expect(r.commands.single.epoch, isNull);
+  });
+
   ctlTest('hello on select, connected on first state', (r) {
     r.host.reply = null;
     r.ctl.select(presenceOf('h'));

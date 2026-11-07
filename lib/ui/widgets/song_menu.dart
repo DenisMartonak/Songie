@@ -11,9 +11,11 @@ import '../../data/database.dart';
 import '../../downloads/download_repository.dart';
 import '../../innertube/ytm_models.dart';
 import '../../providers.dart';
+import '../../remote/remote_protocol.dart';
 import '../../theme/app_theme.dart';
 import '../library/add_to_playlist_sheet.dart';
 import '../motion/motion.dart';
+import '../remote/play_on.dart';
 import '../ytm/ytm_nav.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
@@ -46,8 +48,18 @@ class MenuSong {
   String? get albumId => ytm?.albumBrowseId;
 }
 
+/// One menu item: its action, icon and label, and for Play on / Add to queue
+/// on the device it is for.
+typedef _Entry = (SongMenuAction, IconData, String, RemotePresence?);
+
+/// A menu item's key: the action's name, then the device's id if it has one.
+Key _entryKey(_Entry e) =>
+    Key('songMenu.${e.$1.name}${e.$4 == null ? '' : '.${e.$4!.deviceId}'}');
+
 enum SongMenuAction {
   addToQueue,
+  playOn,
+  addToQueueOn,
   addToPlaylist,
   favorite,
   startRadio,
@@ -164,6 +176,10 @@ Future<void> showSongMenu(
   final askPermission = ref.read(notificationPermissionProvider);
   final favorites = ref.read(favoritesRepositoryProvider);
   final islands = Islands.of(context);
+  // The menu closes when an entry is chosen: the sends outlive `ref`.
+  final container = ProviderScope.containerOf(context);
+  // The devices button keeps this provider alive; unloaded, none are offered.
+  final devices = playOnDevices(ref.read(remoteDevicesProvider).value);
   final playable = song.isYouTube && !song.unavailable;
   // Only Remove download needs it. Null where the app paths are not set up
   // (Remove download then says it couldn't).
@@ -202,44 +218,67 @@ Future<void> showSongMenu(
     if (!context.mounted) return;
   }
 
-  final entries = <(SongMenuAction, IconData, String)>[
-    (SongMenuAction.addToQueue, Icons.queue_music, 'Add to queue'),
-    (SongMenuAction.addToPlaylist, Icons.playlist_add, 'Add to playlist'),
+  final entries = <_Entry>[
+    (SongMenuAction.addToQueue, Icons.queue_music, 'Add to queue', null),
+    for (final d in devices) ...[
+      (SongMenuAction.playOn, Icons.cast_rounded, 'Play on ${d.name}', d),
+      (
+        SongMenuAction.addToQueueOn,
+        Icons.queue_music,
+        'Add to queue on ${d.name}',
+        d,
+      ),
+    ],
+    (SongMenuAction.addToPlaylist, Icons.playlist_add, 'Add to playlist', null),
     favorite
-        ? (SongMenuAction.favorite, Icons.star_rounded, 'Remove from Favorites')
+        ? (
+            SongMenuAction.favorite,
+            Icons.star_rounded,
+            'Remove from Favorites',
+            null,
+          )
         : (
             SongMenuAction.favorite,
             Icons.star_outline_rounded,
             'Add to Favorites',
+            null,
           ),
     if (playable)
-      (SongMenuAction.startRadio, Icons.radio_outlined, 'Start radio'),
+      (SongMenuAction.startRadio, Icons.radio_outlined, 'Start radio', null),
     if (song.artistId != null)
-      (SongMenuAction.goToArtist, Icons.person_outline, 'Go to artist'),
+      (SongMenuAction.goToArtist, Icons.person_outline, 'Go to artist', null),
     if (song.albumId != null)
-      (SongMenuAction.goToAlbum, Icons.album_outlined, 'Go to album'),
+      (SongMenuAction.goToAlbum, Icons.album_outlined, 'Go to album', null),
     if (playable)
       downloaded
           ? (
               SongMenuAction.removeDownload,
               Icons.delete_outline,
               'Remove download',
+              null,
             )
-          : (SongMenuAction.download, Icons.download_outlined, 'Download'),
+          : (
+              SongMenuAction.download,
+              Icons.download_outlined,
+              'Download',
+              null,
+            ),
     if (onRemoveFromPlaylist != null)
       (
         SongMenuAction.removeFromPlaylist,
         Icons.remove_circle_outline,
         'Remove from this playlist',
+        null,
       ),
   ];
 
-  final action = anchor == null
+  final chosen = anchor == null
       ? await _sheet(context, song, entries)
       : await _popup(context, anchor, entries);
   // The row may be gone now (the list changed while the menu was open): the
   // actions that need its context check it; the others run regardless.
-  if (action == null) return;
+  if (chosen == null) return;
+  final action = chosen.$1;
 
   /// [song]'s track row, storing a YouTube Music song first; null (with a
   /// island message) when it cannot be stored.
@@ -261,6 +300,16 @@ Future<void> showSongMenu(
       if (await track() case final t?) {
         await player.addToQueue([t]);
         islands.show('Added to queue', kind: IslandKind.success, song: t);
+      }
+    case SongMenuAction.playOn:
+    case SongMenuAction.addToQueueOn:
+      if (await track() case final t?) {
+        await sendIdsTo(
+          container,
+          chosen.$4!,
+          ids: [t.id],
+          play: action == SongMenuAction.playOn,
+        );
       }
     case SongMenuAction.addToPlaylist:
       final t = await track();
@@ -320,12 +369,12 @@ AnimationStyle _animation(BuildContext context) {
   );
 }
 
-Future<SongMenuAction?> _sheet(
+Future<_Entry?> _sheet(
   BuildContext context,
   MenuSong song,
-  List<(SongMenuAction, IconData, String)> entries,
+  List<_Entry> entries,
 ) {
-  return showModalBottomSheet<SongMenuAction>(
+  return showModalBottomSheet<_Entry>(
     context: context,
     useRootNavigator: true,
     useSafeArea: true,
@@ -365,12 +414,12 @@ Future<SongMenuAction?> _sheet(
                 ],
               ),
             ),
-            for (final (action, icon, label) in entries)
+            for (final e in entries)
               ListTile(
-                key: Key('songMenu.${action.name}'),
-                leading: Icon(icon, color: colors.text),
-                title: Text(label, style: TextStyle(color: colors.text)),
-                onTap: () => Navigator.of(sheet).pop(action),
+                key: _entryKey(e),
+                leading: Icon(e.$2, color: colors.text),
+                title: Text(e.$3, style: TextStyle(color: colors.text)),
+                onTap: () => Navigator.of(sheet).pop(e),
               ),
           ],
         ),
@@ -379,10 +428,10 @@ Future<SongMenuAction?> _sheet(
   );
 }
 
-Future<SongMenuAction?> _popup(
+Future<_Entry?> _popup(
   BuildContext context,
   Rect anchor,
-  List<(SongMenuAction, IconData, String)> entries,
+  List<_Entry> entries,
 ) {
   final colors = Theme.of(context).extension<SongiesColors>()!;
   final overlay =
@@ -395,24 +444,24 @@ Future<SongMenuAction?> _popup(
     overlay.globalToLocal(anchor.topLeft),
     overlay.globalToLocal(anchor.bottomRight),
   );
-  return showMenu<SongMenuAction>(
+  return showMenu<_Entry>(
     context: context,
     useRootNavigator: true,
     position: RelativeRect.fromRect(local, Offset.zero & overlay.size),
     color: colors.surface,
     popUpAnimationStyle: _animation(context),
     items: [
-      for (final (action, icon, label) in entries)
+      for (final e in entries)
         PopupMenuItem(
-          key: Key('songMenu.${action.name}'),
-          value: action,
+          key: _entryKey(e),
+          value: e,
           child: Row(
             children: [
-              Icon(icon, size: 20, color: colors.text),
+              Icon(e.$2, size: 20, color: colors.text),
               const SizedBox(width: 12),
               Flexible(
                 child: Text(
-                  label,
+                  e.$3,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: colors.text),

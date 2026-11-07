@@ -324,6 +324,17 @@ Two devices (phone and desktop) signed in to the same account, and a second acco
 Two accounts (A and B). First apply `supabase/migrations/20261107120000_remote_control.sql` (see `docs/supabase.md`).
 - [ ] Database rules (the SQL editor skips them, so test as a signed-in user, e.g. in the Realtime Inspector or with two user tokens): as user A, sending or joining on `remote:<B's user id>` is refused, and on `remote:<A's user id>` it works. `supabase_realtime` lists no new table.
 
+Two devices signed in to the same account (A and B), both on this build.
+- [ ] Each direction works: from A, pick B in the devices button (the player bar shows "Connecting to B…", then "Playing on B"); then from B pick A.
+- [ ] From the controlling device: play / pause, seek, volume, shuffle and repeat change the other device, and its state comes back (position keeps running).
+- [ ] Queue: jump to a song, drag to reorder, and remove a song, all on the other device's queue; the controller's Now Playing queue follows.
+- [ ] Play on / Add to queue on, from a song's menu, a playlist's ⋯ menu and a fresh YouTube Music search result (not yet in the library): the chosen device plays or queues it, even for a song added a moment ago. "Play on" starts at the song or the playlist's first song.
+- [ ] No Play on entries when no other device is online, when signed out, or for a device on an older build.
+- [ ] A local file the other device doesn't have is skipped there (the island on that device says so), and the rest plays.
+- [ ] Android in the background: the strip shows the device lost, and is back when the app is opened again.
+- [ ] Sign out on one device: the other drops it from the list, and a controller of it returns to This device.
+- [ ] A device on an older build is greyed in the picker with "Update Songies to control this device".
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.
