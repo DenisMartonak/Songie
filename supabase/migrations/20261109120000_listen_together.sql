@@ -42,6 +42,20 @@ alter table public.room_members enable row level security;
 revoke all on table public.rooms from anon, authenticated;
 revoke all on table public.room_members from anon, authenticated;
 
+-- Whether a room is open: not ended, and created less than 24 hours ago. The
+-- one place that says so; join_room, remove_member and the Realtime rules use
+-- it. Not callable by apps.
+create function public.room_is_open(r public.rooms)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select r.ended_at is null and r.created_at >= now() - interval '24 hours';
+$$;
+
+revoke all on function public.room_is_open(public.rooms) from public, anon, authenticated;
+
 -- Open ---------------------------------------------------------------------------
 
 -- A new room hosted by the caller, who is its first member. The caller's
@@ -58,6 +72,7 @@ declare
   alphabet constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   new_code text;
   new_id uuid;
+  b int;
 begin
   if me is null then
     raise exception 'not_signed_in';
@@ -67,9 +82,16 @@ begin
     where r.host_id = me and r.ended_at is null;
 
   for attempt in 1..10 loop
+    -- Random bytes from pgcrypto (in the extensions schema on Supabase). A
+    -- byte of 248 or more is skipped: 248 = 8 * 31, so the rest map evenly
+    -- onto the 31 letters.
     new_code := '';
-    for i in 1..8 loop
-      new_code := new_code || substr(alphabet, 1 + floor(random() * length(alphabet))::int, 1);
+    while length(new_code) < 8 loop
+      for b in select get_byte(extensions.gen_random_bytes(16), i) from generate_series(0, 15) i loop
+        if b < 248 and length(new_code) < 8 then
+          new_code := new_code || substr(alphabet, 1 + b % 31, 1);
+        end if;
+      end loop;
     end loop;
     begin
       insert into public.rooms (code, host_id) values (new_code, me)
@@ -111,12 +133,12 @@ begin
   -- Lock the room's row so two guests joining at once can't both take the
   -- last place.
   select * into r from public.rooms
-    where code = upper(replace(coalesce(p_code, ''), '-', ''))
+    where code = upper(regexp_replace(coalesce(p_code, ''), '[\s-]', '', 'g'))
     for update;
   if not found then
     raise exception 'room_not_found';
   end if;
-  if r.ended_at is not null or r.created_at < now() - interval '24 hours' then
+  if not public.room_is_open(r) then
     raise exception 'room_ended';
   end if;
 
@@ -162,7 +184,7 @@ as $$
 begin
   if not exists (
     select 1 from public.rooms r
-    where r.id = p_room and r.host_id = (select auth.uid()) and r.ended_at is null
+    where r.id = p_room and r.host_id = (select auth.uid()) and public.room_is_open(r)
   ) then
     raise exception 'not_host';
   end if;
@@ -234,7 +256,7 @@ as $$
     join public.rooms r on r.id = m.room_id
     where m.room_id = public.room_of_topic(topic)
       and m.user_id = (select auth.uid())
-      and r.ended_at is null
+      and public.room_is_open(r)
   );
 $$;
 
@@ -250,7 +272,7 @@ as $$
     from public.rooms r
     where r.id = public.room_of_topic(topic)
       and r.host_id = (select auth.uid())
-      and r.ended_at is null
+      and public.room_is_open(r)
   );
 $$;
 
@@ -262,10 +284,11 @@ grant execute on function public.is_room_member(text) to authenticated;
 grant execute on function public.is_room_host(text) to authenticated;
 
 -- A member of an open room may receive on room:<room id>, and send Broadcast
--- and Presence on it. Only the host may send the events that change what
--- everyone hears: state, roles, kick and end. Guests send request (and
--- Presence). The server does not look at the `from` device id inside a
--- request; rooms are for friends.
+-- and Presence on it. There is no per-event rule: Realtime checks these
+-- policies when a client joins the channel (and caches the answer for the
+-- connection), not per message, so "only the host sends state" could not be
+-- enforced here. The app treats state, roles, kick and end from anyone but the
+-- host as noise; the server does not. Rooms are for friends.
 create policy "room: members receive on their room topic"
   on realtime.messages for select
   to authenticated
@@ -282,9 +305,4 @@ create policy "room: members send on their room topic"
     realtime.messages.extension in ('broadcast', 'presence')
     and (select realtime.topic()) = realtime.messages.topic
     and (select public.is_room_member((select realtime.topic())))
-    and (
-      realtime.messages.event is null
-      or realtime.messages.event not in ('state', 'roles', 'kick', 'end')
-      or (select public.is_room_host((select realtime.topic())))
-    )
   );

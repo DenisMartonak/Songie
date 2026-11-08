@@ -40,8 +40,10 @@ abstract class RoomBackend {
   Future<void> end(String roomId);
 }
 
-typedef RoomRpc =
-    Future<Object?> Function(String fn, Map<String, Object?> params);
+typedef RoomRpc = Future<Object?> Function(
+  String fn,
+  Map<String, Object?> params,
+);
 
 class SupabaseRoomBackend implements RoomBackend {
   /// [client] is read only when a call is made, so a signed-out app never
@@ -67,7 +69,9 @@ class SupabaseRoomBackend implements RoomBackend {
   @override
   Future<String> join(String code) async {
     try {
-      return await _rpc('join_room', {'p_code': code}) as String;
+      return await _rpc('join_room', {
+        'p_code': code.replaceAll(RegExp(r'[\s-]'), '').toUpperCase(),
+      }) as String;
     } on PostgrestException catch (e) {
       throw RoomJoinException(switch (e.message) {
         final m when m.contains('room_not_found') => RoomJoinError.notFound,

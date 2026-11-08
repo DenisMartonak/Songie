@@ -34,6 +34,14 @@ void main() {
     expect(calls.single.$2, {'p_code': 'ABCD2345'});
   });
 
+  test('join ignores case, spaces and dashes in the code', () async {
+    final b = backend((_) async => 'r1');
+    await b.join('abcd 2345');
+    await b.join('abcd-2345');
+    expect(calls[0].$2, {'p_code': 'ABCD2345'});
+    expect(calls[1].$2, {'p_code': 'ABCD2345'});
+  });
+
   for (final (msg, kind) in [
     ('room_not_found', RoomJoinError.notFound),
     ('room_ended', RoomJoinError.ended),
