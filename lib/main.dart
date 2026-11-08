@@ -358,6 +358,7 @@ Future<void> main() async {
       playHistoryRepositoryProvider.overrideWithValue(history),
       libraryScannerProvider.overrideWithValue(scanner),
       artCacheProvider.overrideWithValue(artCache),
+      artArrivalsProvider.overrideWith((_) => cloudFiles.artArrivals),
       playerServiceProvider.overrideWithValue(player),
       settingsRepositoryProvider.overrideWithValue(settings),
       ytDlpRunnerProvider.overrideWithValue(runner),

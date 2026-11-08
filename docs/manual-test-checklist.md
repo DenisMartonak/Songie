@@ -318,6 +318,8 @@ Two devices (phone and desktop) signed in to the same account, and a second acco
 - [ ] Database rules (review the migration; the SQL editor runs as the owner and skips them): a signed-in user can read only their own `sync_rows`, can't insert, change or delete them except through `push_rows`, and can touch only their own `<user id>/` folder in `sync-files`.
 - [ ] Upgrade from a version with Sync devices (database schema 8): the app opens with the library, playlists and settings intact; Settings has no Sync devices entry, the desktop sidebar has none, and the old `sync` folder under the app data folder is gone.
 - [ ] Delete account: that user's `sync_rows` and `sync-files/<user id>/` folder are gone; the other account's rows stay.
+- [ ] Covers (SON-19): with both devices open on the same playlist, add a YouTube song to it on one; on the other it appears with the same cover within seconds, without leaving the page. Songs synced before this build get their covers after the next sync (Storage shows them under `sync-files/<user id>/art/`).
+- [ ] Album covers (SON-20): open an album on YouTube Music and add one of its songs to a playlist; the song shows the album's cover, in the playlist and in the player. A music video keeps its video thumbnail. A song added earlier with a different cover switches to the album's when played or added from its album.
 
 ## Remote control
 
