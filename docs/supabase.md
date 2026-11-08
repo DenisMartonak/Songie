@@ -38,6 +38,25 @@ Deleting an account (`delete_my_account`) deletes its `sync_rows` too. The user'
 
 The third migration adds two rules on `realtime.messages` and nothing else (no table, nothing stored). A signed-in user can join, receive on and send on (Broadcast and Presence) only the private channel `remote:<their user id>`; that is how a user's devices see each other and control each other's playback. The `sync:<user id>` topic and its rule are unchanged. There's nothing to switch on in the dashboard, but check that Realtime's "Allow public access" is off (Realtime settings): the rules apply to private channels only, and with public access on, anyone could join `remote:<user id>` as a public channel and bypass them. The app always joins as private.
 
+### Listen together (`20261109120000_listen_together.sql`)
+
+The fourth migration adds rooms: a host opens one, friends join with its 8-character code (shown as `XXXX-XXXX`), and everyone hears the same song. Apply it like the others (once, after the remote control one).
+
+- The `rooms` table (id, code, host, created and ended times) and the `room_members` table (who is in which room, the host included). Both have row rules on and no policy or grant: apps never read or write them directly.
+- `open_room` (the caller becomes host of a new room with a fresh code, and their other open rooms end), `join_room` (adds the caller by code; fails with `room_not_found`, `room_ended` when the room was ended or is over 24 hours old, or `room_full` at 10 members; joining twice is fine), `leave_room` (the host leaving ends the room), `remove_member` (host only, never the host) and `end_room` (host only: marks the room ended and deletes its members). All are `security definer`, callable by signed-in users only.
+- `room_of_topic`, `is_room_member` and `is_room_host`: helpers the Realtime rules use, because the tables have no policies a rule could read through.
+- Two rules on `realtime.messages` for the private channel `room:<room id>`: a member of an open room can receive and send (Broadcast and Presence); only the host can send the `state`, `roles`, `kick` and `end` events. Nothing about what plays is stored; it all travels on that channel. As with remote control, Realtime's "Allow public access" must be off.
+- Known limit: the server checks that a sender is a member and that only the host sends `state`, `roles`, `kick` and `end`, but it does not check the `from` device id inside a `request`, so one guest could pose as another. Rooms are for friends, so this is accepted.
+
+After applying it, check by hand (the migration has not been tried on the project yet). You need two accounts, A and B; in the SQL editor, run as each with `set role authenticated; select set_config('request.jwt.claim.sub', '<user id>', false);` (user ids are under Authentication, Users), or use two signed-in app instances for the Realtime part.
+
+1. As A: `select * from open_room();` returns a room id and an 8-character code from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`. Calling it again ends the first room (its `ended_at` is set, as seen from the SQL editor's default role) and returns a new one.
+2. As B: `select join_room('<code>');` returns the room id. With a lowercase code or a dash in the middle it works too. `join_room('ZZZZZZZZ')` fails with `room_not_found`.
+3. As A: `select end_room('<id>');` then as B `join_room('<code>')` fails with `room_ended`. B calling `end_room` or `remove_member` on A's room fails with `not_host`.
+4. `room_full`: with ten accounts (or by inserting nine extra `room_members` rows from the default role) in a room, the eleventh `join_room` fails with `room_full`.
+5. As B: `select * from rooms;` and `select * from room_members;` fail with permission denied.
+6. Realtime Inspector (dashboard, Realtime, Inspector; pick a user's access token, turn Private on) on `room:<room id>`: A and B can both join and receive. A message with event `request` from B arrives for A. Events `state`, `roles`, `kick` and `end` sent by B are not delivered, and the same events from A are. A third account C, not in the room, can't join the topic. After A ends the room, nobody can join it or send on it.
+
 ## 2. Email sign-in settings
 
 1. Under Authentication, Sign In / Providers, in the user sign-up settings: allow new users to sign up, and turn Confirm email on.
