@@ -94,6 +94,16 @@ void main() {
     expect(pickThumbnail([]), isNull);
   });
 
+  test("musicArtUrl accepts YouTube Music's own art only", () {
+    const art = 'https://lh3.googleusercontent.com/x=w544-h544';
+    expect(musicArtUrl(art), art);
+    expect(musicArtUrl('https://yt3.ggpht.com/y=s544'), isNotNull);
+    expect(musicArtUrl('https://i.ytimg.com/vi/abc/hqdefault.jpg'), isNull);
+    expect(musicArtUrl('https://googleusercontent.com.evil.example/x'), isNull);
+    expect(musicArtUrl(null), isNull);
+    expect(musicArtUrl('not a url'), isNull);
+  });
+
   test('thumbnailCandidates lists the large covers first', () {
     expect(thumbnailCandidates('abc', 'x.jpg'), [
       'https://i.ytimg.com/vi/abc/maxresdefault.jpg',

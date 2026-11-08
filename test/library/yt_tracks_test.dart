@@ -32,14 +32,20 @@ YtmSong song({
   String artist = 'Beyonce',
   String? album = 'I Am',
   int? durationMs = 261000,
+  String thumbnailUrl = 'https://x/t.jpg',
+  bool isVideo = false,
 }) => YtmSong(
   videoId: id,
   title: title,
   artists: [YtmArtistRef(name: artist)],
   album: album,
   durationMs: durationMs,
-  thumbnailUrl: 'https://x/t.jpg',
+  thumbnailUrl: thumbnailUrl,
+  isVideo: isVideo,
 );
+
+/// The square album art YouTube Music gives a song.
+const _albumArt = 'https://lh3.googleusercontent.com/abc=w544-h544-l90-rj';
 
 void main() {
   late AppDatabase db;
@@ -86,6 +92,69 @@ void main() {
     expect(thumbs.calls, hasLength(1));
     expect(thumbs.calls.single.first, contains('/v1/'));
     expect((await rows()).single.artworkRef, 'yt2-abc.jpg');
+  });
+
+  group('album art (the cover the album page shows)', () {
+    test('a song with YouTube Music art takes it before the video '
+        'thumbnails', () async {
+      await store.upsert(song(thumbnailUrl: _albumArt));
+      await store.coversSettled;
+      expect(thumbs.calls.single.first, _albumArt);
+      expect(thumbs.calls.single.skip(1).first, contains('/v1/'));
+    });
+
+    test('a music video keeps its video thumbnail first', () async {
+      await store.upsert(song(thumbnailUrl: _albumArt, isVideo: true));
+      await store.coversSettled;
+      expect(thumbs.calls.single.first, contains('/v1/'));
+    });
+
+    test('replaces a video-thumbnail cover the song already had, once a '
+        'session', () async {
+      await db
+          .into(db.tracks)
+          .insert(
+            trackRow(
+              id: 't1',
+              source: 'yt',
+              ytVideoId: 'v1',
+            ).copyWith(artworkRef: const Value('yt2-video.jpg')),
+          );
+      thumbs.ref = 'yt2-album.jpg';
+      await store.upsert(song(thumbnailUrl: _albumArt));
+      await store.coversSettled;
+      expect(thumbs.calls.single, [_albumArt]);
+      expect((await rows()).single.artworkRef, 'yt2-album.jpg');
+
+      await store.upsert(song(thumbnailUrl: _albumArt));
+      await store.coversSettled;
+      expect(thumbs.calls, hasLength(1));
+    });
+
+    test('the same cover again writes nothing', () async {
+      await store.upsert(song());
+      await store.coversSettled;
+      final before = (await rows()).single.clock;
+      await store.upsert(song(thumbnailUrl: _albumArt));
+      await store.coversSettled;
+      expect(thumbs.calls, hasLength(2));
+      expect((await rows()).single.clock, before);
+    });
+
+    test('without YouTube Music art a sharp cover is left alone', () async {
+      await db
+          .into(db.tracks)
+          .insert(
+            trackRow(
+              id: 't1',
+              source: 'yt',
+              ytVideoId: 'v1',
+            ).copyWith(artworkRef: const Value('yt2-video.jpg')),
+          );
+      await store.upsert(song());
+      await store.coversSettled;
+      expect(thumbs.calls, isEmpty);
+    });
   });
 
   test('changes announces the row once its cover is stored', () async {
