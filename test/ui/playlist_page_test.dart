@@ -29,6 +29,7 @@ import 'package:songies/ui/widgets/artwork.dart';
 import 'package:songies/library/favorites.dart';
 
 import '../helpers/remote_menu_rig.dart';
+import '../helpers/room_rig.dart';
 import '../helpers/test_db.dart';
 import '../helpers/ui_harness.dart';
 
@@ -223,6 +224,64 @@ void main() {
         'ids': ['t1', 't2', 't3'],
       });
       expect(find.text('Added to queue on Desk'), findsOneWidget);
+    });
+  });
+
+  group('in a room', () {
+    late RoomRig rig;
+
+    setUp(() => rig = RoomRig(h));
+
+    Future<void> openMenu(WidgetTester tester) async {
+      await tester.tap(find.byTooltip('More'));
+      await settle(tester);
+    }
+
+    uiTest('no Play on while hosting; Add to queue on stays', (tester) async {
+      final id = await threeSongs(tester);
+      await rig.remoteHub
+          .channelFor('d1')
+          .join(
+            const RemotePresence(
+              deviceId: 'd1',
+              name: 'Desk',
+              platform: 'linux',
+              appVersion: '1.0.0',
+              playing: false,
+            ),
+          );
+      await pumpPage(tester, id, extraOverrides: rig.overrides);
+      await rig.run(
+        tester,
+        containerOf(tester)
+            .read(roomServiceProvider)
+            .open(userId: 'u1', name: 'me'),
+      );
+      await openMenu(tester);
+      expect(find.text('Add to queue on Desk'), findsOneWidget);
+      expect(find.text('Play on Desk'), findsNothing);
+      await tester.tapAt(const Offset(5, 5));
+      await settle(tester);
+      await rig.dispose(tester);
+    });
+
+    uiTest('Listen together while another open is under way does nothing', (
+      tester,
+    ) async {
+      final id = await threeSongs(tester);
+      await pumpPage(tester, id, extraOverrides: rig.overrides);
+      final service = containerOf(tester).read(roomServiceProvider);
+      final gate = rig.backend.openGate = Completer<void>();
+      final first = service.open(userId: 'u1', name: 'me');
+      await tester.pump();
+      await openMenu(tester);
+      await tester.tap(find.byKey(const Key('playlist.listenTogether')));
+      await settle(tester);
+      expect(tester.takeException(), isNull);
+      gate.complete();
+      await rig.run(tester, first);
+      expect(rig.backend.calls.where((c) => c == 'open'), hasLength(1));
+      await rig.dispose(tester);
     });
   });
 

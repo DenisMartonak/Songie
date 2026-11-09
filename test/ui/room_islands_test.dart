@@ -167,9 +167,9 @@ void main() {
       rig.backend.calls,
       containsAllInOrder(['end room1', 'join ABCD2345']),
     );
-    // Nobody hosts that room now: the join gives up.
+    // Nobody hosts that room now: the join gives up, as a stale room.
     await tester.pump(const Duration(seconds: 16));
-    expect(find.text("Couldn't reach the room"), findsOneWidget);
+    expect(find.text('This room has ended'), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
     await rig.dispose(tester);
   });

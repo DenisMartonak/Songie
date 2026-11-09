@@ -40,9 +40,13 @@ Track roomTrack(String id, {String source = 'yt'}) => Track(
 class FakeRoomBackend implements RoomBackend {
   final calls = <String>[];
 
+  /// When set, [open] waits for it (an open still under way).
+  Completer<void>? openGate;
+
   @override
   Future<OpenedRoom> open() async {
     calls.add('open');
+    await openGate?.future;
     return const OpenedRoom(roomId: 'room1', code: 'ABCD2345');
   }
 

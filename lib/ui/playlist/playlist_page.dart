@@ -193,6 +193,8 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
             onMenu: (action) => _onMenu(action, summary),
             listenTogether: listenTogether,
             devices: playOnDevices(ref.watch(remoteDevicesProvider).value),
+            // In a room this device controls no other one.
+            playOn: !ref.watch(inRoomProvider),
             onSendTo: _sendTo,
           ),
         ),
@@ -547,11 +549,17 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     if (account is! SignedIn || rows == null || rows.isEmpty) return;
     final service = ref.read(roomServiceProvider);
     if (service.status is! RoomIdle) return;
-    await service.open(
-      userId: account.profile.id,
-      name: account.profile.username,
-      play: [for (final r in rows) r.track],
-    );
+    try {
+      await service.open(
+        userId: account.profile.id,
+        name: account.profile.username,
+        play: [for (final r in rows) r.track],
+      );
+    } on StateError catch (e, s) {
+      // Another open or join is under way.
+      AppLog.w('room: open skipped', e, s);
+      return;
+    }
     if (mounted && service.status is! RoomIdle) {
       await showRoomPanel(context, ref);
     }
@@ -664,6 +672,7 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
     required this.onMenu,
     required this.listenTogether,
     required this.devices,
+    required this.playOn,
     required this.onSendTo,
   });
 
@@ -687,6 +696,9 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
 
   /// The devices the menu offers Play on / Add to queue on.
   final List<RemotePresence> devices;
+
+  /// Offers Play on (not while in a room).
+  final bool playOn;
   final _SendTo onSendTo;
 
   double get topInset => insets.top;
@@ -769,6 +781,7 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
                         onMenu: onMenu,
                         listenTogether: listenTogether,
                         devices: devices,
+                        playOn: playOn,
                         onSendTo: onSendTo,
                       ),
                     ),
@@ -932,6 +945,7 @@ class _HeroActions extends StatelessWidget {
     required this.onMenu,
     required this.listenTogether,
     required this.devices,
+    required this.playOn,
     required this.onSendTo,
   });
 
@@ -948,6 +962,7 @@ class _HeroActions extends StatelessWidget {
   /// Offers Listen together (signed in, not in a room).
   final bool listenTogether;
   final List<RemotePresence> devices;
+  final bool playOn;
   final _SendTo onSendTo;
 
   @override
@@ -999,11 +1014,12 @@ class _HeroActions extends StatelessWidget {
                   child: Text('Listen together'),
                 ),
               for (final d in devices) ...[
-                PopupMenuItem(
-                  key: Key('playlist.playOn.${d.deviceId}'),
-                  onTap: () => onSendTo(d, play: true),
-                  child: Text('Play on ${d.name}'),
-                ),
+                if (playOn)
+                  PopupMenuItem(
+                    key: Key('playlist.playOn.${d.deviceId}'),
+                    onTap: () => onSendTo(d, play: true),
+                    child: Text('Play on ${d.name}'),
+                  ),
                 PopupMenuItem(
                   key: Key('playlist.addToQueueOn.${d.deviceId}'),
                   onTap: () => onSendTo(d, play: false),

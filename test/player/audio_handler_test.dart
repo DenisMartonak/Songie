@@ -448,10 +448,7 @@ void main() {
 
       expect(p.state.playing, isTrue);
       expect(h.playbackState.value.playing, isTrue);
-      expect(
-        h.playbackState.value.processingState,
-        AudioProcessingState.ready,
-      );
+      expect(h.playbackState.value.processingState, AudioProcessingState.ready);
       // Still published: the room moving this device on shows.
       p.next();
       async.flushMicrotasks();

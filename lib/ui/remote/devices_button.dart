@@ -50,15 +50,17 @@ Future<void> showDevicesPicker(BuildContext context, WidgetRef ref) async {
   if (controller == null) return;
   final devices = container.read(remoteDevicesProvider).value ?? const [];
   final link = container.read(remoteLinkProvider).value;
+  // In a room (hosting or guesting) this device controls no other one.
+  final inRoom = container.read(inRoomProvider);
   final choice = MediaQuery.sizeOf(context).width < phoneBreakpoint
-      ? await _sheet(context, devices, link?.device.deviceId)
-      : await _popup(context, devices, link?.device.deviceId);
+      ? await _sheet(context, devices, link?.device.deviceId, inRoom)
+      : await _popup(context, devices, link?.device.deviceId, inRoom);
   if (choice == null) return;
   // Another account (or none) since the picker opened: do nothing.
   if (container.read(remoteControllerProvider) != controller) return;
   if (choice == _thisDevice) {
     controller.deselect();
-  } else if (choice is RemotePresence) {
+  } else if (choice is RemotePresence && !container.read(inRoomProvider)) {
     await selectRemote(
       container.read(playerServiceProvider),
       controller,
@@ -69,11 +71,16 @@ Future<void> showDevicesPicker(BuildContext context, WidgetRef ref) async {
 
 const _updateHint = 'Update Songies to control this device';
 const _inRoomHint = 'In a Listen together room';
+const _leaveRoomHint = 'Leave the room to control another device';
 
-/// A device in a room takes no remote control.
-bool _available(RemotePresence d) => d.compatible && !d.inRoom;
+/// A device in a room takes no remote control, and this device in a room
+/// controls none.
+bool _available(RemotePresence d, bool inRoom) =>
+    !inRoom && d.compatible && !d.inRoom;
 
-String? _subtitle(RemotePresence d) => !d.compatible
+String? _subtitle(RemotePresence d, bool inRoom) => inRoom
+    ? _leaveRoomHint
+    : !d.compatible
     ? _updateHint
     : d.inRoom
     ? _inRoomHint
@@ -83,6 +90,7 @@ Future<Object?> _sheet(
   BuildContext context,
   List<RemotePresence> devices,
   String? linked,
+  bool inRoom,
 ) {
   return showModalBottomSheet<Object>(
     context: context,
@@ -120,15 +128,19 @@ Future<Object?> _sheet(
             for (final d in devices)
               ListTile(
                 key: Key('devices.device.${d.deviceId}'),
-                enabled: _available(d),
+                enabled: _available(d, inRoom),
                 leading: Icon(Icons.devices_rounded, color: colors.text),
                 title: Text(
                   d.name,
                   style: TextStyle(
-                    color: _available(d) ? colors.text : colors.mutedText,
+                    color: _available(d, inRoom)
+                        ? colors.text
+                        : colors.mutedText,
                   ),
                 ),
-                subtitle: _subtitle(d) == null ? null : Text(_subtitle(d)!),
+                subtitle: _subtitle(d, inRoom) == null
+                    ? null
+                    : Text(_subtitle(d, inRoom)!),
                 trailing: linked == d.deviceId
                     ? Icon(Icons.check_rounded, color: colors.accent)
                     : null,
@@ -145,6 +157,7 @@ Future<Object?> _popup(
   BuildContext context,
   List<RemotePresence> devices,
   String? linked,
+  bool inRoom,
 ) {
   final colors = Theme.of(context).extension<SongiesColors>()!;
   final box = context.findRenderObject()! as RenderBox;
@@ -235,8 +248,8 @@ Future<Object?> _popup(
           key: Key('devices.device.${d.deviceId}'),
           value: d,
           title: d.name,
-          subtitle: _subtitle(d),
-          enabled: _available(d),
+          subtitle: _subtitle(d, inRoom),
+          enabled: _available(d, inRoom),
           checked: linked == d.deviceId,
         ),
     ],

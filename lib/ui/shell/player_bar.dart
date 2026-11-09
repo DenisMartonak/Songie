@@ -381,6 +381,15 @@ class _ScrubberState extends ConsumerState<_Scrubber> {
 class _QueueAndVolume extends ConsumerWidget {
   const _QueueAndVolume();
 
+  /// The volume slider's width when there is room.
+  static const double _volumeSlider = 104;
+
+  /// Narrower than this, the slider is left out.
+  static const double _minVolumeSlider = 48;
+
+  /// The volume icon and the gaps around it.
+  static const double _volumeIconRoom = 32;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
@@ -411,31 +420,50 @@ class _QueueAndVolume extends ConsumerWidget {
           icon: const Icon(Icons.queue_music_rounded),
           onPressed: () => openNowPlaying(GoRouter.of(context)),
         ),
-        const SizedBox(width: 4),
-        Icon(
-          volume == 0
-              ? Icons.volume_off_rounded
-              : volume < 0.5
-              ? Icons.volume_down_rounded
-              : Icons.volume_up_rounded,
-          size: 20,
-          color: colors.mutedText,
-        ),
-        const SizedBox(width: 8),
-        // Gives way in the narrowest desktop windows.
+        // The volume gives way first in narrow desktop windows (a signed-in
+        // bar has four buttons here): its icon, then the slider itself.
         Flexible(
-          child: SizedBox(
-            width: 104,
-            child: _HoverSlider(
-              sliderKey: const Key('playerBar.volume'),
-              theme: SliderTheme.of(context).copyWith(
-                activeTrackColor: colors.text,
-                inactiveTrackColor: colors.text.withAlpha(51),
-                thumbColor: colors.text,
-              ),
-              value: volume,
-              onChanged: (v) => ref.read(playerViewProvider).setVolume(v),
-            ),
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final slider = _HoverSlider(
+                sliderKey: const Key('playerBar.volume'),
+                theme: SliderTheme.of(context).copyWith(
+                  activeTrackColor: colors.text,
+                  inactiveTrackColor: colors.text.withAlpha(51),
+                  thumbColor: colors.text,
+                ),
+                value: volume,
+                onChanged: (v) => ref.read(playerViewProvider).setVolume(v),
+              );
+              final w = box.maxWidth;
+              if (w < _minVolumeSlider) return const SizedBox.shrink();
+              if (w < _volumeIconRoom + _minVolumeSlider) {
+                return SizedBox(
+                  width: math.min(w, _volumeSlider),
+                  child: slider,
+                );
+              }
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(width: 4),
+                  Icon(
+                    volume == 0
+                        ? Icons.volume_off_rounded
+                        : volume < 0.5
+                        ? Icons.volume_down_rounded
+                        : Icons.volume_up_rounded,
+                    size: 20,
+                    color: colors.mutedText,
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: math.min(w - _volumeIconRoom, _volumeSlider),
+                    child: slider,
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ],

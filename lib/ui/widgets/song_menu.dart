@@ -192,6 +192,8 @@ Future<void> showSongMenu(
   // remoteHostFollowerProvider (listened to in main) keeps this loaded on
   // every screen; unloaded, none are offered.
   final devices = playOnDevices(ref.read(remoteDevicesProvider).value);
+  // In a room this device controls no other one: no Play on.
+  final inRoom = ref.read(inRoomProvider);
   final playable = song.isYouTube && !song.unavailable;
   // Only Remove download needs it. Null where the app paths are not set up
   // (Remove download then says it couldn't).
@@ -234,7 +236,8 @@ Future<void> showSongMenu(
     if (offerQueue)
       (SongMenuAction.addToQueue, Icons.queue_music, 'Add to queue', null),
     for (final d in devices) ...[
-      (SongMenuAction.playOn, Icons.cast_rounded, 'Play on ${d.name}', d),
+      if (!inRoom)
+        (SongMenuAction.playOn, Icons.cast_rounded, 'Play on ${d.name}', d),
       (
         SongMenuAction.addToQueueOn,
         Icons.queue_music,

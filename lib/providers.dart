@@ -811,6 +811,19 @@ final roomStatusProvider = StreamProvider<RoomStatus>((ref) {
   });
 });
 
+/// Whether this device is in a room, hosting or guesting. While it is, it
+/// controls no other device (no picking one, no Play on).
+final inRoomProvider = Provider<bool>(
+  (ref) => ref.watch(
+    roomStatusProvider.select(
+      (s) => switch (s.value) {
+        RoomHosting() || RoomGuesting() => true,
+        _ => false,
+      },
+    ),
+  ),
+);
+
 /// What the room tells the user (for islands).
 final roomNoticesProvider = Provider<Stream<RoomNotice>>(
   (ref) => ref.watch(roomServiceProvider).notices,
