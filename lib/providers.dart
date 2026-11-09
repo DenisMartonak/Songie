@@ -36,6 +36,7 @@ import 'library/search_repository.dart';
 import 'library/favorites.dart';
 import 'library/yt_tracks.dart';
 import 'lyrics/lyrics_service.dart';
+import 'player/player_inputs.dart';
 import 'player/player_service.dart';
 import 'player/radio_controller.dart';
 import 'player/runtime_prompter.dart';
@@ -754,6 +755,17 @@ final playerViewStateProvider = StreamProvider<PlayerState>((ref) {
 
 // --- Listen together -------------------------------------------------------
 
+/// Where this device's own playback inputs go (shortcuts, media buttons,
+/// song taps, radio): the player, or the room while this device is a guest,
+/// as its role allows. `main()` overrides it with the instance the system
+/// media controls use.
+final playerInputsProvider = Provider<PlayerInputs>(
+  (ref) => PlayerInputs(
+    ref.watch(playerServiceProvider),
+    room: () => ref.read(roomServiceProvider).guestView,
+  ),
+);
+
 /// The room tables behind Supabase. Not overridden in `main()`: the client
 /// is read only when a call is made, so a signed-out app never touches
 /// Supabase, and tests that never open a room need no wiring.
@@ -860,6 +872,7 @@ final radioControllerProvider = Provider<RadioController>((ref) {
     ref.watch(playerServiceProvider),
     ref.watch(ytmServiceProvider),
     ref.watch(ytTrackStoreProvider),
+    inputs: ref.watch(playerInputsProvider),
   );
   ref.onDispose(c.dispose);
   return c;

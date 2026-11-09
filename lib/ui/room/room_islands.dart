@@ -63,7 +63,9 @@ class _RoomIslandsState extends ConsumerState<RoomIslands> {
       showRoomIsland(context, kRoomSignInText, signIn: true);
       return;
     }
-    unawaited(joinRoomAsking(context, ProviderScope.containerOf(context), code));
+    unawaited(
+      joinRoomAsking(context, ProviderScope.containerOf(context), code),
+    );
   }
 
   @override

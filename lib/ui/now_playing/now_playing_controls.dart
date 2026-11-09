@@ -5,6 +5,8 @@ import '../../player/player_service.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
+import '../../room/room_protocol.dart' show RoomOp;
+import '../room/room_button.dart' show roomGuestRoleProvider, roomLets;
 import '../shell/player_bar.dart' show formatDuration;
 import '../widgets/steady_track_shape.dart';
 
@@ -40,6 +42,9 @@ class _NowPlayingScrubberState extends ConsumerState<NowPlayingScrubber> {
     final state = ref.watch(playerViewStateProvider).value;
     final total = state?.duration ?? Duration.zero;
     final seekable = state?.current != null && total > Duration.zero;
+    // A room's guest seeks only with Full control.
+    final canSeek =
+        seekable && roomLets(ref.watch(roomGuestRoleProvider), RoomOp.seek);
     double fractionOf(Duration d) => seekable
         ? (d.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
         : 0.0;
@@ -97,7 +102,7 @@ class _NowPlayingScrubberState extends ConsumerState<NowPlayingScrubber> {
                 key: const Key('nowPlaying.scrubber'),
                 value: _drag ?? fraction,
                 secondaryTrackValue: buffered,
-                onChanged: seekable ? (v) => setState(() => _drag = v) : null,
+                onChanged: canSeek ? (v) => setState(() => _drag = v) : null,
                 onChangeEnd: (v) {
                   setState(() => _drag = null);
                   ref.read(playerViewProvider).seek(total * v);
@@ -149,6 +154,9 @@ class NowPlayingControls extends ConsumerWidget {
       playerViewStateProvider.select((s) => s.value?.repeat ?? RepeatMode.off),
     );
     final idle = colors.text.withAlpha(179);
+    // A room's guest controls the music only with Full control.
+    final role = ref.watch(roomGuestRoleProvider);
+    bool may(RoomOp op) => roomLets(role, op);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -158,7 +166,9 @@ class NowPlayingControls extends ConsumerWidget {
           icon: Icons.shuffle_rounded,
           tooltip: shuffle ? 'Shuffle: on' : 'Shuffle: off',
           color: shuffle ? colors.accent : idle,
-          onPressed: () => player.setShuffle(!shuffle),
+          onPressed: may(RoomOp.shuffle)
+              ? () => player.setShuffle(!shuffle)
+              : null,
         ),
         _ControlButton(
           key: const Key('nowPlaying.previous'),
@@ -166,11 +176,11 @@ class NowPlayingControls extends ConsumerWidget {
           tooltip: 'Previous',
           size: 38,
           color: colors.text,
-          onPressed: hasTrack ? player.previous : null,
+          onPressed: hasTrack && may(RoomOp.previous) ? player.previous : null,
         ),
         _PlayPauseButton(
           playing: playing,
-          onPressed: hasTrack ? player.togglePlay : null,
+          onPressed: hasTrack && may(RoomOp.toggle) ? player.togglePlay : null,
         ),
         _ControlButton(
           key: const Key('nowPlaying.next'),
@@ -178,7 +188,7 @@ class NowPlayingControls extends ConsumerWidget {
           tooltip: 'Next',
           size: 38,
           color: colors.text,
-          onPressed: hasTrack ? player.next : null,
+          onPressed: hasTrack && may(RoomOp.next) ? player.next : null,
         ),
         _ControlButton(
           key: const Key('nowPlaying.repeat'),
@@ -191,11 +201,13 @@ class NowPlayingControls extends ConsumerWidget {
             RepeatMode.one => 'Repeat: one',
           },
           color: repeat == RepeatMode.off ? idle : colors.accent,
-          onPressed: () => player.setRepeat(switch (repeat) {
-            RepeatMode.off => RepeatMode.all,
-            RepeatMode.all => RepeatMode.one,
-            RepeatMode.one => RepeatMode.off,
-          }),
+          onPressed: may(RoomOp.repeat)
+              ? () => player.setRepeat(switch (repeat) {
+                  RepeatMode.off => RepeatMode.all,
+                  RepeatMode.all => RepeatMode.one,
+                  RepeatMode.one => RepeatMode.off,
+                })
+              : null,
         ),
       ],
     );

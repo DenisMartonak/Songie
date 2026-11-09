@@ -182,8 +182,7 @@ Future<void> showSongMenu(
   // its own local files (the others don't have them).
   final guestRole = ref.read(roomGuestRoleProvider);
   final guestView = guestRole == null ? null : ref.read(playerViewProvider);
-  final offerQueue =
-      guestRole == null || roleAllows(guestRole, RoomOp.addNext);
+  final offerQueue = guestRole == null || roleAllows(guestRole, RoomOp.addNext);
   final disabled = <SongMenuAction>{
     if (guestRole != null && song.track?.source == 'local')
       SongMenuAction.addToQueue,

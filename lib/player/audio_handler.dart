@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/library/art_cache.dart';
+import 'package:songies/player/player_inputs.dart';
 import 'package:songies/player/player_service.dart';
 
 /// Bridges [PlayerService] to the platform media session: the Android
@@ -17,7 +18,9 @@ class SongiesAudioHandler extends BaseAudioHandler with SeekHandler {
     this._art, {
     this.idleStop = const Duration(minutes: 10),
     this.publishProgress = false,
+    PlayerInputs? inputs,
   }) {
+    _inputs = inputs ?? PlayerInputs(_player);
     _sub = _player.states.listen(_onState);
     _onState(_player.state);
   }
@@ -41,6 +44,9 @@ class SongiesAudioHandler extends BaseAudioHandler with SeekHandler {
   static const Duration _seekJump = Duration(seconds: 1);
 
   final PlayerService _player;
+
+  /// Where the session's buttons go (the room, while a guest).
+  late final PlayerInputs _inputs;
   final ArtCache _art;
   late final StreamSubscription<PlayerState> _sub;
 
@@ -177,19 +183,19 @@ class SongiesAudioHandler extends BaseAudioHandler with SeekHandler {
   // --- media session -> PlayerService --------------------------------------
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() => _inputs.play();
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() => _inputs.pause();
 
   @override
-  Future<void> skipToNext() => _player.next();
+  Future<void> skipToNext() => _inputs.next();
 
   @override
-  Future<void> skipToPrevious() => _player.previous();
+  Future<void> skipToPrevious() => _inputs.previous();
 
   @override
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) => _inputs.seek(position);
 
   @override
   Future<dynamic> customAction(
@@ -198,9 +204,9 @@ class SongiesAudioHandler extends BaseAudioHandler with SeekHandler {
   ]) async {
     switch (name) {
       case shuffleAction:
-        _player.setShuffle(!_player.state.shuffle);
+        await _inputs.toggleShuffle();
       case repeatAction:
-        _player.cycleRepeat();
+        await _inputs.cycleRepeat();
     }
   }
 
@@ -213,7 +219,7 @@ class SongiesAudioHandler extends BaseAudioHandler with SeekHandler {
     _idleTimer = null;
     _released = true;
     _lastKey = null;
-    if (_player.state.playing) await _player.pause();
+    if (_player.state.playing) await _inputs.pause();
     playbackState.add(
       playbackState.value.copyWith(
         processingState: AudioProcessingState.idle,

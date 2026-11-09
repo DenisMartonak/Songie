@@ -61,6 +61,7 @@ import 'player/audio_session_binding.dart';
 import 'player/composite_track_resolver.dart';
 import 'player/just_audio_backend.dart';
 import 'player/media_controls.dart';
+import 'player/player_inputs.dart';
 import 'player/player_service.dart';
 import 'player/stream_resolver.dart';
 import 'player/stream_source.dart';
@@ -345,8 +346,18 @@ Future<void> main() async {
   );
 
   final router = buildRouter(navigatorKey: navigatorKey);
+  // The container is made further down; until then no room is open.
+  ProviderContainer? appContainer;
+  final inputs = PlayerInputs(
+    player,
+    room: () => appContainer?.read(roomServiceProvider).guestView,
+  );
   try {
-    final controls = await MediaControlsBinding.create(player, artCache);
+    final controls = await MediaControlsBinding.create(
+      player,
+      artCache,
+      inputs: inputs,
+    );
     controls.openNowPlayingRequests.listen((_) => openNowPlaying(router));
   } catch (e, s) {
     AppLog.e('System media controls unavailable', e, s);
@@ -391,8 +402,10 @@ Future<void> main() async {
         (userId) =>
             SupabaseRemoteChannel(() => Supabase.instance.client, userId),
       ),
+      playerInputsProvider.overrideWithValue(inputs),
     ],
   );
+  appContainer = container;
   // Both listened to, not read: an unlistened provider is paused and would
   // not follow the account.
   container.listen(cloudSyncFollowerProvider, (_, _) {});

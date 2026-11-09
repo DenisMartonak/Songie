@@ -22,7 +22,10 @@ void main() {
   });
   tearDown(() => h.dispose());
 
-  Future<void> pump(WidgetTester tester, {List<Override> extra = const []}) async {
+  Future<void> pump(
+    WidgetTester tester, {
+    List<Override> extra = const [],
+  }) async {
     tester.view.physicalSize = const Size(1000, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -160,7 +163,10 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Leave'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(rig.backend.calls, containsAllInOrder(['end room1', 'join ABCD2345']));
+    expect(
+      rig.backend.calls,
+      containsAllInOrder(['end room1', 'join ABCD2345']),
+    );
     // Nobody hosts that room now: the join gives up.
     await tester.pump(const Duration(seconds: 16));
     expect(find.text("Couldn't reach the room"), findsOneWidget);

@@ -92,6 +92,17 @@ void main() {
     expect(find.text('Desk'), findsOneWidget);
   });
 
+  uiTest('fresh start, nothing playing: the room button is on Home and '
+      'opens the room sheet', (tester) async {
+    await pump(tester);
+    expect(find.byType(MiniPlayer), findsNothing);
+    await tester.tap(find.byKey(const Key('room.button')));
+    await settle(tester);
+    expect(find.byKey(const Key('room.sheet')), findsOneWidget);
+    expect(find.text('Start a room'), findsOneWidget);
+    expect(find.text('Join a room'), findsOneWidget);
+  });
+
   uiTest('signed out there is no devices button', (tester) async {
     rig = RemoteMenuRig(h, signedIn: false);
     await pump(tester);

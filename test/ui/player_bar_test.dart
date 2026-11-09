@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:songies/providers.dart';
 import 'package:songies/room/room_protocol.dart';
 import 'package:songies/ui/shell/player_bar.dart';
 import 'package:songies/ui/widgets/song_menu.dart';
@@ -34,14 +35,26 @@ void main() {
             builder: (_, _) => Scaffold(
               body: Center(
                 child: Consumer(
-                  builder: (context, ref, _) => TextButton(
-                    onPressed: () => showSongMenu(
-                      context,
-                      ref,
-                      MenuSong.track(roomTrack('x', source: 'local')),
-                      anchor: const Rect.fromLTWH(400, 300, 1, 1),
-                    ),
-                    child: const Text('Local song'),
+                  builder: (context, ref, _) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton(
+                        onPressed: () => showSongMenu(
+                          context,
+                          ref,
+                          MenuSong.track(roomTrack('x', source: 'local')),
+                          anchor: const Rect.fromLTWH(400, 300, 1, 1),
+                        ),
+                        child: const Text('Local song'),
+                      ),
+                      // What a song row's tap does (search, Home, stats).
+                      TextButton(
+                        onPressed: () => ref
+                            .read(playerInputsProvider)
+                            .playQueue([roomTrack('z')]),
+                        child: const Text('Tap a song'),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -107,20 +120,22 @@ void main() {
     );
     expect(play.onTap, isNull);
     expect(
-      tester.widget<Slider>(find.byKey(const Key('playerBar.scrubber'))).onChanged,
+      tester
+          .widget<Slider>(find.byKey(const Key('playerBar.scrubber')))
+          .onChanged,
       isNull,
     );
     // Volume stays each person's own.
     expect(
-      tester.widget<Slider>(find.byKey(const Key('playerBar.volume'))).onChanged,
+      tester
+          .widget<Slider>(find.byKey(const Key('playerBar.volume')))
+          .onChanged,
       isNotNull,
     );
     await rig.dispose(tester);
   });
 
-  uiTest('full control: the controls work, through the host', (
-    tester,
-  ) async {
+  uiTest('full control: the controls work, through the host', (tester) async {
     await pump(tester);
     await rig.joinAs(tester, RoomRole.full);
     expect(enabled(tester, 'playerBar.next'), isTrue);
@@ -168,6 +183,25 @@ void main() {
     expect(addToQueue(tester)!.enabled, isFalse);
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
+    await rig.dispose(tester);
+  });
+
+  uiTest('a listener\'s song tap doesn\'t replace its queue', (tester) async {
+    await pump(tester);
+    await rig.joinAs(tester, RoomRole.listener);
+    await tester.tap(find.text('Tap a song'));
+    await rig.run(tester, Future.value());
+    expect(h.player.state.queue.map((t) => t.id), ['a']);
+    expect(h.player.state.playing, isTrue);
+    expect(rig.hostPlayer.state.queue.map((t) => t.id), ['a']);
+    await rig.dispose(tester);
+  });
+
+  uiTest('no room: a song tap plays it here', (tester) async {
+    await pump(tester);
+    await tester.tap(find.text('Tap a song'));
+    await rig.run(tester, Future.value());
+    expect(h.player.state.current?.id, 'z');
     await rig.dispose(tester);
   });
 }

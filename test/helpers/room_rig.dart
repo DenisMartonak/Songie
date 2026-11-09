@@ -63,7 +63,8 @@ class FakeRoomBackend implements RoomBackend {
   Future<void> end(String roomId) async => calls.add('end $roomId');
 }
 
-class _Resolver extends TrackResolver {
+/// Resolves every track to a (fake) file.
+class RigResolver extends TrackResolver {
   @override
   Future<Result<AudioSourceRef>> resolve(Track t) async =>
       Ok(FileSource('/music/${t.id}.mp3'));
@@ -80,7 +81,7 @@ Future<List<Track?>> roomTracksFor(List<RoomSong> songs) async => [
 /// clock).
 class RoomRig {
   RoomRig(this.h) {
-    hostPlayer = PlayerService(FakeAudioBackend(), _Resolver());
+    hostPlayer = PlayerService(FakeAudioBackend(), RigResolver());
     host = RoomService(
       backend: backend,
       channelFor: (_) => hub.channelFor('h'),

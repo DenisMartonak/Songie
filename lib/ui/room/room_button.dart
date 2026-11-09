@@ -18,7 +18,8 @@ final roomGuestRoleProvider = Provider<RoomRole?>(
 
 /// Whether the player UI may offer [op]: always outside a room and to a
 /// host; to a guest, as its [role] allows.
-bool roomLets(RoomRole? role, RoomOp op) => role == null || roleAllows(role, op);
+bool roomLets(RoomRole? role, RoomOp op) =>
+    role == null || roleAllows(role, op);
 
 /// The people-icon button that opens the room panel. Accent, with the
 /// number of people, while this device is in a room.
@@ -34,8 +35,8 @@ class RoomButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final count = switch (ref.watch(roomStatusProvider).value) {
-      RoomHosting(:final people) || RoomGuesting(:final people) =>
-        people.length,
+      RoomHosting(:final people) ||
+      RoomGuesting(:final people) => people.length,
       _ => null,
     };
     return IconButton(

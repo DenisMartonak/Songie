@@ -91,10 +91,7 @@ class _RoomPanelState extends ConsumerState<RoomPanel> {
     try {
       await ref
           .read(roomServiceProvider)
-          .open(
-            userId: account.profile.id,
-            name: account.profile.username,
-          );
+          .open(userId: account.profile.id, name: account.profile.username);
     } on StateError catch (e, s) {
       AppLog.w('room: open skipped', e, s);
     }
@@ -183,9 +180,7 @@ class _RoomPanelState extends ConsumerState<RoomPanel> {
             RoomHosting() => _hosting(status, colors),
             RoomGuesting() => _guesting(status, colors),
             RoomIdle() =>
-              account is SignedIn
-                  ? _idle(account, colors)
-                  : _signedOut(colors),
+              account is SignedIn ? _idle(account, colors) : _signedOut(colors),
           },
         ],
       ),
@@ -413,10 +408,7 @@ class _RoleMenu extends ConsumerWidget {
         for (final r in RoomRole.values)
           PopupMenuItem(
             value: r,
-            child: Text(
-              roomRoleLabel(r),
-              style: TextStyle(color: colors.text),
-            ),
+            child: Text(roomRoleLabel(r), style: TextStyle(color: colors.text)),
           ),
       ],
       child: Padding(

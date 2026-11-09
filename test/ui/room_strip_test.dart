@@ -98,7 +98,10 @@ void main() {
     await rig.guestJoins(tester, 'g2', 'bob');
     await tester.pumpAndSettle();
     expect(
-      find.descendant(of: strip, matching: find.text('Your room · 2 listening')),
+      find.descendant(
+        of: strip,
+        matching: find.text('Your room · 2 listening'),
+      ),
       findsOneWidget,
     );
     await tester.tap(find.descendant(of: strip, matching: find.text('Manage')));

@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:songies/core/log.dart';
 import 'package:songies/library/art_cache.dart';
 import 'package:songies/player/audio_handler.dart';
+import 'package:songies/player/player_inputs.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/player/smtc_binding.dart';
 
@@ -15,14 +16,19 @@ import 'package:songies/player/smtc_binding.dart';
 abstract class MediaControlsBinding {
   /// Picks the implementation for the current platform. On a platform without
   /// system media controls the binding does nothing.
+  /// The buttons go through [inputs] (to the room while this device is a
+  /// guest); straight to [player] without it.
   static Future<MediaControlsBinding> create(
     PlayerService player,
-    ArtCache art,
-  ) async {
+    ArtCache art, {
+    PlayerInputs? inputs,
+  }) async {
     if (Platform.isAndroid || Platform.isLinux) {
-      return _AudioServiceBinding.start(player, art);
+      return _AudioServiceBinding.start(player, art, inputs);
     }
-    if (Platform.isWindows) return SmtcBinding.start(player, art);
+    if (Platform.isWindows) {
+      return SmtcBinding.start(player, art, inputs: inputs);
+    }
     return _NoopBinding();
   }
 
@@ -57,12 +63,17 @@ class _AudioServiceBinding implements MediaControlsBinding {
   static Future<_AudioServiceBinding> start(
     PlayerService player,
     ArtCache art,
+    PlayerInputs? inputs,
   ) async {
     final handler = await AudioService.init(
       // MPRIS shows the last published position as-is, so Linux must keep
       // publishing progress; Android's MediaSession projects it itself.
-      builder: () =>
-          SongiesAudioHandler(player, art, publishProgress: Platform.isLinux),
+      builder: () => SongiesAudioHandler(
+        player,
+        art,
+        publishProgress: Platform.isLinux,
+        inputs: inputs,
+      ),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.songies.playback',
         androidNotificationChannelName: 'Playback',

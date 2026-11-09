@@ -495,7 +495,7 @@ class _SongRow extends ConsumerWidget {
       subtitle: song.displayArtist,
       onTap: track == null
           ? null
-          : () => ref.read(playerServiceProvider).playQueue([track]),
+          : () => ref.read(playerInputsProvider).playQueue([track]),
       onLongPress: menu?.onLongPress,
       onSecondaryTapUp: menu?.onSecondaryTapUp,
       trailing: Row(

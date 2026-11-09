@@ -77,9 +77,7 @@ Future<void> joinRoomAsking(
     final leave = await confirmRoomStep(
       context,
       title: 'Leave the current room?',
-      body: status is RoomHosting
-          ? 'Your room ends for everyone in it.'
-          : null,
+      body: status is RoomHosting ? 'Your room ends for everyone in it.' : null,
       confirm: 'Leave',
     );
     if (!leave) return;

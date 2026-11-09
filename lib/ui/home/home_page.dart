@@ -17,6 +17,7 @@ import '../motion/motion.dart';
 import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
 import '../remote/devices_button.dart';
+import '../room/room_button.dart';
 import '../shell/adaptive_shell.dart';
 import '../stats/listening_card.dart';
 import '../widgets/artwork.dart';
@@ -332,6 +333,8 @@ class _Header extends StatelessWidget {
           // The phone's way to the device picker with nothing playing here
           // (no mini player, so no Now Playing). Absent signed out.
           if (showSettings) DevicesButton(iconSize: 24, color: colors.text),
+          // Likewise the way to start or join a room.
+          if (showSettings) RoomButton(iconSize: 24, color: colors.text),
           if (showSettings)
             IconButton(
               key: const Key('home.settings'),
@@ -551,7 +554,7 @@ class _RecentRow extends ConsumerWidget {
     return Pressable(
       key: Key('home.recent.${track.id}'),
       onTap: () =>
-          ref.read(playerServiceProvider).playQueue(tracks, startIndex: index),
+          ref.read(playerInputsProvider).playQueue(tracks, startIndex: index),
       onLongPress: menu.onLongPress,
       onSecondaryTapUp: menu.onSecondaryTapUp,
       child: Padding(
