@@ -24,7 +24,9 @@ create table public.rooms (
 
 create index rooms_host on public.rooms (host_id);
 
--- Everyone in a room, the host included (at most 10, enforced by join_room).
+-- Everyone in a room, the host included (at most 10 accounts, enforced by
+-- join_room; the app's kRoomMaxPeople in lib/room/room_protocol.dart says the
+-- same and must change with it).
 -- Rows go with the room or with the account.
 create table public.room_members (
   room_id uuid not null references public.rooms (id) on delete cascade,
@@ -156,7 +158,11 @@ $$;
 
 -- Leave, remove, end ------------------------------------------------------------
 
--- The caller leaves a room. The host leaving is the same as ending it.
+-- The caller leaves a room. The app's host never calls this (it ends the room
+-- with end_room), so a call from the host's account comes from another device
+-- of the same account that joined as a guest: it changes nothing. The room
+-- stays open and the host's member row stays, because the host's own device
+-- needs it to keep (or rejoin) the room's topic.
 create function public.leave_room(p_room uuid)
 returns void
 language plpgsql
@@ -167,10 +173,9 @@ declare
   me uuid := (select auth.uid());
 begin
   if exists (select 1 from public.rooms r where r.id = p_room and r.host_id = me) then
-    perform public.end_room(p_room);
-  else
-    delete from public.room_members m where m.room_id = p_room and m.user_id = me;
+    return;
   end if;
+  delete from public.room_members m where m.room_id = p_room and m.user_id = me;
 end;
 $$;
 
@@ -287,8 +292,10 @@ grant execute on function public.is_room_host(text) to authenticated;
 -- and Presence on it. There is no per-event rule: Realtime checks these
 -- policies when a client joins the channel (and caches the answer for the
 -- connection), not per message, so "only the host sends state" could not be
--- enforced here. The app treats state, roles, kick and end from anyone but the
--- host as noise; the server does not. Rooms are for friends.
+-- enforced here. Broadcasts carry no verified sender either, so the app can't
+-- tell the host's state, roles, kick and end from a copy sent by another
+-- member: any member could pose as the host. Rooms are for friends, so this is
+-- accepted.
 create policy "room: members receive on their room topic"
   on realtime.messages for select
   to authenticated

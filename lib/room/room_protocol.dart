@@ -3,7 +3,10 @@ import '../player/player_service.dart' show RepeatMode;
 /// The wire version carried by every room message.
 const int kRoomProtocol = 1;
 
-/// The most people (host included) in one room.
+/// The most people (host included) in one room. The app does not enforce
+/// it: the cap is `join_room`'s `>= 10` in
+/// `supabase/migrations/20261109120000_listen_together.sql`, which counts
+/// accounts (`room_members` rows), not devices. Change both together.
 const int kRoomMaxPeople = 10;
 
 /// The most songs a state message carries (around the current one).
