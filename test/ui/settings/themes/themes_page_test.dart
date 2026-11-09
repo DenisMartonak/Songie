@@ -182,6 +182,11 @@ void main() {
     pick = good.path;
     await tester.tap(find.byKey(const Key('themes.import')));
     await settle(tester);
+    // The import does real file and database work, which a slow runner may
+    // not finish within one settle.
+    for (var i = 0; i < 50 && (await saved(tester)).isEmpty; i++) {
+      await settle(tester);
+    }
     expect((await saved(tester)).map((e) => e.name), ['Shared']);
     expect(find.text('Shared'), findsOneWidget);
   });

@@ -82,7 +82,7 @@ class ThemesPage extends ConsumerWidget {
                   ),
                   TextButton.icon(
                     key: const Key('themes.import'),
-                    onPressed: () => _import(context, ref),
+                    onPressed: () => _import(context),
                     icon: const Icon(Icons.file_open_outlined),
                     label: const Text('Import'),
                   ),
@@ -117,17 +117,20 @@ class ThemesPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _import(BuildContext context, WidgetRef ref) async {
+  Future<void> _import(BuildContext context) async {
     final islands = Islands.of(context);
-    final path = await ref.read(themeFilePickerProvider)();
+    // The container outlives this page: leaving it mid-import must not use
+    // a disposed ref (as in the editor's _importFont).
+    final container = ProviderScope.containerOf(context, listen: false);
+    final path = await container.read(themeFilePickerProvider)();
     if (path == null) return;
-    final r = await ref.read(themeFilesProvider).importFile(path);
+    final r = await container.read(themeFilesProvider).importFile(path);
     switch (r) {
       case Ok():
         // A font the file brought is usable at once, as after the editor's
         // Import font….
-        ref.invalidate(resolvedFontFamilyProvider);
-        ref.invalidate(importedFontsProvider);
+        container.invalidate(resolvedFontFamilyProvider);
+        container.invalidate(importedFontsProvider);
         islands.show('Theme imported', kind: IslandKind.success);
       case Err(:final failure):
         islands.show(failure.message, kind: IslandKind.failure);
