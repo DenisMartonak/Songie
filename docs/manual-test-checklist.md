@@ -360,8 +360,8 @@ Two accounts (A and B) on two devices: a desktop and an Android phone, both on t
 - [ ] In step: both devices stay within about a second of each other over several songs, also after the host seeks.
 - [ ] Leave (strip or panel): the guest keeps the room's queue and keeps playing from where it was, now on its own.
 - [ ] End room asks "End the room?"; every guest gets "The room ended" and keeps playing.
-- [ ] The host kills the app (no End room): guests keep playing and get "The room ended" after about 15 s; opening the old link later says "This room has ended" or "Room not found".
-- [ ] Room full: with `kRoomMaxPeople` temporarily lowered (e.g. to 2) in a debug build, a third device joining gets "This room is full".
+- [ ] The host kills the app (no End room): guests keep playing and get "The room ended" after about 15 s. Opening the old link later, while the host's app is still closed, leaves the friend's own music playing and says "This room has ended" after about 15 s.
+- [ ] Room full: on a test Supabase project (never the real one), lower the cap in `join_room` (`>= 10` to `>= 2`, in the SQL editor with `create or replace function`), then a third account joining gets "This room is full". The cap counts accounts, not devices: a second device of an account already in the room still joins. Put `>= 10` back afterwards. (`kRoomMaxPeople` in the app only mirrors that number.)
 - [ ] Old link: a link of an ended room says "This room has ended".
 - [ ] Signed-out invite: on a signed-out device, opening a room link shows "You need a Songies account to join a room" with Sign in, which opens Settings.
 - [ ] Already in a room or controlling a device: opening a room link first asks "Leave the current room?" (a host's room ends) or "Stop controlling <device>?"; Cancel keeps things as they were.

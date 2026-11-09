@@ -283,6 +283,21 @@ void main() {
     expect(r.removed, ['ug']);
   });
 
+  hostTest("a blip of the host's own connection makes no left/joined "
+      'events', (r) {
+    expect(r.events.whereType<GuestJoined>().length, 1);
+    r.hub.drop('h');
+    r.async.flushMicrotasks();
+    r.hub.restore('h');
+    r.async.flushMicrotasks();
+    expect(r.events.whereType<GuestLeft>(), isEmpty);
+    expect(r.events.whereType<GuestJoined>().length, 1);
+    // A guest really going still counts.
+    r.guestCh.leave();
+    r.async.flushMicrotasks();
+    expect(r.events.whereType<GuestLeft>().length, 1);
+  });
+
   hostTest('stop() sends end', (r) {
     r.host.stop();
     r.async.flushMicrotasks();

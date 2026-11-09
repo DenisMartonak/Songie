@@ -316,6 +316,9 @@ class RoomService {
         _say('The room ended');
       case RoomLeaveReason.removed:
         _say('You were removed from the room');
+      case RoomLeaveReason.stale:
+        // An old link: the room is open on the server but its host is gone.
+        _say('This room has ended');
       case RoomLeaveReason.unreachable:
         _say("Couldn't reach the room");
       case RoomLeaveReason.outdated:

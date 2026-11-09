@@ -3,14 +3,26 @@ import 'dart:math';
 
 import '../core/log.dart';
 import '../data/database.dart';
+import '../player/player_inputs.dart';
 import '../player/player_service.dart';
 import '../remote/player_view.dart';
 import 'room_channel.dart';
 import 'room_protocol.dart';
 import 'room_songs.dart';
 
-/// Why a guest is no longer in the room.
-enum RoomLeaveReason { left, ended, removed, hostGone, unreachable, outdated }
+/// Why a guest is no longer in the room. [stale]: the channel joined but the
+/// host never showed (an old link to a room whose host closed or crashed
+/// without ending it); [unreachable]: the channel never joined, or the host
+/// was there but sent no state.
+enum RoomLeaveReason {
+  left,
+  ended,
+  removed,
+  hostGone,
+  unreachable,
+  outdated,
+  stale,
+}
 
 /// A room's guest: makes this device's [PlayerService] follow the host's
 /// state and sends the guest's requests. It edits its player's queue only by
@@ -48,6 +60,16 @@ class RoomGuest {
   RoomRole _role = RoomRole.listener;
   Map<String, RoomRole> _roleMap = const {};
   bool _hostSeen = false;
+
+  /// This device appeared in the channel's Presence (its channel joined).
+  bool _selfSeen = false;
+
+  /// The guest's own player was paused for the room (once the host showed).
+  bool _tookOver = false;
+
+  /// Gone quiet on its own (headphones out, a call): follows the room's
+  /// queue but plays nothing until [rejoin].
+  bool _held = false;
   int _requests = 0;
 
   StreamSubscription<RoomMessage>? _messageSub;
@@ -98,6 +120,9 @@ class RoomGuest {
   RoomRole get role => _role;
   Stream<RoomRole> get roles => _roles.stream;
 
+  /// Whether this device is holding quiet on its own (see [hold]).
+  bool get held => _held;
+
   /// Every guest device's role as the host last sent them, by device id
   /// (a device missing from it is a listener).
   Map<String, RoomRole> get allRoles => _roleMap;
@@ -125,19 +150,50 @@ class RoomGuest {
     _messageSub = _channel.messages.listen(_onMessage);
     _presenceSub = _channel.presences.listen(_onPresence);
     _playerSub = _player.states.listen(_onPlayer);
+    // No state in time: a channel that joined but never saw the host is an
+    // old room whose host is gone (its own music was never touched).
     _unreachable = Timer(firstStateWait, () {
-      _finish(RoomLeaveReason.unreachable);
+      _finish(
+        !_hostSeen && _selfSeen
+            ? RoomLeaveReason.stale
+            : RoomLeaveReason.unreachable,
+      );
     });
     try {
-      await _player.pause();
-      if (!_running) return;
       await _channel.join(_me);
       if (!_running) return;
       _hello = Timer.periodic(helloEvery, (_) => _sendHello());
       await _sendHello();
     } on Object catch (e, st) {
       AppLog.w('room guest: start failed', e, st);
+      unawaited(_finish(RoomLeaveReason.unreachable));
     }
+  }
+
+  /// The host showed (or its state came): the guest's own music stops, once.
+  void _takeOver() {
+    if (_tookOver) return;
+    _tookOver = true;
+    unawaited(_player.pause());
+  }
+
+  /// This device must go quiet on its own (headphones unplugged, a call):
+  /// pauses, and stops playing with the host (it still follows the queue)
+  /// until [rejoin].
+  Future<void> hold() async {
+    if (!_running) return;
+    _held = true;
+    if (_player.state.playing) await _player.pause();
+  }
+
+  /// Ends a [hold]: applies the latest state again, so the guest lands on
+  /// the host's song and position (the usual drift seek) and plays if the
+  /// host does.
+  Future<void> rejoin() async {
+    if (!_running || !_held) return;
+    _held = false;
+    _pending ??= _last;
+    await _drain();
   }
 
   Future<void> leave() => _finish(RoomLeaveReason.left);
@@ -205,6 +261,7 @@ class RoomGuest {
       RoomPresence? h;
       for (final p in list) {
         if (p.host && p.deviceId != _me.deviceId) h = p;
+        if (p.deviceId == _me.deviceId) _selfSeen = true;
       }
       if (h != null) {
         if (!h.compatible) {
@@ -212,6 +269,7 @@ class RoomGuest {
           return;
         }
         _hostSeen = true;
+        _takeOver();
         _hostGone?.cancel();
         _hostGone = null;
       } else if (_hostSeen && _hostGone == null) {
@@ -233,6 +291,7 @@ class RoomGuest {
           _hello = null;
           _unreachable?.cancel();
           _unreachable = null;
+          _takeOver();
           _pending = (m, _now());
           _drain();
         case RoomRolesMsg():
@@ -376,6 +435,14 @@ class RoomGuest {
       await _wait(song);
       return;
     }
+    if (_held) {
+      // Quiet on its own: nothing that would start a song. Rejoining
+      // applies the latest state in full.
+      final here = _loaded && _playerHoldsQueue();
+      if (here && _player.state.index == target) _target = target;
+      if (_player.state.playing) await _player.pause();
+      return;
+    }
     _target = target;
 
     if (!_loaded || !_playerHoldsQueue()) {
@@ -468,7 +535,7 @@ class RoomGuest {
 
 /// The player UI's view while this device is a room guest: shows the guest's
 /// own player and turns commands the guest's role allows into requests.
-class RoomGuestView implements PlayerView {
+class RoomGuestView implements PlayerView, LocalHold {
   RoomGuestView(this._guest);
 
   static const String localFilesNotice =
@@ -500,12 +567,23 @@ class RoomGuestView implements PlayerView {
     await _guest.request(op, args, epoch);
   }
 
+  /// While held, play means "rejoin here" for any role (a full guest also
+  /// asks the host to play).
   @override
-  Future<void> play() => _ask(RoomOp.play);
+  Future<void> play() async {
+    if (_guest.held) await _guest.rejoin();
+    await _ask(RoomOp.play);
+  }
+
   @override
   Future<void> pause() => _ask(RoomOp.pause);
   @override
-  Future<void> togglePlay() => _ask(RoomOp.toggle);
+  Future<void> togglePlay() => _guest.held ? play() : _ask(RoomOp.toggle);
+
+  @override
+  Future<void> holdLocally() => _guest.hold();
+  @override
+  Future<void> resumeLocally() => _guest.rejoin();
   @override
   Future<void> next() => _ask(RoomOp.next);
   @override
@@ -562,9 +640,15 @@ class RoomGuestView implements PlayerView {
     }
     _noticeIfDropped(tracks.length, songs.length);
     if (start == null) return;
+    // At most a window around the start, as the host's state carries.
+    final from = max(
+      0,
+      min(start - kRoomQueueWindow ~/ 2, songs.length - kRoomQueueWindow),
+    );
+    final to = min(songs.length, from + kRoomQueueWindow);
     await _guest.request(RoomOp.playSongs, {
-      'songs': songs,
-      'startIndex': start,
+      'songs': songs.sublist(from, to),
+      'startIndex': start - from,
     });
   }
 

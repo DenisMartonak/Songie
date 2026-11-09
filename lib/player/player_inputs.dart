@@ -2,6 +2,17 @@ import '../data/database.dart';
 import '../remote/player_view.dart';
 import 'player_service.dart';
 
+/// A room guest's player view: can go quiet on its own (headphones out, a
+/// call) and later rejoin the room's playback.
+abstract interface class LocalHold {
+  /// Pauses this device only and keeps it quiet until [resumeLocally] or a
+  /// local play.
+  Future<void> holdLocally();
+
+  /// Plays with the room again, at the host's song and position.
+  Future<void> resumeLocally();
+}
+
 /// Where this device's own playback inputs go: keyboard shortcuts, the
 /// system media controls (notification, headset, MPRIS, SMTC), song taps
 /// and radio. Normally straight to [PlayerService], as always. While this
@@ -27,6 +38,20 @@ class PlayerInputs {
   Future<void> next() => room?.next() ?? _player.next();
   Future<void> previous() => room?.previous() ?? _player.previous();
   Future<void> seek(Duration d) => room?.seek(d) ?? _player.seek(d);
+
+  /// This device must go quiet on its own (headphones unplugged, an audio
+  /// interruption): pauses it. While a guest, only this device holds; it
+  /// does not ask the room to pause.
+  Future<void> hold() {
+    if (room case final LocalHold r) return r.holdLocally();
+    return _player.pause();
+  }
+
+  /// The interruption [hold] was for ended and asks to resume.
+  Future<void> resumeAfterHold() {
+    if (room case final LocalHold r) return r.resumeLocally();
+    return _player.play();
+  }
 
   Future<void> setShuffle(bool on) async {
     final r = room;

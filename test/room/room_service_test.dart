@@ -368,20 +368,35 @@ void main() {
     expect(guest.service.status, isA<RoomIdle>());
   });
 
-  inRoomTest('a host that never shows ends the join as unreachable', (
-    async,
-    host,
-    guest,
-    backend,
-  ) {
+  inRoomTest('a host that never shows (a stale room) ends the join as '
+      'ended, with the music left playing', (async, host, guest, backend) {
+    guest.player.playQueue([track('x')]);
+    async.elapse(const Duration(milliseconds: 300));
     final f = guest.service.join('ABCD2345', userId: 'u2', name: 'Guest');
     var finished = false;
     f.then((_) => finished = true);
     async.elapse(const Duration(seconds: 20));
     expect(finished, isTrue);
     expect(guest.service.status, isA<RoomIdle>());
-    expect(guest.notices, ["Couldn't reach the room"]);
+    expect(guest.notices, ['This room has ended']);
     expect(backend.calls, contains('leave room1'));
+    expect(guest.player.state.playing, isTrue);
+    expect(guest.player.state.current?.id, 'x');
+  });
+
+  inRoomTest("a guest of the host's own account leaves with leave_room, and "
+      'the room stays open', (async, host, guest, backend) {
+    done(
+      async,
+      host.service.open(userId: 'u1', name: 'Host', play: [track('a')]),
+    );
+    done(async, guest.service.join('ABCD2345', userId: 'u1', name: 'Guest'));
+    done(async, guest.service.leave());
+    expect(guest.service.status, isA<RoomIdle>());
+    expect(backend.calls, contains('leave room1'));
+    expect(backend.calls, isNot(contains('end room1')));
+    expect(host.service.status, isA<RoomHosting>());
+    expect(guest.notices, isEmpty);
   });
 
   inRoomTest('the host sees what guests add', (async, host, guest, backend) {

@@ -212,14 +212,23 @@ class SongiesAudioHandler extends BaseAudioHandler with SeekHandler {
 
   /// Pauses and releases the media session (ends the Android foreground
   /// service, so the notification can be dismissed). The queue is kept: the
-  /// user can resume from the app, which brings the session back.
+  /// user can resume from the app, which brings the session back. When the
+  /// pause is not taken (a room guest whose role may not pause), the music
+  /// plays on and the session stays as it is.
   @override
   Future<void> stop() async {
     _idleTimer?.cancel();
     _idleTimer = null;
     _released = true;
     _lastKey = null;
-    if (_player.state.playing) await _inputs.pause();
+    if (_player.state.playing) {
+      await _inputs.pause();
+      if (_player.state.playing) {
+        _released = false;
+        _publishPlaybackState(_player.state);
+        return;
+      }
+    }
     playbackState.add(
       playbackState.value.copyWith(
         processingState: AudioProcessingState.idle,

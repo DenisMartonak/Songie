@@ -146,6 +146,10 @@ class RoomHost {
 
   void _onPresence(List<RoomPresence> list) {
     if (!_running) return;
+    // A list without this device is the host's own connection dropping (the
+    // channel then reports nobody): no one left, and the list that comes
+    // back with it is compared with the one before.
+    if (!list.any((p) => p.deviceId == _me.deviceId)) return;
     try {
       final now = {for (final p in list) p.deviceId: p};
       for (final p in now.values) {

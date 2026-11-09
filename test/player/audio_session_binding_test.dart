@@ -6,8 +6,10 @@ import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/audio_session_binding.dart';
+import 'package:songies/player/player_inputs.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
+import 'package:songies/remote/player_view.dart';
 
 import '../helpers/fake_audio_backend.dart';
 
@@ -30,6 +32,23 @@ Track _track(String id) => Track(
   unavailable: false,
   searchText: 'title $id artist',
 );
+
+/// A room guest's view: records local holds; anything else is unexpected.
+class _GuestView implements PlayerView, LocalHold {
+  final calls = <String>[];
+
+  @override
+  Future<void> holdLocally() async => calls.add('hold');
+
+  @override
+  Future<void> resumeLocally() async => calls.add('resume');
+
+  @override
+  Object? noSuchMethod(Invocation i) {
+    calls.add(i.memberName.toString());
+    return Future<void>.value();
+  }
+}
 
 AudioInterruptionEvent _begin(AudioInterruptionType t) =>
     AudioInterruptionEvent(true, t);
@@ -148,5 +167,37 @@ void main() {
 
     expect(backend.calls, isEmpty);
     expect(player.state.playing, isTrue);
+  });
+
+  group('while a room guest', () {
+    late _GuestView guest;
+
+    setUp(() async {
+      await binding.cancel();
+      await noisy.close();
+      await interruptions.close();
+      noisy = StreamController<void>();
+      interruptions = StreamController<AudioInterruptionEvent>();
+      guest = _GuestView();
+      binding = bindAudioSession(
+        becomingNoisy: noisy.stream,
+        interruptions: interruptions.stream,
+        player: player,
+        inputs: PlayerInputs(player, room: () => guest),
+      );
+    });
+
+    test('becoming noisy holds locally, without asking the room', () async {
+      noisy.add(null);
+      await pumpEventQueue();
+      expect(guest.calls, ['hold']);
+    });
+
+    test('an interruption holds locally and its resume rejoins', () async {
+      await send(_begin(AudioInterruptionType.pause));
+      expect(guest.calls, ['hold']);
+      await send(_end(AudioInterruptionType.pause));
+      expect(guest.calls, ['hold', 'resume']);
+    });
   });
 }

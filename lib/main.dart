@@ -284,10 +284,18 @@ Future<void> main() async {
   );
   // A cover or details that land after a song was queued reach the player.
   ytTracks.changes.listen(player.updateTrack);
+  // The container is made further down; until then no room is open.
+  ProviderContainer? appContainer;
+  final inputs = PlayerInputs(
+    player,
+    room: () => appContainer?.read(roomServiceProvider).guestView,
+  );
+  // A guest's unplug or call pauses this device only (a local hold).
   bindAudioSession(
     becomingNoisy: backend.becomingNoisy,
     interruptions: backend.interruptions,
     player: player,
+    inputs: inputs,
   );
 
   // Lyrics: looked up only while a lyrics view is open.
@@ -346,12 +354,6 @@ Future<void> main() async {
   );
 
   final router = buildRouter(navigatorKey: navigatorKey);
-  // The container is made further down; until then no room is open.
-  ProviderContainer? appContainer;
-  final inputs = PlayerInputs(
-    player,
-    room: () => appContainer?.read(roomServiceProvider).guestView,
-  );
   try {
     final controls = await MediaControlsBinding.create(
       player,

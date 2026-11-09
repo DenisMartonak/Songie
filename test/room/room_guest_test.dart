@@ -458,16 +458,141 @@ void main() {
     expect(r.ended, [RoomLeaveReason.outdated]);
   }, withHost: false);
 
-  guestTest('no state within 15 s ends with unreachable', (r) {
+  guestTest('a host present that sends no state within 15 s ends with '
+      'unreachable', (r) {
     r.guestPlayer.playQueue([track('x')]);
+    r.hub.channelFor('h2').join(who('uh', 'h2', host: true));
     r.guest.start();
     r.async.elapse(const Duration(seconds: 14));
     expect(r.ended, isEmpty);
     expect(r.hub.sent.whereType<RoomHelloMsg>().length, inInclusiveRange(7, 8));
     r.async.elapse(const Duration(seconds: 2));
     expect(r.ended, [RoomLeaveReason.unreachable]);
-    expect(r.guestPlayer.state.playing, isFalse); // paused on start
+    expect(r.guestPlayer.state.playing, isFalse); // paused once the host showed
   }, withHost: false);
+
+  guestTest('a stale room (its host never there) leaves the music playing '
+      'and ends as stale', (r) {
+    r.guestPlayer.playQueue([track('x')]);
+    r.settle();
+    r.guest.start();
+    r.async.elapse(const Duration(seconds: 14));
+    expect(r.ended, isEmpty);
+    expect(r.guestPlayer.state.playing, isTrue);
+    r.async.elapse(const Duration(seconds: 2));
+    expect(r.ended, [RoomLeaveReason.stale]);
+    expect(r.guestPlayer.state.playing, isTrue);
+    expect(r.guestSong, 'x');
+  }, withHost: false);
+
+  guestTest("a channel that never joins ends with unreachable, the guest's "
+      'music untouched', (r) {
+    r.guestPlayer.playQueue([track('x')]);
+    r.settle();
+    r.hub.drop('g');
+    r.guest.start();
+    r.async.elapse(const Duration(seconds: 16));
+    expect(r.ended, [RoomLeaveReason.unreachable]);
+    expect(r.guestPlayer.state.playing, isTrue);
+  }, withHost: false);
+
+  guestTest("the guest's own music plays on until the host shows", (r) {
+    r.guestPlayer.playQueue([track('x')]);
+    r.settle();
+    r.guest.start();
+    r.async.elapse(const Duration(seconds: 5));
+    expect(r.guestPlayer.state.playing, isTrue);
+    expect(r.guestSong, 'x');
+    r.host.start();
+    r.hostPlays([track('a')]);
+    r.settle();
+    expect(r.guestSong, 'a');
+    expect(r.ended, isEmpty);
+  }, withHost: false);
+
+  guestTest('a local hold (headphones out) keeps the guest quiet until it '
+      'resumes locally, then it rejoins in step', (r) {
+    r.hostPlays([track('a'), track('b')]);
+    r.hostBackend.setPosition(const Duration(seconds: 20));
+    r.join();
+    expect(r.guestPlayer.state.playing, isTrue);
+    r.view.holdLocally();
+    r.settle();
+    expect(r.guestPlayer.state.playing, isFalse);
+    r.async.elapse(const Duration(seconds: 10)); // 5 heartbeats
+    expect(r.guestPlayer.state.playing, isFalse);
+    // A listener's play rejoins locally: no request to the host.
+    r.view.play();
+    r.settle();
+    expect(r.guestPlayer.state.playing, isTrue);
+    expect(r.guestSong, 'a');
+    expect(r.guestMs, closeTo(r.hostMs, 1000));
+    expect(r.requests, isEmpty);
+    // Held again: the host's next is not played here until it rejoins.
+    r.view.holdLocally();
+    r.settle();
+    r.hostPlayer.next();
+    r.async.elapse(const Duration(seconds: 4));
+    expect(r.guestPlayer.state.playing, isFalse);
+    r.view.togglePlay();
+    r.settle();
+    expect(r.guestSong, 'b');
+    expect(r.guestPlayer.state.playing, isTrue);
+    expect(r.requests, isEmpty);
+  });
+
+  guestTest('an interruption that ends with resume rejoins at the '
+      "host's position", (r) {
+    r.hostPlays([track('a'), track('b')]);
+    r.join();
+    r.view.holdLocally();
+    r.settle();
+    r.hostBackend.setPosition(const Duration(seconds: 30));
+    r.async.elapse(const Duration(seconds: 6)); // heartbeats carry 30 s
+    expect(r.guestPlayer.state.playing, isFalse);
+    expect(r.guestMs, lessThan(5000));
+    r.guestBackend.clearCalls();
+    r.view.resumeLocally();
+    r.settle();
+    expect(r.guestPlayer.state.playing, isTrue);
+    expect(r.guestSeeks, isNotEmpty);
+    expect(r.guestMs, closeTo(r.hostMs, 1000));
+  });
+
+  guestTest("a full guest's play while held rejoins and asks the host to "
+      'play', (r) {
+    r.hostPlays([track('a')]);
+    r.join();
+    r.host.setRole('g', RoomRole.full);
+    r.async.flushMicrotasks();
+    r.view.holdLocally();
+    r.settle();
+    r.view.play();
+    r.settle();
+    expect(r.guestPlayer.state.playing, isTrue);
+    expect(r.requests.single.op, RoomOp.play);
+  });
+
+  guestTest("a full guest's playSongs sends at most a window around the "
+      'start', (r) {
+    r.hostPlays([track('a')]);
+    r.join();
+    r.host.setRole('g', RoomRole.full);
+    r.async.flushMicrotasks();
+    final many = [for (var i = 0; i < 1200; i++) track('t$i')];
+    r.view.playTracks(many, startIndex: 1000);
+    r.async.flushMicrotasks();
+    final sent = r.requests.single;
+    final songs = sent.args['songs']! as List;
+    final start = sent.args['startIndex']! as int;
+    expect(songs.length, kRoomQueueWindow);
+    expect((songs[start] as Map)['videoId'], 'vt1000');
+    expect((songs.first as Map)['videoId'], 'vt700');
+    r.view.playTracks(many.take(10).toList(), startIndex: 3);
+    r.async.flushMicrotasks();
+    expect((r.requests.last.args['songs']! as List).length, 10);
+    expect(r.requests.last.args['startIndex'], 3);
+  });
 
   guestTest('hello stops after the first state', (r) {
     r.hostPlays([track('a')]);
