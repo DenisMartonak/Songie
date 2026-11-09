@@ -87,6 +87,7 @@ dependencies:
   sentry_flutter: ^10.3.0
   # Accounts (lib/account). Session in the keyring via our own LocalStorage.
   supabase_flutter: ^2.18.3
+  app_links: ^7.2.2
 
 dev_dependencies:
   flutter_test:

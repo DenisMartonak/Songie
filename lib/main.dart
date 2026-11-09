@@ -79,6 +79,11 @@ import 'ui/library/import_dialog.dart';
 import 'youtube/android_ytdlp_runner.dart';
 import 'youtube/desktop_ytdlp_runner.dart';
 import 'youtube/share_intents.dart';
+import 'room/linux_link_registration.dart';
+import 'room/room_link_listener.dart';
+
+import 'package:app_links/app_links.dart';
+
 import 'youtube/thumbnail_fetcher.dart';
 import 'youtube/yt_import_service.dart';
 import 'youtube/ytdlp_client.dart';
@@ -439,7 +444,25 @@ Future<void> main() async {
       if (context == null || !context.mounted) return;
       showImportDialog(context, initialLink: link, router: router);
     });
+
+    // Room links (songies://room/<code>) hand the code to the room page.
+    RoomLinkListener(
+      AppLinks().uriLinkStream,
+      (code) => container.read(roomInviteProvider.notifier).set(code),
+    );
   });
+
+  // AppImage: make songies:// links open this file (only when it moved).
+  if (Platform.isLinux) {
+    final home = Platform.environment['HOME'];
+    if (home != null) {
+      registerLinuxLinks(
+        appImage: Platform.environment['APPIMAGE'],
+        applications: Directory('$home/.local/share/applications'),
+        xdgMime: (args) => Process.run('xdg-mime', args),
+      ).catchError((Object _) => false);
+    }
+  }
 }
 
 /// Android runs yt-dlp through youtubedl-android; desktop runs the binary in

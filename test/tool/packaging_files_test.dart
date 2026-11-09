@@ -75,6 +75,13 @@ void main() {
       expect(flags, isNot(contains('unchecked')));
     });
 
+    test('registers the songies URL protocol for the current user', () {
+      expect(iss, contains(r'Software\Classes\songies'));
+      expect(iss, contains('URL Protocol'));
+      expect(iss, contains(r'shell\open\command'));
+      expect(iss, contains('"%1"'));
+    });
+
     test('uninstall asks before deleting %APPDATA%\\Songies, default No', () {
       expect(iss, contains('CurUninstallStepChanged'));
       expect(iss, contains(r'{userappdata}\Songies'));
@@ -94,6 +101,18 @@ void main() {
     );
   });
 
+  test('the Android manifest opens songies://room links', () {
+    final manifest = read('android/app/src/main/AndroidManifest.xml');
+    expect(manifest, contains('android:scheme="songies"'));
+    expect(manifest, contains('android:host="room"'));
+    expect(manifest, contains('android.intent.category.BROWSABLE'));
+    expect(manifest, contains('android:launchMode="singleTask"'));
+  });
+
+  test('the Windows runner forwards links to the running window', () {
+    expect(read('windows/runner/main.cpp'), contains('SendAppLinkToInstance'));
+  });
+
   group('linux packaging', () {
     test('desktop file names the binary and the icon', () {
       final desktop = read('linux/packaging/songies.desktop');
@@ -102,6 +121,18 @@ void main() {
       expect(desktop, contains('\nName=Songies\n'));
       expect(desktop, contains('\nExec=songies'));
       expect(desktop, contains('\nIcon=songies\n'));
+    });
+
+    test('desktop file handles songies:// links', () {
+      final desktop = read('linux/packaging/songies.desktop');
+      expect(desktop, contains('\nExec=songies %u\n'));
+      expect(desktop, contains('\nMimeType=x-scheme-handler/songies;\n'));
+    });
+
+    test('the runner is a single instance that handles opened links', () {
+      final runner = read('linux/runner/my_application.cc');
+      expect(runner, contains('G_APPLICATION_HANDLES_OPEN'));
+      expect(runner, isNot(contains('G_APPLICATION_NON_UNIQUE')));
     });
 
     test('the bundle ships the icon and the window loads it', () {
