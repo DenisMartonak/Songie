@@ -92,6 +92,7 @@ class Rig {
       guest.ended.listen(ended.add),
       guest.cantPlay.listen(cantPlay.add),
       view.notices.listen(notices.add),
+      guestPlayer.trackStarts.listen((t) => guestStarts.add(t.id)),
     ];
     if (withHost) host.start();
     async.flushMicrotasks();
@@ -111,6 +112,9 @@ class Rig {
   final ended = <RoomLeaveReason>[];
   final cantPlay = <String>[];
   final notices = <String>[];
+
+  /// Songs the guest's player started (each one a recorded play).
+  final guestStarts = <String>[];
 
   void hostPlays(List<Track> queue, {int start = 0}) {
     hostPlayer.playQueue(queue, startIndex: start);
@@ -282,10 +286,64 @@ void main() {
     expect(r.guestResolver.resolved.where((id) => id == 'b').length, tries);
     expect(r.guestPlayer.state.playing, isFalse);
     expect(r.cantPlay, ['Title b']);
+    // No other song was loaded, played or counted in the failed one's stead.
+    expect(r.guestBackend.sources, isNot(contains('/music/c.mp3')));
+    expect(r.guestStarts, ['a']);
+    // An edit of the host's queue keeps the failed song failed.
+    r.hostPlayer.appendToQueue([track('d')]);
+    r.async.elapse(const Duration(seconds: 4));
+    expect(r.guestResolver.resolved.where((id) => id == 'b').length, tries);
+    expect(r.guestBackend.sources, isNot(contains('/music/c.mp3')));
+    expect(r.cantPlay, ['Title b']);
     r.hostPlayer.next();
     r.settle();
     expect(r.guestSong, 'c');
     expect(r.guestPlayer.state.playing, isTrue);
+  });
+
+  guestTest('a stream dying mid-song silences the guest without loading the '
+      'next song', (r) {
+    r.hostPlays([track('a'), track('b'), track('c')]);
+    r.join();
+    r.hostPlayer.next();
+    r.settle();
+    expect(r.guestSong, 'b');
+    r.guestBackend.clearCalls();
+    r.guestBackend.emitError();
+    r.async.elapse(const Duration(seconds: 20)); // 10 heartbeats
+    expect(r.guestPlayer.state.playing, isFalse);
+    expect(r.cantPlay, ['Title b']);
+    expect(r.guestBackend.sources, isEmpty);
+    expect(r.guestBackend.calls, isNot(contains('play')));
+    expect(r.guestStarts, ['a', 'b']);
+    r.hostPlayer.next();
+    r.settle();
+    expect(r.guestSong, 'c');
+    expect(r.guestPlayer.state.playing, isTrue);
+  });
+
+  guestTest('an addToEnd on the host updates the guest queue without '
+      'restarting its song', (r) {
+    r.hostPlays([track('a'), track('b')]);
+    r.hostBackend.setPosition(const Duration(seconds: 20));
+    r.join();
+    expect(r.guestSong, 'a');
+    final epoch = r.guestPlayer.queueEpoch;
+    r.guestBackend.clearCalls();
+    r.hostPlayer.appendToQueue([track('z')]);
+    r.async.elapse(const Duration(seconds: 3));
+    expect([for (final t in r.guestPlayer.state.queue) t.id], ['a', 'b', 'z']);
+    expect(r.guestSong, 'a');
+    expect(r.guestPlayer.state.playing, isTrue);
+    expect(r.guestBackend.sources, isEmpty);
+    expect(r.guestBackend.calls, isNot(contains('play')));
+    expect(r.guestBackend.calls, isNot(contains('seek:0')));
+    expect(r.guestPlayer.queueEpoch, epoch);
+    expect(r.guestMs, closeTo(20000, 1000));
+    // It still follows the edited queue.
+    r.hostPlayer.playAt(2);
+    r.settle();
+    expect(r.guestSong, 'z');
   });
 
   guestTest('a guest that reached the next song first is not sent back', (r) {

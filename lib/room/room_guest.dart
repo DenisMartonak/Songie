@@ -78,17 +78,17 @@ class RoomGuest {
   /// Whether the player holds [_tracks] (loaded with `playQueue`).
   bool _loaded = false;
 
-  /// Bumped on every new [_tracks]; keys [_failed] and [_shown].
-  int _load = 0;
-
-  /// Indices into [_tracks] this guest failed to play in this load.
-  final _failed = <int>{};
+  /// [Track.id]s this guest failed to play in this epoch.
+  final _failed = <String>{};
 
   /// The index into [_tracks] being followed.
   int? _target;
 
-  /// The (load, window position) whose title `cantPlay` last emitted.
-  (int, int)? _shown;
+  /// The song `cantPlay` last named, until the guest follows a song again.
+  RoomSong? _shown;
+
+  /// The player's [PlayerService.skipUnplayable] before the room.
+  bool _skipBefore = true;
 
   /// The player notice already looked at.
   PlayerNotice? _notice;
@@ -112,6 +112,9 @@ class RoomGuest {
     if (_started) return;
     _started = _running = true;
     _notice = _player.state.notice;
+    // Only the host's song may be started: never a later one in its stead.
+    _skipBefore = _player.skipUnplayable;
+    _player.skipUnplayable = false;
     _messageSub = _channel.messages.listen(_onMessage);
     _presenceSub = _channel.presences.listen(_onPresence);
     _playerSub = _player.states.listen(_onPlayer);
@@ -177,6 +180,7 @@ class RoomGuest {
     unawaited(_playerSub?.cancel());
     _messageSub = _presenceSub = null;
     _playerSub = null;
+    _player.skipUnplayable = _skipBefore;
     _ended.add(reason);
     try {
       await _channel.leave();
@@ -282,9 +286,9 @@ class RoomGuest {
     if (n == null || identical(n, _notice)) return false;
     _notice = n;
     final t = _target;
-    if (!_loaded || t == null || _failed.contains(t)) return false;
+    if (!_loaded || t == null || _failed.contains(_tracks[t].id)) return false;
     if (n.trackTitle != _tracks[t].title) return false;
-    _failed.add(t);
+    _failed.add(_tracks[t].id);
     return true;
   }
 
@@ -332,14 +336,24 @@ class RoomGuest {
           playable.add(t);
         }
       }
+      final sameEpoch = m.epoch == _epoch;
+      final held = _loaded && _playerHoldsQueue();
+      final at = index - offset;
+      final next = at >= 0 && at < map.length ? map[at] : null;
       _epoch = m.epoch;
       _songs = songs;
       _tracks = playable;
       _map = map;
-      _loaded = false;
-      _failed.clear();
       _target = null;
-      _load++;
+      if (!sameEpoch) _failed.clear();
+      // The same queue edited around the song playing: swap the rest in
+      // without restarting it (drift is fixed by seeking, never by a restart).
+      _loaded =
+          sameEpoch &&
+          held &&
+          next != null &&
+          await _player.replaceQueueAroundCurrent(playable, next);
+      if (!_running) return;
     }
     _offset = offset;
     _matchRepeat(m.repeat);
@@ -347,8 +361,10 @@ class RoomGuest {
     final at = index - offset;
     final song = at >= 0 && at < songs.length ? songs[at] : null;
     final target = song == null ? null : _map[at];
-    if (song == null || target == null || _failed.contains(target)) {
-      await _wait(song == null ? null : (at, song));
+    if (song == null ||
+        target == null ||
+        _failed.contains(_tracks[target].id)) {
+      await _wait(song);
       return;
     }
     _target = target;
@@ -365,10 +381,11 @@ class RoomGuest {
       if (!_running) return;
       _checkStarted(target);
     }
-    if (_failed.contains(target)) {
-      await _wait((at, song));
+    if (_failed.contains(_tracks[target].id)) {
+      await _wait(song);
       return;
     }
+    _shown = null;
 
     final expected = Duration(
       milliseconds:
@@ -381,6 +398,9 @@ class RoomGuest {
     }
     if (m.playing && !_player.state.playing) {
       await _player.play();
+      if (!_running) return;
+      _checkStarted(target);
+      if (_failed.contains(_tracks[target].id)) await _wait(song);
     } else if (!m.playing && _player.state.playing) {
       await _player.pause();
     }
@@ -392,7 +412,7 @@ class RoomGuest {
     final s = _player.state;
     _noteFailure(s);
     if (s.index != target || !s.playing || s.error != null) {
-      _failed.add(target);
+      _failed.add(_tracks[target].id);
     }
   }
 
@@ -407,14 +427,14 @@ class RoomGuest {
   }
 
   /// The host plays something this guest cannot: stay silent until it moves
-  /// on. [song] (window position and song) is named once.
-  Future<void> _wait((int, RoomSong)? song) async {
+  /// on. [song] is named once.
+  Future<void> _wait(RoomSong? song) async {
     if (_player.state.playing) await _player.pause();
-    if (!_running || song == null) return;
-    final key = (_load, song.$1);
-    if (_shown == key) return;
-    _shown = key;
-    _cantPlay.add(song.$2.title);
+    if (!_running || song == null || identical(_shown, song)) return;
+    final shown = _shown;
+    if (shown != null && _sameSongs([shown], [song])) return;
+    _shown = song;
+    _cantPlay.add(song.title);
   }
 
   void _matchRepeat(RepeatMode mode) {
