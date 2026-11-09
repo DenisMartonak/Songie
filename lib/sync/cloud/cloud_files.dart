@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -14,10 +15,11 @@ import 'cloud_remote.dart';
 /// - `<user id>/font/<sha256>.<ttf|otf>`: imported fonts (live `fonts` rows;
 ///   the file is `<fontsDir>/<sha256>.<ext>`).
 /// - `<user id>/art/<ref>`: covers in the art cache (`<artDir>/<ref>`, always
-///   JPEG) that aren't YouTube's: art read from a local file's tags (local
-///   tracks, and listens of them) and covers the user picked for a playlist.
-///   A YouTube track's art is fetched again from YouTube on each device, so
-///   it never goes up, whatever its ref looks like.
+///   JPEG): track art (read from a local file's tags, or fetched from
+///   YouTube), the art of listens, and covers the user picked for a
+///   playlist. YouTube art goes up too: it may be the album's art from
+///   YouTube Music, which another device can't fetch again from the video
+///   id alone, and only the same file makes the cover look the same there.
 ///
 /// [reconcile] uploads what the bucket lacks and downloads what this device
 /// lacks; nothing is sent or fetched twice. Every name is checked before it
@@ -38,6 +40,13 @@ class CloudFiles {
   final Directory _fontsDir;
   final Directory _artDir;
   final Future<void> Function()? _onFontsArrived;
+
+  final _artArrivals = StreamController<int>.broadcast();
+  var _artRuns = 0;
+
+  /// A rising count, once per [reconcile] that downloaded art: covers drawn
+  /// before their file was here load it again.
+  Stream<int> get artArrivals => _artArrivals.stream;
 
   /// The bucket's limit per file.
   static const maxBytes = 10 * 1024 * 1024;
@@ -77,6 +86,7 @@ class CloudFiles {
     var moved = 0;
     var movedBytes = 0;
     var fontsArrived = 0;
+    var artArrived = 0;
     final failures = <String>{};
     var failCount = 0;
     var tooBig = 0;
@@ -121,6 +131,7 @@ class CloudFiles {
                 moved++;
                 movedBytes += n;
                 if (kind == 'font') fontsArrived++;
+                if (kind == 'art') artArrived++;
               }
             } else {
               await _remote.uploadFile(
@@ -166,6 +177,7 @@ class CloudFiles {
           'not synced (the limit per file)',
         );
       }
+      if (artArrived > 0) _artArrivals.add(++_artRuns);
       if (fontsArrived > 0) {
         try {
           await _onFontsArrived?.call();
@@ -247,10 +259,10 @@ class CloudFiles {
     };
   }
 
-  /// The art refs of live rows that YouTube can't give again: local tracks,
-  /// listens of local tracks, and playlist covers, checked. With
-  /// [shownHereOnly], local tracks only when they show on this device
-  /// ([shownHereSql]); listens show in the stats either way.
+  /// The art refs of live tracks, of listens of known tracks, and playlist
+  /// covers, checked. With [shownHereOnly], tracks only when they show on
+  /// this device ([shownHereSql]: YouTube tracks always do); listens show in
+  /// the stats either way.
   ///
   /// A playlist's cover_ref is only ever set by picking a picture (Change
   /// cover); a YouTube playlist's own art isn't stored there. Picked covers
@@ -259,15 +271,14 @@ class CloudFiles {
   Future<Set<String>> _artRefs({bool shownHereOnly = false}) async {
     final rows = await _db
         .customSelect(
-          "SELECT t.artwork_ref AS ref FROM tracks t WHERE t.deleted = 0 "
-          "AND t.source = 'local' AND t.artwork_ref IS NOT NULL "
+          'SELECT t.artwork_ref AS ref FROM tracks t WHERE t.deleted = 0 '
+          'AND t.artwork_ref IS NOT NULL '
           '${shownHereOnly ? 'AND $shownHereSql ' : ''}'
           'UNION SELECT cover_ref AS ref FROM playlists WHERE deleted = 0 '
           'AND cover_ref IS NOT NULL '
           'UNION SELECT l.artwork_ref AS ref FROM listens l '
           'JOIN tracks t ON t.id = l.track_id '
-          "WHERE l.deleted = 0 AND t.source = 'local' "
-          'AND l.artwork_ref IS NOT NULL',
+          'WHERE l.deleted = 0 AND l.artwork_ref IS NOT NULL',
           readsFrom: {_db.tracks, _db.playlists, _db.listens, _db.localFiles},
         )
         .get();

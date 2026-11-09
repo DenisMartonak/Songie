@@ -120,6 +120,10 @@ final artCacheProvider = Provider<ArtCache>(
   (ref) => _unwired('artCacheProvider'),
 );
 
+/// A rising count each time synced covers arrived on this device
+/// ([CloudFiles.artArrivals]); [Artwork] reloads on it.
+final artArrivalsProvider = StreamProvider<int>((ref) => const Stream.empty());
+
 final playerServiceProvider = Provider<PlayerService>(
   (ref) => _unwired('playerServiceProvider'),
 );

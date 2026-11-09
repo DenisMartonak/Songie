@@ -26,6 +26,11 @@ class Artwork extends ConsumerWidget {
         radius ?? Theme.of(context).extension<SongiesColors>()!.radius;
     final cover = ref;
     final placeholder = _Placeholder((cover ?? seed).hashCode);
+    // Synced covers can arrive after this was drawn without its file: a new
+    // key makes the image load again instead of keeping its error.
+    final arrivals = cover == null
+        ? 0
+        : widgetRef.watch(artArrivalsProvider).value ?? 0;
     return SizedBox.square(
       dimension: size,
       child: ClipRRect(
@@ -34,6 +39,7 @@ class Artwork extends ConsumerWidget {
             ? placeholder
             : Image.file(
                 widgetRef.watch(artCacheProvider).fileFor(cover),
+                key: ValueKey((cover, arrivals)),
                 width: size,
                 height: size,
                 fit: BoxFit.cover,

@@ -25,6 +25,10 @@ class YtTrackStore {
 
   Future<void> _coversPass = Future.value();
 
+  /// Videos whose album art was fetched this session, so playing or adding
+  /// the song again doesn't download it again.
+  final _albumArtTried = <String>{};
+
   final _changes = StreamController<Track>.broadcast();
 
   /// A row after a cover or an upgrade was written to it, so a copy held
@@ -186,20 +190,31 @@ class YtTrackStore {
     );
   }
 
-  /// Fire-and-forget cover fetch through the shared thumbnail path; the sharp
-  /// `yt2-` art is kept once there. Never throws.
+  /// Fire-and-forget cover fetch through the shared thumbnail path. A song
+  /// (not a music video) with YouTube Music's own art takes that album
+  /// cover first, so it looks the same as on its album page, and it replaces
+  /// a video-thumbnail cover the row already had (once a session). Otherwise
+  /// the sharp `yt2-` art is kept once there. Never throws.
   void _queueCover(Track t, YtmSong s) {
+    if (t.unavailable) return;
     final ref = t.artworkRef;
-    if (t.unavailable || (ref != null && ref.startsWith('yt2-'))) return;
+    final sharp = ref != null && ref.startsWith('yt2-');
+    final album = s.isVideo ? null : musicArtUrl(s.thumbnailUrl);
+    if (sharp && (album == null || !_albumArtTried.add(s.videoId))) return;
+    final urls = album == null
+        ? thumbnailCandidates(s.videoId, s.thumbnailUrl)
+        // A sharp cover is only replaced by the album's own.
+        : [album, if (!sharp) ...thumbnailCandidates(s.videoId, null)];
     final previous = _coversPass;
     _coversPass = () async {
       await previous;
       try {
-        final art = await _thumbs.fetchBest(
-          thumbnailCandidates(s.videoId, s.thumbnailUrl),
-        );
+        final art = await _thumbs.fetchBest(urls);
         if (art == null) return;
+        var wrote = false;
         await guardDb<void>(_db, () async {
+          final cur = await _byIdOrNull(t.id);
+          if (cur == null || cur.artworkRef == art) return const Ok(null);
           final st = await _stamp.next(id: t.id);
           await (_db.update(_db.tracks)..where((r) => r.id.equals(t.id))).write(
             TracksCompanion(
@@ -209,8 +224,10 @@ class YtTrackStore {
               localSeq: Value(st.localSeq),
             ),
           );
+          wrote = true;
           return const Ok(null);
         });
+        if (!wrote) return;
         final cur = await _byIdOrNull(t.id);
         if (cur != null) _changes.add(cur);
       } catch (e, st) {

@@ -19,6 +19,17 @@ List<String> thumbnailCandidates(String videoId, String? flatThumbnail) => [
   ?flatThumbnail,
 ];
 
+/// [url] when it is YouTube Music's own art for a song (the square album
+/// cover its pages show, served from Google's image hosts), else null. Video
+/// thumbnails (`i.ytimg.com`) and other urls don't count.
+String? musicArtUrl(String? url) {
+  final host = url == null ? null : Uri.tryParse(url)?.host;
+  if (host == null) return null;
+  return host.endsWith('.googleusercontent.com') || host.endsWith('.ggpht.com')
+      ? url
+      : null;
+}
+
 /// Prefers a square thumbnail, else the largest; null when none have a url.
 String? pickThumbnail(List thumbnails) {
   Map? best;

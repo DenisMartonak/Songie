@@ -234,42 +234,47 @@ void main() {
     final h4 = 'd' * 64;
     final h5 = 'e' * 64;
 
-    test('YouTube art is never uploaded', () async {
+    test('YouTube art goes up once and comes down on the other device '
+        '(it may be album art, which the video id alone cannot fetch '
+        'again)', () async {
       final a = dev('a');
-      await a.addTrack(
-        'yt1',
-        source: 'yt',
-        ytVideoId: 'v1',
-        art: 'yt2-$h1.jpg',
-      );
-      // Older YouTube art without the yt2- prefix: re-fetchable too.
-      await a.addTrack('yt2', source: 'yt', ytVideoId: 'v2', art: '$h2.jpg');
-      // A listen of a YouTube track carries the same art.
-      await a.addListen('l1', 'yt1', 'yt2-$h1.jpg');
-      a.art.createSync(recursive: true);
-      a.artFile('yt2-$h1.jpg').writeAsBytesSync(_bytes('jpg1'));
-      a.artFile('$h2.jpg').writeAsBytesSync(_bytes('jpg2'));
-
-      await a.files.reconcile(_uid);
-      expect(a.remote.uploads, isEmpty);
-      expect(server.files, isEmpty);
-    });
-
-    test(
-      'YouTube art missing here is not downloaded (it is re-fetched)',
-      () async {
-        final b = dev('b');
-        server.files['$_uid/art/yt2-$h1.jpg'] = (_bytes('x'), 'image/jpeg');
-        await b.addTrack(
+      final b = dev('b');
+      Future<void> rows(_Dev d) async {
+        await d.addTrack(
           'yt1',
           source: 'yt',
           ytVideoId: 'v1',
           art: 'yt2-$h1.jpg',
         );
-        await b.files.reconcile(_uid);
-        expect(b.remote.downloads, isEmpty);
-      },
-    );
+        // Older YouTube art without the yt2- prefix.
+        await d.addTrack('yt2', source: 'yt', ytVideoId: 'v2', art: '$h2.jpg');
+        // A listen of a YouTube track.
+        await d.addListen('l1', 'yt2', '$h3.jpg');
+      }
+
+      await rows(a);
+      a.art.createSync(recursive: true);
+      for (final r in ['yt2-$h1.jpg', '$h2.jpg', '$h3.jpg']) {
+        a.artFile(r).writeAsBytesSync(_jpeg(r));
+      }
+
+      await a.files.reconcile(_uid);
+      expect(server.files.keys.toSet(), {
+        '$_uid/art/yt2-$h1.jpg',
+        '$_uid/art/$h2.jpg',
+        '$_uid/art/$h3.jpg',
+      });
+      await a.files.reconcile(_uid);
+      expect(a.remote.uploads, hasLength(3));
+
+      // YouTube tracks always show, so their art comes down everywhere.
+      await rows(b);
+      await b.files.reconcile(_uid);
+      for (final r in ['yt2-$h1.jpg', '$h2.jpg', '$h3.jpg']) {
+        expect(b.artFile(r).readAsBytesSync(), _jpeg(r));
+      }
+      expect(b.remote.uploads, isEmpty);
+    });
 
     test(
       'art from tags, custom covers and their listens sync as JPEG',
@@ -425,12 +430,7 @@ void main() {
 
     test('nothing to sync makes no storage call', () async {
       final a = dev('a');
-      await a.addTrack(
-        'yt1',
-        source: 'yt',
-        ytVideoId: 'v',
-        art: 'yt2-${'a' * 64}.jpg',
-      );
+      await a.addTrack('yt1', source: 'yt', ytVideoId: 'v');
       await a.files.reconcile(_uid);
       expect(a.remote.listCalls, 0);
     });
@@ -504,6 +504,33 @@ void main() {
       expect(_Dev.fontsArrived, 1);
       await b.files.reconcile(_uid);
       expect(_Dev.fontsArrived, 1);
+    });
+
+    test('downloaded art is announced once a run, so covers already on '
+        'screen load it; none, no event', () async {
+      final a = dev('a');
+      final b = dev('b');
+      final h1 = 'a' * 64;
+      final h2 = 'b' * 64;
+      for (final d in [a, b]) {
+        await d.addTrack('y1', source: 'yt', ytVideoId: 'v1', art: '$h1.jpg');
+        await d.addTrack('y2', source: 'yt', ytVideoId: 'v2', art: '$h2.jpg');
+      }
+      a.art.createSync(recursive: true);
+      a.artFile('$h1.jpg').writeAsBytesSync(_jpeg('1'));
+      a.artFile('$h2.jpg').writeAsBytesSync(_jpeg('2'));
+      final seenA = <int>[];
+      final seenB = <int>[];
+      final subA = a.files.artArrivals.listen(seenA.add);
+      final subB = b.files.artArrivals.listen(seenB.add);
+      await a.files.reconcile(_uid);
+      await b.files.reconcile(_uid);
+      await b.files.reconcile(_uid);
+      await pumpEventQueue();
+      expect(seenA, isEmpty);
+      expect(seenB, [1]);
+      await subA.cancel();
+      await subB.cancel();
     });
 
     test('a run reports uploads still pending', () async {
