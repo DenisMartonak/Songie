@@ -5,27 +5,15 @@ Branch: `listen-together`, in the main checkout, from `main` at `43a3a2b`. Not p
 
 Flutter is at `$HOME/development/flutter/bin`.
 
-## Status (2026-11-09, second pause): paused by the user during Task 7 of 7
+## Status (2026-11-09): all 7 tasks built and reviewed; final review fixes in; waiting on the user's merge decision
 
-The work runs with subagent-driven development: each task gets an implementer, a task review, and a scoped re-review after each fix round. The ledger (git-ignored) is `.superpowers/sdd/2026-11-09-listen-together/progress.md`; it holds the pre-flight scan, every ruling and every deferred minor. If it is gone, this log and `git log` are the record.
+Commits after the first pause: Task 4 `f774c98`, `984f19c`; Task 5 `c52f93b`; Task 6 `e9c2a0e`; Task 7 `78eaa98`, `6a15d6e`, `3309c56`; final-review fixes `206ac9f`, `fdbe57d`, `1bd1a02`. `flutter analyze` clean; full suite +2633 −2 (the two stats "under 500 ms" tests, which pass alone); APK debug and Linux builds succeed.
 
-| Task | What | Commits | Review |
-|---|---|---|---|
-| 1 | Supabase tables, functions and Realtime rules; `RoomBackend` | `a9425fe`, fix `f7f6be8` | clean after 1 fix round |
-| 2 | Room messages, `RoomSong`, codes and links | `e4e4069` | approved |
-| 3 | `RoomChannel`, `FakeRoomHub`, `RoomHost` | `250c512` | approved |
-| 4 | The guest follows (`RoomGuest`, `RoomGuestView`) | `f774c98`, fix `984f19c` | clean after 1 fix round |
-| 5 | `RoomService`, providers, remote-control changes | `c52f93b` | approved |
-| 6 | Links open the app (app_links, Android/Windows/Linux) | `e9c2a0e` | approved |
-| 7 | Room UI | `78eaa98` (guests see every role, unreviewed); UI not written | stopped mid-task |
+Open after the final fix wave (no second wave by process; the user decides):
+- Important: a listener or queue guest paused by an unplugged headset or a call ("local hold") can't resume from inside the app — the play buttons stay disabled for non-full roles although `RoomGuestView.play()` rejoins. Only system media controls/keys work, and the Android notification goes after 10 idle minutes.
+- Minor: a hold during a song load can be overridden by the guest's own play; the guest's own music plays (room routing already on) for up to 15 s before the host shows; a call starting while the host is paused takes no hold; a crashed host's old link still waits 15 s before "This room has ended".
 
-Tests: after Task 6, `flutter analyze` is clean and the full suite fails only on the two known stats "under 500 ms" timing tests (they pass on their own). `flutter build apk --debug` and `flutter build linux` succeed.
-
-Task 7 was stopped by the user (PC shutdown) while its implementer was writing tests. Left in the tree, untracked and unfinished: `test/helpers/room_rig.dart`, `test/ui/room_panel_test.dart`. No UI code was written yet.
-
-**To resume:** re-dispatch Task 7 with `superpowers:subagent-driven-development` (brief: `.superpowers/sdd/2026-11-09-listen-together/task-7-brief.md`, base `e9c2a0e`). Tell the implementer that `78eaa98` already adds Ruling 10 and that the two untracked test files are a half-written start it can keep or redo. The Task 7 review covers `e9c2a0e..HEAD`. Then the final whole-branch review (most capable model), pointed at the deferred minors below.
-
-**Still to do by hand (the user):** apply `supabase/migrations/20261109120000_listen_together.sql` to the Supabase project and run the checks in the "Listen together" section of `docs/supabase.md`. The SQL has never run against a database.
+Still to do by hand (the user): apply `supabase/migrations/20261109120000_listen_together.sql` (edited since the first pause: same-account leave) and run the checks in docs/supabase.md (now including the same-account leave step); the `xdg-open` link check; the manual checklist in docs/manual-test-checklist.md on two accounts.
 
 ## Rulings (each with its cost if wrong)
 
@@ -52,6 +40,12 @@ Task 3: a connection blip makes the channel report nobody present, so the host s
 10. A guest knows every person's role (the guest panel shows them), via an additive getter on `RoomGuest`. Cost: a small getter.
 
 Also from Task 6: the Linux runner is now single-instance (a second launch raises the open window). Windows link code is unbuilt (can't build on Linux).
+
+11. While guesting, every local playback input (shortcuts, media session, SMTC, song taps, Start radio) goes through the room, so the role decides. Cost: a listener can't pause from the notification (Leave is the way out).
+12. The room button is also in the phone Home header. Cost: one button.
+13. The final fix wave covered the four Important findings, the `playSongs` cap and cheap minors. Cost: other minors ship.
+14. The light heartbeat (songs only when the window changes) is a follow-up, not this branch. Cost: big-queue rooms use more Realtime bandwidth.
+15. The account-switch order (leave/end sent under the new session) stays. Cost: a stale room row until the 24 h limit; it reads "This room has ended".
 
 ## Deferred minors, Tasks 4–6
 
