@@ -281,6 +281,13 @@ class PlayerService {
   /// [stateEpoch] always belong together (the remote host publishes them).
   int get stateEpoch => _stateEpoch;
 
+  /// Whether a song that cannot be played (failing to start or mid-song) is
+  /// skipped for the next playable one. When false, only the song asked for
+  /// (or reached by the end of the one before) is tried, and a failure stops
+  /// playback there with a [PlayerState.notice]; no other song is loaded.
+  /// A room guest turns this off while it follows the host.
+  bool skipUnplayable = true;
+
   // --- commands -------------------------------------------------------------
 
   Future<void> playQueue(
@@ -375,6 +382,34 @@ class PlayerService {
     _original.addAll(entries);
     _queueEdited();
   });
+
+  /// Makes [tracks] the queue without touching playback, when the song at
+  /// [index] is the current one ([Track.id] alike) and shuffle is off; the
+  /// current song keeps playing as [index]. Returns whether it did. Not a new
+  /// queue: [queueEpoch] and [stateEpoch] stay.
+  Future<bool> replaceQueueAroundCurrent(List<Track> tracks, int index) async {
+    var done = false;
+    await _locked(() async {
+      final current = _currentEntry;
+      if (current == null || _state.shuffle) return;
+      if (index < 0 || index >= tracks.length) return;
+      if (tracks[index].id != current.track.id) return;
+      final entries = [
+        for (var i = 0; i < tracks.length; i++)
+          i == index ? current : _Entry(tracks[i]),
+      ];
+      _queue
+        ..clear()
+        ..addAll(entries);
+      _original
+        ..clear()
+        ..addAll(entries);
+      _prefetchedFor = null;
+      _emit(_state.copyWith(queue: _queueTracks(), index: index));
+      done = true;
+    });
+    return done;
+  }
 
   /// Songs queued with [addToQueue] waiting right after the current one.
   int get _queuedAhead {
@@ -704,9 +739,12 @@ class PlayerService {
   /// a row. If none can be played, either gives up (stop + error) or just
   /// reports failure.
   Future<bool> _startFirstPlayable(
-    List<_Entry> candidates, {
+    List<_Entry> tried, {
     bool giveUpOnFailure = true,
   }) async {
+    final candidates = skipUnplayable || tried.length < 2
+        ? tried
+        : tried.sublist(0, 1);
     // A new attempt starts clean, so failing again is a new error to show.
     if (_state.error != null) _emit(_state.copyWith(error: null));
     _networkFailure = null;
@@ -1183,11 +1221,16 @@ class PlayerService {
           trackTitle: entry.track.title,
           reason: reason,
         );
-        if (++_engineFailures >= _queue.length) {
+        if (!skipUnplayable || ++_engineFailures >= _queue.length) {
           await _stopBackend();
           _markStopped();
           _noticeFresh = true;
-          _emit(_state.copyWith(error: engineFailedError, notice: notice));
+          _emit(
+            _state.copyWith(
+              error: skipUnplayable ? engineFailedError : playbackFailedError,
+              notice: notice,
+            ),
+          );
           return;
         }
         _publishNotice(notice);

@@ -164,7 +164,8 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    final player = ref.read(playerServiceProvider);
+    // Through the room while a guest: the role decides.
+    final player = ref.read(playerInputsProvider);
     final hasTitleBar = ref.watch(hasCustomTitleBarProvider);
     final panelOpen = ref.watch(lyricsPanelOpenProvider);
     // Keep the field in step when something else sets the query.

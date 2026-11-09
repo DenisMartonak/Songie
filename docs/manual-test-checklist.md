@@ -340,6 +340,35 @@ Two devices signed in to the same account (A and B), both on this build.
 - [ ] Sign out on one device: the other drops it from the list, and a controller of it returns to This device.
 - [ ] A device on an older build is greyed in the picker with "Update Songies to control this device".
 
+## Listen together
+
+Two accounts (A and B) on two devices: a desktop and an Android phone, both on this build. First apply `supabase/migrations/20261109120000_listen_together.sql` (see `docs/supabase.md`).
+- [ ] Open a room on the desktop as A: the people button in the player bar opens Listen together; Start a room shows the link (`songies://room/XXXXXXXX`), "Code XXXX-XXXX" and Copy (no Share link on desktop). The player bar shows "Your room · 0 listening" with Manage.
+- [ ] Copy puts the link on the clipboard and says "Link copied".
+- [ ] Open a room on the phone: the sheet slides up with Share link and Copy; Share link opens Android's share menu with the link as text (Discord is offered when installed).
+- [ ] Join by link: open the room link on the other device (with Songies closed, and again with it open): it joins as a Listener, stops what it was playing and plays the host's song from the host's position. The host sees "<name> joined" and "Your room · 1 listening".
+- [ ] Join by code: type the code (with or without the dash, any case) in Join a room; a wrong code says "Not a room code or link"; an unknown one says "Room not found".
+- [ ] Listener: the strip reads "Listening with <host>" with Leave; play, skip, seek, shuffle and repeat are dimmed and do nothing in the player bar, the mini player, the full-screen player and the lyrics strip; the song menus have no Add to queue; the queue has no drag handles, no swipe to remove and no tap to jump; volume still works and is this device's own.
+- [ ] Listener, other inputs: Space and Ctrl+Left/Right (desktop), the media notification, lock screen and headset buttons (Android), MPRIS (Linux) and the media keys (Windows) do nothing; tapping a song in Home, Search, Stats or a YouTube Music page, and Start radio, leave the room's song playing. With Full control the same inputs change the host's playback (a tapped song plays in the room, without a radio queue).
+- [ ] Phone, nothing playing: Home's header has the people button next to the devices button; it opens the Listen together sheet (Start a room, Join a room).
+- [ ] Queue: the host sets the role in the panel; the guest's island says "You can now add songs" and the strip "· can add songs". Add to queue from a song menu, a playlist row swipe and a YouTube Music search result reaches the host's queue (the host sees "<name> added <title>"); a local file's Add to queue is greyed; play and skip stay dimmed.
+- [ ] Full control: "You now have full control", strip "· full control"; play, pause, seek, skip, previous, shuffle, repeat, jump, reorder and remove in the queue, and Play on a whole playlist all change the host, and every device follows. Back to Listener: "You can listen only".
+- [ ] Everyone sees the people and their roles: the guest's panel lists the host (Host) and each guest with their role, read-only.
+- [ ] Remove: the host's remove button (X) next to a guest asks "Remove <name>?"; the guest gets "You were removed from the room" and keeps playing on its own.
+- [ ] The host plays one of its local files: guests stay silent with "Can't play <title> here, joining in at the next song", and join in at the next YouTube song.
+- [ ] Guest stream failure (a song the guest can't stream, e.g. age-restricted while not signed in to YouTube there): the same note, no retry loop, back in step at the next song.
+- [ ] In step: both devices stay within about a second of each other over several songs, also after the host seeks.
+- [ ] Leave (strip or panel): the guest keeps the room's queue and keeps playing from where it was, now on its own.
+- [ ] End room asks "End the room?"; every guest gets "The room ended" and keeps playing.
+- [ ] The host kills the app (no End room): guests keep playing and get "The room ended" after about 15 s. Opening the old link later, while the host's app is still closed, leaves the friend's own music playing and says "This room has ended" after about 15 s.
+- [ ] Room full: on a test Supabase project (never the real one), lower the cap in `join_room` (`>= 10` to `>= 2`, in the SQL editor with `create or replace function`), then a third account joining gets "This room is full". The cap counts accounts, not devices: a second device of an account already in the room still joins. Put `>= 10` back afterwards. (`kRoomMaxPeople` in the app only mirrors that number.)
+- [ ] Old link: a link of an ended room says "This room has ended".
+- [ ] Signed-out invite: on a signed-out device, opening a room link shows "You need a Songies account to join a room" with Sign in, which opens Settings.
+- [ ] Already in a room or controlling a device: opening a room link first asks "Leave the current room?" (a host's room ends) or "Stop controlling <device>?"; Cancel keeps things as they were.
+- [ ] A playlist's ⋯ menu offers Listen together when signed in and not in a room; it opens a room playing that playlist and shows the panel with the link.
+- [ ] Remote control: a device in a room is greyed in the other devices' pickers with "In a Listen together room".
+- [ ] No emoji anywhere in these screens; the strip uses the headphones icon and the room button the people icon.
+
 ## Known follow-ups
 
 - Remove `dependency_overrides: flutter_rust_bridge` once smtc_windows is rebuilt against frb ≥ 2.13.

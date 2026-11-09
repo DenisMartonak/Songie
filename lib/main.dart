@@ -61,6 +61,7 @@ import 'player/audio_session_binding.dart';
 import 'player/composite_track_resolver.dart';
 import 'player/just_audio_backend.dart';
 import 'player/media_controls.dart';
+import 'player/player_inputs.dart';
 import 'player/player_service.dart';
 import 'player/stream_resolver.dart';
 import 'player/stream_source.dart';
@@ -79,6 +80,11 @@ import 'ui/library/import_dialog.dart';
 import 'youtube/android_ytdlp_runner.dart';
 import 'youtube/desktop_ytdlp_runner.dart';
 import 'youtube/share_intents.dart';
+import 'room/linux_link_registration.dart';
+import 'room/room_link_listener.dart';
+
+import 'package:app_links/app_links.dart';
+
 import 'youtube/thumbnail_fetcher.dart';
 import 'youtube/yt_import_service.dart';
 import 'youtube/ytdlp_client.dart';
@@ -278,10 +284,18 @@ Future<void> main() async {
   );
   // A cover or details that land after a song was queued reach the player.
   ytTracks.changes.listen(player.updateTrack);
+  // The container is made further down; until then no room is open.
+  ProviderContainer? appContainer;
+  final inputs = PlayerInputs(
+    player,
+    room: () => appContainer?.read(roomServiceProvider).guestView,
+  );
+  // A guest's unplug or call pauses this device only (a local hold).
   bindAudioSession(
     becomingNoisy: backend.becomingNoisy,
     interruptions: backend.interruptions,
     player: player,
+    inputs: inputs,
   );
 
   // Lyrics: looked up only while a lyrics view is open.
@@ -341,7 +355,11 @@ Future<void> main() async {
 
   final router = buildRouter(navigatorKey: navigatorKey);
   try {
-    final controls = await MediaControlsBinding.create(player, artCache);
+    final controls = await MediaControlsBinding.create(
+      player,
+      artCache,
+      inputs: inputs,
+    );
     controls.openNowPlayingRequests.listen((_) => openNowPlaying(router));
   } catch (e, s) {
     AppLog.e('System media controls unavailable', e, s);
@@ -386,8 +404,10 @@ Future<void> main() async {
         (userId) =>
             SupabaseRemoteChannel(() => Supabase.instance.client, userId),
       ),
+      playerInputsProvider.overrideWithValue(inputs),
     ],
   );
+  appContainer = container;
   // Both listened to, not read: an unlistened provider is paused and would
   // not follow the account.
   container.listen(cloudSyncFollowerProvider, (_, _) {});
@@ -439,7 +459,25 @@ Future<void> main() async {
       if (context == null || !context.mounted) return;
       showImportDialog(context, initialLink: link, router: router);
     });
+
+    // Room links (songies://room/<code>) hand the code to the room page.
+    RoomLinkListener(
+      AppLinks().uriLinkStream,
+      (code) => container.read(roomInviteProvider.notifier).set(code),
+    );
   });
+
+  // AppImage: make songies:// links open this file (only when it moved).
+  if (Platform.isLinux) {
+    final home = Platform.environment['HOME'];
+    if (home != null) {
+      registerLinuxLinks(
+        appImage: Platform.environment['APPIMAGE'],
+        applications: Directory('$home/.local/share/applications'),
+        xdgMime: (args) => Process.run('xdg-mime', args),
+      ).catchError((Object _) => false);
+    }
+  }
 }
 
 /// Android runs yt-dlp through youtubedl-android; desktop runs the binary in

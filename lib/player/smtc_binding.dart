@@ -3,13 +3,14 @@ import 'dart:async';
 import 'package:smtc_windows/smtc_windows.dart';
 import 'package:songies/library/art_cache.dart';
 import 'package:songies/player/media_controls.dart';
+import 'package:songies/player/player_inputs.dart';
 import 'package:songies/player/player_service.dart';
 
 /// Windows: mirrors [PlayerService] into the System Media Transport Controls
 /// (volume flyout, lock screen) and routes its buttons and the keyboard media
 /// keys back to the service.
 class SmtcBinding implements MediaControlsBinding {
-  SmtcBinding._(this._smtc, this._player, this._art) {
+  SmtcBinding._(this._smtc, this._player, this._inputs, this._art) {
     _subs = [
       _smtc.buttonPressStream.listen(_onButton),
       _player.states.listen(_onState),
@@ -17,7 +18,11 @@ class SmtcBinding implements MediaControlsBinding {
     _onState(_player.state);
   }
 
-  static Future<SmtcBinding> start(PlayerService player, ArtCache art) async {
+  static Future<SmtcBinding> start(
+    PlayerService player,
+    ArtCache art, {
+    PlayerInputs? inputs,
+  }) async {
     await SMTCWindows.initialize();
     final smtc = SMTCWindows(
       config: const SMTCConfig(
@@ -30,7 +35,7 @@ class SmtcBinding implements MediaControlsBinding {
         rewindEnabled: false,
       ),
     );
-    return SmtcBinding._(smtc, player, art);
+    return SmtcBinding._(smtc, player, inputs ?? PlayerInputs(player), art);
   }
 
   /// A position update this far from where the last one projects to counts as
@@ -39,6 +44,9 @@ class SmtcBinding implements MediaControlsBinding {
 
   final SMTCWindows _smtc;
   final PlayerService _player;
+
+  /// Where the buttons go (the room, while a guest).
+  final PlayerInputs _inputs;
   final ArtCache _art;
   late final List<StreamSubscription<Object?>> _subs;
 
@@ -58,13 +66,13 @@ class SmtcBinding implements MediaControlsBinding {
   void _onButton(PressedButton button) {
     switch (button) {
       case PressedButton.play:
-        _player.play();
+        _inputs.play();
       case PressedButton.pause:
-        _player.pause();
+        _inputs.pause();
       case PressedButton.next:
-        _player.next();
+        _inputs.next();
       case PressedButton.previous:
-        _player.previous();
+        _inputs.previous();
       default:
         break;
     }

@@ -576,7 +576,7 @@ class _SongRow extends ConsumerWidget {
       seed: track.id,
       title: track.title,
       subtitle: track.artist,
-      onTap: () => ref.read(playerServiceProvider).playQueue([track]),
+      onTap: () => ref.read(playerInputsProvider).playQueue([track]),
       onLongPress: menu.onLongPress,
       onSecondaryTapUp: menu.onSecondaryTapUp,
       trailing: FavoriteStar(song: MenuSong.track(track)),

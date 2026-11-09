@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers.dart';
+import '../../room/room_protocol.dart' show RoomOp;
+import '../room/room_button.dart' show roomGuestRoleProvider, roomLets;
 import '../../theme/app_theme.dart';
 
 /// The slim row above the phone's lyrics: the song's title and artist, and
@@ -61,11 +63,16 @@ class LyricsStrip extends ConsumerWidget {
               key: const Key('lyricsStrip.playPause'),
               tooltip: playing ? 'Pause' : 'Play',
               color: colors.text,
+              disabledColor: colors.text.withAlpha(90),
               iconSize: 32,
               icon: Icon(
                 playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
               ),
-              onPressed: () => ref.read(playerViewProvider).togglePlay(),
+              // A room's guest pauses only with Full control.
+              onPressed:
+                  roomLets(ref.watch(roomGuestRoleProvider), RoomOp.toggle)
+                  ? () => ref.read(playerViewProvider).togglePlay()
+                  : null,
             ),
           ],
         ),

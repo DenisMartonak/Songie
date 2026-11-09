@@ -79,6 +79,22 @@ class RemoteHost {
     }
   }
 
+  /// Publishes the presence again (e.g. the device entered or left a room).
+  Future<void> refreshPresence() async {
+    if (!_running) return;
+    await _updatePresence(_player.state);
+  }
+
+  /// Whether this device is in a Listen together room, which takes no
+  /// commands.
+  bool get _inRoom {
+    try {
+      return _presence(_player.state).inRoom;
+    } on Object {
+      return false;
+    }
+  }
+
   Future<void> stop() async {
     if (!_running) return;
     _running = false;
@@ -241,6 +257,7 @@ class RemoteHost {
         case RemoteHello(:final to) when to == _me:
           unawaited(_sendState(always: true));
         case RemoteCommand(:final to) when to == _me:
+          if (_inRoom) return;
           _tail = _tail.then((_) => _run(m));
         default:
           break;

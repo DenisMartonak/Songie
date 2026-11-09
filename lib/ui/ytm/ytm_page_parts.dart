@@ -38,7 +38,7 @@ Future<void> playYtmList(
   YtmSong? from,
   bool shuffle = false,
 }) async {
-  final player = ref.read(playerServiceProvider);
+  final player = ref.read(playerInputsProvider);
   final tracks = await ref.read(ytTrackStoreProvider).upsertAll(songs);
   if (tracks.isEmpty) return;
   var start = 0;

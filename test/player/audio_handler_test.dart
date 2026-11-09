@@ -8,8 +8,10 @@ import 'package:songies/data/database.dart';
 import 'package:songies/library/art_cache.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/audio_handler.dart';
+import 'package:songies/player/player_inputs.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
+import 'package:songies/remote/player_view.dart';
 
 import '../helpers/fake_audio_backend.dart';
 
@@ -36,6 +38,12 @@ class _Resolver extends TrackResolver {
 }
 
 Future<void> settle() => pumpEventQueue();
+
+/// A listener's room view: every command is ignored.
+class _IgnoringRoom implements PlayerView {
+  @override
+  Object? noSuchMethod(Invocation i) => Future<void>.value();
+}
 
 void main() {
   final art = ArtCache(Directory.systemTemp.absolute);
@@ -419,6 +427,35 @@ void main() {
           AudioProcessingState.idle,
         );
       });
+    });
+  });
+
+  test('stop() from a guest whose room ignores the pause keeps the session '
+      'live while the music plays', () {
+    fakeAsync((async) {
+      final be = FakeAudioBackend();
+      final p = PlayerService(be, _Resolver());
+      final h = SongiesAudioHandler(
+        p,
+        art,
+        idleStop: const Duration(milliseconds: 50),
+        inputs: PlayerInputs(p, room: _IgnoringRoom.new),
+      );
+      p.playQueue([a, b]);
+      async.flushMicrotasks();
+      h.stop();
+      async.flushMicrotasks();
+
+      expect(p.state.playing, isTrue);
+      expect(h.playbackState.value.playing, isTrue);
+      expect(h.playbackState.value.processingState, AudioProcessingState.ready);
+      // Still published: the room moving this device on shows.
+      p.next();
+      async.flushMicrotasks();
+      expect(h.playbackState.value.queueIndex, 1);
+      h.dispose();
+      p.dispose();
+      async.flushMicrotasks();
     });
   });
 }

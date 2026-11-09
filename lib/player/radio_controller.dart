@@ -6,6 +6,7 @@ import '../data/database.dart';
 import '../innertube/ytm_models.dart';
 import '../innertube/ytm_service.dart';
 import '../library/yt_tracks.dart';
+import 'player_inputs.dart';
 import 'player_service.dart';
 
 /// YouTube Music radio queues: a tapped song plays at once while its radio
@@ -23,13 +24,17 @@ import 'player_service.dart';
 /// every song in a radio page goes through [YtTrackStore.upsertAll]'s
 /// fill-only rule. Nothing here makes a request just to upgrade metadata.
 class RadioController {
-  RadioController(this._player, this._ytm, this._store) {
+  RadioController(this._player, this._ytm, this._store, {this._inputs}) {
     _sub = _player.states.listen(_onState);
   }
 
   final PlayerService _player;
   final YtmService _ytm;
   final YtTrackStore _store;
+
+  /// While a Listen together guest, a radio only asks the room to play its
+  /// seed (no radio follows): the host owns the queue.
+  final PlayerInputs? _inputs;
   late final StreamSubscription<PlayerState> _sub;
 
   /// [PlayerService.queueEpoch] of the radio queue, or null when none plays.
@@ -75,6 +80,10 @@ class RadioController {
   Future<void> dispose() => _sub.cancel();
 
   Future<void> _start(Track seed, String videoId, {String? playlistId}) async {
+    if (_inputs?.room case final room?) {
+      await room.playTracks([seed]);
+      return;
+    }
     // The stream start and the radio request go out together.
     final playing = _player.playQueue([seed]);
     final epoch = _player.queueEpoch;

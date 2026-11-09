@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:audio_session/audio_session.dart';
+import 'package:songies/player/player_inputs.dart';
 import 'package:songies/player/player_service.dart';
 
 /// Active link between audio-session events and a [PlayerService].
@@ -17,8 +18,11 @@ class AudioSessionBinding {
 }
 
 /// Pauses [player] when audio becomes noisy, and pauses/resumes it around
-/// audio-focus interruptions. All changes go through [PlayerService] commands
-/// so its playing flag stays in step.
+/// audio-focus interruptions. All changes go through [inputs] (built on
+/// [player] when null), so its playing flag stays in step and, while this
+/// device is a room guest, the pause is a local hold: only this device goes
+/// quiet, and it plays with the room again when the user resumes it or the
+/// interruption ends with resume.
 ///
 /// Ducking is left to the platform. After an interruption, playback resumes
 /// only if it was playing when the interruption began and the interruption
@@ -27,22 +31,24 @@ AudioSessionBinding bindAudioSession({
   required Stream<void> becomingNoisy,
   required Stream<AudioInterruptionEvent> interruptions,
   required PlayerService player,
+  PlayerInputs? inputs,
 }) {
+  final input = inputs ?? PlayerInputs(player);
   var wasPlaying = false;
   return AudioSessionBinding._([
-    becomingNoisy.listen((_) => player.pause()),
+    becomingNoisy.listen((_) => input.hold()),
     interruptions.listen((event) {
       if (event.begin) {
         if (event.type == AudioInterruptionType.duck) return;
         if (player.state.playing) {
           wasPlaying = true;
-          player.pause();
+          input.hold();
         }
       } else {
         if (event.type == AudioInterruptionType.duck) return;
         final resume = wasPlaying && event.type == AudioInterruptionType.pause;
         wasPlaying = false;
-        if (resume) player.play();
+        if (resume) input.resumeAfterHold();
       }
     }),
   ]);

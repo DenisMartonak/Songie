@@ -1,24 +1,41 @@
 package com.songies.songies
 
+import android.app.Activity
 import android.content.Intent
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
-/** `songies/share` + `songies/share/events`: ACTION_SEND text/plain shares. */
-class SharePlugin(messenger: BinaryMessenger, launchIntent: Intent?) {
+/**
+ * `songies/share` + `songies/share/events`: ACTION_SEND text/plain shares
+ * into the app, and `shareText` out of it (the system share menu).
+ */
+class SharePlugin(
+    private val activity: Activity,
+    messenger: BinaryMessenger,
+    launchIntent: Intent?,
+) {
     private var initial: String? = textOf(launchIntent)
     private var sink: EventChannel.EventSink? = null
     private val pending = ArrayDeque<String>()
 
     init {
         MethodChannel(messenger, "songies/share").setMethodCallHandler { call, result ->
-            if (call.method == "initialText") {
-                val t = initial
-                initial = null // consume once so recreation doesn't re-import
-                result.success(t)
-            } else {
-                result.notImplemented()
+            when (call.method) {
+                "initialText" -> {
+                    val t = initial
+                    initial = null // consume once so recreation doesn't re-import
+                    result.success(t)
+                }
+                "shareText" -> {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, call.arguments as? String)
+                    }
+                    activity.startActivity(Intent.createChooser(send, null))
+                    result.success(null)
+                }
+                else -> result.notImplemented()
             }
         }
         EventChannel(messenger, "songies/share/events").setStreamHandler(
