@@ -38,6 +38,7 @@ class RoomGuest {
   final DateTime Function() _now;
 
   final _roles = StreamController<RoomRole>.broadcast();
+  final _allRoles = StreamController<Map<String, RoomRole>>.broadcast();
   final _people = StreamController<List<RoomPresence>>.broadcast();
   final _ended = StreamController<RoomLeaveReason>.broadcast();
   final _cantPlay = StreamController<String>.broadcast();
@@ -45,6 +46,7 @@ class RoomGuest {
   bool _running = false;
   bool _started = false;
   RoomRole _role = RoomRole.listener;
+  Map<String, RoomRole> _roleMap = const {};
   bool _hostSeen = false;
   int _requests = 0;
 
@@ -95,6 +97,11 @@ class RoomGuest {
 
   RoomRole get role => _role;
   Stream<RoomRole> get roles => _roles.stream;
+
+  /// Every guest device's role as the host last sent them, by device id
+  /// (a device missing from it is a listener).
+  Map<String, RoomRole> get allRoles => _roleMap;
+  Stream<Map<String, RoomRole>> get allRolesChanges => _allRoles.stream;
   Stream<List<RoomPresence>> get people => _people.stream;
   Stream<RoomLeaveReason> get ended => _ended.stream;
 
@@ -229,6 +236,8 @@ class RoomGuest {
           _pending = (m, _now());
           _drain();
         case RoomRolesMsg():
+          _roleMap = Map.unmodifiable(m.roles);
+          _allRoles.add(_roleMap);
           final r = m.roles[_me.deviceId] ?? RoomRole.listener;
           if (r != _role) {
             _role = r;

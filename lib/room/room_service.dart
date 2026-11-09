@@ -52,7 +52,7 @@ class RoomGuesting extends RoomStatus {
   final RoomRole role;
   final List<RoomPresence> people;
 
-  /// What this device knows of the roles: its own, by device id.
+  /// Every guest device's role, by device id, as the host sent them.
   final Map<String, RoomRole> roles;
 }
 
@@ -267,7 +267,7 @@ class RoomService {
             host: h,
             role: guest.role,
             people: people,
-            roles: {_deviceId: guest.role},
+            roles: {...guest.allRoles, _deviceId: guest.role},
           ),
         );
       }
@@ -286,6 +286,7 @@ class RoomService {
         });
         publish();
       });
+      _listen(guest.allRolesChanges, (_) => publish());
       _listen(guest.cantPlay, (title) {
         _say("Can't play $title here, joining in at the next song");
       });

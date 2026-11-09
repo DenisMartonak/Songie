@@ -264,6 +264,30 @@ void main() {
     ]);
   });
 
+  test('a guest sees every guest\'s role, by device', () {
+    fakeAsync((async) {
+      final hub = FakeRoomHub();
+      final backend = FakeBackend();
+      final host = Device('h', hub, backend);
+      final guest = Device('g', hub, backend);
+      final other = Device('g2', hub, backend);
+      done(async, host.service.open(userId: 'u1', name: 'Host'));
+      done(async, guest.service.join('ABCD2345', userId: 'u2', name: 'G'));
+      done(async, other.service.join('ABCD2345', userId: 'u3', name: 'G2'));
+      done(async, host.service.setRole('g2', RoomRole.full));
+      done(async, host.service.setRole('g', RoomRole.queue));
+      final g = guest.service.status as RoomGuesting;
+      expect(g.role, RoomRole.queue);
+      expect(g.roles, {'g': RoomRole.queue, 'g2': RoomRole.full});
+      // Another guest's role change tells this one nothing.
+      expect(guest.notices, ['You can now add songs']);
+      host.player.dispose();
+      guest.player.dispose();
+      other.player.dispose();
+      async.flushMicrotasks();
+    });
+  });
+
   inRoomTest('removing a guest sends it away', (async, host, guest, backend) {
     done(async, host.service.open(userId: 'u1', name: 'Host'));
     done(async, guest.service.join('ABCD2345', userId: 'u2', name: 'Guest'));
