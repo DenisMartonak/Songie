@@ -6,6 +6,7 @@ import 'package:flutter/material.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 
 import 'account/account_service.dart';
 import 'bug_report/bug_report.dart';
@@ -46,6 +47,10 @@ import 'remote/remote_channel.dart';
 import 'remote/remote_controller.dart';
 import 'remote/remote_host.dart';
 import 'remote/remote_protocol.dart';
+import 'room/room_backend.dart';
+import 'room/room_channel.dart';
+import 'room/room_service.dart';
+import 'room/room_songs.dart';
 import 'stats/stats_models.dart';
 import 'stats/stats_repository.dart';
 import 'theme/app_theme.dart';
@@ -534,6 +539,7 @@ class _RemoteSession {
     required this.deviceId,
     required PlayerService player,
     required Future<Map<String, Track>> Function(List<String> ids) lookup,
+    required this._inRoom,
   }) : _player = player,
        _lookup = lookup,
        controller = RemoteController(
@@ -550,6 +556,7 @@ class _RemoteSession {
   final RemoteController controller;
   final PlayerService _player;
   final Future<Map<String, Track>> Function(List<String> ids) _lookup;
+  final bool Function() _inRoom;
   late final StreamSubscription<PlayerState> _playerSub;
   late bool _wasPlaying;
   RemoteHost? _host;
@@ -576,10 +583,20 @@ class _RemoteSession {
         appVersion: appVersion,
         playing: s.playing,
         title: s.current?.title,
+        inRoom: _inRoom(),
       ),
       lookup: _lookup,
     );
     await host.start();
+  }
+
+  /// A room started or ended on this device: a room takes no remote
+  /// control, so any link ends, and the presence says so.
+  void roomChanged(bool inRoom) {
+    if (_disposed) return;
+    if (inRoom) controller.deselect();
+    final host = _host;
+    if (host != null) unawaited(host.refreshPresence());
   }
 
   void dispose() {
@@ -601,8 +618,13 @@ final _remoteSessionProvider = Provider<_RemoteSession?>((ref) {
     deviceId: ref.watch(deviceIdProvider),
     player: ref.watch(playerServiceProvider),
     lookup: library.tracksByIds,
+    inRoom: () => ref.read(roomServiceProvider).status is! RoomIdle,
   );
   ref.onDispose(session.dispose);
+  ref.listen(roomStatusProvider, (_, next) {
+    final status = next.value;
+    if (status != null) session.roomChanged(status is! RoomIdle);
+  });
   unawaited(
     ref.read(remoteDeviceNameProvider.future).then(session.start).catchError((
       Object e,
@@ -699,6 +721,13 @@ final remoteEndedProvider = Provider<Stream<(RemotePresence, RemoteEndReason)>>(
 /// a link exists, else this device's player.
 final playerViewProvider = Provider<PlayerView>((ref) {
   final player = ref.watch(playerServiceProvider);
+  final guesting = ref.watch(
+    roomStatusProvider.select((s) => s.value is RoomGuesting),
+  );
+  if (guesting) {
+    final guest = ref.watch(roomServiceProvider).guestView;
+    if (guest != null) return guest;
+  }
   final controller = ref.watch(remoteControllerProvider);
   final linked = ref.watch(remoteLinkProvider.select((l) => l.value != null));
   if (controller != null && linked) {
@@ -722,6 +751,72 @@ final playerViewStateProvider = StreamProvider<PlayerState>((ref) {
     c.onCancel = sub.cancel;
   });
 });
+
+// --- Listen together -------------------------------------------------------
+
+/// The room tables behind Supabase. Not overridden in `main()`: the client
+/// is read only when a call is made, so a signed-out app never touches
+/// Supabase, and tests that never open a room need no wiring.
+final roomBackendProvider = Provider<RoomBackend>(
+  (ref) => SupabaseRoomBackend(() => Supabase.instance.client),
+);
+
+/// Makes the `room:<room id>` channel (lazy like [roomBackendProvider]).
+final roomChannelProvider = Provider<RoomChannel Function(String roomId)>(
+  (ref) =>
+      (roomId) => SupabaseRoomChannel(() => Supabase.instance.client, roomId),
+);
+
+/// This device's one room session, hosting or guesting. Stops when the
+/// account signs out or changes.
+final roomServiceProvider = Provider<RoomService>((ref) {
+  final service = RoomService(
+    backend: ref.watch(roomBackendProvider),
+    channelFor: ref.watch(roomChannelProvider),
+    player: ref.watch(playerServiceProvider),
+    tracksFor: (songs) => tracksForSongs(songs, ref.read(ytTrackStoreProvider)),
+    deviceId: ref.watch(deviceIdProvider),
+    platform: Platform.operatingSystem,
+  );
+  ref.listen(_remoteUserIdProvider, (previous, next) {
+    if (previous != null && previous != next) unawaited(service.signedOut());
+  });
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+/// How the room session stands, starting with its current value.
+final roomStatusProvider = StreamProvider<RoomStatus>((ref) {
+  final service = ref.watch(roomServiceProvider);
+  return Stream<RoomStatus>.multi((c) {
+    final sub = service.statuses.listen(
+      c.addSync,
+      onError: c.addErrorSync,
+      onDone: c.closeSync,
+    );
+    c.addSync(service.status);
+    c.onCancel = sub.cancel;
+  });
+});
+
+/// What the room tells the user (for islands).
+final roomNoticesProvider = Provider<Stream<RoomNotice>>(
+  (ref) => ref.watch(roomServiceProvider).notices,
+);
+
+/// A room code waiting for the user to join (from a link, see Task 6).
+class RoomInvite extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String code) => state = code;
+
+  void clear() => state = null;
+}
+
+final roomInviteProvider = NotifierProvider<RoomInvite, String?>(
+  RoomInvite.new,
+);
 
 /// Starts controlling [device]: pauses this device's playback first, so the
 /// two don't play at once.

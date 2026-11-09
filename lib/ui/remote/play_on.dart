@@ -9,7 +9,7 @@ import '../island/island_host.dart';
 /// other online devices that speak this version. Empty signed out.
 List<RemotePresence> playOnDevices(List<RemotePresence>? online) => [
   for (final d in online ?? const <RemotePresence>[])
-    if (d.compatible) d,
+    if (d.compatible && !d.inRoom) d,
 ].take(3).toList();
 
 /// Plays [ids] on [d] from the first (as [sourcePlaylistId] when it is a

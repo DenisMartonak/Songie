@@ -18,6 +18,7 @@ class RemotePresence {
     required this.appVersion,
     required this.playing,
     this.title,
+    this.inRoom = false,
     this.v = kRemoteProtocol,
   });
 
@@ -27,6 +28,10 @@ class RemotePresence {
   final String appVersion;
   final bool playing;
   final String? title;
+
+  /// Whether the device is in a Listen together room, and so takes no
+  /// remote control. Absent from older devices' payloads: false.
+  final bool inRoom;
   final int v;
 
   bool get compatible => v == kRemoteProtocol;
@@ -39,6 +44,7 @@ class RemotePresence {
     'appVersion': appVersion,
     'playing': playing,
     'title': title,
+    'inRoom': inRoom,
   };
 
   static RemotePresence? fromJson(Object? j) {
@@ -54,6 +60,7 @@ class RemotePresence {
       final appVersion = j['appVersion'];
       final playing = j['playing'];
       final title = j['title'];
+      final inRoom = j['inRoom'];
       return RemotePresence(
         deviceId: deviceId,
         name: name,
@@ -61,6 +68,7 @@ class RemotePresence {
         appVersion: appVersion is String ? appVersion : '',
         playing: playing is bool ? playing : false,
         title: title is String ? title : null,
+        inRoom: inRoom is bool ? inRoom : false,
         v: v,
       );
     } on Object {

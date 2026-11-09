@@ -126,6 +126,25 @@ void main() {
       expect(r.playing, true);
       expect(r.title, isNull);
       expect(r.compatible, true);
+      expect(r.inRoom, false);
+    });
+
+    test('inRoom round-trips and an old payload decodes with false', () {
+      const p = RemotePresence(
+        deviceId: 'd',
+        name: 'Desk',
+        platform: 'linux',
+        appVersion: '1.0',
+        playing: false,
+        inRoom: true,
+      );
+      final json = jsonDecode(jsonEncode(p.toJson())) as Map<String, dynamic>;
+      expect(RemotePresence.fromJson(json)!.inRoom, true);
+      expect(json['v'], kRemoteProtocol);
+      json.remove('inRoom');
+      expect(RemotePresence.fromJson(json)!.inRoom, false);
+      json['inRoom'] = 'yes';
+      expect(RemotePresence.fromJson(json)!.inRoom, false);
     });
   });
 

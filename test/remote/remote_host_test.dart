@@ -818,4 +818,45 @@ void main() {
       async.flushMicrotasks();
     });
   });
+
+  test('a device in a room ignores commands, and says so in its presence', () {
+    fakeAsync((async) {
+      final hub = FakeRemoteHub();
+      final player = PlayerService(FakeAudioBackend(), _Resolver());
+      var inRoom = true;
+      final host = RemoteHost(
+        channel: SpyChannel(hub.channelFor('h')),
+        player: player,
+        presence: (s) => RemotePresence(
+          deviceId: 'h',
+          name: 'Host',
+          platform: 'linux',
+          appVersion: '1.0.0',
+          playing: s.playing,
+          inRoom: inRoom,
+        ),
+        lookup: (_) async => const {},
+      );
+      final ctl = hub.channelFor('c')..join(_presenceOf('c'));
+      host.start();
+      async.flushMicrotasks();
+      player.playQueue([track('a')]);
+      async.flushMicrotasks();
+      ctl.send(const RemoteCommand(to: 'h', id: 'x', op: RemoteOp.pause));
+      async.elapse(const Duration(seconds: 1));
+      expect(player.state.playing, isTrue);
+      expect(ctl.present.firstWhere((p) => p.deviceId == 'h').inRoom, isTrue);
+
+      inRoom = false;
+      host.refreshPresence();
+      async.flushMicrotasks();
+      expect(ctl.present.firstWhere((p) => p.deviceId == 'h').inRoom, isFalse);
+      ctl.send(const RemoteCommand(to: 'h', id: 'y', op: RemoteOp.pause));
+      async.elapse(const Duration(seconds: 1));
+      expect(player.state.playing, isFalse);
+      host.stop();
+      player.dispose();
+      async.flushMicrotasks();
+    });
+  });
 }

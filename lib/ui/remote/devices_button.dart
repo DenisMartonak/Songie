@@ -68,9 +68,16 @@ Future<void> showDevicesPicker(BuildContext context, WidgetRef ref) async {
 }
 
 const _updateHint = 'Update Songies to control this device';
+const _inRoomHint = 'In a Listen together room';
 
-String? _subtitle(RemotePresence d) =>
-    d.compatible ? (d.playing ? d.title : null) : _updateHint;
+/// A device in a room takes no remote control.
+bool _available(RemotePresence d) => d.compatible && !d.inRoom;
+
+String? _subtitle(RemotePresence d) => !d.compatible
+    ? _updateHint
+    : d.inRoom
+    ? _inRoomHint
+    : (d.playing ? d.title : null);
 
 Future<Object?> _sheet(
   BuildContext context,
@@ -113,12 +120,12 @@ Future<Object?> _sheet(
             for (final d in devices)
               ListTile(
                 key: Key('devices.device.${d.deviceId}'),
-                enabled: d.compatible,
+                enabled: _available(d),
                 leading: Icon(Icons.devices_rounded, color: colors.text),
                 title: Text(
                   d.name,
                   style: TextStyle(
-                    color: d.compatible ? colors.text : colors.mutedText,
+                    color: _available(d) ? colors.text : colors.mutedText,
                   ),
                 ),
                 subtitle: _subtitle(d) == null ? null : Text(_subtitle(d)!),
@@ -229,7 +236,7 @@ Future<Object?> _popup(
           value: d,
           title: d.name,
           subtitle: _subtitle(d),
-          enabled: d.compatible,
+          enabled: _available(d),
           checked: linked == d.deviceId,
         ),
     ],
