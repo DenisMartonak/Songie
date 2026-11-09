@@ -16,7 +16,7 @@ class MainActivity : AudioServiceActivity() {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         ytDlp = YtDlpPlugin(applicationContext, messenger)
-        share = SharePlugin(messenger, intent)
+        share = SharePlugin(this, messenger, intent)
         folderPicker = FolderPickerPlugin(this, messenger)
         downloadNotifier = DownloadNotifierPlugin(applicationContext, messenger)
         updater = UpdaterPlugin(this, messenger)

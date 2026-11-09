@@ -16,6 +16,8 @@ import '../../theme/app_theme.dart';
 import '../library/add_to_playlist_sheet.dart';
 import '../motion/motion.dart';
 import '../remote/play_on.dart';
+import '../../room/room_protocol.dart' show RoomOp, roleAllows;
+import '../room/room_button.dart' show roomGuestRoleProvider;
 import '../ytm/ytm_nav.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
@@ -176,6 +178,16 @@ Future<void> showSongMenu(
   final askPermission = ref.read(notificationPermissionProvider);
   final favorites = ref.read(favoritesRepositoryProvider);
   final islands = Islands.of(context);
+  // A room's guest adds to the host's queue, as its role allows, and never
+  // its own local files (the others don't have them).
+  final guestRole = ref.read(roomGuestRoleProvider);
+  final guestView = guestRole == null ? null : ref.read(playerViewProvider);
+  final offerQueue =
+      guestRole == null || roleAllows(guestRole, RoomOp.addNext);
+  final disabled = <SongMenuAction>{
+    if (guestRole != null && song.track?.source == 'local')
+      SongMenuAction.addToQueue,
+  };
   // The menu closes when an entry is chosen: the sends outlive `ref`.
   final container = ProviderScope.containerOf(context);
   // remoteHostFollowerProvider (listened to in main) keeps this loaded on
@@ -220,7 +232,8 @@ Future<void> showSongMenu(
   }
 
   final entries = <_Entry>[
-    (SongMenuAction.addToQueue, Icons.queue_music, 'Add to queue', null),
+    if (offerQueue)
+      (SongMenuAction.addToQueue, Icons.queue_music, 'Add to queue', null),
     for (final d in devices) ...[
       (SongMenuAction.playOn, Icons.cast_rounded, 'Play on ${d.name}', d),
       (
@@ -274,8 +287,8 @@ Future<void> showSongMenu(
   ];
 
   final chosen = anchor == null
-      ? await _sheet(context, song, entries)
-      : await _popup(context, anchor, entries);
+      ? await _sheet(context, song, entries, disabled)
+      : await _popup(context, anchor, entries, disabled);
   // The row may be gone now (the list changed while the menu was open): the
   // actions that need its context check it; the others run regardless.
   if (chosen == null) return;
@@ -299,7 +312,11 @@ Future<void> showSongMenu(
   switch (action) {
     case SongMenuAction.addToQueue:
       if (await track() case final t?) {
-        await player.addToQueue([t]);
+        if (guestView != null) {
+          await guestView.addNext([t]);
+        } else {
+          await player.addToQueue([t]);
+        }
         islands.show('Added to queue', kind: IslandKind.success, song: t);
       }
     case SongMenuAction.playOn:
@@ -375,6 +392,7 @@ Future<_Entry?> _sheet(
   BuildContext context,
   MenuSong song,
   List<_Entry> entries,
+  Set<SongMenuAction> disabled,
 ) {
   return showModalBottomSheet<_Entry>(
     context: context,
@@ -419,8 +437,12 @@ Future<_Entry?> _sheet(
             for (final e in entries)
               ListTile(
                 key: _entryKey(e),
-                leading: Icon(e.$2, color: colors.text),
-                title: Text(e.$3, style: TextStyle(color: colors.text)),
+                enabled: !disabled.contains(e.$1),
+                leading: Icon(e.$2, color: _entryColor(colors, e, disabled)),
+                title: Text(
+                  e.$3,
+                  style: TextStyle(color: _entryColor(colors, e, disabled)),
+                ),
                 onTap: () => Navigator.of(sheet).pop(e),
               ),
           ],
@@ -430,10 +452,18 @@ Future<_Entry?> _sheet(
   );
 }
 
+/// A greyed entry takes the muted colour.
+Color _entryColor(
+  SongiesColors colors,
+  _Entry e,
+  Set<SongMenuAction> disabled,
+) => disabled.contains(e.$1) ? colors.mutedText : colors.text;
+
 Future<_Entry?> _popup(
   BuildContext context,
   Rect anchor,
   List<_Entry> entries,
+  Set<SongMenuAction> disabled,
 ) {
   final colors = Theme.of(context).extension<SongiesColors>()!;
   final overlay =
@@ -457,16 +487,17 @@ Future<_Entry?> _popup(
         PopupMenuItem(
           key: _entryKey(e),
           value: e,
+          enabled: !disabled.contains(e.$1),
           child: Row(
             children: [
-              Icon(e.$2, size: 20, color: colors.text),
+              Icon(e.$2, size: 20, color: _entryColor(colors, e, disabled)),
               const SizedBox(width: 12),
               Flexible(
                 child: Text(
                   e.$3,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: colors.text),
+                  style: TextStyle(color: _entryColor(colors, e, disabled)),
                 ),
               ),
             ],

@@ -7,6 +7,8 @@ import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
 import '../remote/devices_button.dart';
 import '../remote/remote_strip.dart';
+import '../room/room_button.dart';
+import '../room/room_strip.dart';
 import '../widgets/song_menu.dart';
 
 /// The page's top row: a close button (a chevron on a phone, an X on the
@@ -90,11 +92,13 @@ class NowPlayingHeader extends ConsumerWidget {
                 ),
               ),
               devices,
+              RoomButton(iconSize: 24, color: colors.text),
               wide ? close : more,
             ],
           ),
         ),
         const RemoteStrip(),
+        const RoomChip(),
       ],
     );
   }

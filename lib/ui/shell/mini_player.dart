@@ -9,6 +9,8 @@ import '../motion/motion.dart';
 import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
 import '../../remote/remote_controller.dart' show RemoteLink;
 import '../remote/remote_strip.dart' show remoteStripText;
+import '../../room/room_protocol.dart' show RoomRole;
+import '../room/room_button.dart' show roomGuestRoleProvider;
 import '../widgets/artwork.dart';
 
 /// The phone's mini-player: 48 high with an 8 px side margin, filled with the
@@ -118,15 +120,18 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
       playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
     final trackKey = ValueKey(track.id);
+    // A room's guest skips and pauses only with Full control.
+    final role = ref.watch(roomGuestRoleProvider);
+    final control = role == null || role == RoomRole.full;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: MiniPlayer.sideMargin),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => openNowPlaying(GoRouter.of(context)),
-        onHorizontalDragUpdate: _onDragUpdate,
-        onHorizontalDragEnd: _onDragEnd,
-        onHorizontalDragCancel: _springBack,
+        onHorizontalDragUpdate: control ? _onDragUpdate : null,
+        onHorizontalDragEnd: control ? _onDragEnd : null,
+        onHorizontalDragCancel: control ? _springBack : null,
         child: Container(
           key: const Key('miniPlayer.pill'),
           height: MiniPlayer.height,
@@ -213,13 +218,15 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                       ),
                       iconSize: 26,
                       color: colors.text,
+                      disabledColor: colors.text.withAlpha(90),
                       icon: Icon(
                         playing
                             ? Icons.pause_rounded
                             : Icons.play_arrow_rounded,
                       ),
-                      onPressed: () =>
-                          ref.read(playerViewProvider).togglePlay(),
+                      onPressed: control
+                          ? () => ref.read(playerViewProvider).togglePlay()
+                          : null,
                     ),
                   ],
                 ),

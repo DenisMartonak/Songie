@@ -57,3 +57,7 @@ Stream<String> sharedPlaylistLinks(ShareSource? source) {
   );
   return out.stream;
 }
+
+/// Opens Android's share menu for [text] (a room link, say).
+Future<void> shareText(String text) =>
+    const MethodChannel('songies/share').invokeMethod<void>('shareText', text);

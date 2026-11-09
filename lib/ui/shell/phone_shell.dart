@@ -7,6 +7,8 @@ import '../../theme/app_theme.dart';
 import '../downloads/downloads_banner.dart';
 import '../downloads/downloads_sheet.dart';
 import '../island/island_host.dart';
+import '../../room/room_service.dart' show RoomIdle;
+import '../room/room_strip.dart';
 import 'bottom_nav.dart';
 import 'go_tab.dart';
 import 'mini_player.dart';
@@ -28,6 +30,9 @@ class PhoneShell extends ConsumerWidget {
     final hasMini =
         ref.watch(remoteLinkProvider.select((l) => l.value != null)) ||
         ref.watch(playerStateProvider.select((s) => s.value?.current != null));
+    final inRoom = ref.watch(
+      roomStatusProvider.select((s) => s.value != null && s.value is! RoomIdle),
+    );
     final downloading = ref.watch(downloadsActiveProvider);
     final banner = ref.watch(downloadsBannerVisibleProvider);
     final media = MediaQuery.of(context);
@@ -40,6 +45,7 @@ class PhoneShell extends ConsumerWidget {
         : BottomNav.height +
               bottomInset +
               (hasMini ? MiniPlayer.height + MiniPlayer.gapAboveNav : 0) +
+              (inRoom ? RoomStrip.height : 0) +
               (downloading ? DownloadsIndicator.height : 0) +
               (banner ? DownloadsBanner.height : 0);
 
@@ -70,6 +76,12 @@ class PhoneShell extends ConsumerWidget {
                       ColoredBox(
                         color: colors.background,
                         child: const DownloadsIndicator(),
+                      ),
+                    // On top of the mini player; opaque over the page.
+                    if (inRoom)
+                      ColoredBox(
+                        color: colors.background,
+                        child: const RoomStrip(),
                       ),
                     if (hasMini) ...[
                       const MiniPlayer(),

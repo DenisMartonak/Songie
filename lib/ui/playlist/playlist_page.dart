@@ -7,12 +7,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
+import '../../account/account_service.dart';
 import '../../library/favorites.dart';
 import '../../core/log.dart';
 import '../../core/result.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../remote/remote_protocol.dart';
+import '../../room/room_protocol.dart' show RoomOp, roleAllows;
+import '../../room/room_service.dart' show RoomIdle;
 import '../../theme/app_theme.dart';
 import '../../theme/contrast.dart';
 import '../downloads/download_status_line.dart';
@@ -25,6 +28,8 @@ import '../motion/equalizer_bars.dart';
 import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
 import '../remote/play_on.dart';
+import '../room/room_button.dart' show roomGuestRoleProvider;
+import '../room/room_panel.dart' show showRoomPanel;
 import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../island/island_controller.dart';
@@ -150,6 +155,16 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
         .watch(artPaletteProvider(summary.coverRef))
         .value
         ?.dominant;
+    // A room's guest queues songs only as its role allows, and never its
+    // local files.
+    final guestRole = ref.watch(roomGuestRoleProvider);
+    bool canQueue(PlaylistTrack row) =>
+        guestRole == null ||
+        (roleAllows(guestRole, RoomOp.addNext) && row.track.source != 'local');
+    final listenTogether =
+        list.isNotEmpty &&
+        ref.watch(accountStateProvider).value is SignedIn &&
+        ref.watch(roomStatusProvider.select((s) => s.value is RoomIdle));
 
     return CustomScrollView(
       slivers: [
@@ -176,6 +191,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
             onPlay: () => _play(list, shuffle: false),
             onShuffle: () => _play(list, shuffle: true),
             onMenu: (action) => _onMenu(action, summary),
+            listenTogether: listenTogether,
             devices: playOnDevices(ref.watch(remoteDevicesProvider).value),
             onSendTo: _sendTo,
           ),
@@ -205,6 +221,9 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
                 final row = list[i];
                 return Dismissible(
                   key: ValueKey(row.entryId),
+                  direction: canQueue(row)
+                      ? DismissDirection.horizontal
+                      : DismissDirection.endToStart,
                   // Swiping right queues the song and springs back; swiping
                   // left removes it.
                   background: const _SwipeBackground.queue(),
@@ -516,6 +535,25 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
         if (result is Err<void>) _say("Couldn't remove the cover");
       case _MenuAction.addSongs:
         await _addSongs();
+      case _MenuAction.listenTogether:
+        await _listenTogether();
+    }
+  }
+
+  /// Opens a room playing this playlist, and the room panel to share it.
+  Future<void> _listenTogether() async {
+    final account = ref.read(accountStateProvider).value;
+    final rows = _pending ?? ref.read(playlistTracksProvider(_id)).value;
+    if (account is! SignedIn || rows == null || rows.isEmpty) return;
+    final service = ref.read(roomServiceProvider);
+    if (service.status is! RoomIdle) return;
+    await service.open(
+      userId: account.profile.id,
+      name: account.profile.username,
+      play: [for (final r in rows) r.track],
+    );
+    if (mounted && service.status is! RoomIdle) {
+      await showRoomPanel(context, ref);
     }
   }
 
@@ -559,7 +597,14 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
 
 typedef _SendTo = void Function(RemotePresence device, {required bool play});
 
-enum _MenuAction { rename, changeCover, removeCover, delete, addSongs }
+enum _MenuAction {
+  rename,
+  changeCover,
+  removeCover,
+  delete,
+  addSongs,
+  listenTogether,
+}
 
 /// The hero's pinned top bar.
 const double _barHeight = 56;
@@ -617,6 +662,7 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
     required this.onPlay,
     required this.onShuffle,
     required this.onMenu,
+    required this.listenTogether,
     required this.devices,
     required this.onSendTo,
   });
@@ -635,6 +681,9 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
   final VoidCallback onPlay;
   final VoidCallback onShuffle;
   final ValueChanged<_MenuAction> onMenu;
+
+  /// The menu offers Listen together.
+  final bool listenTogether;
 
   /// The devices the menu offers Play on / Add to queue on.
   final List<RemotePresence> devices;
@@ -718,6 +767,7 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
                         builtIn: summary.id == kFavoritesPlaylistId,
                         onShuffle: onShuffle,
                         onMenu: onMenu,
+                        listenTogether: listenTogether,
                         devices: devices,
                         onSendTo: onSendTo,
                       ),
@@ -880,6 +930,7 @@ class _HeroActions extends StatelessWidget {
     required this.builtIn,
     required this.onShuffle,
     required this.onMenu,
+    required this.listenTogether,
     required this.devices,
     required this.onSendTo,
   });
@@ -893,6 +944,9 @@ class _HeroActions extends StatelessWidget {
   final bool hasOwnCover;
   final VoidCallback onShuffle;
   final ValueChanged<_MenuAction> onMenu;
+
+  /// Offers Listen together (signed in, not in a room).
+  final bool listenTogether;
   final List<RemotePresence> devices;
   final _SendTo onSendTo;
 
@@ -938,6 +992,12 @@ class _HeroActions extends StatelessWidget {
                 value: _MenuAction.addSongs,
                 child: Text('Add songs'),
               ),
+              if (listenTogether)
+                const PopupMenuItem(
+                  key: Key('playlist.listenTogether'),
+                  value: _MenuAction.listenTogether,
+                  child: Text('Listen together'),
+                ),
               for (final d in devices) ...[
                 PopupMenuItem(
                   key: Key('playlist.playOn.${d.deviceId}'),

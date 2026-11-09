@@ -7,6 +7,8 @@ import '../../remote/remote_controller.dart' show kRemoteUnknownSource;
 import '../../theme/app_theme.dart';
 import '../motion/equalizer_bars.dart';
 import '../motion/pressable.dart';
+import '../../room/room_protocol.dart' show RoomRole;
+import '../room/room_button.dart' show roomGuestRoleProvider;
 import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
 import '../widgets/favorite_star.dart';
@@ -45,6 +47,9 @@ class NowPlayingQueue extends ConsumerWidget {
       );
     }
     final player = ref.read(playerViewProvider);
+    // A room's guest jumps, reorders and removes only with Full control.
+    final role = ref.watch(roomGuestRoleProvider);
+    final edit = role == null || role == RoomRole.full;
     final keys = _slotKeys(queue);
     final bottom = MediaQuery.paddingOf(context).bottom;
     // Upcoming rows start after the playing one; row i is queue[first + i].
@@ -61,7 +66,7 @@ class NowPlayingQueue extends ConsumerWidget {
               track: queue[playingIndex],
               current: true,
               playing: playing,
-              onTap: () => player.playAt(playingIndex),
+              onTap: edit ? () => player.playAt(playingIndex) : null,
               menu: _menu(context, ref, queue[playingIndex]),
             ),
           ),
@@ -77,7 +82,9 @@ class NowPlayingQueue extends ConsumerWidget {
               final q = first + i;
               return Dismissible(
                 key: keys[q],
-                direction: DismissDirection.endToStart,
+                direction: edit
+                    ? DismissDirection.endToStart
+                    : DismissDirection.none,
                 onDismissed: (_) => player.removeAt(q),
                 background: Container(
                   color: colors.text.withAlpha(30),
@@ -87,11 +94,11 @@ class NowPlayingQueue extends ConsumerWidget {
                 ),
                 child: _QueueRow(
                   index: q,
-                  dragIndex: i,
+                  dragIndex: edit ? i : null,
                   track: queue[q],
                   current: false,
                   playing: playing,
-                  onTap: () => player.playAt(q),
+                  onTap: edit ? () => player.playAt(q) : null,
                   menu: _menu(context, ref, queue[q]),
                 ),
               );
@@ -169,7 +176,7 @@ class _QueueRow extends StatelessWidget {
 
   /// Whether playback is running (the playing row's bars move).
   final bool playing;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   /// Opens the song menu.
   final SongMenuOpeners? menu;
