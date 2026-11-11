@@ -11,6 +11,7 @@ class MainActivity : AudioServiceActivity() {
     private var downloadNotifier: DownloadNotifierPlugin? = null
     private var updater: UpdaterPlugin? = null
     private var deviceInfo: DeviceInfoPlugin? = null
+    private var updateNotifier: UpdateNotifierPlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -21,6 +22,9 @@ class MainActivity : AudioServiceActivity() {
         downloadNotifier = DownloadNotifierPlugin(applicationContext, messenger)
         updater = UpdaterPlugin(this, messenger)
         deviceInfo = DeviceInfoPlugin(messenger)
+        updateNotifier = UpdateNotifierPlugin(this, messenger)
+        // The background update check (SON-28); kept as is once scheduled.
+        UpdateNotifications.schedule(applicationContext)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -31,6 +35,7 @@ class MainActivity : AudioServiceActivity() {
         downloadNotifier = null
         updater = null
         deviceInfo = null
+        updateNotifier = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
@@ -38,6 +43,7 @@ class MainActivity : AudioServiceActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         share?.onNewIntent(intent)
+        updateNotifier?.onNewIntent(intent)
     }
 
     @Deprecated("Deprecated in Java")

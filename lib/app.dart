@@ -47,19 +47,47 @@ class _SongiesAppState extends ConsumerState<SongiesApp> {
   @override
   void dispose() {
     _startupTimer?.cancel();
+    _notificationTaps?.cancel();
     super.dispose();
   }
 
-  /// Silent unless an update is available; never throws.
+  StreamSubscription<void>? _notificationTaps;
+
+  /// Silent unless an update is available; never throws. Opened from the
+  /// update notification, it checks right away (past the 12 h limit).
   Future<void> _startupCheck() async {
     try {
-      await ref.read(updateControllerProvider.notifier).startup();
+      final controller = ref.read(updateControllerProvider.notifier);
+      final notifications = ref.read(updateNotificationsProvider);
+      _notificationTaps ??= notifications?.openRequests.listen(
+        (_) => _checkFromNotification(),
+      );
+      if (notifications != null && await notifications.takeOpenRequest()) {
+        await controller.checkNow();
+      } else {
+        await controller.startup();
+      }
+      // Android 13+: without it the update notification can't show.
+      await notifications?.askPermissionOnce();
       if (!mounted) return;
       if (ref.read(updateControllerProvider) case Available() || ManualOnly()) {
         _showUpdateDialog();
       }
     } on Object catch (e, s) {
       AppLog.e('update: startup check failed', e, s);
+    }
+  }
+
+  /// The update notification was tapped while Songies runs.
+  Future<void> _checkFromNotification() async {
+    try {
+      await ref.read(updateControllerProvider.notifier).checkNow();
+      if (!mounted) return;
+      if (ref.read(updateControllerProvider) case Available() || ManualOnly()) {
+        _showUpdateDialog();
+      }
+    } on Object catch (e, s) {
+      AppLog.e('update: check from the notification failed', e, s);
     }
   }
 

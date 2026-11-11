@@ -101,4 +101,9 @@ flutter {
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+    // The background update check (UpdateCheckWorker, SON-28).
+    implementation("androidx.work:work-runtime:2.10.0")
+    testImplementation("junit:junit:4.13.2")
+    // Android's org.json is a stub in JVM unit tests.
+    testImplementation("org.json:json:20240303")
 }
