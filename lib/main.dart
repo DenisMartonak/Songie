@@ -65,6 +65,7 @@ import 'player/just_audio_backend.dart';
 import 'player/media_controls.dart';
 import 'player/player_inputs.dart';
 import 'player/player_service.dart';
+import 'player/volume_memory.dart';
 import 'player/stream_resolver.dart';
 import 'player/stream_source.dart';
 import 'player/track_resolver.dart';
@@ -297,6 +298,15 @@ Future<ProviderContainer> runSongies({
     onUnavailable: library.markUnavailable,
     network: network,
     onNeedsRuntime: denoInstaller == null ? null : runtimePrompter.ask,
+  );
+  // The volume this device had when it last closed, then kept up to date.
+  await restoreVolume(
+    read: () => settings.getString(kVolume),
+    apply: player.setVolume,
+  );
+  rememberVolume(
+    player.states.map((s) => s.volume),
+    write: (v) => settings.setString(kVolume, v),
   );
   // A cover or details that land after a song was queued reach the player.
   ytTracks.changes.listen(player.updateTrack);
