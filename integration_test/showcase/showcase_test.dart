@@ -19,17 +19,12 @@ import 'demo_library.dart';
 import 'isolation.dart';
 import 'recorder.dart';
 
-const _allScenes = ['themes', 'playlists', 'downloads', 'search'];
-
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
   final env = Platform.environment;
-  final scenes = (env['SHOWCASE_SCENES'] ?? _allScenes.join(','))
-      .split(',')
-      .where(_allScenes.contains)
-      .toList();
+  final scenes = showcaseScenes(env['SHOWCASE_SCENES']);
 
   testWidgets('showcase', (tester) async {
     final problem = isolationProblem(env);
@@ -45,6 +40,22 @@ void main() {
         imagePickerProvider.overrideWithValue(() async => roadTrip),
       ],
     );
+    // A Flutter semantics null check (seen 2026-11-11) would fail the whole
+    // run; note it and carry on. The run prints how many there were.
+    final semanticsErrors = <String>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if ('${details.stack}'.contains('_RenderObjectSemantics')) {
+        semanticsErrors.add('${details.exception}');
+        debugPrint('showcase: semantics error ignored: ${details.exception}');
+        return;
+      }
+      previous?.call(details);
+    };
+    addTearDown(() {
+      FlutterError.onError = previous;
+      debugPrint('showcase: ${semanticsErrors.length} semantics error(s)');
+    });
     await windowManager.setSize(const Size(1280, 800));
     await windowManager.center();
     await idle(tester, 3);
@@ -58,6 +69,7 @@ void main() {
     final rec = FrameRecorder(out);
 
     for (final scene in scenes) {
+      debugPrint('showcase: scene $scene');
       await _goHome(tester);
       switch (scene) {
         case 'themes':
@@ -96,7 +108,11 @@ Future<void> tapAndWait(
 }
 
 /// Waits up to [timeout] seconds for [finder] to show up.
-Future<void> waitFor(WidgetTester tester, Finder finder, {int timeout = 20}) async {
+Future<void> waitFor(
+  WidgetTester tester,
+  Finder finder, {
+  int timeout = 20,
+}) async {
   final end = DateTime.now().add(Duration(seconds: timeout));
   while (finder.evaluate().isEmpty) {
     if (DateTime.now().isAfter(end)) fail('Timed out waiting for $finder');
@@ -172,7 +188,11 @@ Future<void> downloadsScene(WidgetTester tester, FrameRecorder rec) async {
   await tapAndWait(tester, find.text('Sunday'), seconds: 2);
   rec.start('downloads');
   await idle(tester, 1.2);
-  await tapAndWait(tester, find.byKey(const Key('playlist.download')), seconds: 12);
+  await tapAndWait(
+    tester,
+    find.byKey(const Key('playlist.download')),
+    seconds: 12,
+  );
   await rec.stop();
   // Still frames in case the clip comes out choppy.
   await rec.shot('downloads', 'done');
@@ -183,11 +203,13 @@ Future<void> searchScene(WidgetTester tester, FrameRecorder rec) async {
   await tapAndWait(tester, find.text('Search'), seconds: 1.2);
   rec.start('search');
   await idle(tester, 0.8);
-  final field = find.byKey(const Key('search.field'));
+  // Desktop searches from the title bar.
+  final field = find.byKey(const Key('shell.search'));
+  await waitFor(tester, field);
   await tester.tap(field);
   await typeSlowly(tester, field, 'Sabrina Carpenter');
   await idle(tester, 4);
-  await tester.drag(find.byType(Scrollable).last, const Offset(0, -350));
+  await tester.dragFrom(const Offset(760, 520), const Offset(0, -350));
   await idle(tester, 2.5);
   await rec.stop();
 }

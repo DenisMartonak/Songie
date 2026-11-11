@@ -37,4 +37,12 @@ void main() {
       isNotNull,
     );
   });
+
+  test('scene list: unset or empty means every scene', () {
+    const all = ['themes', 'playlists', 'downloads', 'search'];
+    expect(showcaseScenes(null), all);
+    expect(showcaseScenes(''), all);
+    expect(showcaseScenes('search,themes'), ['search', 'themes']);
+    expect(showcaseScenes('themes,bogus'), ['themes']);
+  });
 }

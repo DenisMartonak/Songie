@@ -19,3 +19,16 @@ String? isolationProblem(Map<String, String> env) {
   }
   return null;
 }
+
+/// Every scene, in recording order.
+const allShowcaseScenes = ['themes', 'playlists', 'downloads', 'search'];
+
+/// The scenes to record from SHOWCASE_SCENES: unset or empty means all.
+List<String> showcaseScenes(String? value) {
+  if (value == null || value.trim().isEmpty) return allShowcaseScenes;
+  return value
+      .split(',')
+      .map((s) => s.trim())
+      .where(allShowcaseScenes.contains)
+      .toList();
+}

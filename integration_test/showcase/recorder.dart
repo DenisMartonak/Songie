@@ -47,7 +47,8 @@ class FrameRecorder {
 
   Future<void> _record(Directory dir) async {
     await dir.create(recursive: true);
-    final file = await File('${dir.path}/frames.rgba').open(mode: FileMode.write);
+    final file = await File('${dir.path}/frames.rgba')
+        .open(mode: FileMode.write);
     final frameTime = Duration(microseconds: 1000000 ~/ fps);
     final clock = Stopwatch()..start();
     var written = 0;
@@ -62,7 +63,8 @@ class FrameRecorder {
         image.dispose();
         last = data!.buffer.asUint8List();
         // Every frame due by now: this one, plus copies for any we missed.
-        final due = clock.elapsed.inMicroseconds ~/ frameTime.inMicroseconds + 1;
+        final due =
+            clock.elapsed.inMicroseconds ~/ frameTime.inMicroseconds + 1;
         while (written < due) {
           await file.writeFrom(last);
           written++;
@@ -73,7 +75,12 @@ class FrameRecorder {
     } finally {
       await file.close();
       await File('${dir.path}/meta.json').writeAsString(
-        jsonEncode({'width': width, 'height': height, 'fps': fps, 'frames': written}),
+        jsonEncode({
+          'width': width,
+          'height': height,
+          'fps': fps,
+          'frames': written,
+        }),
       );
     }
   }

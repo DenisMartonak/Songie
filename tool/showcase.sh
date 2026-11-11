@@ -10,6 +10,7 @@
 # everything; your own library and accounts are never opened. A window opens
 # on your desktop while it records; leave it alone until it closes.
 set -euo pipefail
+shopt -s nullglob
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 flutter="${FLUTTER:-$HOME/development/flutter/bin/flutter}"
