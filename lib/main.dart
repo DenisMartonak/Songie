@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import 'package:window_manager/window_manager.dart';
 import 'package:just_audio/just_audio.dart'
@@ -98,6 +99,16 @@ const _forceYtDlp =
     !kReleaseMode && bool.fromEnvironment('SONGIES_FORCE_YTDLP');
 
 Future<void> main() async {
+  await runSongies();
+}
+
+/// Starts the app and returns its provider container. The showcase
+/// recording (integration_test/showcase) passes [extraOverrides], applied
+/// after the app's own, and turns [checkForUpdates] off.
+Future<ProviderContainer> runSongies({
+  List<Override> extraOverrides = const [],
+  bool checkForUpdates = true,
+}) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final paths = await AppPaths.resolve();
@@ -406,6 +417,7 @@ Future<void> main() async {
             SupabaseRemoteChannel(() => Supabase.instance.client, userId),
       ),
       playerInputsProvider.overrideWithValue(inputs),
+      ...extraOverrides,
     ],
   );
   appContainer = container;
@@ -448,7 +460,7 @@ Future<void> main() async {
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: SongiesApp(router: router, checkForUpdates: true),
+      child: SongiesApp(router: router, checkForUpdates: checkForUpdates),
     ),
   );
 
@@ -479,6 +491,7 @@ Future<void> main() async {
       ).catchError((Object _) => false);
     }
   }
+  return container;
 }
 
 /// Android runs yt-dlp through youtubedl-android; desktop runs the binary in
