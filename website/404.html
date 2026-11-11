@@ -128,8 +128,8 @@
 
   <script type="module">
     import { mountMark } from './assets/js/mark.js';
-    import { upgradeDownloadLinks } from './assets/js/download.js';
-    import { roomCodeFromPath, formatRoomCode, appLink } from './assets/js/room.js';
+    import { upgradeDownloadLinks, detectPlatform } from './assets/js/download.js';
+    import { roomCodeFromPath, formatRoomCode, appLink, shouldAutoOpen } from './assets/js/room.js';
 
     // ?preview=<path> lets tool/website_preview.sh show this page locally.
     const path = new URLSearchParams(location.search).get('preview') ?? location.pathname;
@@ -144,9 +144,17 @@
       document.querySelector('[data-code]').textContent = formatRoomCode(code);
       document.querySelector('[data-open]').href = link;
       upgradeDownloadLinks();
-      // Ask the browser to open Songies straight away; the button is the
-      // fallback when the prompt is dismissed or blocked.
-      location.href = link;
+      // Ask the browser to open Songies straight away, once per tab; the
+      // button is the fallback when the prompt is dismissed or blocked.
+      const key = `songies-opened:${code}`;
+      let opened = false;
+      try {
+        opened = sessionStorage.getItem(key) === '1';
+        sessionStorage.setItem(key, '1');
+      } catch {
+        // Storage blocked: still open once for this page load.
+      }
+      if (shouldAutoOpen(detectPlatform(navigator.userAgent), opened)) location.href = link;
     } else {
       document.title = view === 'bad-code' ? 'This link doesn’t look right · Songies' : 'Page not found · Songies';
     }

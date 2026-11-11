@@ -22,3 +22,11 @@ test('formatRoomCode and appLink', () => {
   assert.equal(formatRoomCode('ABCD2345'), 'ABCD-2345');
   assert.equal(appLink('ABCD2345'), 'songies://room/ABCD2345');
 });
+
+test('shouldAutoOpen: once per tab, only where Songies exists', async () => {
+  const { shouldAutoOpen } = await import('../../website/assets/js/room.js');
+  assert.equal(shouldAutoOpen('linux', false), true);
+  assert.equal(shouldAutoOpen('android', false), true);
+  assert.equal(shouldAutoOpen('windows', true), false); // came back with Back
+  assert.equal(shouldAutoOpen(null, false), false); // iPhone, Mac: no app to open
+});

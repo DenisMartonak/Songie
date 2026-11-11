@@ -13,6 +13,7 @@ import 'package:songies/main.dart' show runSongies;
 import 'package:songies/providers.dart';
 import 'package:songies/theme/theme_repository.dart';
 import 'package:songies/ui/library/pickers.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show EmptyLocalStorage;
 import 'package:window_manager/window_manager.dart';
 
 import 'demo_library.dart';
@@ -35,6 +36,10 @@ void main() {
 
     final c = await runSongies(
       checkForUpdates: false,
+      // Neither session may come from the keyring, which the test build
+      // shares with the real app.
+      accountStorage: const EmptyLocalStorage(),
+      ytSessionStore: NoYtSessionStore(),
       extraOverrides: [
         // "Change cover" gets a picture without a file dialog.
         imagePickerProvider.overrideWithValue(() async => roadTrip),

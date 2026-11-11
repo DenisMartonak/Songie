@@ -98,6 +98,7 @@ The Report a bug form in Settings sends a report to a Discord channel through a 
 
 ## 5. Make a release (every time)
 
+0. Check the website is live: <https://denismartonak.github.io/Songie/r/ABCD2345> shows "You've been invited to listen together". From the first release after 1.4.0 the app shares room links on that site, so a release before the site works hands out dead links. See `docs/website.md`.
 1. Pick the new version, for example `1.1.0`.
 2. The version is written in two places. Change both:
    - `version:` in `pubspec.yaml`, for example `version: 1.1.0+2`
@@ -115,6 +116,7 @@ The Report a bug form in Settings sends a report to a Discord channel through a 
 The workflow writes the release notes from the commits; edit them on GitHub and add these lines:
 
 - Home-network sync is gone: sign in on every device to keep them in sync.
+- Listen together links are now web links (https://denismartonak.github.io/Songie/r/…), so they're clickable in Discord.
 
 ### When something goes wrong
 

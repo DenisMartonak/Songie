@@ -1,3 +1,6 @@
+import 'package:songies/innertube/yt_session.dart';
+import 'package:songies/innertube/yt_session_store.dart';
+
 /// Why this run might touch the user's real Songies data, or null when it
 /// is safe: the app must be pointed (via XDG_DATA_HOME, which
 /// lib/core/paths.dart honours on Linux) at a throwaway folder that
@@ -31,4 +34,17 @@ List<String> showcaseScenes(String? value) {
       .map((s) => s.trim())
       .where(allShowcaseScenes.contains)
       .toList();
+}
+
+/// The showcase's YouTube session store: always empty, never the keyring
+/// (the test build shares the real app's keyring entries).
+class NoYtSessionStore implements YtSessionStore {
+  @override
+  Future<bool> available() async => false;
+  @override
+  Future<YtSession?> read() async => null;
+  @override
+  Future<void> write(YtSession s) async {}
+  @override
+  Future<void> clear() async {}
 }

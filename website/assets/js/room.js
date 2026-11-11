@@ -28,3 +28,10 @@ export const formatRoomCode = (code) =>
 
 /** The address that opens Songies at the room. */
 export const appLink = (code) => `songies://room/${code}`;
+
+/**
+ * Whether the invite page should ask the browser to open Songies by itself:
+ * not on devices Songies doesn't run on, and only once per tab, so coming
+ * back (or a browser error page) doesn't loop into it again.
+ */
+export const shouldAutoOpen = (platform, alreadyOpened) => platform !== null && !alreadyOpened;

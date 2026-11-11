@@ -45,4 +45,10 @@ void main() {
     expect(showcaseScenes('search,themes'), ['search', 'themes']);
     expect(showcaseScenes('themes,bogus'), ['themes']);
   });
+
+  test('the showcase YouTube session store never holds a session', () async {
+    final store = NoYtSessionStore();
+    expect(await store.available(), isFalse);
+    expect(await store.read(), isNull);
+  });
 }
