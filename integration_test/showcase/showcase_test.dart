@@ -108,7 +108,7 @@ Future<void> tapAndWait(
   num seconds = 1.2,
 }) async {
   await waitFor(tester, finder);
-  await tester.tap(finder.last);
+  await quietTap(tester, finder.last);
   await idle(tester, seconds);
 }
 
@@ -211,10 +211,67 @@ Future<void> searchScene(WidgetTester tester, FrameRecorder rec) async {
   // Desktop searches from the title bar.
   final field = find.byKey(const Key('shell.search'));
   await waitFor(tester, field);
-  await tester.tap(field);
+  await quietTap(tester, field);
   await typeSlowly(tester, field, 'Sabrina Carpenter');
   await idle(tester, 4);
-  await tester.dragFrom(const Offset(760, 520), const Offset(0, -350));
+  await quietDrag(tester, const Offset(760, 520), const Offset(0, -350));
   await idle(tester, 2.5);
   await rec.stop();
+}
+
+// Taps and drags go in as device input. Taps made the usual way
+// (tester.tap) make the live test binding paint a crosshair where they
+// land, into the app's frames, which would show in the clips.
+var _nextPointer = 1000;
+
+Future<void> _asDevice(
+  WidgetTester tester,
+  Future<void> Function(void Function(PointerEvent)) run,
+) async {
+  final binding = tester.binding;
+  final propagate = binding.shouldPropagateDevicePointerEvents;
+  binding.shouldPropagateDevicePointerEvents = true;
+  try {
+    await run(
+      (e) => binding.handlePointerEventForSource(
+        e,
+        source: TestBindingEventSource.device,
+      ),
+    );
+  } finally {
+    binding.shouldPropagateDevicePointerEvents = propagate;
+  }
+}
+
+/// Taps the middle of [finder] without a tap marker.
+Future<void> quietTap(WidgetTester tester, Finder finder) async {
+  final at = tester.getCenter(finder);
+  final pointer = _nextPointer++;
+  await _asDevice(tester, (send) async {
+    send(PointerDownEvent(pointer: pointer, position: at));
+    await tester.pump(const Duration(milliseconds: 50));
+    send(PointerUpEvent(pointer: pointer, position: at));
+    await tester.pump();
+  });
+}
+
+/// Drags from [from] by [by] over about half a second, without a marker.
+Future<void> quietDrag(WidgetTester tester, Offset from, Offset by) async {
+  final pointer = _nextPointer++;
+  const steps = 20;
+  await _asDevice(tester, (send) async {
+    send(PointerDownEvent(pointer: pointer, position: from));
+    for (var i = 1; i <= steps; i++) {
+      await idle(tester, 0.025);
+      send(
+        PointerMoveEvent(
+          pointer: pointer,
+          position: from + by * (i / steps),
+          delta: by / steps.toDouble(),
+        ),
+      );
+    }
+    send(PointerUpEvent(pointer: pointer, position: from + by));
+    await tester.pump();
+  });
 }
