@@ -46,6 +46,22 @@ test('placeholders cover the four topics in order', () => {
   );
 });
 
+test('several screenshots come with a dot to pick each one', () => {
+  const html = sceneMarkup(
+    { id: 'search', title: 'Search', shots: ['a.webp', 'b.webp', 'c.webp'] },
+    { reducedMotion: false },
+  );
+  assert.equal(html.match(/<button[^>]*data-shot=/g).length, 3);
+  assert.match(html, /aria-label="Screenshot 2 of 3"/);
+  // The first one shows to begin with.
+  assert.match(html, /<img class="shot is-shown"[^>]*a\.webp/);
+});
+
+test('a single screenshot has no dots', () => {
+  const html = sceneMarkup({ id: 'x', title: 'X', shots: ['a.webp'] }, { reducedMotion: false });
+  assert.doesNotMatch(html, /data-shot=/);
+});
+
 test('titles are escaped', () => {
   const html = sceneMarkup({ id: 'x', title: '<b>', shots: ['a.webp'] }, { reducedMotion: false });
   assert.doesNotMatch(html, /<b>/);

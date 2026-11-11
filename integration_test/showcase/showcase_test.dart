@@ -129,8 +129,8 @@ Future<void> _goHome(WidgetTester tester) async {
   await tapAndWait(tester, find.text('Home'), seconds: 1.5);
 }
 
-/// Themes: a song with a bright cover plays; switch through themes,
-/// ending on Album glow, whose colours follow the cover.
+/// Themes: a song with a bright cover is loaded; three themes, ending on
+/// Album glow, whose colours follow the cover.
 Future<void> themesScene(
   WidgetTester tester,
   ProviderContainer c,
@@ -140,21 +140,21 @@ Future<void> themesScene(
   final song = (await c
       .read(libraryRepositoryProvider)
       .trackById(demo.trackIds['h-zuG75Ds-w']!))!;
-  await c.read(playerServiceProvider).playQueue([song]);
+  final player = c.read(playerServiceProvider);
+  await player.playQueue([song]);
+  await idle(tester, 3);
+  await player.pause();
   await tapAndWait(tester, find.text('Settings'));
   await tapAndWait(tester, find.text('Themes'), seconds: 2);
-
-  rec.start('themes');
-  await idle(tester, 1.5);
+  var n = 0;
   for (final id in [
     demo.themeIds['Songies']!,
-    kTerminalThemeId,
     demo.themeIds['Ocean']!,
     kAlbumGlowThemeId,
   ]) {
-    await tapAndWait(tester, find.byKey(Key('themes.card.$id')), seconds: 2.2);
+    await tapAndWait(tester, find.byKey(Key('themes.card.$id')), seconds: 2);
+    await rec.shot('themes', '${++n}');
   }
-  await rec.stop();
 }
 
 /// Types [text] into [field] one letter at a time, like a person.
@@ -165,58 +165,61 @@ Future<void> typeSlowly(WidgetTester tester, Finder field, String text) async {
   }
 }
 
-/// Playlists & covers: make a playlist, add songs, give it a cover.
+/// Playlists & covers: the library with covers, picking songs for a new
+/// playlist, and the playlist with its own cover.
 Future<void> playlistsScene(WidgetTester tester, FrameRecorder rec) async {
   await tapAndWait(tester, find.text('Library'), seconds: 1.5);
-  rec.start('playlists');
-  await idle(tester, 1);
+  await rec.shot('playlists', '1');
   await tapAndWait(tester, find.byTooltip('Add'), seconds: 0.8);
   await tapAndWait(tester, find.text('New playlist'), seconds: 0.8);
   await typeSlowly(tester, find.byType(TextField).last, 'Road trip');
-  await idle(tester, 0.5);
   await tapAndWait(tester, find.text('Save'), seconds: 1.2);
   await tapAndWait(tester, find.text('Road trip'), seconds: 1.5);
   await tapAndWait(tester, find.byTooltip('More'), seconds: 0.8);
   await tapAndWait(tester, find.text('Add songs'), seconds: 1.2);
   for (final title in ['Blinding Lights', 'Espresso', 'APT.', 'Flowers']) {
-    await tapAndWait(tester, find.text(title), seconds: 0.5);
+    await tapAndWait(tester, find.text(title), seconds: 0.4);
   }
+  await idle(tester, 0.6);
+  await rec.shot('playlists', '2');
   await tapAndWait(tester, find.textContaining('Add ('), seconds: 1.5);
   await tapAndWait(tester, find.byTooltip('More'), seconds: 0.8);
   await tapAndWait(tester, find.text('Change cover'), seconds: 3);
-  await rec.stop();
+  await rec.shot('playlists', '3');
 }
 
-/// Downloads: download a playlist and watch the songs come in.
+/// Downloads: a playlist downloading, then done.
 Future<void> downloadsScene(WidgetTester tester, FrameRecorder rec) async {
   await tapAndWait(tester, find.text('Library'), seconds: 1.5);
   await tapAndWait(tester, find.text('Sunday'), seconds: 2);
-  rec.start('downloads');
-  await idle(tester, 1.2);
   await tapAndWait(
     tester,
     find.byKey(const Key('playlist.download')),
-    seconds: 12,
+    seconds: 5,
   );
-  await rec.stop();
-  // Still frames in case the clip comes out choppy.
-  await rec.shot('downloads', 'done');
+  await rec.shot('downloads', '1');
+  // Done when the sidebar no longer says "Downloading".
+  final end = DateTime.now().add(const Duration(seconds: 90));
+  while (find.textContaining('Downloading').evaluate().isNotEmpty &&
+      DateTime.now().isBefore(end)) {
+    await idle(tester, 1);
+  }
+  await idle(tester, 1.5);
+  await rec.shot('downloads', '2');
 }
 
-/// Search: type a query and look through the results.
+/// Search: songs for a query, then its albums.
 Future<void> searchScene(WidgetTester tester, FrameRecorder rec) async {
   await tapAndWait(tester, find.text('Search'), seconds: 1.2);
-  rec.start('search');
-  await idle(tester, 0.8);
   // Desktop searches from the title bar.
   final field = find.byKey(const Key('shell.search'));
   await waitFor(tester, field);
   await quietTap(tester, field);
   await typeSlowly(tester, field, 'Sabrina Carpenter');
-  await idle(tester, 4);
-  await quietDrag(tester, const Offset(760, 520), const Offset(0, -350));
-  await idle(tester, 2.5);
-  await rec.stop();
+  await idle(tester, 5);
+  await rec.shot('search', '1');
+  await tapAndWait(tester, find.text('Albums'), seconds: 4);
+  await rec.shot('search', '2');
 }
 
 // Taps and drags go in as device input. Taps made the usual way

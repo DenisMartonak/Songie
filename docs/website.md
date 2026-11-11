@@ -15,7 +15,7 @@ GitHub repo → Settings → Pages → Source: **GitHub Actions**.
 
 | Address | File | What it is |
 | --- | --- | --- |
-| `/Songie/` | `website/index.html` | Home: the S animation, download for the visitor's device, showcase clips |
+| `/Songie/` | `website/index.html` | Home: the S animation, download for the visitor's device, showcase screenshots |
 | `/Songie/features/` | `website/features/index.html` | Every feature |
 | `/Songie/r/<CODE>` | `website/404.html` | Listen together invite: opens `songies://room/<CODE>` |
 
@@ -39,9 +39,9 @@ That serves the site at <http://localhost:8123/Songie/>. The room page:
 
 The site's scripts have tests: `node --test test/website/`.
 
-## Re-recording the showcase clips
+## Retaking the showcase screenshots
 
-    tool/showcase.sh                    # every scene, about 3 minutes
+    tool/showcase.sh                    # every scene, about 2 minutes
     SCENES=themes,search tool/showcase.sh
 
 It runs the real Linux app under `integration_test/showcase/` with a
@@ -51,8 +51,13 @@ accounts are never opened. A window opens on your desktop and clicks
 through the scenes. Leave it alone until it closes. It needs internet:
 the songs are real YouTube Music tracks (pinned in `demo_library.dart`).
 
-Results go to `website/media/showcase/` (a WebM and an MP4 per scene, a
-poster, and `showcase.json`, which the home page reads). Commit them.
+Results go to `website/media/showcase/` (2–3 WebP screenshots per scene,
+taken at twice the window size, and `showcase.json`, which the home page
+reads and shows as a slideshow). Commit them.
+
+Video was tried and dropped: grabbing frames from inside a debug build
+can't keep up, so the clips were choppy. If clips come back, record them
+with a real screen recorder instead.
 
 ## Not yet
 

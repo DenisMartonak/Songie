@@ -2,31 +2,33 @@
   "scenes": [
     {
       "id": "themes",
-      "webm": "themes.webm",
-      "mp4": "themes.mp4",
-      "poster": "themes.jpg",
-      "shots": []
+      "shots": [
+        "themes-1.webp",
+        "themes-2.webp",
+        "themes-3.webp"
+      ]
     },
     {
       "id": "search",
-      "webm": "search.webm",
-      "mp4": "search.mp4",
-      "poster": "search.jpg",
-      "shots": []
+      "shots": [
+        "search-1.webp",
+        "search-2.webp"
+      ]
     },
     {
       "id": "playlists",
-      "webm": "playlists.webm",
-      "mp4": "playlists.mp4",
-      "poster": "playlists.jpg",
-      "shots": []
+      "shots": [
+        "playlists-1.webp",
+        "playlists-2.webp",
+        "playlists-3.webp"
+      ]
     },
     {
       "id": "downloads",
-      "webm": "downloads.webm",
-      "mp4": "downloads.mp4",
-      "poster": "downloads.jpg",
-      "shots": []
+      "shots": [
+        "downloads-1.webp",
+        "downloads-2.webp"
+      ]
     }
   ]
 }

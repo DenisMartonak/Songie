@@ -250,11 +250,58 @@ h3 {
 }
 
 .shots {
-  display: grid;
+  position: relative;
   height: 100%;
-  gap: 2px;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
+}
+
+.shots .shot {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.shots .shot.is-shown {
+  opacity: 1;
+}
+
+.shot-dots {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: rgba(11, 6, 18, 0.7);
+  backdrop-filter: blur(6px);
+}
+
+.shot-dots button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.shot-dots button::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(241, 235, 255, 0.4);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.shot-dots button[aria-pressed='true']::before {
+  background: var(--pink);
+  transform: scale(1.25);
 }
 
 .shot-placeholder {

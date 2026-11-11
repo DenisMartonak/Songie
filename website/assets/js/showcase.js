@@ -1,5 +1,6 @@
 // The showcase under the hero: one screen frame and a tab per topic.
-// Clips come from media/showcase/showcase.json (written by tool/showcase.sh);
+// Screenshots (or clips) come from media/showcase/showcase.json, written by
+// tool/showcase.sh;
 // without it each topic shows a placeholder.
 
 const MEDIA = 'media/showcase/';
@@ -31,9 +32,13 @@ export function sceneMarkup(scene, { reducedMotion }) {
   }
   const shots = scene.shots ?? [];
   if (shots.length) {
-    return `<div class="shots shots-${shots.length}">${shots
-      .map((s, i) => `<img class="shot" src="${MEDIA}${esc(s)}" alt="${title} in Songies, screenshot ${i + 1} of ${shots.length}" loading="lazy">`)
+    const imgs = shots
+      .map((s, i) => `<img class="shot${i === 0 ? ' is-shown' : ''}" src="${MEDIA}${esc(s)}" alt="${title} in Songies, screenshot ${i + 1} of ${shots.length}"${i === 0 ? '' : ' loading="lazy"'}>`)
+      .join('');
+    const dots = shots.length < 2 ? '' : `<div class="shot-dots">${shots
+      .map((_, i) => `<button type="button" data-shot="${i}" aria-label="Screenshot ${i + 1} of ${shots.length}" aria-pressed="${i === 0}"></button>`)
       .join('')}</div>`;
+    return `<div class="shots">${imgs}${dots}</div>`;
   }
   return `<div class="shot-placeholder"><span>${title}</span></div>`;
 }
@@ -42,6 +47,30 @@ export function sceneMarkup(scene, { reducedMotion }) {
 export function mergeScenes(manifest) {
   const byId = new Map((manifest?.scenes ?? []).map((s) => [s.id, s]));
   return placeholderScenes().map((t) => ({ ...t, ...(byId.get(t.id) ?? {}), title: t.title, caption: t.caption }));
+}
+
+let slideTimer = 0;
+
+/** Steps through a scene's screenshots: the dots pick one, and without
+ *  reduced motion they also advance by themselves until a dot is used. */
+function startSlides(frame, reducedMotion) {
+  clearInterval(slideTimer);
+  const imgs = [...frame.querySelectorAll('.shots .shot')];
+  const dots = [...frame.querySelectorAll('[data-shot]')];
+  if (imgs.length < 2) return;
+  let at = 0;
+  const go = (n) => {
+    at = n;
+    imgs.forEach((img, j) => img.classList.toggle('is-shown', j === n));
+    dots.forEach((d, j) => d.setAttribute('aria-pressed', String(j === n)));
+  };
+  dots.forEach((d, j) =>
+    d.addEventListener('click', () => {
+      clearInterval(slideTimer);
+      go(j);
+    }),
+  );
+  if (!reducedMotion) slideTimer = setInterval(() => go((at + 1) % imgs.length), 3500);
 }
 
 /** Builds the tabs and frame inside [root] (browser only). */
@@ -70,6 +99,7 @@ export async function renderShowcase(root) {
     frame.setAttribute('aria-labelledby', buttons[i].id);
     frame.innerHTML = sceneMarkup(scenes[i], { reducedMotion });
     caption.textContent = scenes[i].caption;
+    startSlides(frame, reducedMotion);
   };
   buttons.forEach((b, i) => {
     b.addEventListener('click', () => show(i));
