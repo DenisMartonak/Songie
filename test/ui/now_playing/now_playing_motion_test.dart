@@ -751,7 +751,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
       expect(find.byType(EqualizerBars), findsOneWidget);
-      expect(tester.binding.transientCallbackCount, greaterThan(0));
+      // The bars step on a timer (SON-30), so they repaint without a ticker.
+      var paints = EqualizerBars.debugPaintCount;
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+      expect(EqualizerBars.debugPaintCount, greaterThan(paints));
 
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
@@ -759,6 +763,9 @@ void main() {
       await tester.pump();
       expect(tester.binding.transientCallbackCount, 0);
       expect(tester.binding.hasScheduledFrame, isFalse);
+      paints = EqualizerBars.debugPaintCount;
+      await tester.pump(const Duration(seconds: 1));
+      expect(EqualizerBars.debugPaintCount, paints);
       // Back on screen, so the app can be torn down.
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();

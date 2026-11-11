@@ -207,9 +207,13 @@ void main() {
         expect(find.byType(HomePage), findsOneWidget);
         expect(find.byType(YtmShelfRow), findsOneWidget);
         await play(tester, title: _longTitle);
-        // Playing does animate (or this test would prove nothing).
+        // Playing does animate (or this test would prove nothing): the bars
+        // repaint, a step every 100 ms (SON-30).
         expect(find.byType(EqualizerBars), findsWidgets);
-        expect(tester.binding.hasScheduledFrame, isTrue);
+        final paints = EqualizerBars.debugPaintCount;
+        await tester.pump(const Duration(milliseconds: 350));
+        await tester.pump();
+        expect(EqualizerBars.debugPaintCount, greaterThan(paints));
 
         await pause(tester);
         expectIdle(tester, 'paused on Home');

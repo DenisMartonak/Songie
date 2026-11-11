@@ -24,10 +24,40 @@ void main() {
     expect(tester.getSize(find.byType(EqualizerBars)), const Size(14, 14));
   });
 
-  testWidgets('playing: keeps scheduling frames', (tester) async {
+  /// How often the bars were painted during [seconds] of playing.
+  Future<int> paintsOver(WidgetTester tester, num seconds) async {
+    final before = EqualizerBars.debugPaintCount;
+    for (var t = 0; t < seconds * 1000; t += 16) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    return EqualizerBars.debugPaintCount - before;
+  }
+
+  testWidgets('playing: the bars step about 10 times a second, not every '
+      'frame', (tester) async {
     await tester.pumpWidget(app(true));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.binding.hasScheduledFrame, isTrue);
+    await tester.pump();
+    final paints = await paintsOver(tester, 1);
+    expect(paints, inInclusiveRange(8, 12));
+    // No ticker asking for a frame every vsync.
+    expect(tester.binding.transientCallbackCount, 0);
+  });
+
+  testWidgets('an unfocused window freezes the bars', (tester) async {
+    addTearDown(
+      () => tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      ),
+    );
+    await tester.pumpWidget(app(true));
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    expect(await paintsOver(tester, 1), lessThanOrEqualTo(1));
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(await paintsOver(tester, 1), inInclusiveRange(8, 12));
   });
 
   testWidgets('pausing playback stops it', (tester) async {
@@ -38,7 +68,7 @@ void main() {
     expect(tester.binding.hasScheduledFrame, isFalse);
   });
 
-  testWidgets('the app being paused stops the ticker', (tester) async {
+  testWidgets('the app being paused stops the bars', (tester) async {
     addTearDown(
       () => tester.binding.handleAppLifecycleStateChanged(
         AppLifecycleState.resumed,
@@ -46,14 +76,12 @@ void main() {
     );
     await tester.pumpWidget(app(true));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.binding.transientCallbackCount, greaterThan(0));
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await tester.pump();
-    // A muted ticker unschedules its frame callback.
-    expect(tester.binding.transientCallbackCount, 0);
+    expect(await paintsOver(tester, 1), 0);
     final bars = find.descendant(
       of: find.byType(EqualizerBars),
       matching: find.byType(CustomPaint),

@@ -63,4 +63,34 @@ void main() {
       expect(tickerEnabled(tester), isTrue, reason: 'resumed after $state');
     }
   });
+
+  testWidgets('an unfocused window keeps it running, unless asked not to', (
+    tester,
+  ) async {
+    addTearDown(
+      () => tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      ),
+    );
+    Widget app({required bool onlyFocused}) => TickerMode(
+      enabled: true,
+      child: VisibleTicker(
+        onlyWhileFocused: onlyFocused,
+        child: const SizedBox(key: Key('probe')),
+      ),
+    );
+
+    await tester.pumpWidget(app(onlyFocused: false));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    expect(tickerEnabled(tester), isTrue);
+
+    await tester.pumpWidget(app(onlyFocused: true));
+    await tester.pump();
+    expect(tickerEnabled(tester), isFalse);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(tickerEnabled(tester), isTrue);
+  });
 }
