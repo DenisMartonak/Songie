@@ -30,8 +30,10 @@ void main() {
   late FakeUpdateInstaller installer;
   late FakeNetworkStatus network;
   late List<Uri> opened;
+  late FakeUpdateNotifications notifications;
 
   setUp(() {
+    notifications = FakeUpdateNotifications();
     checker = FakeUpdateChecker();
     downloader = FakeUpdateDownloader();
     installer = FakeUpdateInstaller();
@@ -51,6 +53,7 @@ void main() {
     isAndroidProvider.overrideWithValue(isAndroid),
     openDownloadPageProvider.overrideWithValue((u) async => opened.add(u)),
     if (timeout != null) updateCheckTimeoutProvider.overrideWithValue(timeout),
+    updateNotificationsProvider.overrideWithValue(notifications),
   ];
 
   group('controller', () {
@@ -190,6 +193,8 @@ void main() {
       ctl(c).notNow();
       await pumpEventQueue();
       expect(checker.skipped, [testRelease.version]);
+      // The background check (Android notification) stays quiet about it too.
+      expect(notifications.skipped, [testRelease.version]);
       expect(c.read(updateControllerProvider), isA<Idle>());
     });
 
@@ -472,6 +477,40 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Songies 1.1.0 is available'), findsNothing);
       expect(checker.skipped, [testRelease.version]);
+    });
+
+    testWidgets('opened from the update notification: checks right away, '
+        'past the 12 h limit', (tester) async {
+      notifications.openRequest = true;
+      checker.onNow = () async => availableFor(testRelease);
+      await pumpApp(tester);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(checker.nowCalls, 1);
+      expect(checker.startupCalls, 0);
+      expect(find.text('Songies 1.1.0 is available'), findsOneWidget);
+    });
+
+    testWidgets(
+      'tapping the notification while Songies runs shows the prompt',
+      (tester) async {
+        checker.onStartup = () async => const UpToDate();
+        checker.onNow = () async => availableFor(testRelease);
+        await pumpApp(tester);
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+        expect(find.text('Songies 1.1.0 is available'), findsNothing);
+        notifications.tap();
+        await tester.pumpAndSettle();
+        expect(find.text('Songies 1.1.0 is available'), findsOneWidget);
+      },
+    );
+
+    testWidgets('startup asks for the notification permission', (tester) async {
+      await pumpApp(tester);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(notifications.permissionAsks, 1);
     });
 
     testWidgets('startup with no update shows nothing and runs once', (

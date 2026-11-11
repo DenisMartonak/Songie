@@ -69,6 +69,10 @@ const kCloudParkedPrefix = 'cloud_parked:';
 /// another one asks to merge or start empty. Device-local.
 const kCloudLastAccount = 'cloud_last_account';
 
+/// Set once Songies has asked (Android 13+) for permission to show the
+/// update notification, so it asks only once. Device-local.
+const kUpdateNotifyAsked = 'update_notify_asked';
+
 /// The player's volume (0..1, as text), restored at start. Device-local:
 /// each device keeps its own.
 const kVolume = 'volume';

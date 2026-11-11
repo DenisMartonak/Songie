@@ -341,6 +341,8 @@ class UpdateController extends Notifier<UpdateState> {
           AppLog.w('update: saving the skipped version failed: $e');
         }),
       );
+      // The Android notification stays quiet about it too.
+      unawaited(ref.read(updateNotificationsProvider)?.skip(r.version));
     }
     state = const Idle();
   }

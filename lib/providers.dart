@@ -67,6 +67,7 @@ import 'ui/shell/window_controls.dart';
 import 'update/release.dart';
 import 'update/update_checker.dart';
 import 'update/update_controller.dart';
+import 'update/update_notifications.dart';
 import 'update/update_downloader.dart';
 import 'youtube/deno_installer.dart';
 import 'youtube/js_runtime.dart';
@@ -1277,6 +1278,15 @@ final updateCheckerProvider = Provider<UpdateChecker?>((ref) {
 /// Downloads and verifies update files into the app's `updates` folder.
 final updateDownloaderProvider = Provider<UpdateDownloader>(
   (ref) => UpdateDownloader(dir: ref.watch(appPathsProvider).updates),
+);
+
+/// The Android update notification's app side; null off Android.
+final updateNotificationsProvider = Provider<UpdateNotifications?>(
+  (ref) => ref.watch(isAndroidProvider)
+      ? ChannelUpdateNotifications(
+          settings: ref.watch(settingsRepositoryProvider),
+        )
+      : null,
 );
 
 /// The in-app update flow behind the update dialog and Settings → About.

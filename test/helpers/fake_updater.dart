@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:songies/update/release.dart';
 import 'package:songies/update/update_checker.dart';
+import 'package:songies/update/update_notifications.dart';
 import 'package:songies/update/update_downloader.dart';
 import 'package:songies/update/update_installer.dart' as inst;
 
@@ -114,4 +115,31 @@ class FakeUpdateInstaller implements inst.UpdateInstaller {
 
   @override
   Future<void> openPermissionSettings() async => permissionOpens++;
+}
+
+/// An [UpdateNotifications] that records what the app asked of it.
+class FakeUpdateNotifications implements UpdateNotifications {
+  final List<AppVersion> skipped = [];
+  bool openRequest = false;
+  int permissionAsks = 0;
+  final _opens = StreamController<void>.broadcast();
+
+  /// A notification tap while the app runs.
+  void tap() => _opens.add(null);
+
+  @override
+  Future<void> skip(AppVersion v) async => skipped.add(v);
+
+  @override
+  Future<bool> takeOpenRequest() async {
+    final r = openRequest;
+    openRequest = false;
+    return r;
+  }
+
+  @override
+  Stream<void> get openRequests => _opens.stream;
+
+  @override
+  Future<void> askPermissionOnce() async => permissionAsks++;
 }
