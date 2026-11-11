@@ -69,6 +69,10 @@ const kCloudParkedPrefix = 'cloud_parked:';
 /// another one asks to merge or start empty. Device-local.
 const kCloudLastAccount = 'cloud_last_account';
 
+/// The player's volume (0..1, as text), restored at start. Device-local:
+/// each device keeps its own.
+const kVolume = 'volume';
+
 /// The equalizer preset (an `EqPreset` name). Device-local, Off by default.
 const kEqPreset = 'eq_preset';
 
