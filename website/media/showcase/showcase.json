@@ -1,0 +1,32 @@
+{
+  "scenes": [
+    {
+      "id": "themes",
+      "webm": "themes.webm",
+      "mp4": "themes.mp4",
+      "poster": "themes.jpg",
+      "shots": []
+    },
+    {
+      "id": "search",
+      "webm": "search.webm",
+      "mp4": "search.mp4",
+      "poster": "search.jpg",
+      "shots": []
+    },
+    {
+      "id": "playlists",
+      "webm": "playlists.webm",
+      "mp4": "playlists.mp4",
+      "poster": "playlists.jpg",
+      "shots": []
+    },
+    {
+      "id": "downloads",
+      "webm": "downloads.webm",
+      "mp4": "downloads.mp4",
+      "poster": "downloads.jpg",
+      "shots": []
+    }
+  ]
+}

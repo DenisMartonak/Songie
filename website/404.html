@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- GitHub Pages serves this page for every unknown address, which is how
+       room links (/Songie/r/<CODE>) reach it. The base keeps assets working
+       at any depth. -->
+  <base href="/Songie/">
+  <title>You’ve been invited to listen together · Songies</title>
+  <meta name="description" content="Open the link to join the room in Songies.">
+  <meta name="theme-color" content="#0b0612">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Songies">
+  <meta property="og:title" content="You’ve been invited to listen together">
+  <meta property="og:description" content="Join the room in Songies and hear the same music at the same time.">
+  <meta property="og:image" content="https://denismartonak.github.io/Songie/assets/img/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500&family=Unbounded:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <style>
+    .invite {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      justify-items: center;
+      text-align: center;
+      gap: 1.25rem;
+      padding: 6rem var(--gutter) 5rem;
+      max-width: 40rem;
+    }
+    .invite-body {
+      display: grid;
+      justify-items: center;
+      gap: 1.25rem;
+    }
+    /* Rings stay behind the words here. */
+    .invite .mark-rings {
+      opacity: 0.4;
+    }
+    .invite .mark {
+      width: min(30vmin, 220px);
+      margin-bottom: 0.75rem;
+    }
+    .invite h1 {
+      font-size: clamp(1.6rem, 5vw, 2.6rem);
+    }
+    .invite p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .code {
+      font-family: var(--display);
+      font-size: 1.05rem;
+      letter-spacing: 0.08em;
+      color: var(--text);
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
+      box-shadow: inset 0 0 0 1.5px var(--line);
+    }
+    .invite .btn {
+      margin-top: 0.5rem;
+      font-size: 1.05rem;
+      min-height: 54px;
+      padding-inline: 2rem;
+    }
+    .get {
+      margin-top: 1.75rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 0.75rem;
+      justify-items: center;
+      width: 100%;
+    }
+    .get p {
+      font-size: 0.95rem;
+    }
+    [hidden] {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <div class="corner corner-tl"><a class="ghost-link" href="./">Songies</a></div>
+    <div class="corner corner-tr">
+      <a class="ghost-link" href="https://github.com/DenisMartonak/Songie">GitHub</a>
+    </div>
+
+    <div class="invite">
+      <div class="mark" data-mark></div>
+
+      <section data-view="room" hidden>
+        <div class="invite-body">
+          <h1>You’ve been invited to listen together</h1>
+          <p>Songies should ask to open. If it doesn’t, use the button.</p>
+          <span class="code" data-code aria-label="Room code"></span>
+          <a class="btn" href="./" data-open>Open Songies</a>
+          <div class="get">
+            <p>Don’t have Songies yet? Joining needs the app and a Songies account.</p>
+            <a class="btn btn-quiet" href="https://github.com/DenisMartonak/Songie/releases/latest" data-download><span data-download-label>All downloads</span></a>
+          </div>
+        </div>
+      </section>
+
+      <section data-view="bad-code" hidden>
+        <div class="invite-body">
+          <h1>This link doesn’t look right</h1>
+          <p>Room links end in a code like ABCD-2345. Ask for the link again, or type the code into Songies.</p>
+          <a class="btn btn-quiet" href="./">Go to the Songies home page</a>
+        </div>
+      </section>
+
+      <section data-view="not-found" hidden>
+        <div class="invite-body">
+          <h1>Page not found</h1>
+          <p>There’s nothing at this address.</p>
+          <a class="btn btn-quiet" href="./">Go to the Songies home page</a>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+    import { mountMark } from './assets/js/mark.js';
+    import { upgradeDownloadLinks, detectPlatform } from './assets/js/download.js';
+    import { roomCodeFromPath, formatRoomCode, appLink, shouldAutoOpen } from './assets/js/room.js';
+
+    // ?preview=<path> lets tool/website_preview.sh show this page locally.
+    const path = new URLSearchParams(location.search).get('preview') ?? location.pathname;
+    const code = roomCodeFromPath(path);
+    const segs = path.split('/').filter(Boolean);
+    const view = code ? 'room' : segs.includes('r') ? 'bad-code' : 'not-found';
+    document.querySelector(`[data-view="${view}"]`).hidden = false;
+    mountMark(document.querySelector('[data-mark]'), { rings: view === 'room' });
+
+    if (code) {
+      const link = appLink(code);
+      document.querySelector('[data-code]').textContent = formatRoomCode(code);
+      document.querySelector('[data-open]').href = link;
+      upgradeDownloadLinks();
+      // Ask the browser to open Songies straight away, once per tab; the
+      // button is the fallback when the prompt is dismissed or blocked.
+      const key = `songies-opened:${code}`;
+      let opened = false;
+      try {
+        opened = sessionStorage.getItem(key) === '1';
+        sessionStorage.setItem(key, '1');
+      } catch {
+        // Storage blocked: still open once for this page load.
+      }
+      if (shouldAutoOpen(detectPlatform(navigator.userAgent), opened)) location.href = link;
+    } else {
+      document.title = view === 'bad-code' ? 'This link doesn’t look right · Songies' : 'Page not found · Songies';
+    }
+  </script>
+</body>
+</html>

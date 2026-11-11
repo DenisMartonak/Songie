@@ -192,14 +192,17 @@ Never _fail(String what, Object e) {
 /// keep), no deep links, and no Supabase logs in debug builds. Requests
 /// give up after [kAccountHttpTimeout], so a dead network can't hold the
 /// account screens for minutes.
-Future<AccountBackend> connectSupabase(SessionMarker marker) async {
+Future<AccountBackend> connectSupabase(
+  SessionMarker marker, {
+  LocalStorage? localStorage,
+}) async {
   final s = await Supabase.initialize(
     url: kSupabaseUrl,
     publishableKey: kSupabasePublishableKey,
     httpClient: TimeoutClient(http.Client()),
     debug: false,
     authOptions: FlutterAuthClientOptions(
-      localStorage: SecureSessionStorage(marker: marker),
+      localStorage: localStorage ?? SecureSessionStorage(marker: marker),
       pkceAsyncStorage: _NoAsyncStorage(),
       authFlowType: AuthFlowType.implicit,
       detectSessionInUri: false,

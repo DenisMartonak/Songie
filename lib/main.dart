@@ -5,7 +5,9 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show LocalStorage, Supabase;
 import 'package:window_manager/window_manager.dart';
 import 'package:just_audio/just_audio.dart'
     show AndroidEqualizer, AudioPipeline;
@@ -98,6 +100,20 @@ const _forceYtDlp =
     !kReleaseMode && bool.fromEnvironment('SONGIES_FORCE_YTDLP');
 
 Future<void> main() async {
+  await runSongies();
+}
+
+/// Starts the app and returns its provider container. The showcase
+/// recording (integration_test/showcase) passes [extraOverrides] (for
+/// providers the app doesn't override itself), [accountStorage] and
+/// [ytSessionStore] to keep both sessions out of the keyring, and turns
+/// [checkForUpdates] off.
+Future<ProviderContainer> runSongies({
+  List<Override> extraOverrides = const [],
+  LocalStorage? accountStorage,
+  YtSessionStore? ytSessionStore,
+  bool checkForUpdates = true,
+}) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final paths = await AppPaths.resolve();
@@ -345,7 +361,12 @@ Future<void> main() async {
     ),
   );
   final accounts = AccountService(
-    PendingAccountBackend(connectSupabase(SettingsSessionMarker(settings))),
+    PendingAccountBackend(
+      connectSupabase(
+        SettingsSessionMarker(settings),
+        localStorage: accountStorage,
+      ),
+    ),
     network: network.changes,
     deleteSyncFiles: cloudFiles.deleteAll,
     // Stopped first, so it can't upload files while they are deleted.
@@ -387,7 +408,9 @@ Future<void> main() async {
       ytImportServiceProvider.overrideWithValue(ytImport),
       ytTrackStoreProvider.overrideWithValue(ytTracks),
       innertubeClientProvider.overrideWithValue(innertube),
-      ytSessionStoreProvider.overrideWithValue(SecureYtSessionStore()),
+      ytSessionStoreProvider.overrideWithValue(
+        ytSessionStore ?? SecureYtSessionStore(),
+      ),
       networkStatusProvider.overrideWithValue(network),
       lyricsServiceProvider.overrideWithValue(lyrics),
       downloadRepositoryProvider.overrideWithValue(downloadRepo),
@@ -406,6 +429,7 @@ Future<void> main() async {
             SupabaseRemoteChannel(() => Supabase.instance.client, userId),
       ),
       playerInputsProvider.overrideWithValue(inputs),
+      ...extraOverrides,
     ],
   );
   appContainer = container;
@@ -448,7 +472,7 @@ Future<void> main() async {
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: SongiesApp(router: router, checkForUpdates: true),
+      child: SongiesApp(router: router, checkForUpdates: checkForUpdates),
     ),
   );
 
@@ -479,6 +503,7 @@ Future<void> main() async {
       ).catchError((Object _) => false);
     }
   }
+  return container;
 }
 
 /// Android runs yt-dlp through youtubedl-android; desktop runs the binary in
