@@ -1,0 +1,382 @@
+/* Songies website. One look for every page: the night stage from the app
+   icon, the S and its rings as the one loud thing, everything else quiet. */
+
+:root {
+  --night: #0b0612;
+  --glow: #2a0f45;
+  --violet: #7c3aed;
+  --pink: #ec4899;
+  --text: #f1ebff;
+  --muted: #a99bc7;
+  --line: rgba(241, 235, 255, 0.14);
+  --gradient: linear-gradient(135deg, var(--violet), var(--pink));
+  --display: 'Unbounded', 'Rubik', system-ui, sans-serif;
+  --body: 'Rubik', system-ui, sans-serif;
+  --gutter: clamp(16px, 4vw, 40px);
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--night);
+  color: var(--text);
+  font: 400 1.0625rem/1.6 var(--body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* The stage: full screen, the mark in the middle, links in the corners. */
+
+.stage {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  background: radial-gradient(ellipse 80% 70% at 50% 52%, var(--glow) 0%, var(--night) 70%);
+}
+
+.mark {
+  width: min(46vmin, 420px);
+  aspect-ratio: 1;
+  filter: drop-shadow(0 0 32px rgba(236, 72, 153, 0.45));
+}
+
+.mark-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  display: block;
+}
+
+.mark-rings circle {
+  vector-effect: non-scaling-stroke;
+}
+
+.corner {
+  position: absolute;
+  z-index: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.corner-tl {
+  top: var(--gutter);
+  left: var(--gutter);
+}
+
+.corner-tr {
+  top: var(--gutter);
+  right: var(--gutter);
+}
+
+.corner-bl {
+  bottom: var(--gutter);
+  left: var(--gutter);
+  max-width: 22rem;
+}
+
+.corner-br {
+  bottom: var(--gutter);
+  right: var(--gutter);
+  color: var(--muted);
+}
+
+.wordmark {
+  display: block;
+  font-family: var(--display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+}
+
+.tagline {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* The download link in the top-left corner: underlined in the gradient. */
+.download {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  padding-bottom: 4px;
+  background: var(--gradient) left bottom / 100% 2px no-repeat;
+}
+
+.download svg {
+  width: 1em;
+  height: 1em;
+}
+
+.download:hover {
+  background-size: 100% 100%;
+  color: #fff;
+  padding-inline: 0.4em;
+  margin-inline: -0.4em;
+  border-radius: 4px;
+  transition: background-size 0.25s ease;
+}
+
+.ghost-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  text-decoration: none;
+  opacity: 0.85;
+}
+
+.ghost-link:hover {
+  opacity: 1;
+}
+
+.ghost-link svg {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+/* Buttons. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 48px;
+  padding: 0.75rem 1.5rem;
+  border-radius: 999px;
+  border: 0;
+  font: 500 1rem/1 var(--body);
+  text-decoration: none;
+  cursor: pointer;
+  color: #fff;
+  background: var(--gradient);
+  box-shadow: 0 10px 30px -10px rgba(236, 72, 153, 0.6);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 34px -10px rgba(236, 72, 153, 0.75);
+}
+
+.btn-quiet {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+
+.btn-quiet:hover {
+  box-shadow: inset 0 0 0 1.5px var(--muted);
+}
+
+/* Sections under the stage. */
+
+.wrap {
+  width: min(1120px, 100% - 2 * var(--gutter));
+  margin-inline: auto;
+}
+
+.section {
+  padding-block: clamp(4rem, 10vw, 7.5rem);
+}
+
+.section-head {
+  max-width: 38rem;
+  margin-bottom: 2.25rem;
+}
+
+.section-head h2 {
+  font-size: clamp(1.75rem, 4.2vw, 2.75rem);
+}
+
+.section-head p {
+  color: var(--muted);
+  margin: 0.9rem 0 0;
+}
+
+/* The showcase: one screen and a tab per topic. */
+
+.screen {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #120a1e;
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 40px 120px -40px rgba(124, 58, 237, 0.55);
+}
+
+.screen .shot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top left;
+}
+
+.shots {
+  display: grid;
+  height: 100%;
+  gap: 2px;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.shot-placeholder {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(124, 58, 237, 0.35), transparent 60%),
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 46px, rgba(241, 235, 255, 0.05) 46px 47px);
+}
+
+.shot-placeholder span {
+  font-family: var(--display);
+  font-size: clamp(1.25rem, 3.5vw, 2.25rem);
+  font-weight: 600;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.tabs [role='tab'] {
+  font: 500 0.95rem/1 var(--body);
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.75rem 1.1rem;
+  min-height: 44px;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  transition: color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.tabs [role='tab']:hover {
+  color: var(--text);
+}
+
+.tabs [role='tab'][aria-selected='true'] {
+  color: #fff;
+  background: var(--gradient);
+  box-shadow: none;
+}
+
+.caption {
+  color: var(--muted);
+  margin: 1rem 0 0;
+  min-height: 1.6em;
+}
+
+/* Features call and footer. */
+
+.more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem 2.5rem;
+  padding-block: clamp(2.5rem, 6vw, 4rem);
+  border-top: 1px solid var(--line);
+}
+
+.more h2 {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  max-width: 26rem;
+}
+
+.more-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem 2rem;
+  padding-block: 2rem 2.5rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  border-top: 1px solid var(--line);
+}
+
+.footer p {
+  margin: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .corner {
+    font-size: 0.8125rem;
+  }
+  .corner-br {
+    display: none;
+  }
+  .corner-bl {
+    right: var(--gutter);
+  }
+  .mark {
+    width: 62vmin;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+  }
+}
