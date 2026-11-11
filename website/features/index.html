@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Features · Songies</title>
+  <meta name="description" content="Everything Songies does: one library for your music files and YouTube Music, offline downloads, synced lyrics, themes, sync between devices and listening together.">
+  <meta name="theme-color" content="#0b0612">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Songies">
+  <meta property="og:title" content="Songies features">
+  <meta property="og:description" content="One library for your music files and YouTube Music, on Android, Windows and Linux.">
+  <meta property="og:url" content="https://denismartonak.github.io/Songie/features/">
+  <meta property="og:image" content="https://denismartonak.github.io/Songie/assets/img/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500&family=Unbounded:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/site.css">
+  <style>
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-block: var(--gutter);
+    }
+    .home {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      text-decoration: none;
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 1.125rem;
+    }
+    .home .mark {
+      width: 34px;
+      filter: none;
+    }
+    .topbar nav {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .intro {
+      position: relative;
+      padding-block: clamp(3rem, 9vw, 6.5rem) clamp(2.5rem, 6vw, 4rem);
+    }
+    .intro::before {
+      content: '';
+      position: absolute;
+      inset: -40% -20% auto auto;
+      width: 70vmin;
+      aspect-ratio: 1;
+      background: radial-gradient(circle, rgba(124, 58, 237, 0.35), transparent 65%);
+      pointer-events: none;
+      z-index: -1;
+    }
+    .intro h1 {
+      font-size: clamp(2.1rem, 6.5vw, 4.25rem);
+      max-width: 14ch;
+    }
+    .intro p {
+      color: var(--muted);
+      max-width: 36rem;
+      margin: 1.25rem 0 0;
+      font-size: 1.125rem;
+    }
+    .group {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+      gap: 1.25rem 3rem;
+      padding-block: clamp(2rem, 5vw, 3.25rem);
+      border-top: 1px solid var(--line);
+    }
+    .group h2 {
+      font-size: clamp(1.3rem, 2.4vw, 1.75rem);
+      position: sticky;
+      top: 1.5rem;
+      align-self: start;
+    }
+    .group h2::after {
+      content: '';
+      display: block;
+      width: 2.5rem;
+      height: 3px;
+      margin-top: 0.9rem;
+      border-radius: 3px;
+      background: var(--gradient);
+    }
+    .group ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 1.35rem;
+    }
+    .group li {
+      max-width: 40rem;
+      color: var(--muted);
+    }
+    .group li strong {
+      display: block;
+      color: var(--text);
+      font-weight: 500;
+      margin-bottom: 0.15rem;
+    }
+    .cta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      padding-block: clamp(2.5rem, 6vw, 4rem);
+      border-top: 1px solid var(--line);
+    }
+    @media (max-width: 720px) {
+      .group {
+        grid-template-columns: 1fr;
+      }
+      .group h2 {
+        position: static;
+      }
+      .topbar nav .hide-sm {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="wrap topbar">
+    <a class="home" href="../" aria-label="Songies home">
+      <span class="mark" data-mark></span>
+      Songies
+    </a>
+    <nav aria-label="Site">
+      <a class="ghost-link hide-sm" href="https://github.com/DenisMartonak/Songie">GitHub</a>
+      <a class="download" href="https://github.com/DenisMartonak/Songie/releases/latest" data-download><span data-download-label>All downloads</span></a>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <section class="intro">
+      <h1>Everything Songies does</h1>
+      <p>A music player for Android, Windows and Linux. The songs on your device and the whole of YouTube Music live in one library, so a playlist can hold both.</p>
+    </section>
+
+    <section class="group" aria-labelledby="g-library">
+      <h2 id="g-library">One library for everything</h2>
+      <ul>
+        <li><strong>Your own music, played where it is</strong>Point Songies at your MP3 folders. Files are played in place, never copied.</li>
+        <li><strong>YouTube Music alongside it</strong>Songs, albums and artists from YouTube Music sit next to your files, in the same playlists.</li>
+        <li><strong>Playlists that look like yours</strong>Reorder by dragging, swipe to edit, and give any playlist your own cover picture.</li>
+        <li><strong>Bring your YouTube playlists</strong>Import a YouTube or YouTube Music playlist by its link. Songies keeps it up to date.</li>
+        <li><strong>One search</strong>Search your library and YouTube Music together: songs, albums, artists and playlists.</li>
+      </ul>
+    </section>
+
+    <section class="group" aria-labelledby="g-listening">
+      <h2 id="g-listening">Listening</h2>
+      <ul>
+        <li><strong>A queue that does what you expect</strong>Add to queue plays songs next, in the order you added them.</li>
+        <li><strong>Shuffle, repeat and radio</strong>Start a radio from any song. Media keys, notification and lock-screen controls work too.</li>
+        <li><strong>Now Playing</strong>Big artwork on a blurred cover background, with Now playing, Lyrics and Queue pages you swipe between on phones.</li>
+        <li><strong>Synced lyrics</strong>Lyrics from LRCLIB and YouTube Music follow the song. Tap a line to jump there.</li>
+        <li><strong>Offline</strong>Download songs and whole playlists, with an optional Wi-Fi only switch.</li>
+        <li><strong>Your stats</strong>Top songs and artists and how long you listened, from the last 7 days up to 12 months.</li>
+      </ul>
+    </section>
+
+    <section class="group" aria-labelledby="g-together">
+      <h2 id="g-together">Listen together</h2>
+      <ul>
+        <li><strong>Share a link, hear the same song</strong>Open a room and share its link, in Discord or anywhere. Friends who open it hear what you play, at the same moment, each on their own device.</li>
+        <li><strong>You decide who does what</strong>Give each friend a role: Listener, Queue (they can add songs) or Full control.</li>
+        <li><strong>Nothing stops when it ends</strong>Leaving a room, or the room ending, never cuts the music. The queue stays and the song carries on.</li>
+      </ul>
+    </section>
+
+    <section class="group" aria-labelledby="g-yours">
+      <h2 id="g-yours">Make it yours</h2>
+      <ul>
+        <li><strong>Themes</strong>Pick a built-in theme, make your own with your colours and fonts, or let the colours follow the album cover.</li>
+        <li><strong>Your YouTube, if you want it</strong>Sign in to YouTube for your own recommendations and history. The sign-in stays in your system’s secure storage and is never synced.</li>
+        <li><strong>Discord status</strong>On Windows and Linux, show what you’re listening to on your Discord profile. Off until you turn it on.</li>
+      </ul>
+    </section>
+
+    <section class="group" aria-labelledby="g-devices">
+      <h2 id="g-devices">Across your devices</h2>
+      <ul>
+        <li><strong>Sync, if you want it</strong>Sign in to a Songies account and your library, playlists, themes, lyrics and stats follow you between devices. Songies works fine signed out.</li>
+        <li><strong>Remote control</strong>Run the music on one device from another one signed in to the same account.</li>
+        <li><strong>Updates inside the app</strong>Songies finds a new release, checks it and installs it over the top, keeping your library.</li>
+      </ul>
+    </section>
+
+    <section class="cta" aria-label="Get Songies">
+      <a class="btn" href="https://github.com/DenisMartonak/Songie/releases/latest" data-download><span data-download-label>All downloads</span></a>
+      <a class="btn btn-quiet" href="../">Back to the home page</a>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <p>Free for personal, non-commercial use. For educational purposes only.</p>
+    <p><a href="https://github.com/DenisMartonak/Songie">Source on GitHub</a> · <a href="https://github.com/DenisMartonak/Songie/blob/main/LICENSE">License</a></p>
+  </footer>
+
+  <script type="module">
+    import { mountMark } from '../assets/js/mark.js';
+    import { upgradeDownloadLinks } from '../assets/js/download.js';
+    mountMark(document.querySelector('[data-mark]'), { rings: false });
+    upgradeDownloadLinks();
+  </script>
+</body>
+</html>
