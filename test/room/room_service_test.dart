@@ -149,7 +149,7 @@ void main() {
     done(async, host.service.open(userId: 'u1', name: 'Host'));
     final s = host.service.status as RoomHosting;
     expect(s.code, 'ABCD2345');
-    expect(s.link, 'songies://room/ABCD2345');
+    expect(s.link, 'https://denismartonak.github.io/Songie/r/ABCD2345');
     expect(s.people.single.deviceId, 'h');
     expect(host.service.guestView, isNull);
   });

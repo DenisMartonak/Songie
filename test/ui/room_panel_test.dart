@@ -108,7 +108,10 @@ void main() {
     await tester.tap(find.text('Start a room'));
     await rig.run(tester, Future.value());
     expect(rig.service!.status, isA<RoomHosting>());
-    expect(find.text('songies://room/ABCD2345'), findsOneWidget);
+    expect(
+      find.text('https://denismartonak.github.io/Songie/r/ABCD2345'),
+      findsOneWidget,
+    );
     expect(find.text('Code ABCD-2345'), findsOneWidget);
     expect(find.text('Copy'), findsOneWidget);
     // Share link is for phones (Android).

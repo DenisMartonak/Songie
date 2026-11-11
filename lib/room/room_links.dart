@@ -1,5 +1,6 @@
-/// The site that serves `/r/<code>` links; empty until there is one.
-const String kRoomSiteBase = '';
+/// The website that serves `/r/<code>` links (website/404.html), which
+/// hands the code to the app as `songies://room/<code>`.
+const String kRoomSiteBase = 'https://denismartonak.github.io/Songie';
 
 const String _alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
@@ -30,10 +31,11 @@ String? parseRoomCode(String input) {
       if (uri.host == 'room' && segs.length == 1) return _code(segs[0]);
       return null;
     }
+    // Any site address ending in `/r/<code>`, e.g. `<kRoomSiteBase>/r/<code>`.
     if ((uri.scheme == 'https' || uri.scheme == 'http') &&
-        segs.length == 2 &&
-        segs[0] == 'r') {
-      return _code(segs[1]);
+        segs.length >= 2 &&
+        segs[segs.length - 2] == 'r') {
+      return _code(segs.last);
     }
     return null;
   }
