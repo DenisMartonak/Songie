@@ -49,6 +49,9 @@ class _ArtistPageState extends ConsumerState<ArtistPage> {
           child: YtmHero(
             kind: 'Artist',
             title: artist.name,
+            subtitle: page.monthlyListeners == null
+                ? null
+                : '${page.monthlyListeners} monthly listeners',
             thumbnailUrl: artist.thumbnailUrl,
             seed: artist.browseId,
             circle: true,

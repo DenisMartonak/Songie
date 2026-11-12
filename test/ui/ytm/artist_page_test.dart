@@ -81,6 +81,22 @@ void main() {
     expect(find.byKey(const Key('ytm.song.s7')), findsOneWidget);
   });
 
+  uiTest('shows the monthly listeners under the name', (tester) async {
+    h.ytm.artistAnswers['UCdaft'] = Ok(
+      YtmArtistPage(artist: _page.artist, monthlyListeners: '68M'),
+    );
+    await pumpPage(tester);
+
+    expect(find.text('68M monthly listeners'), findsOneWidget);
+  });
+
+  uiTest('no monthly listeners: no such line', (tester) async {
+    h.ytm.artistAnswers['UCdaft'] = Ok(_page);
+    await pumpPage(tester);
+
+    expect(find.textContaining('monthly listeners'), findsNothing);
+  });
+
   uiTest('five top songs or fewer: no Show all', (tester) async {
     h.ytm.artistAnswers['UCdaft'] = Ok(
       YtmArtistPage(

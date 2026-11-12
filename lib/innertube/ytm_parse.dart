@@ -709,8 +709,11 @@ YtmArtistPage? parseArtistPage(Json json, String browseId) =>
         }
         // Videos, playlists, live performances and the like are not used.
       }
+      final listeners = _runsText(_runs(dig(header, ['monthlyListenerCount'])));
+      final count = listeners?.split(' ').first;
       return YtmArtistPage(
         artist: artist,
+        monthlyListeners: count == null || count.isEmpty ? null : count,
         topSongs: topSongs,
         albums: albums,
         singles: singles,
