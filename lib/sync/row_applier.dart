@@ -59,6 +59,7 @@ const _order = [
   SyncTable.ytSeen,
   SyncTable.lyrics,
   SyncTable.listens,
+  SyncTable.savedArtists,
 ];
 
 /// The state of one [RowApplier.apply] call.

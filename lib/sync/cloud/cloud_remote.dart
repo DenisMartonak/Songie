@@ -13,7 +13,7 @@ import '../sync_row.dart';
 /// keeps a newer-format row from being overwritten by an older app, and an
 /// older app leaves such rows for after its update (see [PulledRow]). The
 /// drift schema version it came with.
-const kRowFormat = 10;
+const kRowFormat = 11;
 
 /// The server couldn't be reached (no network, a timeout).
 class CloudOffline implements Exception {

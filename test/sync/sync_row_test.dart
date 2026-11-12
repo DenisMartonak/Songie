@@ -24,6 +24,7 @@ void main() {
       'fonts',
       'lyrics',
       'listens',
+      'saved_artists',
     ]);
     expect(SyncTable.values.where((t) => t.clashes), [
       SyncTable.playlists,

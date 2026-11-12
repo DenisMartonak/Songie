@@ -13,9 +13,9 @@ void main() {
   tearDown(() => db.close());
 
   test('since pages across all tables in seq order', () async {
-    await seedOneOfEach(db); // seqs 1..8
-    await db.into(db.tracks).insert(trackRow(id: 'x', localSeq: 9));
-    await db.into(db.tracks).insert(trackRow(id: 'y', localSeq: 10));
+    await seedOneOfEach(db); // seqs 1..9
+    await db.into(db.tracks).insert(trackRow(id: 'x', localSeq: 10));
+    await db.into(db.tracks).insert(trackRow(id: 'y', localSeq: 11));
     final feed = ChangeFeed(db);
     final seen = <int>[];
     var cursor = 0;
@@ -27,16 +27,16 @@ void main() {
       expect(page.next, page.rows.last.localSeq);
       cursor = page.next!;
     }
-    expect(seen, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    expect(await feed.highSeq(), 10);
+    expect(seen, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(await feed.highSeq(), 11);
   });
 
   test('since excludes rows at or below seq', () async {
     await seedOneOfEach(db);
     final page = await ChangeFeed(db).since(5);
-    expect(page.rows.map((r) => r.localSeq), [6, 7, 8]);
+    expect(page.rows.map((r) => r.localSeq), [6, 7, 8, 9]);
     expect(page.next, isNull);
-    expect((await ChangeFeed(db).since(8)).rows, isEmpty);
+    expect((await ChangeFeed(db).since(9)).rows, isEmpty);
   });
 
   test('highSeq is 0 for an empty database', () async {
@@ -46,7 +46,7 @@ void main() {
   test('snapshot maps wire/id to content hash', () async {
     await seedOneOfEach(db);
     final snap = await snapshot(db);
-    expect(snap.length, 8);
+    expect(snap.length, 9);
     expect(snap.keys.first, startsWith('tracks/'));
   });
 

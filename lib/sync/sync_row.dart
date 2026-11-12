@@ -13,7 +13,8 @@ enum SyncTable {
   themes('themes'),
   fonts('fonts'),
   lyrics('lyrics'),
-  listens('listens');
+  listens('listens'),
+  savedArtists('saved_artists');
 
   const SyncTable(this.wire);
 
@@ -35,6 +36,7 @@ enum SyncTable {
     SyncTable.fonts => db.fonts,
     SyncTable.lyrics => db.lyrics,
     SyncTable.listens => db.listens,
+    SyncTable.savedArtists => db.savedArtists,
   };
 
   static SyncTable fromWire(String wire) =>
@@ -97,6 +99,7 @@ class SyncRow {
       SyncTable.fonts => FontRow.fromJson(json).toCompanion(false),
       SyncTable.lyrics => LyricsRow.fromJson(json).toCompanion(false),
       SyncTable.listens => ListenRow.fromJson(json).toCompanion(false),
+      SyncTable.savedArtists => SavedArtist.fromJson(json).toCompanion(false),
     };
   }
 }

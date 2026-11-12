@@ -197,7 +197,7 @@ void main() {
       now: () => DateTime.utc(2024),
     ).apply(incoming);
 
-    expect(report.written, 8);
+    expect(report.written, 9);
     expect(report.tracksAdded, 1);
     expect(report.playlistIds, containsAll(['p2', 'p']));
     final mine = await snapshot(db);
@@ -206,13 +206,13 @@ void main() {
       expect(mine[k], theirs[k], reason: k);
     }
     final applied = (await rowsOf(db)).where((r) => r.id != 'mine').toList();
-    expect(applied, hasLength(8));
+    expect(applied, hasLength(9));
     for (final r in applied) {
       expect(r.clock, '0000000000001-00000-dev');
       expect(r.originDevice, 'dev');
     }
     final seqs = applied.map((r) => r.localSeq).toSet();
-    expect(seqs, hasLength(8));
+    expect(seqs, hasLength(9));
     expect(seqs.every((s) => s > before), isTrue);
   });
 
