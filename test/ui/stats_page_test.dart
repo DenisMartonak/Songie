@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
+import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/stats/stats_models.dart';
 import 'package:songies/stats/stats_repository.dart';
@@ -15,6 +17,7 @@ import 'package:songies/ui/stats/stats_page.dart';
 import 'package:songies/ui/widgets/page_surface.dart';
 import 'package:songies/ui/widgets/favorite_star.dart';
 
+import '../helpers/test_db.dart';
 import '../helpers/ui_harness.dart';
 
 /// Scripted stats per period, recording which periods were asked for.
@@ -122,7 +125,6 @@ void main() {
 
   Future<void> pumpPage(
     WidgetTester tester, {
-    String? knownArtistPage,
     bool disableAnimations = false,
   }) async {
     await tester.pumpWidget(
@@ -151,12 +153,6 @@ void main() {
                   Text('search: ${ref.watch(searchQueryProvider)}'),
             ),
           ),
-        ],
-        extraOverrides: [
-          if (knownArtistPage != null)
-            statsArtistPageProvider.overrideWithValue(
-              (trackId) async => trackId == 's1' ? knownArtistPage : null,
-            ),
         ],
       ),
     );
@@ -345,9 +341,29 @@ void main() {
     expect(h.player.state.queue.map((t) => t.id), ['s1']);
   });
 
-  uiTest('an artist with a known page opens it', (tester) async {
+  uiTest('tapping a top artist whose song is a yt track opens the artist page', (
+    tester,
+  ) async {
     size(tester, const Size(400, 800));
-    await pumpPage(tester, knownArtistPage: 'UCone');
+    await real(
+      tester,
+      () => h.db
+          .into(h.db.tracks)
+          .insert(trackRow(id: 's1', source: 'yt', ytVideoId: 'vs1')),
+    );
+    h.ytm.radioAnswer = const Ok(
+      YtmRadio(
+        [],
+        null,
+        current: YtmSong(
+          videoId: 'vs1',
+          title: 'T',
+          artists: [YtmArtistRef(browseId: 'UCone', name: 'Artist 1')],
+          durationMs: 1000,
+        ),
+      ),
+    );
+    await pumpPage(tester);
     await tester.tap(find.byKey(const Key('stats.artist.0')));
     await settle(tester);
     expect(find.text('artist UCone'), findsOneWidget);
@@ -357,7 +373,7 @@ void main() {
     tester,
   ) async {
     size(tester, const Size(400, 800));
-    await pumpPage(tester, knownArtistPage: 'UCone');
+    await pumpPage(tester);
     await tester.tap(find.byKey(const Key('stats.artist.1')));
     await settle(tester);
     expect(find.byType(StatsPage), findsNothing);

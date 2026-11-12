@@ -99,6 +99,20 @@ class FakeYtmService implements YtmService {
     playlistAnswers,
   );
 
+  /// `radio` requests (video ids), answered with [radioAnswer].
+  final radioCalls = <String>[];
+  Result<YtmRadio> radioAnswer = const Ok(YtmRadio([], null));
+
+  @override
+  Future<Result<YtmRadio>> radio(
+    String videoId, {
+    String? playlistId,
+    String? continuation,
+  }) async {
+    radioCalls.add(videoId);
+    return radioAnswer;
+  }
+
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }

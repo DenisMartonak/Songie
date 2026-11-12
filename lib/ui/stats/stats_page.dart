@@ -6,10 +6,9 @@ import '../../providers.dart';
 import '../../stats/stats_models.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/contrast.dart';
-import '../shell/go_tab.dart';
 import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
-import '../ytm/ytm_nav.dart';
+import '../ytm/artist_lookup.dart';
 import '../ytm/ytm_page_parts.dart' show YtmSectionTitle;
 import '../ytm/ytm_result_tiles.dart' show YtmTile;
 import '../widgets/favorite_star.dart';
@@ -17,22 +16,6 @@ import 'stats_chart.dart';
 
 /// Rows shown before Show top 10.
 const int _shownTop = 5;
-
-/// The Search tab's branch index (see `router.dart`).
-const int _searchTab = 1;
-
-/// The YouTube Music artist page for a top artist, from its most-played
-/// song's id: that song (if still in the library) by the song menu's Go to
-/// artist rule ([MenuSong.artistId]); null when no page is known. Looked up
-/// at tap time.
-final statsArtistPageProvider =
-    Provider<Future<String?> Function(String trackId)>((ref) {
-      final library = ref.watch(libraryRepositoryProvider);
-      return (trackId) async {
-        final track = await library.trackById(trackId);
-        return track == null ? null : MenuSong.track(track).artistId;
-      };
-    });
 
 /// Listening stats: the period picker, total minutes and the change from
 /// the period before, a chart of minutes, then top artists and top songs.
@@ -416,8 +399,8 @@ class _PlayCount extends StatelessWidget {
   }
 }
 
-/// A top artist: opens their YouTube Music page when one is known
-/// ([statsArtistPageProvider]), otherwise Search with their name.
+/// A top artist: opens their YouTube Music page when one is found from
+/// their most-played song ([openArtist]), otherwise Search with their name.
 class _ArtistRow extends ConsumerWidget {
   const _ArtistRow({required this.rank, required this.artist});
 
@@ -447,26 +430,13 @@ class _ArtistRow extends ConsumerWidget {
     );
   }
 
-  /// Opens the artist's YouTube Music page when one is known, otherwise
-  /// Search for their name.
   Future<void> _open(BuildContext context, WidgetRef ref) async {
-    final shell = StatefulNavigationShell.maybeOf(context);
-    final router = GoRouter.of(context);
-    final query = ref.read(searchQueryProvider.notifier);
-    final pageFor = ref.read(statsArtistPageProvider);
     final trackId = artist.sampleTrackId;
-    final page = trackId == null ? null : await pageFor(trackId);
+    final track = trackId == null
+        ? null
+        : await ref.read(libraryRepositoryProvider).trackById(trackId);
     if (!context.mounted) return;
-    if (page != null) {
-      context.goYtmArtist(page);
-      return;
-    }
-    query.set(artist.name);
-    if (shell != null) {
-      goTab(shell.widget, _searchTab);
-    } else {
-      router.go('/search');
-    }
+    await openArtist(context, ref, track: track, name: artist.name);
   }
 }
 

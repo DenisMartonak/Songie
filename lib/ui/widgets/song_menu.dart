@@ -18,6 +18,7 @@ import '../motion/motion.dart';
 import '../remote/play_on.dart';
 import '../../room/room_protocol.dart' show RoomOp, roleAllows;
 import '../room/room_button.dart' show roomGuestRoleProvider;
+import '../ytm/artist_lookup.dart';
 import '../ytm/ytm_nav.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
@@ -261,7 +262,7 @@ Future<void> showSongMenu(
           ),
     if (playable)
       (SongMenuAction.startRadio, Icons.radio_outlined, 'Start radio', null),
-    if (song.artistId != null)
+    if (song.artistId != null || (song.track?.source == 'yt'))
       (SongMenuAction.goToArtist, Icons.person_outline, 'Go to artist', null),
     if (song.albumId != null)
       (SongMenuAction.goToAlbum, Icons.album_outlined, 'Go to album', null),
@@ -346,7 +347,15 @@ Future<void> showSongMenu(
         await radio.startRadio(song.track!);
       }
     case SongMenuAction.goToArtist:
-      if (context.mounted) context.goYtmArtist(song.artistId!);
+      if (context.mounted) {
+        await openArtist(
+          context,
+          ref,
+          browseId: song.artistId,
+          track: song.track,
+          name: song.track?.artist ?? '',
+        );
+      }
     case SongMenuAction.goToAlbum:
       if (context.mounted) context.goYtmAlbum(song.albumId!);
     case SongMenuAction.download:

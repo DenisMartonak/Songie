@@ -601,7 +601,7 @@ void main() {
   });
 
   group('Go to', () {
-    uiTest('artist and album hide for a library song (ids unknown)', (
+    uiTest('a library yt track\'s menu offers Go to artist, not Go to album', (
       tester,
     ) async {
       final pid = await real(tester, () async {
@@ -611,8 +611,18 @@ void main() {
       await pumpPlaylist(tester, pid);
       await longPress(tester, find.text('Song y1'));
       expect(item('addToQueue'), findsOneWidget);
-      expect(item('goToArtist'), findsNothing);
+      expect(item('goToArtist'), findsOneWidget);
       expect(item('goToAlbum'), findsNothing);
+    });
+
+    uiTest('Go to artist is hidden for a local song', (tester) async {
+      final pid = await real(tester, () async {
+        await h.addTrack('t1');
+        return h.addPlaylist('Mix', ['t1']);
+      });
+      await pumpPlaylist(tester, pid);
+      await longPress(tester, find.text('Song t1'));
+      expect(item('goToArtist'), findsNothing);
     });
 
     uiTest('artist and album show for a YouTube Music song with ids', (
