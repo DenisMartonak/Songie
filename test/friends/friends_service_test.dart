@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:songies/friends/activity_backend.dart';
 import 'package:songies/friends/friends_backend.dart';
 import 'package:songies/friends/friends_service.dart';
 
+import '../helpers/fake_activity_backend.dart';
 import '../helpers/fake_friends_backend.dart';
 
 void main() {
@@ -150,6 +152,98 @@ void main() {
     await r1;
     expect(service.state.linkOf('b'), FriendLink.friend);
     service.dispose();
+  });
+
+  group('activity', () {
+    late FakeActivityBackend activity;
+    const halo = NowPlaying(title: 'Halo', artist: 'Beyonce');
+
+    setUp(() {
+      activity = FakeActivityBackend()
+        ..friendsOf = (id) => id == 'a' ? {'b'} : {'a'};
+      service = FriendsService(backend, activity: activity);
+    });
+
+    /// Acts as friend b on the activity server.
+    Future<void> asB(Future<void> Function() f) async {
+      activity.me = 'b';
+      await f();
+      activity.me = 'a';
+    }
+
+    Future<void> befriend() async {
+      backend.me = 'a';
+      await service.signedIn('a');
+      await service.send('b');
+      await as('b', () => backend.accept('a'));
+    }
+
+    test("refresh brings friends' activity", () async {
+      await befriend();
+      await asB(() => activity.publishNowPlaying(halo, roomCode: 'ABCD2345'));
+      await service.refresh();
+      expect(service.state.activity['b']!.nowPlaying, halo);
+      expect(service.state.activity['b']!.roomCode, 'ABCD2345');
+      expect(service.state.listening('b', DateTime.now()), isTrue);
+      service.dispose();
+    });
+
+    test(
+      'a friend who stops sharing loses their status at the next refresh',
+      () async {
+        await befriend();
+        await asB(() => activity.publishNowPlaying(halo));
+        await service.refresh();
+        await asB(
+          () => activity.setSharing(const Sharing(listening: false, top: true)),
+        );
+        await service.refresh();
+        expect(service.state.activity['b']!.nowPlaying, isNull);
+        expect(service.state.listening('b', DateTime.now()), isFalse);
+        service.dispose();
+      },
+    );
+
+    test('a status older than 15 minutes is not listening', () async {
+      await befriend();
+      await asB(() => activity.publishNowPlaying(halo));
+      await service.refresh();
+      final later = DateTime.now().add(const Duration(minutes: 16));
+      expect(service.state.listening('b', later), isFalse);
+      service.dispose();
+    });
+
+    test(
+      'a failed activity fetch keeps the friends and the old activity',
+      () async {
+        await befriend();
+        await asB(() => activity.publishNowPlaying(halo));
+        await service.refresh();
+        activity.error = const FriendsException(FriendsError.offline);
+        await service.refresh();
+        expect(service.state.friends.single.id, 'b');
+        expect(service.state.activity['b']!.nowPlaying, halo);
+        service.dispose();
+      },
+    );
+
+    test('watching closely refreshes every minute until released', () {
+      fakeAsync((async) {
+        backend.me = 'a';
+        service.signedIn('a');
+        async.flushMicrotasks();
+        backend.calls.clear();
+        final token = service.watchClosely();
+        async.elapse(const Duration(minutes: 3));
+        expect(backend.calls.where((c) => c == 'load'), hasLength(3));
+        service.stopWatching(token);
+        backend.calls.clear();
+        // Until the regular 5-minute refresh, nothing more.
+        async.elapse(const Duration(seconds: 110));
+        expect(backend.calls, isEmpty);
+        service.dispose();
+      });
+    });
   });
 
   test('search under 2 letters asks nothing', () async {

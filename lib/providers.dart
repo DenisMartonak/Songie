@@ -829,7 +829,10 @@ final activityPublisherProvider = Provider<ActivityPublisher>((ref) {
 /// The signed-in account's friends and requests: loads on sign-in, every 5
 /// minutes and after each change; cleared on sign-out.
 final friendsServiceProvider = Provider<FriendsService>((ref) {
-  final service = FriendsService(ref.watch(friendsBackendProvider));
+  final service = FriendsService(
+    ref.watch(friendsBackendProvider),
+    activity: ref.watch(activityBackendProvider),
+  );
   ref.onDispose(service.dispose);
   void follow(String? userId) {
     if (userId == null) {
