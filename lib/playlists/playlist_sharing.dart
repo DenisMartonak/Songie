@@ -7,7 +7,23 @@ import '../friends/friends_backend.dart' show FriendsException;
 import '../library/library_repository.dart';
 import '../room/room_protocol.dart' show RoomSong;
 import '../room/room_songs.dart' show roomSongOf;
+import '../sync/cloud/sync_status.dart';
 import 'sharing_backend.dart';
+
+/// Whether cloud sync has finished a pull since [since] (this device has
+/// the account's latest rows), or can't run at all (waiting would not end).
+/// Offline, it waits: there is nothing to publish or fetch then anyway.
+bool syncPulledSince(SyncStatus status, DateTime since) {
+  switch (status.phase) {
+    case SyncPhase.error || SyncPhase.clockWrong || SyncPhase.updateNeeded:
+      return true;
+    case SyncPhase.idle:
+      final last = status.lastSynced;
+      return last != null && !last.isBefore(since);
+    case SyncPhase.syncing || SyncPhase.offline:
+      return false;
+  }
+}
 
 /// Playlist sharing: shares this account's playlists (and keeps their
 /// snapshots current), follows others' (and keeps those current), and copies.
@@ -18,7 +34,13 @@ class PlaylistSharing {
     required this._tracksFor,
     this.every = const Duration(minutes: 15),
     this.settle = const Duration(seconds: 3),
+    this._ready,
   });
+
+  /// Resolves once sync's first pull since signing in is done (or never
+  /// mind): until then this device may hold an old copy of a shared or
+  /// followed playlist, so nothing is compared, published or applied.
+  final Future<void> Function()? _ready;
 
   /// How long an owner's edits settle before the snapshot goes out.
   final Duration settle;
@@ -33,8 +55,16 @@ class PlaylistSharing {
   bool _running = false;
   Timer? _timer;
   StreamSubscription<List<Playlist>>? _sharedSub;
-  final _trackSubs = <String, StreamSubscription<Object?>>{};
+  final _trackSubs = <String, List<StreamSubscription<Object?>>>{};
   final _debounces = <String, Timer>{};
+
+  /// What each shared playlist's snapshot holds on the server, as this
+  /// device last saw or sent it: a change goes out only when it differs.
+  final _published = <String, String>{};
+
+  /// The snapshot's identity: its name and its songs' video ids.
+  static String _key(String name, List<RoomSong> songs) =>
+      [name, for (final s in songs) s.videoId].join('\n');
 
   // --- owner -------------------------------------------------------------------
 
@@ -74,12 +104,22 @@ class PlaylistSharing {
     await _library.setShareCode(playlistId, null);
   }
 
+  /// Sends [playlistId]'s snapshot when it differs from what the server
+  /// holds (first learned from the server, once per playlist).
   Future<void> _publish(String playlistId) async {
     final code = (await _library.playlistById(playlistId))?.shareCode;
     if (code == null || !_running) return;
-    final (name, songs) = await _snapshot(playlistId);
     try {
+      if (!_published.containsKey(playlistId)) {
+        final remote = await _backend.get(code);
+        if (remote == null) return;
+        _published[playlistId] = _key(remote.name, remote.songs);
+      }
+      final (name, songs) = await _snapshot(playlistId);
+      final key = _key(name, songs);
+      if (key == _published[playlistId] || !_running) return;
       await _backend.update(code, name, songs);
+      _published[playlistId] = key;
     } on FriendsException catch (e) {
       AppLog.w('sharing: publishing failed (${e.error.name})');
     }
@@ -93,46 +133,42 @@ class PlaylistSharing {
     );
   }
 
-  /// Follows each shared playlist's songs and name; a change goes out after
-  /// [settle]. The first sight of each is compared with the server's copy,
-  /// so an edit made while it couldn't publish goes out now.
+  /// Follows each shared playlist's songs and name: a change is published
+  /// after [settle], when it differs from what the server holds. The first
+  /// sight of each (sync has pulled by then) catches an edit made while it
+  /// couldn't publish. Deleted ones stop their share.
   void _watchShared(List<Playlist> shared) {
     final ids = {for (final p in shared) p.id};
     for (final id in [..._trackSubs.keys]) {
       if (!ids.contains(id)) {
-        unawaited(_trackSubs.remove(id)!.cancel());
+        for (final sub in _trackSubs.remove(id)!) {
+          unawaited(sub.cancel());
+        }
         _debounces.remove(id)?.cancel();
+        _published.remove(id);
       }
     }
     for (final p in shared) {
       if (_trackSubs.containsKey(p.id)) continue;
-      var first = true;
-      _trackSubs[p.id] = _library.watchPlaylistTracks(p.id).listen((_) {
-        if (first) {
-          first = false;
-          unawaited(_publishIfDifferent(p.id, p.shareCode!));
-        } else {
-          _schedulePublish(p.id);
-        }
-      });
+      void changed(Object? _) => _schedulePublish(p.id);
+      _trackSubs[p.id] = [
+        _library.watchPlaylistTracks(p.id).listen(changed),
+        _library.watchPlaylist(p.id).listen(changed),
+      ];
     }
+    unawaited(_stopDeletedShares());
   }
 
-  Future<void> _publishIfDifferent(String playlistId, String code) async {
-    try {
-      final remote = await _backend.get(code);
-      final (name, songs) = await _snapshot(playlistId);
-      if (remote == null) return;
-      final same =
-          remote.name == name &&
-          remote.songs.length == songs.length &&
-          [
-            for (var i = 0; i < songs.length; i++)
-              remote.songs[i].videoId == songs[i].videoId,
-          ].every((x) => x);
-      if (!same) await _publish(playlistId);
-    } on FriendsException catch (e) {
-      AppLog.w('sharing: checking a share failed (${e.error.name})');
+  /// Stops the shares of playlists deleted while shared (here, on another
+  /// device, or merged away by sync), so their links don't stay live.
+  Future<void> _stopDeletedShares() async {
+    for (final p in await _library.deletedSharedPlaylists()) {
+      try {
+        await _backend.stop(p.shareCode!);
+        await _library.forgetShareCode(p.id);
+      } on FriendsException catch (e) {
+        AppLog.w('sharing: stopping a deleted share failed (${e.error.name})');
+      }
     }
   }
 
@@ -216,13 +252,13 @@ class PlaylistSharing {
       _library.deletePlaylist(playlistId);
 
   /// A new, editable playlist with the songs of the share [code] or of the
-  /// playlist [playlistId]; returns its id.
-  Future<String> copy({String? code, String? playlistId}) async {
+  /// playlist [playlistId]; returns its id, or null when the share is gone.
+  Future<String?> copy({String? code, String? playlistId}) async {
     final String name;
     final List<String> trackIds;
     if (code != null) {
       final shared = await _backend.get(code);
-      if (shared == null) throw StateError('share $code is gone');
+      if (shared == null) return null;
       name = shared.name;
       trackIds = [for (final t in await _tracksFor(shared.songs)) ?t?.id];
     } else {
@@ -244,10 +280,24 @@ class PlaylistSharing {
 
   // --- lifecycle -----------------------------------------------------------------
 
-  /// Starts keeping shares and follows current (signed in).
+  /// Starts keeping shares and follows current (signed in), once sync's
+  /// first pull is done.
   void signedIn() {
     if (_running) return;
     _running = true;
+    unawaited(_start());
+  }
+
+  Future<void> _start() async {
+    final ready = _ready;
+    if (ready != null) {
+      try {
+        await ready();
+      } catch (e) {
+        AppLog.w('sharing: waiting for sync failed (${e.runtimeType})');
+      }
+    }
+    if (!_running) return;
     _sharedSub = _library.watchSharedPlaylists().listen(_watchShared);
     _timer = Timer.periodic(every, (_) => unawaited(refresh()));
     unawaited(refresh());
@@ -259,10 +309,13 @@ class PlaylistSharing {
     _timer = null;
     unawaited(_sharedSub?.cancel());
     _sharedSub = null;
-    for (final s in _trackSubs.values) {
-      unawaited(s.cancel());
+    for (final subs in _trackSubs.values) {
+      for (final s in subs) {
+        unawaited(s.cancel());
+      }
     }
     _trackSubs.clear();
+    _published.clear();
     for (final t in _debounces.values) {
       t.cancel();
     }

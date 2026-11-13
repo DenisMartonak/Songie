@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
@@ -89,6 +90,64 @@ void main() {
       expect(p.followUpdatedAt!.toUtc(), DateTime.utc(2026, 11, 14));
     },
   );
+
+  test(
+    'two devices applying the same snapshot write the same entries',
+    () async {
+      // A second device of the same account, with its own database.
+      final other = testDb();
+      addTearDown(other.close);
+      final otherRepo = LibraryRepository(other, await SyncStamp.load(other));
+      for (final id in ['a', 'b', 'c']) {
+        await other.insertTrack(trackRow(id: id, durationMs: 1000));
+      }
+      final id = await followed();
+      // The same playlist row reached the other device by sync.
+      final row = await (db.select(
+        db.playlists,
+      )..where((p) => p.id.equals(id))).getSingle();
+      await other.into(other.playlists).insert(row);
+      for (final r in [repo, otherRepo]) {
+        ok(
+          await r.applySnapshot(
+            id,
+            name: 'Gym',
+            trackIds: const ['c', 'a'],
+            updatedAt: DateTime.utc(2026, 11, 14),
+          ),
+        );
+      }
+      Future<List<String>> liveIds(AppDatabase d) async => [
+        for (final e
+            in await (d.select(d.playlistEntries)
+                  ..where(
+                    (e) => e.playlistId.equals(id) & e.deleted.equals(false),
+                  )
+                  ..orderBy([(e) => OrderingTerm.asc(e.position)]))
+                .get())
+          e.id,
+      ];
+      expect(await liveIds(db), await liveIds(other));
+    },
+  );
+
+  test('a snapshot that goes back to an earlier list applies again', () async {
+    final id = await followed();
+    for (final ids in const [
+      ['c'],
+      ['a', 'b'],
+    ]) {
+      ok(
+        await repo.applySnapshot(
+          id,
+          name: 'Gym',
+          trackIds: ids,
+          updatedAt: DateTime.utc(2026, 11, 14),
+        ),
+      );
+    }
+    expect(await trackIdsOf(id), ['a', 'b']);
+  });
 
   test('endFollow keeps the songs and makes it editable', () async {
     final id = await followed();

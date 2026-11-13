@@ -77,6 +77,9 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
 
   String get _id => widget.id;
 
+  /// Whether this page asked a followed playlist's owner copy already.
+  bool _checkedFollow = false;
+
   LibraryRepository get _repo => ref.read(libraryRepositoryProvider);
 
   /// Kept to clear this page's pending import when it goes away.
@@ -88,6 +91,18 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
   void initState() {
     super.initState();
     _pendingImports; // read now: `ref` is unusable in dispose
+    // A followed playlist checks its owner's copy when it opens, once its
+    // row says it is followed.
+    ref.listenManual(playlistRowProvider(_id), (_, next) {
+      if (_checkedFollow || next.value?.isFollowed != true) return;
+      _checkedFollow = true;
+      unawaited(
+        ref
+            .read(playlistSharingProvider)
+            .refresh(_id)
+            .catchError((Object _) {}),
+      );
+    }, fireImmediately: true);
     // Entries that were already loaded when the page opened.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _settlePendingImport(ref.read(playlistTracksProvider(_id)));
@@ -579,6 +594,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
         final copy = await ref
             .read(playlistSharingProvider)
             .copy(playlistId: _id);
+        if (copy == null) return;
         islands.show('Copied to your library', kind: IslandKind.success);
         router.go('/library/playlist/$copy');
       case _MenuAction.stopFollowing:

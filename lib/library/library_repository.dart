@@ -24,11 +24,15 @@ class PlaylistSummary {
     required this.durationMs,
     required this.coverRef,
     this.hasOwnCover = false,
+    this.followed = false,
   });
 
   final String id;
   final String name;
   final String source;
+
+  /// Followed from someone's share (read-only).
+  final bool followed;
 
   /// Live entries whose track is not deleted.
   final int trackCount;
@@ -95,6 +99,7 @@ Stream<List<PlaylistSummary>> watchPlaylistSummaries(
       'AND $shownHereSql';
   final query = db.customSelect(
     'SELECT p.id, p.name, p.source, p.cover_ref, '
+    '(p.follow_code IS NOT NULL) AS followed, '
     '(SELECT COUNT(*) $liveEntries) AS track_count, '
     '(SELECT COALESCE(SUM(t.duration_ms), 0) $liveEntries) AS duration_ms, '
     '(SELECT t.artwork_ref $liveEntries '
@@ -120,6 +125,7 @@ Stream<List<PlaylistSummary>> watchPlaylistSummaries(
               r.readNullable<String>('cover_ref') ??
               r.readNullable<String>('first_artwork'),
           hasOwnCover: r.readNullable<String>('cover_ref') != null,
+          followed: r.read<bool>('followed'),
         ),
     ];
     list.sort((a, b) {
@@ -537,18 +543,27 @@ class LibraryRepository {
               current[i].trackId == trackIds[i],
           ].every((x) => x);
       if (!same) {
+        // Entry ids come from the playlist and the song list, so every
+        // device of the follower that applies the same snapshot writes the
+        // same rows (sync then has nothing to double), and a list that comes
+        // back revives its old rows.
+        final listKey = _fnv64('$id\n${trackIds.join('\n')}');
+        final wanted = {
+          for (var i = 0; i < trackIds.length; i++) 'f-$id-$listKey-$i',
+        };
         for (final e in current) {
-          await _tombstoneEntry(e.id);
+          if (!wanted.contains(e.id)) await _tombstoneEntry(e.id);
         }
         final positions = nKeysBetween(null, null, trackIds.length);
         final now = DateTime.now();
         for (var i = 0; i < trackIds.length; i++) {
-          final stamp = await _stamp.next();
+          final entryId = 'f-$id-$listKey-$i';
+          final stamp = await _stamp.next(id: entryId);
           await _db
               .into(_db.playlistEntries)
-              .insert(
+              .insertOnConflictUpdate(
                 PlaylistEntriesCompanion.insert(
-                  id: stamp.id,
+                  id: entryId,
                   clock: stamp.clock,
                   originDevice: stamp.originDevice,
                   localSeq: stamp.localSeq,
@@ -556,6 +571,7 @@ class LibraryRepository {
                   trackId: trackIds[i],
                   position: positions[i],
                   addedAt: now,
+                  deleted: const Value(false),
                 ),
               );
         }
@@ -607,6 +623,25 @@ class LibraryRepository {
             ..where((p) => p.shareCode.equals(code) & p.deleted.equals(false))
             ..limit(1))
           .getSingleOrNull();
+
+  /// Deleted playlists that were still shared (deleted here, on another
+  /// device, or merged away by sync): their shares must stop.
+  Future<List<Playlist>> deletedSharedPlaylists() => (_db.select(
+    _db.playlists,
+  )..where((p) => p.shareCode.isNotNull() & p.deleted.equals(true))).get();
+
+  /// Forgets a deleted playlist's share code once its share has stopped.
+  Future<void> forgetShareCode(String id) async {
+    final stamp = await _stamp.next(id: id);
+    await (_db.update(_db.playlists)..where((p) => p.id.equals(id))).write(
+      PlaylistsCompanion(
+        shareCode: const Value(null),
+        clock: Value(stamp.clock),
+        originDevice: Value(stamp.originDevice),
+        localSeq: Value(stamp.localSeq),
+      ),
+    );
+  }
 
   /// The live playlists followed from someone's share.
   Future<List<Playlist>> followedPlaylists() => (_db.select(
@@ -836,4 +871,15 @@ class LibraryRepository {
 extension PlaylistSharingX on Playlist {
   /// Followed from someone's share: read-only, updated from theirs.
   bool get isFollowed => followCode != null;
+}
+
+/// FNV-1a, 64 bits, as hex: a stable hash (not `hashCode`, which may change
+/// between runs) for ids every device must agree on. Native ints are 64-bit
+/// and wrap on overflow, which is what the hash wants.
+String _fnv64(String s) {
+  var hash = 0xcbf29ce484222325;
+  for (final unit in s.codeUnits) {
+    hash = (hash ^ unit) * 0x100000001b3;
+  }
+  return hash.toUnsigned(64).toRadixString(16).padLeft(16, '0');
 }

@@ -840,10 +840,36 @@ final sharingBackendProvider = Provider<SharingBackend>(
 /// Playlist sharing: keeps this account's shares and follows current while
 /// signed in. `main()` listens to it once so it follows the account.
 final playlistSharingProvider = Provider<PlaylistSharing>((ref) {
+  // Shares and follows wait for sync's first pull since the app started:
+  // until then a shared or followed playlist here may be an old copy. Sync
+  // is looked at only once they start (signed in).
+  final since = DateTime.now();
+  final pulled = Completer<void>();
+  StreamSubscription<SyncStatus>? statusSub;
+  void check(SyncStatus status) {
+    if (!pulled.isCompleted && syncPulledSince(status, since)) {
+      pulled.complete();
+    }
+  }
+
+  Future<void> ready() {
+    if (statusSub == null && !pulled.isCompleted) {
+      final sync = ref.read(cloudSyncProvider);
+      check(sync.current);
+      statusSub = sync.status.listen(check);
+    }
+    return pulled.future;
+  }
+
+  ref.onDispose(() {
+    unawaited(statusSub?.cancel());
+    if (!pulled.isCompleted) pulled.complete();
+  });
   final sharing = PlaylistSharing(
     backend: ref.watch(sharingBackendProvider),
     library: ref.watch(libraryRepositoryProvider),
     tracksFor: (songs) => tracksForSongs(songs, ref.read(ytTrackStoreProvider)),
+    ready: ready,
   );
   ref.onDispose(sharing.dispose);
   if (ref.read(_remoteUserIdProvider) != null) sharing.signedIn();

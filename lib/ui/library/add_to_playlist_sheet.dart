@@ -90,7 +90,11 @@ class _AddToPlaylistSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    final playlists = ref.watch(playlistsProvider).value ?? const [];
+    // Followed playlists change only from their owner's: not offered.
+    final playlists = [
+      for (final p in ref.watch(playlistsProvider).value ?? const [])
+        if (!p.followed) p,
+    ];
     final height = MediaQuery.sizeOf(context).height;
     return ConstrainedBox(
       key: const Key('addToPlaylist.sheet'),

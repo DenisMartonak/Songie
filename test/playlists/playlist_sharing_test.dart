@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
@@ -5,6 +7,7 @@ import 'package:songies/data/sync_stamp.dart';
 import 'package:songies/library/library_repository.dart';
 import 'package:songies/playlists/playlist_sharing.dart';
 import 'package:songies/room/room_protocol.dart';
+import 'package:songies/sync/cloud/sync_status.dart';
 
 import '../helpers/fake_sharing_backend.dart';
 import '../helpers/test_db.dart';
@@ -119,6 +122,95 @@ void main() {
     expect(got.songs.map((s) => s.videoId), ['v1', 'v2']);
   });
 
+  /// A sharing service that settles in 100 ms, started (signed in).
+  Future<PlaylistSharing> started({Future<void> Function()? ready}) async {
+    sharing.dispose();
+    sharing = PlaylistSharing(
+      backend: backend,
+      library: repo,
+      tracksFor: tracksFor,
+      settle: const Duration(milliseconds: 100),
+      ready: ready,
+    );
+    return sharing;
+  }
+
+  Future<void> wait([int ms = 400]) =>
+      Future<void>.delayed(Duration(milliseconds: ms));
+
+  test('a rename is republished', () async {
+    final id = await playlist('Gym', const ['y1']);
+    final code = await (await started()).share(id);
+    sharing.signedIn();
+    await wait();
+    ok(await repo.renamePlaylist(id, 'Gym 2'));
+    await wait();
+    expect((await backend.get(code))!.name, 'Gym 2');
+  });
+
+  test(
+    'a library write that leaves the playlist as it was publishes nothing',
+    () async {
+      final id = await playlist('Gym', const ['y1']);
+      await (await started()).share(id);
+      sharing.signedIn();
+      await wait();
+      backend.calls.clear();
+      // Something else in the library changes (a song's details, a new song).
+      await db.insertTrack(trackRow(id: 'other', title: 'Other'));
+      await repo.updateTrackMetadata('y1', album: 'An album');
+      await wait();
+      expect(backend.calls, isNot(contains('update')));
+    },
+  );
+
+  test(
+    "on start, nothing is compared or fetched before sync's first pull",
+    () async {
+      final id = await playlist('Gym', const ['y1']);
+      final pulled = Completer<void>();
+      await (await started(ready: () => pulled.future)).share(id);
+      backend.calls.clear();
+      sharing.signedIn();
+      await wait();
+      expect(backend.calls, isEmpty);
+      pulled.complete();
+      await wait();
+      expect(backend.calls, contains('get'));
+    },
+  );
+
+  test('deleting a shared playlist stops its share', () async {
+    final id = await playlist('Gym', const ['y1']);
+    final code = await (await started()).share(id);
+    sharing.signedIn();
+    await wait();
+    ok(await repo.deletePlaylist(id));
+    await wait();
+    expect(await backend.get(code), isNull);
+  });
+
+  test("sync's first pull counts once it finished after starting", () {
+    final since = DateTime(2026, 11, 13, 12);
+    bool done(SyncPhase phase, [DateTime? last]) =>
+        syncPulledSince(SyncStatus(phase, lastSynced: last), since);
+    expect(done(SyncPhase.idle), isFalse);
+    expect(
+      done(SyncPhase.idle, since.subtract(const Duration(days: 1))),
+      isFalse,
+    );
+    expect(
+      done(SyncPhase.syncing, since.add(const Duration(seconds: 1))),
+      isFalse,
+    );
+    expect(done(SyncPhase.idle, since.add(const Duration(seconds: 1))), isTrue);
+    // Sync can't run: waiting longer would never end.
+    expect(done(SyncPhase.error), isTrue);
+    expect(done(SyncPhase.clockWrong), isTrue);
+    expect(done(SyncPhase.updateNeeded), isTrue);
+    expect(done(SyncPhase.offline), isFalse);
+  });
+
   test('the default wait before republishing is 3 s', () {
     expect(sharing.settle, const Duration(seconds: 3));
   });
@@ -193,11 +285,11 @@ void main() {
       RoomSong(videoId: 'v2', title: 'Run', artist: 'B'),
     ]);
     backend.me = 'follower';
-    final fromLink = await sharing.copy(code: code);
+    final fromLink = (await sharing.copy(code: code))!;
     expect((await row(fromLink)).isFollowed, isFalse);
     expect(await idsOf(fromLink), ['y1', 'y2']);
     final followed = (await sharing.follow(code))!;
-    final fromFollowed = await sharing.copy(playlistId: followed);
+    final fromFollowed = (await sharing.copy(playlistId: followed))!;
     expect(await idsOf(fromFollowed), ['y1', 'y2']);
     ok(await repo.addTracks(fromFollowed, const ['l1']));
   });

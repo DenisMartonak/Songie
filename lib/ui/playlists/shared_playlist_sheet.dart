@@ -82,6 +82,13 @@ class _SharedDialogState extends ConsumerState<_SharedDialog> {
         _busy = false;
         _error = friendActionError(e);
       });
+    } catch (e) {
+      // Anything else: say so and let the window be closed.
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = "Couldn't add this playlist";
+      });
     }
   }
 

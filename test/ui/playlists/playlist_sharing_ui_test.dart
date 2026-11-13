@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/account/account_service.dart';
+import 'package:songies/core/result.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/room/room_protocol.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
@@ -181,6 +182,89 @@ void main() {
     await tester.tap(find.byTooltip('Song options').first);
     await go(tester);
     expect(find.text('Remove from playlist'), findsNothing);
+  });
+
+  uiTest('opening a followed playlist checks for updates', (tester) async {
+    await signedIn();
+    await seed(tester);
+    final code = await densShare(tester);
+    await pump(tester, '/');
+    final id = (await real(
+      tester,
+      () => app(tester).read(playlistSharingProvider).follow(code),
+    ))!;
+    // The owner changes it; the follower opens it before any timer.
+    await real(tester, () async {
+      h.sharingBackend.me = 'den';
+      await h.sharingBackend.update(code, 'Den mix', const [
+        RoomSong(videoId: 'v2', title: 'Run', artist: 'B'),
+      ]);
+      h.sharingBackend.me = me;
+    });
+    router.go('/library/playlist/$id');
+    await go(tester);
+    expect(find.text('Halo'), findsNothing);
+    expect(find.text('Run'), findsOneWidget);
+  });
+
+  uiTest('a share that stops while its window is open says so and closes', (
+    tester,
+  ) async {
+    await signedIn();
+    await seed(tester);
+    final code = await densShare(tester);
+    await pump(tester, '/');
+    openLink(tester, code);
+    await go(tester);
+    await real(tester, () async {
+      h.sharingBackend.me = 'den';
+      await h.sharingBackend.stop(code);
+      h.sharingBackend.me = me;
+    });
+    await tester.tap(key('invite.copy'));
+    await go(tester);
+    expect(key('invite.copy'), findsNothing);
+    expect(find.text("This playlist isn't shared any more"), findsOneWidget);
+  });
+
+  uiTest('Add to playlist leaves out followed playlists', (tester) async {
+    await signedIn();
+    await seed(tester);
+    final mine = await real(tester, () async {
+      // A followed playlist, as following a link leaves it.
+      final followed = (await h.repo.createFollowedPlaylist(
+        code: 'ABCDEFGH2345',
+        name: 'Den mix',
+        owner: 'den',
+      ) as Ok<String>).value;
+      await h.repo.applySnapshot(
+        followed,
+        name: 'Den mix',
+        trackIds: const ['y1'],
+        updatedAt: DateTime.utc(2026, 11, 13),
+      );
+      return h.addPlaylist('Mine', ['y1']);
+    });
+    await pump(tester, '/library/playlist/$mine');
+    await tester.tap(find.byTooltip('Song options').first);
+    await go(tester);
+    await tester.tap(find.text('Add to playlist'));
+    await go(tester);
+    expect(key('addToPlaylist.sheet'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: key('addToPlaylist.sheet'),
+        matching: find.text('Mine'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: key('addToPlaylist.sheet'),
+        matching: find.text('Den mix'),
+      ),
+      findsNothing,
+    );
   });
 
   uiTest("opening your own playlist's link opens it, without Follow", (
