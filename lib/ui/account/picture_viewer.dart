@@ -74,56 +74,60 @@ class _PictureViewerState extends ConsumerState<_PictureViewer> {
     final state = ref.watch(accountStateProvider).value;
     final hasPicture = state is SignedIn && state.profile.avatarPath != null;
     final error = _error;
-    return Dialog(
-      key: const Key('profile.pictureViewer'),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox.square(
-              key: Key('profile.pictureLarge'),
-              dimension: _PictureViewer.size,
-              child: AccountAvatar(size: _PictureViewer.size),
-            ),
-            const SizedBox(height: 20),
-            if (error != null) ...[
-              Text(
-                error,
-                key: const Key('profile.pictureError'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+    // Not closed while a change is under way: its outcome shows here.
+    return PopScope(
+      canPop: !_busy,
+      child: Dialog(
+        key: const Key('profile.pictureViewer'),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox.square(
+                key: Key('profile.pictureLarge'),
+                dimension: _PictureViewer.size,
+                child: AccountAvatar(size: _PictureViewer.size),
               ),
-              const SizedBox(height: 12),
-            ],
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.icon(
-                  key: const Key('profile.changePicture'),
-                  onPressed: _busy ? null : _change,
-                  icon: const Icon(Icons.image_outlined),
-                  label: const Text('Change picture'),
+              const SizedBox(height: 20),
+              if (error != null) ...[
+                Text(
+                  error,
+                  key: const Key('profile.pictureError'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
-                if (hasPicture)
-                  TextButton.icon(
-                    key: const Key('profile.removePicture'),
-                    onPressed: _busy ? null : _remove,
-                    icon: const Icon(Icons.hide_image_outlined),
-                    label: const Text('Remove picture'),
-                  ),
+                const SizedBox(height: 12),
               ],
-            ),
-            if (_busy) ...[
-              const SizedBox(height: 16),
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    key: const Key('profile.changePicture'),
+                    onPressed: _busy ? null : _change,
+                    icon: const Icon(Icons.image_outlined),
+                    label: const Text('Change picture'),
+                  ),
+                  if (hasPicture)
+                    TextButton.icon(
+                      key: const Key('profile.removePicture'),
+                      onPressed: _busy ? null : _remove,
+                      icon: const Icon(Icons.hide_image_outlined),
+                      label: const Text('Remove picture'),
+                    ),
+                ],
               ),
+              if (_busy) ...[
+                const SizedBox(height: 16),
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

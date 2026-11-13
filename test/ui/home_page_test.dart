@@ -99,6 +99,9 @@ void main() {
       tester.getCenter(avatar).dx,
       lessThan(tester.getCenter(find.byKey(const Key('home.settings'))).dx),
     );
+    // As easy to hit as the buttons beside it.
+    expect(tester.getSize(avatar).width, greaterThanOrEqualTo(48));
+    expect(tester.getSize(avatar).height, greaterThanOrEqualTo(48));
     await tester.tap(avatar);
     await settle(tester);
     expect(find.text('Profile page'), findsOneWidget);

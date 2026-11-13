@@ -41,9 +41,9 @@ class Sidebar extends ConsumerWidget {
     final path = GoRouterState.of(context).uri.path;
     final playlists = ref.watch(playlistsProvider).value ?? const [];
     final current = shell.currentIndex;
-    // Settings shares Home's branch but is not Home.
+    // Settings and your profile share Home's branch but are not Home.
     final onSettings = path == '/settings';
-    final homeSelected = current == 0 && !onSettings;
+    final homeSelected = current == 0 && !onSettings && path != '/profile';
     final playlistSelected = playlists.indexWhere(
       (p) => path.endsWith('/playlist/${p.id}'),
     );

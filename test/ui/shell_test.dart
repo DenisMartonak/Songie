@@ -612,6 +612,21 @@ void main() {
       expect(find.byKey(const Key('playerBar')), findsOneWidget);
     });
 
+    testWidgets('on your profile the sidebar does not mark Home', (
+      tester,
+    ) async {
+      await pumpApp(tester, desktop);
+      bool homeMarked() =>
+          (tester.widget(
+                find.byKey(const Key('sidebar.home')),
+              ) as dynamic).selected
+              as bool;
+      expect(homeMarked(), isTrue);
+      router.go('/profile');
+      await tester.pumpAndSettle();
+      expect(homeMarked(), isFalse);
+    });
+
     testWidgets(
       'typing in the title-bar search sets the query and opens Search',
       (tester) async {

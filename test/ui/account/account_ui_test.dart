@@ -29,6 +29,17 @@ class _SlowBackend extends FakeAccountBackend {
   }
 }
 
+/// Holds picture uploads until [gate] completes.
+class _SlowUploadBackend extends FakeAccountBackend {
+  Completer<void>? gate;
+
+  @override
+  Future<void> uploadAvatar(String id, String path, Uint8List bytes) async {
+    await gate?.future;
+    return super.uploadAvatar(id, path, bytes);
+  }
+}
+
 Uint8List _png() =>
     Uint8List.fromList(img.encodePng(img.Image(width: 40, height: 30)));
 
@@ -184,8 +195,8 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
     expect(
       find.text(
-        'Your account uses the username @squatter. You can change it in '
-        'Settings.',
+        'Your account uses the username @squatter. You can change it on '
+        'your profile.',
       ),
       findsOneWidget,
     );
@@ -567,6 +578,47 @@ void main() {
     expect(inSection(key('account.avatar.image')), findsNothing);
     expect(inTop(key('account.avatar.image')), findsNothing);
     expect(inTop(find.text('D')), findsOneWidget);
+  });
+
+  uiTest('the viewer cannot be closed while a change is uploading', (
+    tester,
+  ) async {
+    final slow = _SlowUploadBackend();
+    h.accountBackend = slow;
+    await signedIn('den@x.com', 'den');
+    await pumpAccount(tester);
+    await openViewer(tester);
+    final gate = slow.gate = Completer<void>();
+    slow.uploadError = AccountError.offline;
+    pick = (size: 100, bytes: _png());
+    await tester.tap(key('profile.changePicture'));
+    final spinner = find.descendant(
+      of: key('profile.pictureViewer'),
+      matching: find.byType(CircularProgressIndicator),
+    );
+    for (var i = 0; i < 40 && spinner.evaluate().isEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+    expect(spinner, findsOneWidget);
+    // Esc and a tap outside both leave it open while busy.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pump();
+    expect(key('profile.pictureViewer'), findsOneWidget);
+    gate.complete();
+    await tapUntil(
+      tester,
+      key('profile.pictureLarge'),
+      () => key('profile.pictureError').evaluate().isNotEmpty,
+    );
+    expect(
+      tester.widget<Text>(key('profile.pictureError')).data,
+      AccountError.offline.message,
+    );
   });
 
   uiTest('a picture too big shows the error and keeps the viewer open', (

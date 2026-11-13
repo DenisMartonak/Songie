@@ -148,7 +148,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       } else {
         islands.show(
           'Your account uses the username @$keptUsername. You can change it '
-          'in Settings.',
+          'on your profile.',
           kind: IslandKind.info,
         );
       }

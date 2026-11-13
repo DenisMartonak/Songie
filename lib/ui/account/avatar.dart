@@ -140,9 +140,10 @@ class AccountButton extends ConsumerWidget {
             : push
             ? context.push('/profile')
             : context.go('/profile'),
-        child: const Padding(
-          padding: EdgeInsets.all(4),
-          child: AccountAvatar(size: size),
+        // Beside the Home header's buttons it takes their 48 px.
+        child: Padding(
+          padding: EdgeInsets.all(push ? 10 : 4),
+          child: const AccountAvatar(size: size),
         ),
       ),
     );
