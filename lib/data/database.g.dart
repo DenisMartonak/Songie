@@ -1040,6 +1040,66 @@ class $PlaylistsTable extends Playlists
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _shareCodeMeta = const VerificationMeta(
+    'shareCode',
+  );
+  @override
+  late final GeneratedColumn<String> shareCode = GeneratedColumn<String>(
+    'share_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _followCodeMeta = const VerificationMeta(
+    'followCode',
+  );
+  @override
+  late final GeneratedColumn<String> followCode = GeneratedColumn<String>(
+    'follow_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _followOwnerMeta = const VerificationMeta(
+    'followOwner',
+  );
+  @override
+  late final GeneratedColumn<String> followOwner = GeneratedColumn<String>(
+    'follow_owner',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _followUpdatedAtMeta = const VerificationMeta(
+    'followUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> followUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'follow_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _followEndedMeta = const VerificationMeta(
+    'followEnded',
+  );
+  @override
+  late final GeneratedColumn<bool> followEnded = GeneratedColumn<bool>(
+    'follow_ended',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("follow_ended" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1053,6 +1113,11 @@ class $PlaylistsTable extends Playlists
     ytPlaylistUrl,
     lastYtSyncAt,
     mergedInto,
+    shareCode,
+    followCode,
+    followOwner,
+    followUpdatedAt,
+    followEnded,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1150,6 +1215,45 @@ class $PlaylistsTable extends Playlists
         mergedInto.isAcceptableOrUnknown(data['merged_into']!, _mergedIntoMeta),
       );
     }
+    if (data.containsKey('share_code')) {
+      context.handle(
+        _shareCodeMeta,
+        shareCode.isAcceptableOrUnknown(data['share_code']!, _shareCodeMeta),
+      );
+    }
+    if (data.containsKey('follow_code')) {
+      context.handle(
+        _followCodeMeta,
+        followCode.isAcceptableOrUnknown(data['follow_code']!, _followCodeMeta),
+      );
+    }
+    if (data.containsKey('follow_owner')) {
+      context.handle(
+        _followOwnerMeta,
+        followOwner.isAcceptableOrUnknown(
+          data['follow_owner']!,
+          _followOwnerMeta,
+        ),
+      );
+    }
+    if (data.containsKey('follow_updated_at')) {
+      context.handle(
+        _followUpdatedAtMeta,
+        followUpdatedAt.isAcceptableOrUnknown(
+          data['follow_updated_at']!,
+          _followUpdatedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('follow_ended')) {
+      context.handle(
+        _followEndedMeta,
+        followEnded.isAcceptableOrUnknown(
+          data['follow_ended']!,
+          _followEndedMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1203,6 +1307,26 @@ class $PlaylistsTable extends Playlists
         DriftSqlType.string,
         data['${effectivePrefix}merged_into'],
       ),
+      shareCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}share_code'],
+      ),
+      followCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}follow_code'],
+      ),
+      followOwner: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}follow_owner'],
+      ),
+      followUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}follow_updated_at'],
+      ),
+      followEnded: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}follow_ended'],
+      )!,
     );
   }
 
@@ -1228,6 +1352,21 @@ class Playlist extends DataClass implements Insertable<Playlist> {
 
   /// Set on a playlist merged into another by sync; points at the winner.
   final String? mergedInto;
+
+  /// Its share code while this account shares it (playlist sharing).
+  final String? shareCode;
+
+  /// The share code it follows: read-only, updated from the owner's.
+  final String? followCode;
+
+  /// The followed playlist owner's username.
+  final String? followOwner;
+
+  /// The `updated_at` of the owner's snapshot last applied.
+  final DateTime? followUpdatedAt;
+
+  /// The owner stopped sharing it: now the follower's own playlist.
+  final bool followEnded;
   const Playlist({
     required this.id,
     required this.clock,
@@ -1240,6 +1379,11 @@ class Playlist extends DataClass implements Insertable<Playlist> {
     this.ytPlaylistUrl,
     this.lastYtSyncAt,
     this.mergedInto,
+    this.shareCode,
+    this.followCode,
+    this.followOwner,
+    this.followUpdatedAt,
+    required this.followEnded,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1263,6 +1407,19 @@ class Playlist extends DataClass implements Insertable<Playlist> {
     if (!nullToAbsent || mergedInto != null) {
       map['merged_into'] = Variable<String>(mergedInto);
     }
+    if (!nullToAbsent || shareCode != null) {
+      map['share_code'] = Variable<String>(shareCode);
+    }
+    if (!nullToAbsent || followCode != null) {
+      map['follow_code'] = Variable<String>(followCode);
+    }
+    if (!nullToAbsent || followOwner != null) {
+      map['follow_owner'] = Variable<String>(followOwner);
+    }
+    if (!nullToAbsent || followUpdatedAt != null) {
+      map['follow_updated_at'] = Variable<DateTime>(followUpdatedAt);
+    }
+    map['follow_ended'] = Variable<bool>(followEnded);
     return map;
   }
 
@@ -1287,6 +1444,19 @@ class Playlist extends DataClass implements Insertable<Playlist> {
       mergedInto: mergedInto == null && nullToAbsent
           ? const Value.absent()
           : Value(mergedInto),
+      shareCode: shareCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(shareCode),
+      followCode: followCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(followCode),
+      followOwner: followOwner == null && nullToAbsent
+          ? const Value.absent()
+          : Value(followOwner),
+      followUpdatedAt: followUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(followUpdatedAt),
+      followEnded: Value(followEnded),
     );
   }
 
@@ -1307,6 +1477,11 @@ class Playlist extends DataClass implements Insertable<Playlist> {
       ytPlaylistUrl: serializer.fromJson<String?>(json['ytPlaylistUrl']),
       lastYtSyncAt: serializer.fromJson<DateTime?>(json['lastYtSyncAt']),
       mergedInto: serializer.fromJson<String?>(json['mergedInto']),
+      shareCode: serializer.fromJson<String?>(json['shareCode']),
+      followCode: serializer.fromJson<String?>(json['followCode']),
+      followOwner: serializer.fromJson<String?>(json['followOwner']),
+      followUpdatedAt: serializer.fromJson<DateTime?>(json['followUpdatedAt']),
+      followEnded: serializer.fromJson<bool>(json['followEnded']),
     );
   }
   @override
@@ -1324,6 +1499,11 @@ class Playlist extends DataClass implements Insertable<Playlist> {
       'ytPlaylistUrl': serializer.toJson<String?>(ytPlaylistUrl),
       'lastYtSyncAt': serializer.toJson<DateTime?>(lastYtSyncAt),
       'mergedInto': serializer.toJson<String?>(mergedInto),
+      'shareCode': serializer.toJson<String?>(shareCode),
+      'followCode': serializer.toJson<String?>(followCode),
+      'followOwner': serializer.toJson<String?>(followOwner),
+      'followUpdatedAt': serializer.toJson<DateTime?>(followUpdatedAt),
+      'followEnded': serializer.toJson<bool>(followEnded),
     };
   }
 
@@ -1339,6 +1519,11 @@ class Playlist extends DataClass implements Insertable<Playlist> {
     Value<String?> ytPlaylistUrl = const Value.absent(),
     Value<DateTime?> lastYtSyncAt = const Value.absent(),
     Value<String?> mergedInto = const Value.absent(),
+    Value<String?> shareCode = const Value.absent(),
+    Value<String?> followCode = const Value.absent(),
+    Value<String?> followOwner = const Value.absent(),
+    Value<DateTime?> followUpdatedAt = const Value.absent(),
+    bool? followEnded,
   }) => Playlist(
     id: id ?? this.id,
     clock: clock ?? this.clock,
@@ -1353,6 +1538,13 @@ class Playlist extends DataClass implements Insertable<Playlist> {
         : this.ytPlaylistUrl,
     lastYtSyncAt: lastYtSyncAt.present ? lastYtSyncAt.value : this.lastYtSyncAt,
     mergedInto: mergedInto.present ? mergedInto.value : this.mergedInto,
+    shareCode: shareCode.present ? shareCode.value : this.shareCode,
+    followCode: followCode.present ? followCode.value : this.followCode,
+    followOwner: followOwner.present ? followOwner.value : this.followOwner,
+    followUpdatedAt: followUpdatedAt.present
+        ? followUpdatedAt.value
+        : this.followUpdatedAt,
+    followEnded: followEnded ?? this.followEnded,
   );
   Playlist copyWithCompanion(PlaylistsCompanion data) {
     return Playlist(
@@ -1375,6 +1567,19 @@ class Playlist extends DataClass implements Insertable<Playlist> {
       mergedInto: data.mergedInto.present
           ? data.mergedInto.value
           : this.mergedInto,
+      shareCode: data.shareCode.present ? data.shareCode.value : this.shareCode,
+      followCode: data.followCode.present
+          ? data.followCode.value
+          : this.followCode,
+      followOwner: data.followOwner.present
+          ? data.followOwner.value
+          : this.followOwner,
+      followUpdatedAt: data.followUpdatedAt.present
+          ? data.followUpdatedAt.value
+          : this.followUpdatedAt,
+      followEnded: data.followEnded.present
+          ? data.followEnded.value
+          : this.followEnded,
     );
   }
 
@@ -1391,7 +1596,12 @@ class Playlist extends DataClass implements Insertable<Playlist> {
           ..write('source: $source, ')
           ..write('ytPlaylistUrl: $ytPlaylistUrl, ')
           ..write('lastYtSyncAt: $lastYtSyncAt, ')
-          ..write('mergedInto: $mergedInto')
+          ..write('mergedInto: $mergedInto, ')
+          ..write('shareCode: $shareCode, ')
+          ..write('followCode: $followCode, ')
+          ..write('followOwner: $followOwner, ')
+          ..write('followUpdatedAt: $followUpdatedAt, ')
+          ..write('followEnded: $followEnded')
           ..write(')'))
         .toString();
   }
@@ -1409,6 +1619,11 @@ class Playlist extends DataClass implements Insertable<Playlist> {
     ytPlaylistUrl,
     lastYtSyncAt,
     mergedInto,
+    shareCode,
+    followCode,
+    followOwner,
+    followUpdatedAt,
+    followEnded,
   );
   @override
   bool operator ==(Object other) =>
@@ -1424,7 +1639,12 @@ class Playlist extends DataClass implements Insertable<Playlist> {
           other.source == this.source &&
           other.ytPlaylistUrl == this.ytPlaylistUrl &&
           other.lastYtSyncAt == this.lastYtSyncAt &&
-          other.mergedInto == this.mergedInto);
+          other.mergedInto == this.mergedInto &&
+          other.shareCode == this.shareCode &&
+          other.followCode == this.followCode &&
+          other.followOwner == this.followOwner &&
+          other.followUpdatedAt == this.followUpdatedAt &&
+          other.followEnded == this.followEnded);
 }
 
 class PlaylistsCompanion extends UpdateCompanion<Playlist> {
@@ -1439,6 +1659,11 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
   final Value<String?> ytPlaylistUrl;
   final Value<DateTime?> lastYtSyncAt;
   final Value<String?> mergedInto;
+  final Value<String?> shareCode;
+  final Value<String?> followCode;
+  final Value<String?> followOwner;
+  final Value<DateTime?> followUpdatedAt;
+  final Value<bool> followEnded;
   final Value<int> rowid;
   const PlaylistsCompanion({
     this.id = const Value.absent(),
@@ -1452,6 +1677,11 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
     this.ytPlaylistUrl = const Value.absent(),
     this.lastYtSyncAt = const Value.absent(),
     this.mergedInto = const Value.absent(),
+    this.shareCode = const Value.absent(),
+    this.followCode = const Value.absent(),
+    this.followOwner = const Value.absent(),
+    this.followUpdatedAt = const Value.absent(),
+    this.followEnded = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   PlaylistsCompanion.insert({
@@ -1466,6 +1696,11 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
     this.ytPlaylistUrl = const Value.absent(),
     this.lastYtSyncAt = const Value.absent(),
     this.mergedInto = const Value.absent(),
+    this.shareCode = const Value.absent(),
+    this.followCode = const Value.absent(),
+    this.followOwner = const Value.absent(),
+    this.followUpdatedAt = const Value.absent(),
+    this.followEnded = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        clock = Value(clock),
@@ -1485,6 +1720,11 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
     Expression<String>? ytPlaylistUrl,
     Expression<DateTime>? lastYtSyncAt,
     Expression<String>? mergedInto,
+    Expression<String>? shareCode,
+    Expression<String>? followCode,
+    Expression<String>? followOwner,
+    Expression<DateTime>? followUpdatedAt,
+    Expression<bool>? followEnded,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1499,6 +1739,11 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
       if (ytPlaylistUrl != null) 'yt_playlist_url': ytPlaylistUrl,
       if (lastYtSyncAt != null) 'last_yt_sync_at': lastYtSyncAt,
       if (mergedInto != null) 'merged_into': mergedInto,
+      if (shareCode != null) 'share_code': shareCode,
+      if (followCode != null) 'follow_code': followCode,
+      if (followOwner != null) 'follow_owner': followOwner,
+      if (followUpdatedAt != null) 'follow_updated_at': followUpdatedAt,
+      if (followEnded != null) 'follow_ended': followEnded,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1515,6 +1760,11 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
     Value<String?>? ytPlaylistUrl,
     Value<DateTime?>? lastYtSyncAt,
     Value<String?>? mergedInto,
+    Value<String?>? shareCode,
+    Value<String?>? followCode,
+    Value<String?>? followOwner,
+    Value<DateTime?>? followUpdatedAt,
+    Value<bool>? followEnded,
     Value<int>? rowid,
   }) {
     return PlaylistsCompanion(
@@ -1529,6 +1779,11 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
       ytPlaylistUrl: ytPlaylistUrl ?? this.ytPlaylistUrl,
       lastYtSyncAt: lastYtSyncAt ?? this.lastYtSyncAt,
       mergedInto: mergedInto ?? this.mergedInto,
+      shareCode: shareCode ?? this.shareCode,
+      followCode: followCode ?? this.followCode,
+      followOwner: followOwner ?? this.followOwner,
+      followUpdatedAt: followUpdatedAt ?? this.followUpdatedAt,
+      followEnded: followEnded ?? this.followEnded,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1569,6 +1824,21 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
     if (mergedInto.present) {
       map['merged_into'] = Variable<String>(mergedInto.value);
     }
+    if (shareCode.present) {
+      map['share_code'] = Variable<String>(shareCode.value);
+    }
+    if (followCode.present) {
+      map['follow_code'] = Variable<String>(followCode.value);
+    }
+    if (followOwner.present) {
+      map['follow_owner'] = Variable<String>(followOwner.value);
+    }
+    if (followUpdatedAt.present) {
+      map['follow_updated_at'] = Variable<DateTime>(followUpdatedAt.value);
+    }
+    if (followEnded.present) {
+      map['follow_ended'] = Variable<bool>(followEnded.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1589,6 +1859,11 @@ class PlaylistsCompanion extends UpdateCompanion<Playlist> {
           ..write('ytPlaylistUrl: $ytPlaylistUrl, ')
           ..write('lastYtSyncAt: $lastYtSyncAt, ')
           ..write('mergedInto: $mergedInto, ')
+          ..write('shareCode: $shareCode, ')
+          ..write('followCode: $followCode, ')
+          ..write('followOwner: $followOwner, ')
+          ..write('followUpdatedAt: $followUpdatedAt, ')
+          ..write('followEnded: $followEnded, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7627,6 +7902,11 @@ typedef $$PlaylistsTableCreateCompanionBuilder = PlaylistsCompanion Function({
   Value<String?> ytPlaylistUrl,
   Value<DateTime?> lastYtSyncAt,
   Value<String?> mergedInto,
+  Value<String?> shareCode,
+  Value<String?> followCode,
+  Value<String?> followOwner,
+  Value<DateTime?> followUpdatedAt,
+  Value<bool> followEnded,
   Value<int> rowid,
 });
 typedef $$PlaylistsTableUpdateCompanionBuilder = PlaylistsCompanion Function({
@@ -7641,6 +7921,11 @@ typedef $$PlaylistsTableUpdateCompanionBuilder = PlaylistsCompanion Function({
   Value<String?> ytPlaylistUrl,
   Value<DateTime?> lastYtSyncAt,
   Value<String?> mergedInto,
+  Value<String?> shareCode,
+  Value<String?> followCode,
+  Value<String?> followOwner,
+  Value<DateTime?> followUpdatedAt,
+  Value<bool> followEnded,
   Value<int> rowid,
 });
 
@@ -7705,6 +7990,31 @@ class $$PlaylistsTableFilterComposer
 
   ColumnFilters<String> get mergedInto => $composableBuilder(
     column: $table.mergedInto,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get shareCode => $composableBuilder(
+    column: $table.shareCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get followCode => $composableBuilder(
+    column: $table.followCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get followOwner => $composableBuilder(
+    column: $table.followOwner,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get followUpdatedAt => $composableBuilder(
+    column: $table.followUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get followEnded => $composableBuilder(
+    column: $table.followEnded,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -7772,6 +8082,31 @@ class $$PlaylistsTableOrderingComposer
     column: $table.mergedInto,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get shareCode => $composableBuilder(
+    column: $table.shareCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get followCode => $composableBuilder(
+    column: $table.followCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get followOwner => $composableBuilder(
+    column: $table.followOwner,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get followUpdatedAt => $composableBuilder(
+    column: $table.followUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get followEnded => $composableBuilder(
+    column: $table.followEnded,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PlaylistsTableAnnotationComposer
@@ -7823,6 +8158,29 @@ class $$PlaylistsTableAnnotationComposer
     column: $table.mergedInto,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get shareCode =>
+      $composableBuilder(column: $table.shareCode, builder: (column) => column);
+
+  GeneratedColumn<String> get followCode => $composableBuilder(
+    column: $table.followCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get followOwner => $composableBuilder(
+    column: $table.followOwner,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get followUpdatedAt => $composableBuilder(
+    column: $table.followUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get followEnded => $composableBuilder(
+    column: $table.followEnded,
+    builder: (column) => column,
+  );
 }
 
 class $$PlaylistsTableTableManager
@@ -7864,6 +8222,11 @@ class $$PlaylistsTableTableManager
                 Value<String?> ytPlaylistUrl = const Value.absent(),
                 Value<DateTime?> lastYtSyncAt = const Value.absent(),
                 Value<String?> mergedInto = const Value.absent(),
+                Value<String?> shareCode = const Value.absent(),
+                Value<String?> followCode = const Value.absent(),
+                Value<String?> followOwner = const Value.absent(),
+                Value<DateTime?> followUpdatedAt = const Value.absent(),
+                Value<bool> followEnded = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PlaylistsCompanion(
                 id: id,
@@ -7877,6 +8240,11 @@ class $$PlaylistsTableTableManager
                 ytPlaylistUrl: ytPlaylistUrl,
                 lastYtSyncAt: lastYtSyncAt,
                 mergedInto: mergedInto,
+                shareCode: shareCode,
+                followCode: followCode,
+                followOwner: followOwner,
+                followUpdatedAt: followUpdatedAt,
+                followEnded: followEnded,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -7892,6 +8260,11 @@ class $$PlaylistsTableTableManager
                 Value<String?> ytPlaylistUrl = const Value.absent(),
                 Value<DateTime?> lastYtSyncAt = const Value.absent(),
                 Value<String?> mergedInto = const Value.absent(),
+                Value<String?> shareCode = const Value.absent(),
+                Value<String?> followCode = const Value.absent(),
+                Value<String?> followOwner = const Value.absent(),
+                Value<DateTime?> followUpdatedAt = const Value.absent(),
+                Value<bool> followEnded = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PlaylistsCompanion.insert(
                 id: id,
@@ -7905,6 +8278,11 @@ class $$PlaylistsTableTableManager
                 ytPlaylistUrl: ytPlaylistUrl,
                 lastYtSyncAt: lastYtSyncAt,
                 mergedInto: mergedInto,
+                shareCode: shareCode,
+                followCode: followCode,
+                followOwner: followOwner,
+                followUpdatedAt: followUpdatedAt,
+                followEnded: followEnded,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

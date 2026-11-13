@@ -5,6 +5,9 @@ enum FailureKind {
   permission,
   network,
   unsupported,
+
+  /// The thing can't be changed (a followed playlist).
+  readOnly,
   unknown,
 }
 

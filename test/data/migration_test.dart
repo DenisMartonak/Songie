@@ -15,9 +15,24 @@ const _v1Schema = <String>[
   'CREATE INDEX playlist_entries_playlist_position ON playlist_entries (playlist_id, position)',
 ];
 
+/// Undoes the v12 additions (playlist sharing's columns) on an open
+/// current-schema database.
+Future<void> _stepBackToV11(AppDatabase db) async {
+  for (final c in [
+    'share_code',
+    'follow_code',
+    'follow_owner',
+    'follow_updated_at',
+    'follow_ended',
+  ]) {
+    await db.customStatement('ALTER TABLE playlists DROP COLUMN $c');
+  }
+}
+
 /// Undoes the v8 additions (the v9 removal of `peers` and the v11 table) on an
 /// open current-schema database.
 Future<void> _stepBackToV7(AppDatabase db) async {
+  await _stepBackToV11(db);
   await db.customStatement('DROP TABLE IF EXISTS peers');
   await db.customStatement('DROP TABLE IF EXISTS saved_artists');
   for (final t in [
@@ -79,7 +94,7 @@ void main() {
     expect(await db.select(db.playHistory).get(), hasLength(1));
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 11);
+    expect(version.data.values.single, 12);
   });
 
   test('a v2 database opened with v3 code gains yt_seen and keeps data', () async {
@@ -139,7 +154,7 @@ void main() {
       throwsA(anything),
     );
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 11);
+    expect(version.data.values.single, 12);
   });
 
   test(
@@ -183,7 +198,7 @@ void main() {
       expect(pref.downloadEnabled, isFalse);
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 11);
+      expect(version.data.values.single, 12);
     },
   );
 
@@ -233,7 +248,7 @@ void main() {
     expect(await db.select(db.themes).get(), hasLength(1));
     expect((await db.select(db.fonts).getSingle()).family, 'Fira');
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 11);
+    expect(version.data.values.single, 12);
   });
 
   test(
@@ -255,7 +270,7 @@ void main() {
       addTearDown(db.close);
       expect(await db.select(db.lyrics).get(), isEmpty);
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 11);
+      expect(version.data.values.single, 12);
     },
   );
 
@@ -284,7 +299,7 @@ void main() {
           .get();
       expect(idx, hasLength(1));
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.single, 11);
+      expect(version.data.values.single, 12);
     },
   );
 
@@ -309,7 +324,7 @@ void main() {
       contains('listens_local_seq'),
     );
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 11);
+    expect(version.data.values.single, 12);
   });
   test('v8 to v9 drops peers and keeps every other table\'s rows', () async {
     final dir = await Directory.systemTemp.createTemp('songies_migration');
@@ -383,6 +398,7 @@ void main() {
     final before = await counts(first);
     expect(before.values, everyElement(1));
     await first.customStatement('DROP TABLE saved_artists');
+    await _stepBackToV11(first);
     await first.customStatement('PRAGMA user_version = 8');
     await first.close();
 
@@ -397,7 +413,7 @@ void main() {
     expect(peers, isEmpty);
     expect(await counts(db), before);
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 11);
+    expect(version.data.values.single, 12);
   });
 
   test('v9 to v10 rewrites the NUL credit marker in plain lyrics', () async {
@@ -418,6 +434,7 @@ void main() {
       );
     }
     await first.customStatement('DROP TABLE saved_artists');
+    await _stepBackToV11(first);
     await first.customStatement('PRAGMA user_version = 9');
     await first.close();
 
@@ -430,7 +447,7 @@ void main() {
     expect(rows['t2']!.body, 'no credit');
     expect(rows['t3']!.body, '[00:01.00]x\n[by:Me]');
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 11);
+    expect(version.data.values.single, 12);
   });
 
   test('v10 to v11 creates saved_artists', () async {
@@ -440,6 +457,7 @@ void main() {
 
     final first = AppDatabase.open(file);
     await first.customStatement('DROP TABLE saved_artists');
+    await _stepBackToV11(first);
     await first.customStatement('PRAGMA user_version = 10');
     await first.close();
 
@@ -454,6 +472,34 @@ void main() {
         .get();
     expect(idx, hasLength(1));
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 11);
+    expect(version.data.values.single, 12);
+  });
+
+  test('v11 to v12 adds the playlist sharing columns', () async {
+    final dir = await Directory.systemTemp.createTemp('songies_migration');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File('${dir.path}/songies.db');
+
+    final first = AppDatabase.open(file);
+    await _stepBackToV11(first);
+    await first.customStatement('PRAGMA user_version = 11');
+    await first.close();
+
+    final db = AppDatabase.open(file);
+    addTearDown(db.close);
+    final cols = await db.customSelect('PRAGMA table_info(playlists)').get();
+    final names = {for (final c in cols) c.data['name']};
+    expect(
+      names,
+      containsAll([
+        'share_code',
+        'follow_code',
+        'follow_owner',
+        'follow_updated_at',
+        'follow_ended',
+      ]),
+    );
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data.values.single, 12);
   });
 }

@@ -200,6 +200,23 @@ class LibraryRepository {
     });
   }
 
+  /// A followed playlist (playlist sharing) changes only from its owner's.
+  static Result<T> _readOnly<T>() => const Err(
+    Failure(FailureKind.readOnly, "A followed playlist can't be changed"),
+  );
+
+  /// Whether playlist [id] is followed (read-only).
+  Future<bool> _followed(String id) async {
+    final p = await _livePlaylist(id);
+    return p != null && p.followCode != null;
+  }
+
+  /// Whether entry [entryId] belongs to a followed playlist.
+  Future<bool> _entryFollowed(String entryId) async {
+    final e = await _liveEntry(entryId);
+    return e != null && await _followed(e.playlistId);
+  }
+
   static Result<T> _builtIn<T>() => const Err(
     Failure(FailureKind.invalidInput, "Favorites can't be renamed or deleted"),
   );
@@ -231,6 +248,7 @@ class LibraryRepository {
     if (clean == null) return _badName<void>();
     return guardDb(_db, () async {
       if (await _livePlaylist(id) == null) return _notFound('playlist $id');
+      if (await _followed(id)) return _readOnly<void>();
       final stamp = await _stamp.next(id: id);
       await (_db.update(_db.playlists)..where((p) => p.id.equals(id))).write(
         PlaylistsCompanion(
@@ -249,6 +267,7 @@ class LibraryRepository {
   Future<Result<void>> setPlaylistCover(String id, String? coverRef) {
     return guardDb(_db, () async {
       if (await _livePlaylist(id) == null) return _notFound('playlist $id');
+      if (await _followed(id)) return _readOnly<void>();
       final stamp = await _stamp.next(id: id);
       await (_db.update(_db.playlists)..where((p) => p.id.equals(id))).write(
         PlaylistsCompanion(
@@ -298,6 +317,7 @@ class LibraryRepository {
       if (await _livePlaylist(playlistId) == null) {
         return _notFound('playlist $playlistId');
       }
+      if (await _followed(playlistId)) return _readOnly<void>();
       if (trackIds.isEmpty) return const Ok(null);
 
       final wanted = trackIds.toSet();
@@ -359,6 +379,7 @@ class LibraryRepository {
     return guardDb(_db, () async {
       final entry = await _liveEntry(entryId);
       if (entry == null) return _notFound('entry $entryId');
+      if (await _followed(entry.playlistId)) return _readOnly<void>();
 
       Future<Result<String?>> neighbourPosition(String? id) async {
         if (id == null) return const Ok(null);
@@ -412,6 +433,7 @@ class LibraryRepository {
   Future<Result<void>> removeEntry(String entryId) {
     return guardDb(_db, () async {
       if (await _liveEntry(entryId) == null) return _notFound('entry $entryId');
+      if (await _entryFollowed(entryId)) return _readOnly<void>();
       await _tombstoneEntry(entryId);
       return const Ok(null);
     });
@@ -422,6 +444,7 @@ class LibraryRepository {
   Future<Result<void>> keepEntry(String entryId) {
     return guardDb(_db, () async {
       if (await _liveEntry(entryId) == null) return _notFound('entry $entryId');
+      if (await _entryFollowed(entryId)) return _readOnly<void>();
       final stamp = await _stamp.next(id: entryId);
       await (_db.update(
         _db.playlistEntries,
@@ -429,6 +452,136 @@ class LibraryRepository {
         PlaylistEntriesCompanion(
           status: const Value('active'),
           kept: const Value(true),
+          clock: Value(stamp.clock),
+          originDevice: Value(stamp.originDevice),
+          localSeq: Value(stamp.localSeq),
+        ),
+      );
+      return const Ok(null);
+    });
+  }
+
+  // --- playlist sharing ------------------------------------------------------
+
+  /// Marks this account's playlist [id] as shared under [code] (null: not
+  /// shared any more). Its owner can still edit it.
+  Future<Result<void>> setShareCode(String id, String? code) {
+    return guardDb(_db, () async {
+      if (await _livePlaylist(id) == null) return _notFound('playlist $id');
+      final stamp = await _stamp.next(id: id);
+      await (_db.update(_db.playlists)..where((p) => p.id.equals(id))).write(
+        PlaylistsCompanion(
+          shareCode: Value(code),
+          clock: Value(stamp.clock),
+          originDevice: Value(stamp.originDevice),
+          localSeq: Value(stamp.localSeq),
+        ),
+      );
+      return const Ok(null);
+    });
+  }
+
+  /// A new, empty playlist following the share [code] by [owner]; its songs
+  /// come with [applySnapshot].
+  Future<Result<String>> createFollowedPlaylist({
+    required String code,
+    required String name,
+    required String owner,
+  }) {
+    final clean = _cleanName(name) ?? 'Shared playlist';
+    return guardDb(_db, () async {
+      final stamp = await _stamp.next();
+      await _db
+          .into(_db.playlists)
+          .insert(
+            PlaylistsCompanion.insert(
+              id: stamp.id,
+              clock: stamp.clock,
+              originDevice: stamp.originDevice,
+              localSeq: stamp.localSeq,
+              name: clean,
+              source: 'local',
+              followCode: Value(code),
+              followOwner: Value(owner),
+            ),
+          );
+      return Ok(stamp.id);
+    });
+  }
+
+  /// Makes followed playlist [id] the owner's snapshot: its name, and
+  /// [trackIds] in order (replacing its entries), as of [updatedAt].
+  Future<Result<void>> applySnapshot(
+    String id, {
+    required String name,
+    required List<String> trackIds,
+    required DateTime updatedAt,
+  }) {
+    return guardDb(_db, () async {
+      final p = await _livePlaylist(id);
+      if (p == null) return _notFound('playlist $id');
+      final current =
+          await (_db.select(_db.playlistEntries)
+                ..where((e) => e.playlistId.equals(id) & e.deleted.equals(false))
+                ..orderBy([
+                  (e) => OrderingTerm.asc(e.position),
+                  (e) => OrderingTerm.asc(e.id),
+                ]))
+              .get();
+      final same =
+          current.length == trackIds.length &&
+          [
+            for (var i = 0; i < trackIds.length; i++)
+              current[i].trackId == trackIds[i],
+          ].every((x) => x);
+      if (!same) {
+        for (final e in current) {
+          await _tombstoneEntry(e.id);
+        }
+        final positions = nKeysBetween(null, null, trackIds.length);
+        final now = DateTime.now();
+        for (var i = 0; i < trackIds.length; i++) {
+          final stamp = await _stamp.next();
+          await _db
+              .into(_db.playlistEntries)
+              .insert(
+                PlaylistEntriesCompanion.insert(
+                  id: stamp.id,
+                  clock: stamp.clock,
+                  originDevice: stamp.originDevice,
+                  localSeq: stamp.localSeq,
+                  playlistId: id,
+                  trackId: trackIds[i],
+                  position: positions[i],
+                  addedAt: now,
+                ),
+              );
+        }
+      }
+      final stamp = await _stamp.next(id: id);
+      await (_db.update(_db.playlists)..where((p) => p.id.equals(id))).write(
+        PlaylistsCompanion(
+          name: Value(_cleanName(name) ?? p.name),
+          followUpdatedAt: Value(updatedAt),
+          clock: Value(stamp.clock),
+          originDevice: Value(stamp.originDevice),
+          localSeq: Value(stamp.localSeq),
+        ),
+      );
+      return const Ok(null);
+    });
+  }
+
+  /// The owner stopped sharing followed playlist [id]: it keeps its songs
+  /// and becomes the follower's own (editable) playlist.
+  Future<Result<void>> endFollow(String id) {
+    return guardDb(_db, () async {
+      if (await _livePlaylist(id) == null) return _notFound('playlist $id');
+      final stamp = await _stamp.next(id: id);
+      await (_db.update(_db.playlists)..where((p) => p.id.equals(id))).write(
+        PlaylistsCompanion(
+          followCode: const Value(null),
+          followEnded: const Value(true),
           clock: Value(stamp.clock),
           originDevice: Value(stamp.originDevice),
           localSeq: Value(stamp.localSeq),
@@ -463,6 +616,7 @@ class LibraryRepository {
   Future<Result<void>> replaceEntryTrack(String entryId, String trackId) {
     return guardDb(_db, () async {
       if (await _liveEntry(entryId) == null) return _notFound('entry $entryId');
+      if (await _entryFollowed(entryId)) return _readOnly<void>();
       if (await trackById(trackId) == null) return _notFound('track $trackId');
       final stamp = await _stamp.next(id: entryId);
       await (_db.update(
@@ -654,4 +808,10 @@ class LibraryRepository {
 
   Err<T> _notFound<T>(String what) =>
       Err(Failure(FailureKind.notFound, 'No such $what'));
+}
+
+/// Playlist sharing on a playlist row.
+extension PlaylistSharingX on Playlist {
+  /// Followed from someone's share: read-only, updated from theirs.
+  bool get isFollowed => followCode != null;
 }

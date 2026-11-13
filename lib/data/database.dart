@@ -34,7 +34,7 @@ class AppDatabase extends _$AppDatabase {
       AppDatabase(NativeDatabase.createInBackground(f));
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -78,6 +78,13 @@ class AppDatabase extends _$AppDatabase {
       if (from < 11) {
         await m.createTable(savedArtists);
         await m.createIndex(savedArtistsLocalSeq);
+      }
+      if (from < 12) {
+        await m.addColumn(playlists, playlists.shareCode);
+        await m.addColumn(playlists, playlists.followCode);
+        await m.addColumn(playlists, playlists.followOwner);
+        await m.addColumn(playlists, playlists.followUpdatedAt);
+        await m.addColumn(playlists, playlists.followEnded);
       }
     },
     beforeOpen: (details) async {

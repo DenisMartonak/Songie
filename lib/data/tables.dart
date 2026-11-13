@@ -46,6 +46,21 @@ class Playlists extends Table with SyncColumns {
 
   /// Set on a playlist merged into another by sync; points at the winner.
   TextColumn get mergedInto => text().nullable()();
+
+  /// Its share code while this account shares it (playlist sharing).
+  TextColumn get shareCode => text().nullable()();
+
+  /// The share code it follows: read-only, updated from the owner's.
+  TextColumn get followCode => text().nullable()();
+
+  /// The followed playlist owner's username.
+  TextColumn get followOwner => text().nullable()();
+
+  /// The `updated_at` of the owner's snapshot last applied.
+  DateTimeColumn get followUpdatedAt => dateTime().nullable()();
+
+  /// The owner stopped sharing it: now the follower's own playlist.
+  BoolColumn get followEnded => boolean().withDefault(const Constant(false))();
 }
 
 @TableIndex(
