@@ -115,7 +115,7 @@ class _RoomPanelState extends ConsumerState<RoomPanel> {
   void _signIn() {
     final router = GoRouter.of(context);
     Navigator.of(context).pop();
-    router.go('/settings');
+    router.go('/profile');
   }
 
   Future<void> _copy(String link) async {

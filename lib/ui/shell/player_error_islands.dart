@@ -82,7 +82,7 @@ class PlayerErrorIslands extends ConsumerWidget {
           action: router != null
               ? IslandAction(
                   label: 'Sign in',
-                  onPressed: () => router.go('/settings'),
+                  onPressed: () => router.go('/profile'),
                 )
               : null,
         );

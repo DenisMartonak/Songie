@@ -21,33 +21,14 @@ const int _shownTop = 5;
 /// the period before, a chart of minutes, then top artists and top songs.
 /// An empty period says so instead. While another period loads, the stats
 /// shown last stay on screen, dimmed.
-class StatsPage extends ConsumerStatefulWidget {
+class StatsPage extends StatelessWidget {
   const StatsPage({super.key});
 
-  @override
-  ConsumerState<StatsPage> createState() => _StatsPageState();
-}
-
-class _StatsPageState extends ConsumerState<StatsPage> {
   static const double _maxContentWidth = 720;
-
-  /// The stats last shown, kept until the selected period's arrive.
-  PeriodStats? _shown;
 
   @override
   Widget build(BuildContext context) {
-    final period = ref.watch(statsPeriodProvider);
-    final value = ref.watch(periodStatsProvider(period));
     final bottom = MediaQuery.paddingOf(context).bottom;
-    final fresh = value.value;
-    if (fresh != null && fresh.period == period) {
-      _shown = fresh;
-    } else if (value.hasError) {
-      _shown = null;
-    }
-    final stats = _shown;
-    final stale = stats != null && stats.period != period;
-
     return SafeArea(
       bottom: false,
       child: Align(
@@ -58,30 +39,63 @@ class _StatsPageState extends ConsumerState<StatsPage> {
           // 10 survives scrolling it out of view.
           child: SingleChildScrollView(
             padding: EdgeInsets.only(bottom: bottom + 24),
-            child: Column(
+            child: const Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _Header(),
-                _PeriodPicker(
-                  selected: period,
-                  onSelected: ref.read(statsPeriodProvider.notifier).select,
-                ),
-                if (stats != null)
-                  // A static dim while the new period loads.
-                  Opacity(
-                    opacity: stale ? 0.5 : 1,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: _content(stats),
-                    ),
-                  )
-                else if (value.hasError)
-                  const _Message("Couldn't load your listening stats"),
-              ],
+              children: [_Header(), StatsBody()],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The stats themselves, without a header or a scroll view of their own (so
+/// another page, as the profile, can show them): the period picker, then the
+/// selected period's stats, or why there are none.
+class StatsBody extends ConsumerStatefulWidget {
+  const StatsBody({super.key});
+
+  @override
+  ConsumerState<StatsBody> createState() => _StatsBodyState();
+}
+
+class _StatsBodyState extends ConsumerState<StatsBody> {
+  /// The stats last shown, kept until the selected period's arrive.
+  PeriodStats? _shown;
+
+  @override
+  Widget build(BuildContext context) {
+    final period = ref.watch(statsPeriodProvider);
+    final value = ref.watch(periodStatsProvider(period));
+    final fresh = value.value;
+    if (fresh != null && fresh.period == period) {
+      _shown = fresh;
+    } else if (value.hasError) {
+      _shown = null;
+    }
+    final stats = _shown;
+    final stale = stats != null && stats.period != period;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _PeriodPicker(
+          selected: period,
+          onSelected: ref.read(statsPeriodProvider.notifier).select,
+        ),
+        if (stats != null)
+          // A static dim while the new period loads.
+          Opacity(
+            opacity: stale ? 0.5 : 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: _content(stats),
+            ),
+          )
+        else if (value.hasError)
+          const _Message("Couldn't load your listening stats"),
+      ],
     );
   }
 

@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
@@ -11,7 +11,7 @@ import 'package:songies/account/username.dart';
 import 'package:songies/core/paths.dart';
 import 'package:songies/ui/account/account_section.dart';
 import 'package:songies/ui/account/avatar.dart';
-import 'package:songies/ui/settings/settings_page.dart';
+import 'package:songies/ui/account/profile_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 
 import '../../account/fake_account_backend.dart';
@@ -26,6 +26,17 @@ class _SlowBackend extends FakeAccountBackend {
   Future<String> logIn(String email, String password) async {
     await gate?.future;
     return super.logIn(email, password);
+  }
+}
+
+/// Holds picture uploads until [gate] completes.
+class _SlowUploadBackend extends FakeAccountBackend {
+  Completer<void>? gate;
+
+  @override
+  Future<void> uploadAvatar(String id, String path, Uint8List bytes) async {
+    await gate?.future;
+    return super.uploadAvatar(id, path, bytes);
   }
 }
 
@@ -49,14 +60,14 @@ void main() {
     tmp.deleteSync(recursive: true);
   });
 
-  /// Settings with a top-bar avatar above it, as the shell shows it.
+  /// The profile page with a top-bar avatar above it, as the shell shows it.
   Future<void> pumpAccount(WidgetTester tester, {double width = 1000}) async {
-    tester.view.physicalSize = Size(width, 1400);
+    tester.view.physicalSize = Size(width, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       h.app(
-        initialLocation: '/settings',
+        initialLocation: '/profile',
         extraOverrides: [
           storageUsageProvider.overrideWith(
             (ref) async => const StorageUsage(artBytes: 0, databaseBytes: 0),
@@ -65,12 +76,12 @@ void main() {
         ],
         routes: [
           GoRoute(
-            path: '/settings',
+            path: '/profile',
             builder: (_, _) => const Scaffold(
               body: Column(
                 children: [
                   AccountAvatar(size: 28, key: Key('top.avatar')),
-                  Expanded(child: SettingsPage()),
+                  Expanded(child: ProfilePage()),
                 ],
               ),
             ),
@@ -90,7 +101,7 @@ void main() {
   Finder key(String k) => find.byKey(Key(k));
   Finder inTop(Finder f) => find.descendant(of: key('top.avatar'), matching: f);
   Finder inSection(Finder f) =>
-      find.descendant(of: find.byType(AccountSection), matching: f);
+      find.descendant(of: find.byType(ProfilePage), matching: f);
 
   /// Types into a field and rebuilds (enterText alone doesn't).
   Future<void> type(WidgetTester tester, Finder f, String text) async {
@@ -132,8 +143,8 @@ void main() {
     // No picture yet: the first letter.
     expect(inSection(find.text('D')), findsOneWidget);
     expect(inTop(find.text('D')), findsOneWidget);
-    expect(inSection(find.text('Change username')), findsOneWidget);
-    expect(inSection(find.text('Change picture')), findsOneWidget);
+    expect(inSection(find.byTooltip('Change username')), findsOneWidget);
+    expect(key('profile.avatar'), findsOneWidget);
     expect(inSection(find.text('Log out')), findsOneWidget);
     expect(inSection(find.text('Delete account')), findsOneWidget);
     expect(key('account.signUp'), findsNothing);
@@ -184,8 +195,8 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
     expect(
       find.text(
-        'Your account uses the username @squatter. You can change it in '
-        'Settings.',
+        'Your account uses the username @squatter. You can change it on '
+        'your profile.',
       ),
       findsOneWidget,
     );
@@ -433,69 +444,120 @@ void main() {
     expect(find.text('Signed in'), findsOneWidget);
   });
 
-  uiTest('change username and change / remove picture update the section and '
-      'the top-bar avatar', (tester) async {
+  /// Taps the name on the profile, turning it into a field.
+  Future<void> editName(WidgetTester tester) async {
+    await tapAndSettle(tester, key('account.username'));
+    expect(key('account.newUsername'), findsOneWidget);
+  }
+
+  uiTest('tap the name to edit it; Enter saves', (tester) async {
     await signedIn('den@x.com', 'den');
     h.accountBackend.takenUsernames.add('taken');
     await pumpAccount(tester);
     expect(inTop(find.text('D')), findsOneWidget);
+    await editName(tester);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(
+      tester.widget<TextField>(key('account.newUsername')).controller!.text,
+      'den',
+    );
 
-    // Change username: a taken one is refused inline.
-    await tapAndSettle(tester, key('account.changeUsername'));
+    // A taken one is refused by the server and stays in the field.
     await type(tester, key('account.newUsername'), 'Taken');
-    await tester.pump();
     expect(
       tester.widget<TextField>(key('account.newUsername')).controller!.text,
       'taken',
     );
-    await tapAndSettle(tester, key('account.saveUsername'));
+    await tapAndSettle(tester, key('profile.saveUsername'));
     expect(find.text('That username is taken.'), findsWidgets);
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(key('account.newUsername'), findsOneWidget);
 
     await type(tester, key('account.newUsername'), 'neo');
     await tester.pump(const Duration(milliseconds: 500));
-    await tapAndSettle(tester, key('account.saveUsername'));
-    expect(find.byType(AlertDialog), findsNothing);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(key('account.newUsername'), findsNothing);
     expect(find.text('Username changed'), findsOneWidget);
-    expect(inSection(find.text('neo')), findsOneWidget);
+    expect(tester.widget<Text>(key('account.username')).data, 'neo');
     expect(inTop(find.text('N')), findsOneWidget);
+  });
 
-    // Too big a file is refused before it is read.
-    expect(maxAvatarSourceBytes, 10 * 1024 * 1024);
-    pick = (size: 11 * 1024 * 1024, bytes: null);
-    await tapAndSettle(tester, key('account.changePicture'));
-    expect(find.text('That image is too big'), findsOneWidget);
-    expect(h.accountBackend.calls, isNot(contains('uploadAvatar')));
+  uiTest('Esc restores the old name without saving', (tester) async {
+    await signedIn('den@x.com', 'den');
+    await pumpAccount(tester);
+    await editName(tester);
+    await type(tester, key('account.newUsername'), 'neo');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester);
+    expect(key('account.newUsername'), findsNothing);
+    expect(tester.widget<Text>(key('account.username')).data, 'den');
+    expect(h.accountBackend.calls, isNot(contains('updateUsername')));
+  });
 
-    // So is a small file with too many pixels.
-    pick = (size: 100, bytes: hugePngHeader(8000, 6000));
-    await tester.tap(key('account.changePicture'));
-    await tester.pump();
-    // The earlier message clears while the picture is read.
-    expect(key('account.error'), findsNothing);
-    for (var i = 0; i < 20 && key('account.error').evaluate().isEmpty; i++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pump();
-    }
+  uiTest('a taken name cannot be saved once checked', (tester) async {
+    await signedIn('den@x.com', 'den');
+    h.accountBackend.takenUsernames.add('taken');
+    await pumpAccount(tester);
+    await editName(tester);
+    await type(tester, key('account.newUsername'), 'taken');
+    // The availability check runs after a pause.
+    await tester.pump(const Duration(milliseconds: 500));
     await settle(tester);
     expect(
-      tester.widget<Text>(key('account.error')).data,
-      'That image is too big',
+      tester.widget<IconButton>(key('profile.saveUsername')).onPressed,
+      isNull,
     );
-    expect(h.accountBackend.calls, isNot(contains('uploadAvatar')));
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(h.accountBackend.calls, isNot(contains('updateUsername')));
+    expect(key('account.newUsername'), findsOneWidget);
+  });
 
-    // Change picture.
-    pick = (size: 100, bytes: _png());
-    await tester.tap(key('account.changePicture'));
-    for (var i = 0; i < 20 && h.accountBackend.files.isEmpty; i++) {
+  /// Opens the picture viewer from the profile's picture.
+  Future<void> openViewer(WidgetTester tester) async {
+    await tapAndSettle(tester, key('profile.avatar'));
+    expect(key('profile.pictureViewer'), findsOneWidget);
+  }
+
+  /// Taps [f] and waits (on the real clock) until [done] holds.
+  Future<void> tapUntil(
+    WidgetTester tester,
+    Finder f,
+    bool Function() done,
+  ) async {
+    await tester.tap(f);
+    await tester.pump();
+    for (var i = 0; i < 20 && !done(); i++) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );
       await tester.pump();
     }
     await settle(tester);
+  }
+
+  uiTest('tapping the picture opens it large with Change and Remove', (
+    tester,
+  ) async {
+    await signedIn('den@x.com', 'den');
+    await pumpAccount(tester);
+    await openViewer(tester);
+    // No picture yet: only Change.
+    expect(key('profile.changePicture'), findsOneWidget);
+    expect(key('profile.removePicture'), findsNothing);
+    expect(
+      tester.getSize(find.byKey(const Key('profile.pictureLarge'))).width,
+      240,
+    );
+
+    // Change picture: the viewer closes and every avatar shows it.
+    pick = (size: 100, bytes: _png());
+    await tapUntil(
+      tester,
+      key('profile.changePicture'),
+      () => h.accountBackend.files.isNotEmpty,
+    );
+    expect(key('profile.pictureViewer'), findsNothing);
     expect(find.text('Picture updated'), findsOneWidget);
     expect(inSection(key('account.avatar.image')), findsOneWidget);
     expect(inTop(key('account.avatar.image')), findsOneWidget);
@@ -507,12 +569,99 @@ void main() {
       startsWith('https://x/'),
     );
 
-    // Remove picture.
-    await tapAndSettle(tester, key('account.removePicture'));
+    // Remove picture: back to the initial.
+    await openViewer(tester);
+    expect(key('profile.removePicture'), findsOneWidget);
+    await tapAndSettle(tester, key('profile.removePicture'));
+    expect(key('profile.pictureViewer'), findsNothing);
+    expect(find.text('Picture removed'), findsOneWidget);
     expect(inSection(key('account.avatar.image')), findsNothing);
     expect(inTop(key('account.avatar.image')), findsNothing);
-    expect(inTop(find.text('N')), findsOneWidget);
-    expect(key('account.removePicture'), findsNothing);
+    expect(inTop(find.text('D')), findsOneWidget);
+  });
+
+  uiTest('the viewer cannot be closed while a change is uploading', (
+    tester,
+  ) async {
+    final slow = _SlowUploadBackend();
+    h.accountBackend = slow;
+    await signedIn('den@x.com', 'den');
+    await pumpAccount(tester);
+    await openViewer(tester);
+    final gate = slow.gate = Completer<void>();
+    slow.uploadError = AccountError.offline;
+    pick = (size: 100, bytes: _png());
+    await tester.tap(key('profile.changePicture'));
+    final spinner = find.descendant(
+      of: key('profile.pictureViewer'),
+      matching: find.byType(CircularProgressIndicator),
+    );
+    for (var i = 0; i < 40 && spinner.evaluate().isEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+    expect(spinner, findsOneWidget);
+    // Esc and a tap outside both leave it open while busy.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pump();
+    expect(key('profile.pictureViewer'), findsOneWidget);
+    gate.complete();
+    await tapUntil(
+      tester,
+      key('profile.pictureLarge'),
+      () => key('profile.pictureError').evaluate().isNotEmpty,
+    );
+    expect(
+      tester.widget<Text>(key('profile.pictureError')).data,
+      AccountError.offline.message,
+    );
+  });
+
+  uiTest('a picture too big shows the error and keeps the viewer open', (
+    tester,
+  ) async {
+    await signedIn('den@x.com', 'den');
+    await pumpAccount(tester);
+    await openViewer(tester);
+
+    // Too big a file is refused before it is read.
+    expect(maxAvatarSourceBytes, 10 * 1024 * 1024);
+    pick = (size: 11 * 1024 * 1024, bytes: null);
+    await tapAndSettle(tester, key('profile.changePicture'));
+    expect(
+      tester.widget<Text>(key('profile.pictureError')).data,
+      'That image is too big',
+    );
+    expect(key('profile.pictureViewer'), findsOneWidget);
+    expect(h.accountBackend.calls, isNot(contains('uploadAvatar')));
+
+    // So is a small file with too many pixels; the earlier message clears
+    // while it is read.
+    pick = (size: 100, bytes: hugePngHeader(8000, 6000));
+    await tester.tap(key('profile.changePicture'));
+    await tester.pump();
+    expect(key('profile.pictureError'), findsNothing);
+    for (
+      var i = 0;
+      i < 20 && key('profile.pictureError').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+    await settle(tester);
+    expect(
+      tester.widget<Text>(key('profile.pictureError')).data,
+      'That image is too big',
+    );
+    expect(key('profile.pictureViewer'), findsOneWidget);
+    expect(h.accountBackend.calls, isNot(contains('uploadAvatar')));
   });
 
   uiTest('delete account asks first, then returns to signed out', (
@@ -542,26 +691,39 @@ void main() {
     expect(inTop(find.byIcon(Icons.person_outline_rounded)), findsOneWidget);
   });
 
-  uiTest('an action that fails shows its message in the section', (
+  uiTest('a picture change that fails offline says so in the viewer', (
     tester,
   ) async {
     await signedIn('den@x.com', 'den');
     await pumpAccount(tester);
     h.accountBackend.everythingError = AccountError.offline;
     pick = (size: 100, bytes: _png());
-    await tester.tap(key('account.changePicture'));
-    for (var i = 0; i < 20 && key('account.error').evaluate().isEmpty; i++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pump();
-    }
-    await settle(tester);
+    await openViewer(tester);
+    await tapUntil(
+      tester,
+      key('profile.changePicture'),
+      () => key('profile.pictureError').evaluate().isNotEmpty,
+    );
+    expect(
+      tester.widget<Text>(key('profile.pictureError')).data,
+      AccountError.offline.message,
+    );
+    expect(key('profile.pictureViewer'), findsOneWidget);
+    expect(inSection(find.text('den')), findsOneWidget);
+  });
+
+  uiTest('a delete that fails offline shows the error on the page', (
+    tester,
+  ) async {
+    await signedIn('den@x.com', 'den');
+    await pumpAccount(tester);
+    h.accountBackend.everythingError = AccountError.offline;
+    await tapAndSettle(tester, key('account.delete'));
+    await tapAndSettle(tester, find.text('Delete'));
     expect(
       tester.widget<Text>(key('account.error')).data,
       AccountError.offline.message,
     );
-    expect(inSection(find.text('den')), findsOneWidget);
   });
 
   uiTest('showing the section loads a session restored while offline', (

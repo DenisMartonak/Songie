@@ -76,8 +76,8 @@ void main() {
                   const Scaffold(body: PlayerErrorIslands(child: SizedBox())),
             ),
             GoRoute(
-              path: '/settings',
-              builder: (_, _) => const Scaffold(body: Text('settings page')),
+              path: '/profile',
+              builder: (_, _) => const Scaffold(body: Text('profile page')),
             ),
           ],
         );
@@ -103,7 +103,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
         await tester.tap(find.text('Sign in'));
         await tester.pumpAndSettle();
-        expect(find.text('settings page'), findsOneWidget);
+        expect(find.text('profile page'), findsOneWidget);
       });
     }
 
@@ -126,8 +126,8 @@ void main() {
             ),
           ),
           GoRoute(
-            path: '/settings',
-            builder: (_, _) => const Scaffold(body: Text('settings page')),
+            path: '/profile',
+            builder: (_, _) => const Scaffold(body: Text('profile page')),
           ),
         ],
       );
@@ -157,7 +157,7 @@ void main() {
       await tester.tap(find.text('Sign in'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.text('settings page'), findsOneWidget);
+      expect(find.text('profile page'), findsOneWidget);
     });
 
     testWidgets('other skips have no action', (tester) async {

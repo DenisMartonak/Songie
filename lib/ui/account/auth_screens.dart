@@ -148,7 +148,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       } else {
         islands.show(
           'Your account uses the username @$keptUsername. You can change it '
-          'in Settings.',
+          'on your profile.',
           kind: IslandKind.info,
         );
       }
@@ -499,11 +499,15 @@ class UsernameField extends ConsumerStatefulWidget {
     this.enabled = true,
     this.fieldKey,
     this.autofocus = false,
+    this.onSubmitted,
     super.key,
   });
 
   final TextEditingController controller;
   final ValueChanged<bool> onTaken;
+
+  /// Enter in the field.
+  final ValueChanged<String>? onSubmitted;
   final VoidCallback? onChanged;
   final String? current;
   final bool enabled;
@@ -577,6 +581,7 @@ class _UsernameFieldState extends ConsumerState<UsernameField> {
         border: const OutlineInputBorder(),
       ),
       onChanged: _changed,
+      onSubmitted: widget.onSubmitted,
     );
   }
 }

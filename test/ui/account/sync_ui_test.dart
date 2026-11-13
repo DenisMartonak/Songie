@@ -8,7 +8,7 @@ import 'package:songies/account/account_service.dart';
 import 'package:songies/core/paths.dart';
 import 'package:songies/sync/cloud/sync_status.dart';
 import 'package:songies/ui/account/account_dialogs.dart';
-import 'package:songies/ui/settings/settings_page.dart';
+import 'package:songies/ui/account/profile_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 
 import '../../helpers/ui_harness.dart';
@@ -36,12 +36,12 @@ void main() {
     WidgetTester tester, {
     GlobalKey<NavigatorState>? navigatorKey,
   }) async {
-    tester.view.physicalSize = const Size(1000, 1400);
+    tester.view.physicalSize = const Size(1000, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       h.app(
-        initialLocation: '/settings',
+        initialLocation: '/profile',
         navigatorKey: navigatorKey,
         extraOverrides: [
           storageUsageProvider.overrideWith(
@@ -50,8 +50,8 @@ void main() {
         ],
         routes: [
           GoRoute(
-            path: '/settings',
-            builder: (_, _) => const Scaffold(body: SettingsPage()),
+            path: '/profile',
+            builder: (_, _) => const Scaffold(body: ProfilePage()),
           ),
         ],
       ),
@@ -267,7 +267,7 @@ void main() {
     expect(find.text(question), findsNothing);
     expect(finished, isTrue);
     // The rest of the app is still there, nothing else was popped.
-    expect(find.text('Account'), findsWidgets);
+    expect(find.byKey(const Key('profile.page')), findsOneWidget);
   });
 
   uiTest('while the merge question is open the status reads Syncing… and '

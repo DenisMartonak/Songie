@@ -172,6 +172,27 @@ void main() {
     ),
   );
 
+  uiTest('StatsBody shows the stats inside another page', (tester) async {
+    size(tester, const Size(400, 800));
+    await tester.pumpWidget(
+      h.app(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => const Scaffold(
+              body: SingleChildScrollView(child: StatsBody()),
+            ),
+          ),
+        ],
+      ),
+    );
+    await settle(tester);
+    expect(find.byKey(const Key('stats.chart')), findsOneWidget);
+    expect(find.text('Top artists'), findsOneWidget);
+    expect(find.text('Your listening'), findsNothing);
+  });
+
   uiTest('the picker switches periods and asks for each', (tester) async {
     size(tester, const Size(400, 800));
     await pumpPage(tester);

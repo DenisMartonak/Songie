@@ -19,6 +19,7 @@ import '../motion/shimmer.dart';
 import '../remote/devices_button.dart';
 import '../room/room_button.dart';
 import '../shell/adaptive_shell.dart';
+import '../account/avatar.dart' show AccountButton;
 import '../stats/listening_card.dart';
 import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
@@ -335,6 +336,8 @@ class _Header extends StatelessWidget {
           if (showSettings) DevicesButton(iconSize: 24, color: colors.text),
           // Likewise the way to start or join a room.
           if (showSettings) RoomButton(iconSize: 24, color: colors.text),
+          // Your profile (or Log in), next to Settings.
+          if (showSettings) const AccountButton(push: true),
           if (showSettings)
             IconButton(
               key: const Key('home.settings'),
