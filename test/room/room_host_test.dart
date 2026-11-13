@@ -334,6 +334,86 @@ void main() {
     expect(s.songs[250].videoId, 'vt700');
   });
 
+  Map<String, Object?> song(String id) =>
+      RoomSong(videoId: 'v$id', title: 'Title $id', artist: 'a').toJson();
+
+  hostTest("songs carry who added them; untagged ones are the host's", (r) {
+    r.playQueue(['a']);
+    r.host.setRole('g', RoomRole.queue);
+    r.async.flushMicrotasks();
+    r.request(RoomOp.addToEnd, {
+      'songs': [song('b')],
+    });
+    final s = r.states.last;
+    expect(s.songs.map((x) => x.by), ['uh', 'ug']);
+    expect(s.faces.keys.toSet(), {'uh', 'ug'});
+    expect(s.faces['ug']!.name, 'Name g');
+  });
+
+  hostTest("a full guest's playSongs are tagged with that guest", (r) {
+    r.playQueue(['a']);
+    r.host.setRole('g', RoomRole.full);
+    r.async.flushMicrotasks();
+    r.request(RoomOp.playSongs, {
+      'songs': [song('x'), song('y')],
+      'startIndex': 0,
+    });
+    expect(r.states.last.songs.map((x) => x.by), ['ug', 'ug']);
+    expect(r.player.state.addedBy, ['ug', 'ug']);
+  });
+
+  hostTest('a guest who left keeps their face on their songs', (r) {
+    r.playQueue(['a']);
+    r.host.setRole('g', RoomRole.queue);
+    r.async.flushMicrotasks();
+    r.request(RoomOp.addToEnd, {
+      'songs': [song('b')],
+    });
+    r.guestCh.leave();
+    r.async.flushMicrotasks();
+    final other = r.hub.channelFor('o');
+    other.join(who('uo', 'o'));
+    r.async.flushMicrotasks();
+    r.hub.sent.clear();
+    other.send(const RoomHelloMsg(from: 'o'));
+    r.async.flushMicrotasks();
+    final s = r.states.single;
+    expect(s.songs.last.by, 'ug');
+    expect(s.faces['ug']!.name, 'Name g');
+    expect(r.host.faces.keys, containsAll(['uh', 'ug', 'uo']));
+  });
+
+  hostTest('a new picture sends the full state again', (r) {
+    r.playQueue(['a']);
+    r.host.setRole('g', RoomRole.queue);
+    r.async.flushMicrotasks();
+    r.request(RoomOp.addToEnd, {
+      'songs': [song('b')],
+    });
+    final rev = r.states.last.rev;
+    r.hub.sent.clear();
+    r.guestCh.join(
+      const RoomPresence(
+        userId: 'ug',
+        deviceId: 'g',
+        name: 'Name g',
+        platform: 'linux',
+        host: false,
+        avatarUrl: 'https://x/new.jpg',
+      ),
+    );
+    r.async.elapse(const Duration(milliseconds: 2300));
+    final s = r.states.first;
+    expect(s.rev, isNot(rev));
+    expect(s.faces['ug']!.avatarUrl, 'https://x/new.jpg');
+  });
+
+  hostTest('faces list only the adders in the window', (r) {
+    r.playQueue(['a', 'b']);
+    r.hello();
+    expect(r.states.last.faces.keys.toSet(), {'uh'});
+  });
+
   hostTest('removeGuest sharing the host user id kicks, no removeMember', (r) {
     final twin = r.hub.channelFor('twin');
     twin.join(who('uh', 'twin'));

@@ -5,7 +5,7 @@ import 'room_protocol.dart';
 
 /// The room song for [t]: a YouTube track keeps its video id, a local file
 /// has none (guests cannot play it).
-RoomSong roomSongOf(Track t) {
+RoomSong roomSongOf(Track t, {String? by}) {
   final id = t.source == 'local' ? null : t.ytVideoId;
   return RoomSong(
     videoId: id,
@@ -13,6 +13,7 @@ RoomSong roomSongOf(Track t) {
     artist: t.artist,
     album: (t.album ?? '').isEmpty ? null : t.album,
     durationMs: t.durationMs > 0 ? t.durationMs : null,
+    by: by,
   );
 }
 

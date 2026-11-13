@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show listEquals, mapEquals;
+
 import '../core/log.dart';
 import '../data/database.dart';
 import '../player/player_service.dart';
@@ -77,14 +79,26 @@ class RoomHost {
   int? _sentEpoch;
   int _sentOffset = 0;
   List<Track> _sentWindow = const [];
+  List<String> _sentBys = const [];
+  Map<String, RoomFace> _sentFaces = const {};
+
+  /// Everyone who has been in this room, the host included, by user id:
+  /// their songs keep their face after they leave.
+  final _faces = <String, RoomFace>{};
+  final _facesChanges = StreamController<Map<String, RoomFace>>.broadcast();
 
   Map<String, RoomRole> get roles => Map.unmodifiable(_roles);
   Stream<RoomHostEvent> get events => _events.stream;
   Stream<List<RoomPresence>> get people => _people.stream;
 
+  /// See [_faces].
+  Map<String, RoomFace> get faces => Map.unmodifiable(_faces);
+  Stream<Map<String, RoomFace>> get facesChanges => _facesChanges.stream;
+
   Future<void> start() async {
     if (_running) return;
     _running = true;
+    _noteFace(_me);
     final s = _player.state;
     _last = s;
     _lastAtMs = _nowMs();
@@ -170,10 +184,27 @@ class RoomHost {
         }
       }
       _known = now;
+      var changed = false;
+      for (final p in list) {
+        changed = _noteFace(p) || changed;
+      }
+      if (changed) {
+        _facesChanges.add(faces);
+        // A face in the window may have changed: guests get it now.
+        _schedule();
+      }
       _people.add(list);
     } on Object catch (e, st) {
       AppLog.w('room host: presence failed', e, st);
     }
+  }
+
+  /// Records [p]'s face; whether it is new or changed.
+  bool _noteFace(RoomPresence p) {
+    final face = RoomFace(name: p.name, avatarUrl: p.avatarUrl);
+    if (_faces[p.userId] == face) return false;
+    _faces[p.userId] = face;
+    return true;
   }
 
   // --- player side ---------------------------------------------------------
@@ -277,10 +308,18 @@ class RoomHost {
     final end = min(len, offset + kRoomQueueWindow);
     final epoch = _player.stateEpoch;
     final window = s.queue.sublist(offset, end);
+    // An untagged entry is the host's own.
+    final bys = [
+      for (var i = offset; i < end; i++)
+        s.addedBy.elementAtOrNull(i) ?? _me.userId,
+    ];
+    final windowFaces = {for (final id in bys) id: ?_faces[id]};
     final same =
         epoch == _sentEpoch &&
         offset == _sentOffset &&
-        _sameTracks(window, _sentWindow);
+        _sameTracks(window, _sentWindow) &&
+        listEquals(bys, _sentBys) &&
+        mapEquals(windowFaces, _sentFaces);
     if (same && !full && _guestsTakeBeats) {
       return RoomBeatMsg(
         rev: _rev,
@@ -297,11 +336,17 @@ class RoomHost {
       _sentEpoch = epoch;
       _sentOffset = offset;
       _sentWindow = window;
+      _sentBys = bys;
+      _sentFaces = windowFaces;
     }
     return RoomStateMsg(
       rev: _rev,
       epoch: epoch,
-      songs: [for (final t in window) roomSongOf(t)],
+      songs: [
+        for (var i = 0; i < window.length; i++)
+          roomSongOf(window[i], by: bys[i]),
+      ],
+      faces: windowFaces,
       offset: offset,
       index: s.index,
       playing: s.playing,
@@ -432,17 +477,22 @@ class RoomHost {
           out.add(t);
         }
         if (startAt == null) return;
-        await p.playQueue(out, startIndex: startAt);
+        await p.playQueue(
+          out,
+          startIndex: startAt,
+          addedBy: List.filled(out.length, who.userId),
+        );
       case RoomOp.addNext:
       case RoomOp.addToEnd:
         final songs = _songsOf(a['songs']);
         if (songs == null || songs.isEmpty) return;
         final tracks = [for (final t in await _tracksFor(songs)) ?t];
         if (!_running || tracks.isEmpty) return;
+        final by = List<String?>.filled(tracks.length, who.userId);
         if (r.op == RoomOp.addNext) {
-          await p.addToQueue(tracks);
+          await p.addToQueue(tracks, addedBy: by);
         } else {
-          await p.appendToQueue(tracks);
+          await p.appendToQueue(tracks, addedBy: by);
         }
         _events.add(GuestAdded(who.name, songs.first.title));
     }
