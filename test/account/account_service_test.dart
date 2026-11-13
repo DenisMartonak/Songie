@@ -33,6 +33,29 @@ void main() {
     await service.verifySignup(email, backend.goodCode);
   }
 
+  test(
+    'before-log-out steps run while still signed in to the server',
+    () async {
+      await service.signUp('a@b.c', 'password1', 'den');
+      await service.verifySignup('a@b.c', backend.goodCode);
+      final seen = <List<String>>[];
+      final remove = service.addBeforeLogOut(() async {
+        seen.add([...backend.calls]);
+        throw StateError('a failing step does not stop the log-out');
+      });
+      await service.logOut();
+      expect(seen.single, isNot(contains('logOut')));
+      expect(backend.calls, contains('logOut'));
+      expect(service.state, isA<SignedOut>());
+      // Removed, it no longer runs.
+      remove();
+      await service.signUp('b@b.c', 'password1', 'ben');
+      await service.verifySignup('b@b.c', backend.goodCode);
+      await service.logOut();
+      expect(seen, hasLength(1));
+    },
+  );
+
   test('error messages are the exact copy', () {
     expect(AccountError.wrongCredentials.message, 'Wrong email or password.');
     expect(

@@ -83,6 +83,24 @@ After applying it, check by hand. You need three accounts, A, B and C; in the SQ
 5. As A: `insert into friendships values (...)`, `update friendships set status = 'accepted'` and `delete from friendships` all fail with permission denied.
 6. As A: `select remove_friend('<C>');` removes their row; calling it again is fine. Deleting account B (Authentication, Users) removes the A–B row.
 
+### Friend activity (`20261115120000_friend_activity.sql`)
+
+The seventh migration lets friends see what each other is listening to, their top 10 of the last 30 days, and join a friend's room. Apply it like the others (once, after the friends one), and before releasing the app version with friend activity.
+
+- The `activity` table: one row per account with two switches (`share_listening`, `share_top`, both on by default), what it plays now and when that was published, the code of the room it hosts, and its top 10. Rows go with the account. A signed-in user reads only their own row; there is no write grant.
+- `my_sharing` (the caller's switches; both on with no row yet), `set_sharing` (sets the switches given; a null one stays as it is, so another device can't turn back on what one turned off; one turned off clears what it covers at once), `publish_now_playing` and `publish_top` (do nothing while the matching switch is off; over 2 kB and 16 kB fail with `too_large`) and `friend_activity` (each accepted friend's row, with every part the friend doesn't share left empty; it starts from the caller's friendships, so it costs what their friends do). All are `security definer`, callable by signed-in users only.
+- A room code is kept only when it is an open room the caller hosts (so nobody can send friends into someone else's room); anything else is stored as no room.
+- Nothing is pushed live: friends' apps ask every few minutes, and every minute while a friends page is open. A "now playing" older than 15 minutes counts as not listening (the app may have closed without clearing it).
+
+After applying it, check by hand with accounts A and B (friends) and C (not a friend), as for friends:
+
+1. As A: `select * from my_sharing();` gives `true, true`. `select publish_now_playing('{"title":"Halo","artist":"Beyonce"}', 'ABCD2345');` then as B `select * from friend_activity();` shows A's song and the room code.
+2. As A: `select publish_top('{"artists":[{"name":"Beyonce"}],"songs":[]}');` and B sees it in `friend_activity()`.
+3. As A: `select set_sharing(false, null);` (null: top unchanged). A's own row (`select * from activity;`) has no song or room code, and publishing a song again changes nothing. B's `friend_activity()` row for A has no song or room code but still has the top 10.
+4. As C: `friend_activity()` has no row for A, and `select * from activity;` shows only C's own row.
+5. As A: writing to `activity` directly (insert, update, delete) fails with permission denied. `publish_now_playing` with a code that isn't a room A hosts stores no room code.
+6. Deleting account A removes A's row.
+
 ## 2. Email sign-in settings
 
 1. Under Authentication, Sign In / Providers, in the user sign-up settings: allow new users to sign up, and turn Confirm email on.

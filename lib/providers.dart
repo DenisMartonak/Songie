@@ -49,6 +49,8 @@ import 'remote/remote_channel.dart';
 import 'remote/remote_controller.dart';
 import 'remote/remote_host.dart';
 import 'remote/remote_protocol.dart';
+import 'friends/activity_backend.dart';
+import 'friends/activity_publisher.dart';
 import 'friends/friends_backend.dart';
 import 'friends/friends_service.dart';
 import 'room/room_backend.dart';
@@ -780,10 +782,61 @@ final friendsBackendProvider = Provider<FriendsBackend>(
   (ref) => SupabaseFriendsBackend(() => Supabase.instance.client),
 );
 
+/// The activity rows behind Supabase (lazy like [friendsBackendProvider]).
+final activityBackendProvider = Provider<ActivityBackend>(
+  (ref) => SupabaseActivityBackend(() => Supabase.instance.client),
+);
+
+/// Publishes what this account plays now and its top 10 for friends, while
+/// signed in. `main()` listens to it once so it follows the account.
+final activityPublisherProvider = Provider<ActivityPublisher>((ref) {
+  final player = ref.watch(playerServiceProvider);
+  final room = ref.watch(roomServiceProvider);
+  final stats = ref.watch(statsRepositoryProvider);
+  final publisher = ActivityPublisher(
+    backend: ref.watch(activityBackendProvider),
+    states: player.states,
+    current: () => player.state,
+    roomCode: () => switch (room.status) {
+      RoomHosting(:final code) => code,
+      _ => null,
+    },
+    roomChanges: room.statuses,
+    top: () async {
+      final month = await stats.period(StatsPeriod.month);
+      return TopSummary(
+        artists: [
+          for (final a in month.topArtists.take(TopSummary.most)) a.name,
+        ],
+        songs: [
+          for (final song in month.topSongs.take(TopSummary.most))
+            NowPlaying(title: song.title, artist: song.displayArtist),
+        ],
+      );
+    },
+  );
+  ref.onDispose(publisher.dispose);
+  // Cleared while the session still works: after it, the server refuses.
+  ref.onDispose(
+    ref.read(accountServiceProvider).addBeforeLogOut(publisher.signedOut),
+  );
+  if (ref.read(_remoteUserIdProvider) != null) {
+    unawaited(publisher.signedIn());
+  }
+  ref.listen(_remoteUserIdProvider, (previous, next) {
+    if (previous != null && previous != next) unawaited(publisher.signedOut());
+    if (next != null && previous != next) unawaited(publisher.signedIn());
+  });
+  return publisher;
+});
+
 /// The signed-in account's friends and requests: loads on sign-in, every 5
 /// minutes and after each change; cleared on sign-out.
 final friendsServiceProvider = Provider<FriendsService>((ref) {
-  final service = FriendsService(ref.watch(friendsBackendProvider));
+  final service = FriendsService(
+    ref.watch(friendsBackendProvider),
+    activity: ref.watch(activityBackendProvider),
+  );
   ref.onDispose(service.dispose);
   void follow(String? userId) {
     if (userId == null) {

@@ -291,7 +291,24 @@ class AccountService {
     await _b.resetPassword(email.trim(), code.trim(), newPassword),
   );
 
+  final _beforeLogOut = <Future<void> Function()>[];
+
+  /// Runs [step] at each log-out, while the session still works (to clear
+  /// what this account shows others). A failing step doesn't stop the
+  /// log-out. Returns a function that removes it.
+  void Function() addBeforeLogOut(Future<void> Function() step) {
+    _beforeLogOut.add(step);
+    return () => _beforeLogOut.remove(step);
+  }
+
   Future<void> logOut() async {
+    for (final step in [..._beforeLogOut]) {
+      try {
+        await step().timeout(const Duration(seconds: 5));
+      } catch (e) {
+        AppLog.w('Before log-out step failed: ${e.runtimeType}');
+      }
+    }
     await _b.logOut();
     await _follow(null);
   }

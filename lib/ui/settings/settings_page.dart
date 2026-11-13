@@ -22,6 +22,7 @@ import '../island/island_host.dart';
 import '../shell/adaptive_shell.dart' show phoneBreakpoint;
 import 'downloads_settings.dart';
 import 'playback_settings.dart';
+import 'privacy_settings.dart';
 import 'storage_usage.dart';
 import 'youtube_settings.dart';
 import 'discord_settings.dart';
@@ -90,6 +91,7 @@ class SettingsPage extends ConsumerWidget {
           ),
           const _FoldersSection(),
           const PlaybackSettingsSection(),
+          const PrivacySettingsSection(),
           const _AppearanceSection(),
           const DiscordSettingsSection(),
           const YouTubeSettingsSection(),

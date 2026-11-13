@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../core/log.dart';
+import 'activity_backend.dart';
 import 'friends_backend.dart';
 
 /// The signed-in user's friends and requests, as last loaded.
@@ -12,6 +13,7 @@ class FriendsState {
     this.friends = const [],
     this.incoming = const [],
     this.outgoing = const [],
+    this.activity = const {},
     this.loaded = false,
   });
 
@@ -25,7 +27,14 @@ class FriendsState {
 
   /// Requests the user sent.
   final List<FriendUser> outgoing;
+
+  /// What each friend shares, by user id.
+  final Map<String, FriendActivity> activity;
   final bool loaded;
+
+  /// Whether friend [userId] is listening to something, as of [now].
+  bool listening(String userId, DateTime now) =>
+      activity[userId]?.listeningAt(now) ?? false;
 
   FriendLink? linkOf(String userId) {
     bool has(List<FriendUser> l) => l.any((u) => u.id == userId);
@@ -40,10 +49,21 @@ class FriendsState {
 /// every [every] and after each change, and clears on sign-out. Changes go
 /// to the server; their failures are rethrown as [FriendsException]s.
 class FriendsService {
-  FriendsService(this._backend, {this.every = const Duration(minutes: 5)});
+  FriendsService(
+    this._backend, {
+    this._activity,
+    this.every = const Duration(minutes: 5),
+    this.closely = const Duration(minutes: 1),
+  });
 
   final FriendsBackend _backend;
+  final ActivityBackend? _activity;
   final Duration every;
+
+  /// How often it refreshes while a page watches closely.
+  final Duration closely;
+  final _watchers = <Object>{};
+  Timer? _closeTimer;
 
   final _states = StreamController<FriendsState>.broadcast();
   FriendsState _state = FriendsState.empty;
@@ -99,6 +119,16 @@ class FriendsService {
     final session = _session;
     final load = ++_loads;
     final rows = await _backend.load(me);
+    var activity = _state.activity;
+    final source = _activity;
+    if (source != null) {
+      try {
+        activity = await source.friendActivity();
+      } on FriendsException catch (e) {
+        // The friends still update; their activity stays as it was.
+        AppLog.w('friends: activity failed (${e.error.name})');
+      }
+    }
     if (session != _session || load < _applied) return;
     _applied = load;
     List<FriendUser> of(FriendLink link) => [
@@ -110,6 +140,7 @@ class FriendsService {
         friends: of(FriendLink.friend),
         incoming: of(FriendLink.incoming),
         outgoing: of(FriendLink.outgoing),
+        activity: activity,
         loaded: true,
       ),
     );
@@ -120,6 +151,26 @@ class FriendsService {
       await refresh();
     } on FriendsException catch (e) {
       AppLog.w('friends: refresh failed (${e.error.name})');
+    }
+  }
+
+  /// Refreshes every [closely] until [stopWatching] is called with the
+  /// returned token (a page showing friends' activity).
+  Object watchClosely() {
+    final token = Object();
+    _watchers.add(token);
+    _closeTimer ??= Timer.periodic(
+      closely,
+      (_) => unawaited(_refreshQuietly()),
+    );
+    return token;
+  }
+
+  void stopWatching(Object token) {
+    _watchers.remove(token);
+    if (_watchers.isEmpty) {
+      _closeTimer?.cancel();
+      _closeTimer = null;
     }
   }
 
@@ -143,6 +194,7 @@ class FriendsService {
 
   void dispose() {
     _timer?.cancel();
+    _closeTimer?.cancel();
     unawaited(_states.close());
   }
 }

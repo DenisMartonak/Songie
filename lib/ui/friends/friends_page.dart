@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../friends/activity_backend.dart';
 import '../../friends/friends_backend.dart';
 import '../../friends/friends_service.dart';
 import '../../providers.dart';
@@ -24,9 +25,21 @@ class FriendsPage extends ConsumerStatefulWidget {
 }
 
 class _FriendsPageState extends ConsumerState<FriendsPage> {
+  /// Keeps friends' listening fresh while the page is open.
+  late final FriendsService _service;
+  late final Object _watch;
+
+  @override
+  void dispose() {
+    _service.stopWatching(_watch);
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
+    _service = ref.read(friendsServiceProvider);
+    _watch = _service.watchClosely();
     unawaited(
       ref.read(friendsServiceProvider).refresh().catchError((Object _) {}),
     );
@@ -37,6 +50,7 @@ class _FriendsPageState extends ConsumerState<FriendsPage> {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final state = ref.watch(friendsStateProvider).value ?? FriendsState.empty;
     final service = ref.read(friendsServiceProvider);
+    final now = ref.read(nowProvider)();
     final bottom = MediaQuery.paddingOf(context).bottom;
     final nothing =
         state.friends.isEmpty &&
@@ -97,6 +111,9 @@ class _FriendsPageState extends ConsumerState<FriendsPage> {
                   _PersonRow(
                     key: Key('friends.friend.${u.id}'),
                     user: u,
+                    listening: state.listening(u.id, now)
+                        ? state.activity[u.id]!.nowPlaying
+                        : null,
                     onTap: () => context.push('/profile/friends/${u.id}'),
                   ),
               ],
@@ -183,11 +200,15 @@ class _PersonRow extends StatelessWidget {
   const _PersonRow({
     required this.user,
     this.actions = const [],
+    this.listening,
     this.onTap,
     super.key,
   });
 
   final FriendUser user;
+
+  /// What they play now, shown under their name.
+  final NowPlaying? listening;
   final List<Widget> actions;
   final VoidCallback? onTap;
 
@@ -203,14 +224,27 @@ class _PersonRow extends StatelessWidget {
             PersonAvatar(name: user.username, url: user.avatarUrl, size: 44),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                user.username,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user.username,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (listening case final song?)
+                    Text(
+                      '♪ ${song.title} · ${song.artist}',
+                      key: Key('friends.listening.${user.id}'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.accent, fontSize: 12),
+                    ),
+                ],
               ),
             ),
             ...actions,
