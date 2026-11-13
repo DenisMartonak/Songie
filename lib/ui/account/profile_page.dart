@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../account/account_service.dart';
-import '../../account/avatar_image.dart' show ImageTooBigException;
 import '../../core/log.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
@@ -17,6 +16,7 @@ import 'account_dialogs.dart';
 import 'account_section.dart';
 import 'auth_screens.dart';
 import 'avatar.dart';
+import 'picture_viewer.dart';
 
 /// Your profile: the picture, username and email, your listening stats,
 /// then the account's sync status and actions. Signed out, Sign up and Log
@@ -55,15 +55,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     String? error;
     try {
       await action();
-    } on AccountException catch (e) {
-      error = e.error.message;
-    } on ImageTooBigException {
-      error = 'That image is too big';
-    } on FormatException {
-      error = "Couldn't read that image";
     } catch (e) {
-      AppLog.w('Account action failed: ${e.runtimeType}');
-      error = AccountError.unknown.message;
+      error = accountActionError(e);
     }
     if (error == null) islands.show(done, kind: IslandKind.success);
     if (!mounted) return;
@@ -71,19 +64,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       _busy = false;
       _error = error;
     });
-  }
-
-  Future<void> _changePicture() async {
-    if (_busy) return;
-    final service = ref.read(accountServiceProvider);
-    final pick = await ref.read(avatarPickerProvider)();
-    if (!mounted || pick == null) return;
-    final bytes = pick.bytes;
-    if (bytes == null || pick.size > maxAvatarSourceBytes) {
-      setState(() => _error = 'That image is too big');
-      return;
-    }
-    await _run(() => service.changeAvatar(bytes), 'Picture updated');
   }
 
   /// Logs out. Changes the account hasn't got yet are uploaded first; if
@@ -197,7 +177,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     SongiesColors colors,
     Profile profile,
   ) {
-    final service = ref.read(accountServiceProvider);
     final off = _busy;
     Widget action(
       String key,
@@ -220,7 +199,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
         child: Row(
           children: [
-            const AccountAvatar(size: 96, key: Key('profile.avatar')),
+            Tooltip(
+              message: 'Your picture',
+              child: InkResponse(
+                key: const Key('profile.avatar'),
+                radius: 54,
+                onTap: off ? null : () => showPictureViewer(context),
+                child: const AccountAvatar(size: 96),
+              ),
+            ),
             const SizedBox(width: 18),
             Expanded(
               child: Column(
@@ -252,19 +239,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                         () =>
                             showChangeUsernameDialog(context, profile.username),
                       ),
-                      action(
-                        'account.changePicture',
-                        Icons.image_outlined,
-                        'Change picture',
-                        _changePicture,
-                      ),
-                      if (profile.avatarPath != null)
-                        action(
-                          'account.removePicture',
-                          Icons.hide_image_outlined,
-                          'Remove picture',
-                          () => _run(service.removeAvatar, 'Picture removed'),
-                        ),
                     ],
                   ),
                 ],

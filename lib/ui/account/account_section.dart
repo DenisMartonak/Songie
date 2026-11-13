@@ -6,6 +6,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../account/account_service.dart';
+import '../../account/avatar_image.dart' show ImageTooBigException;
+import '../../core/log.dart';
 import '../../providers.dart';
 import '../../sync/cloud/sync_status.dart';
 import '../../theme/app_theme.dart';
@@ -37,6 +40,22 @@ final avatarPickerProvider = Provider<Future<AvatarPick?> Function()>(
     );
   },
 );
+
+/// What to tell the user when an account action failed with [e]; an
+/// unexpected failure is logged.
+String accountActionError(Object e) {
+  switch (e) {
+    case AccountException(:final error):
+      return error.message;
+    case ImageTooBigException():
+      return 'That image is too big';
+    case FormatException():
+      return "Couldn't read that image";
+    default:
+      AppLog.w('Account action failed: ${e.runtimeType}');
+      return AccountError.unknown.message;
+  }
+}
 
 /// The sync status line's main text.
 String syncPhaseText(SyncPhase phase) => switch (phase) {
