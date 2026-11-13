@@ -118,10 +118,13 @@ class _GatedPlayer extends PlayerService {
   Completer<void>? addGate;
 
   @override
-  Future<void> appendToQueue(List<Track> tracks) async {
+  Future<void> appendToQueue(
+    List<Track> tracks, {
+    List<String?>? addedBy,
+  }) async {
     final g = addGate;
     if (g != null) await g.future;
-    return super.appendToQueue(tracks);
+    return super.appendToQueue(tracks, addedBy: addedBy);
   }
 }
 

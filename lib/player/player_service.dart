@@ -29,6 +29,7 @@ class PlayerNotice {
 class PlayerState {
   const PlayerState({
     this.queue = const [],
+    this.addedBy = const [],
     this.index = -1,
     this.playing = false,
     this.buffering = false,
@@ -44,6 +45,10 @@ class PlayerState {
   });
 
   final List<Track> queue;
+
+  /// Who put each [queue] entry there (a user id; null: not said), in step
+  /// with [queue]. Empty when nothing tags the queue.
+  final List<String?> addedBy;
   final int index;
   final bool playing;
   final bool buffering;
@@ -67,6 +72,10 @@ class PlayerState {
   Track? get current =>
       index >= 0 && index < queue.length ? queue[index] : null;
 
+  /// [addedBy] of the current entry.
+  String? get currentAddedBy =>
+      index >= 0 && index < addedBy.length ? addedBy[index] : null;
+
   /// The song the player will play after [current]: the next entry that is
   /// not unavailable, wrapping to the start only with [RepeatMode.all], never
   /// [current] itself. Null with [RepeatMode.one] (shuffle has already
@@ -88,6 +97,7 @@ class PlayerState {
   /// their value unless a new one (including an explicit null) is passed.
   PlayerState copyWith({
     List<Track>? queue,
+    List<String?>? addedBy,
     int? index,
     bool? playing,
     bool? buffering,
@@ -103,6 +113,7 @@ class PlayerState {
   }) {
     return PlayerState(
       queue: queue ?? this.queue,
+      addedBy: addedBy ?? this.addedBy,
       index: index ?? this.index,
       playing: playing ?? this.playing,
       buffering: buffering ?? this.buffering,
@@ -137,6 +148,20 @@ class _Entry {
   /// Added by [PlayerService.addToQueue] rather than being part of the queue
   /// that was played.
   bool queued = false;
+
+  /// Who added it (a user id), as the command that made it said.
+  String? addedBy;
+}
+
+/// [tracks] as entries, tagged from [addedBy] when it is in step with them.
+List<_Entry> _entriesOf(List<Track> tracks, List<String?>? addedBy) {
+  final tags = addedBy != null && addedBy.length == tracks.length
+      ? addedBy
+      : null;
+  return [
+    for (var i = 0; i < tracks.length; i++)
+      _Entry(tracks[i])..addedBy = tags?[i],
+  ];
 }
 
 /// The single source of truth for what is playing. Platform-agnostic: audio
@@ -290,25 +315,29 @@ class PlayerService {
 
   // --- commands -------------------------------------------------------------
 
+  /// [addedBy], in step with [tracks], says who added each (see
+  /// [PlayerState.addedBy]).
   Future<void> playQueue(
     List<Track> tracks, {
     int startIndex = 0,
     String? sourcePlaylistId,
+    List<String?>? addedBy,
   }) {
     final epoch = ++_queueEpoch;
-    return _playQueue(tracks, startIndex, sourcePlaylistId, epoch);
+    return _playQueue(tracks, startIndex, sourcePlaylistId, epoch, addedBy);
   }
 
   Future<void> _playQueue(
     List<Track> tracks,
     int startIndex,
     String? sourcePlaylistId,
-    int epoch,
-  ) => _locked(() async {
+    int epoch, [
+    List<String?>? addedBy,
+  ]) => _locked(() async {
     _stateEpoch = epoch;
     _engineFailures = 0;
     _failedStarts = 0;
-    final entries = [for (final t in tracks) _Entry(t)];
+    final entries = _entriesOf(tracks, addedBy);
     _original
       ..clear()
       ..addAll(entries);
@@ -352,9 +381,14 @@ class PlayerService {
   /// so they play next, in the order they were added, before the rest of the
   /// queue that was played. On an empty queue they become the queue, with the
   /// first one current but not started.
-  Future<void> addToQueue(List<Track> tracks) => _locked(() async {
+  Future<void> addToQueue(
+    List<Track> tracks, {
+    List<String?>? addedBy,
+  }) => _locked(() async {
     if (tracks.isEmpty) return;
-    final entries = [for (final t in tracks) _Entry(t)..queued = true];
+    final entries = [
+      for (final e in _entriesOf(tracks, addedBy)) e..queued = true,
+    ];
     if (_currentEntry == null) {
       _becomeQueue(entries);
       return;
@@ -371,32 +405,40 @@ class PlayerService {
   /// Adds [tracks] at the end of the queue as ordinary queue songs (a
   /// radio's next page), not as songs the user queued: a later [addToQueue]
   /// still goes right after the current song, ahead of them.
-  Future<void> appendToQueue(List<Track> tracks) => _locked(() async {
-    if (tracks.isEmpty) return;
-    final entries = [for (final t in tracks) _Entry(t)];
-    if (_currentEntry == null) {
-      _becomeQueue(entries);
-      return;
-    }
-    _queue.addAll(entries);
-    _original.addAll(entries);
-    _queueEdited();
-  });
+  Future<void> appendToQueue(List<Track> tracks, {List<String?>? addedBy}) =>
+      _locked(() async {
+        if (tracks.isEmpty) return;
+        final entries = _entriesOf(tracks, addedBy);
+        if (_currentEntry == null) {
+          _becomeQueue(entries);
+          return;
+        }
+        _queue.addAll(entries);
+        _original.addAll(entries);
+        _queueEdited();
+      });
 
   /// Makes [tracks] the queue without touching playback, when the song at
   /// [index] is the current one ([Track.id] alike) and shuffle is off; the
   /// current song keeps playing as [index]. Returns whether it did. Not a new
   /// queue: [queueEpoch] and [stateEpoch] stay.
-  Future<bool> replaceQueueAroundCurrent(List<Track> tracks, int index) async {
+  Future<bool> replaceQueueAroundCurrent(
+    List<Track> tracks,
+    int index, {
+    List<String?>? addedBy,
+  }) async {
     var done = false;
     await _locked(() async {
       final current = _currentEntry;
       if (current == null || _state.shuffle) return;
       if (index < 0 || index >= tracks.length) return;
       if (tracks[index].id != current.track.id) return;
+      final fresh = _entriesOf(tracks, addedBy);
+      if (addedBy != null && addedBy.length == tracks.length) {
+        current.addedBy = addedBy[index];
+      }
       final entries = [
-        for (var i = 0; i < tracks.length; i++)
-          i == index ? current : _Entry(tracks[i]),
+        for (var i = 0; i < tracks.length; i++) i == index ? current : fresh[i],
       ];
       _queue
         ..clear()
@@ -700,6 +742,14 @@ class PlayerService {
       entries.toList()..shuffle(_random);
 
   void _emit(PlayerState s) {
+    // Every queue published is built from [_queue]: its tags go with it.
+    if (!identical(s.queue, _state.queue)) {
+      s = s.copyWith(
+        addedBy: List<String?>.unmodifiable([
+          for (final e in _queue) e.addedBy,
+        ]),
+      );
+    }
     _state = s;
     if (!_controller.isClosed) _controller.add(s);
   }
