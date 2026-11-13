@@ -71,6 +71,13 @@ class RoomHost {
   PlayerState? _last;
   int _lastAtMs = 0;
 
+  /// The window last sent in full, and its revision: a send whose window is
+  /// the same can be a [RoomBeatMsg].
+  int _rev = 0;
+  int? _sentEpoch;
+  int _sentOffset = 0;
+  List<Track> _sentWindow = const [];
+
   Map<String, RoomRole> get roles => Map.unmodifiable(_roles);
   Stream<RoomHostEvent> get events => _events.stream;
   Stream<List<RoomPresence>> get people => _people.stream;
@@ -239,7 +246,7 @@ class RoomHost {
         _heartbeat = null;
       }
       if (!always && !_guestPresent) return;
-      await _channel.send(_build());
+      await _channel.send(_build(full: always));
     } on Object catch (e, st) {
       AppLog.w('room host: sending state failed', e, st);
     }
@@ -253,7 +260,14 @@ class RoomHost {
     }
   }
 
-  RoomStateMsg _build() {
+  /// Every guest present follows beats (none is an older build).
+  bool get _guestsTakeBeats =>
+      _channel.present.every((p) => p.deviceId == _me.deviceId || p.beats);
+
+  /// The state to send: a beat while the window is the one last sent in
+  /// full and every guest takes beats, else the full state ([full] forces
+  /// it, as for a hello).
+  RoomMessage _build({bool full = false}) {
     final s = _player.state;
     final len = s.queue.length;
     final offset = max(
@@ -261,9 +275,33 @@ class RoomHost {
       min(s.index - kRoomQueueWindow ~/ 2, len - kRoomQueueWindow),
     );
     final end = min(len, offset + kRoomQueueWindow);
+    final epoch = _player.stateEpoch;
+    final window = s.queue.sublist(offset, end);
+    final same =
+        epoch == _sentEpoch &&
+        offset == _sentOffset &&
+        _sameTracks(window, _sentWindow);
+    if (same && !full && _guestsTakeBeats) {
+      return RoomBeatMsg(
+        rev: _rev,
+        index: s.index,
+        playing: s.playing,
+        positionMs: s.position.inMilliseconds,
+        durationMs: s.duration?.inMilliseconds,
+        shuffle: s.shuffle,
+        repeat: s.repeat,
+      );
+    }
+    if (!same) {
+      _rev++;
+      _sentEpoch = epoch;
+      _sentOffset = offset;
+      _sentWindow = window;
+    }
     return RoomStateMsg(
-      epoch: _player.stateEpoch,
-      songs: [for (var i = offset; i < end; i++) roomSongOf(s.queue[i])],
+      rev: _rev,
+      epoch: epoch,
+      songs: [for (final t in window) roomSongOf(t)],
       offset: offset,
       index: s.index,
       playing: s.playing,
@@ -272,6 +310,14 @@ class RoomHost {
       shuffle: s.shuffle,
       repeat: s.repeat,
     );
+  }
+
+  static bool _sameTracks(List<Track> a, List<Track> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   // --- requests ------------------------------------------------------------

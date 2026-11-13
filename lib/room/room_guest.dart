@@ -88,6 +88,14 @@ class RoomGuest {
 
   /// The latest state applied (or being applied).
   (RoomStateMsg, DateTime)? _last;
+
+  /// The latest full state received: its window is what beats of its
+  /// revision play over.
+  RoomStateMsg? _full;
+
+  /// When this guest last asked for the full state over a beat it could
+  /// not place (this device's clock).
+  DateTime? _askedAt;
   bool _applying = false;
 
   /// The queue the guest follows: the host's window as last loaded.
@@ -240,6 +248,17 @@ class RoomGuest {
     }
   }
 
+  /// A beat of a revision this guest does not hold (its full state was
+  /// lost, or none came yet): asks the host for it, at most every
+  /// [helloEvery].
+  void _askForState() {
+    final now = _now();
+    final asked = _askedAt;
+    if (asked != null && now.difference(asked) < helloEvery) return;
+    _askedAt = now;
+    unawaited(_sendHello());
+  }
+
   Future<void> _finish(RoomLeaveReason reason) async {
     if (!_running) return;
     _running = false;
@@ -302,8 +321,17 @@ class RoomGuest {
           _unreachable?.cancel();
           _unreachable = null;
           _takeOver();
+          _full = m;
           _pending = (m, _now());
           _drain();
+        case RoomBeatMsg():
+          final full = _full;
+          if (full == null || full.rev != m.rev) {
+            _askForState();
+          } else {
+            _pending = (m.over(full), _now());
+            _drain();
+          }
         case RoomRolesMsg():
           _roleMap = Map.unmodifiable(m.roles);
           _allRoles.add(_roleMap);

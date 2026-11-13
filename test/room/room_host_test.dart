@@ -83,6 +83,7 @@ class Rig {
   var _n = 0;
 
   List<RoomStateMsg> get states => hub.sent.whereType<RoomStateMsg>().toList();
+  List<RoomBeatMsg> get beats => hub.sent.whereType<RoomBeatMsg>().toList();
 
   void playQueue(List<String> queue, {int start = 0}) {
     player.playQueue([for (final id in queue) track(id)], startIndex: start);
@@ -232,7 +233,7 @@ void main() {
       'videoId': 'vb',
     }, r.player.stateEpoch - 1);
     expect(ids(r.player), ['a', 'b', 'c']);
-    expect(r.states, isNotEmpty);
+    expect([...r.states, ...r.beats], isNotEmpty);
     // A matching one works; a mismatching video id does not.
     r.request(RoomOp.remove, {
       'index': 1,
@@ -250,12 +251,75 @@ void main() {
     r.playQueue(['a', 'b']);
     expect(r.player.state.playing, isTrue);
     r.async.elapse(const Duration(seconds: 6));
-    expect(r.states.length, inInclusiveRange(3, 4));
+    expect(r.beats.length, inInclusiveRange(3, 4));
     r.player.pause();
     r.async.elapse(const Duration(milliseconds: 300));
     r.hub.sent.clear();
     r.async.elapse(const Duration(seconds: 10));
+    expect([...r.states, ...r.beats], isEmpty);
+  });
+
+  hostTest('songs go out only when the window changes; heartbeats are '
+      'beats of its revision', (r) {
+    r.player.playQueue([track('a'), track('b')]);
+    r.async.elapse(const Duration(milliseconds: 300));
+    final first = r.states.single;
+    expect(first.rev, isNotNull);
+    r.hub.sent.clear();
+    r.async.elapse(const Duration(seconds: 6));
     expect(r.states, isEmpty);
+    expect(r.beats, isNotEmpty);
+    expect(r.beats.map((b) => b.rev).toSet(), {first.rev});
+    // A song moving on keeps the window: a beat with the new index.
+    r.player.next();
+    r.async.elapse(const Duration(milliseconds: 300));
+    expect(r.states, isEmpty);
+    expect(r.beats.last.index, 1);
+    // An added song changes it: the full state, of a new revision.
+    r.hub.sent.clear();
+    r.player.appendToQueue([track('c')]);
+    r.async.elapse(const Duration(milliseconds: 300));
+    final next = r.states.single;
+    expect(next.rev, isNot(first.rev));
+    expect(next.songs.map((s) => s.videoId), ['va', 'vb', 'vc']);
+    r.hub.sent.clear();
+    r.async.elapse(const Duration(seconds: 2));
+    expect(r.beats.single.rev, next.rev);
+  });
+
+  hostTest('a hello is answered with the full state even when unchanged', (r) {
+    r.playQueue(['a', 'b']);
+    r.async.elapse(const Duration(seconds: 2));
+    r.hub.sent.clear();
+    r.hello();
+    expect(r.states.single.songs.length, 2);
+  });
+
+  hostTest('an older guest present gets full states only', (r) {
+    final old = r.hub.channelFor('old');
+    old.join(
+      const RoomPresence(
+        userId: 'uo',
+        deviceId: 'old',
+        name: 'Old',
+        platform: 'android',
+        host: false,
+        beats: false,
+      ),
+    );
+    r.async.flushMicrotasks();
+    r.playQueue(['a', 'b']);
+    r.async.elapse(const Duration(seconds: 6));
+    expect(r.beats, isEmpty);
+    expect(r.states.length, inInclusiveRange(3, 4));
+    expect(r.states.every((s) => s.songs.length == 2), isTrue);
+    // Once it leaves, heartbeats are beats again.
+    old.leave();
+    r.async.flushMicrotasks();
+    r.hub.sent.clear();
+    r.async.elapse(const Duration(seconds: 4));
+    expect(r.states, isEmpty);
+    expect(r.beats, isNotEmpty);
   });
 
   hostTest('a 1200-song queue sends 500 songs with the right offset', (r) {

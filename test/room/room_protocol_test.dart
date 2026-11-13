@@ -40,6 +40,73 @@ void main() {
     expect(other.v, 7);
     expect(other.compatible, isFalse);
     expect(RoomPresence.fromJson({'v': 1}), isNull);
+    // Beats: this build takes them; a build before them leaves the key out.
+    expect(back.beats, isTrue);
+    expect(
+      RoomPresence.fromJson({...p.toJson()}..remove('beats'))!.beats,
+      isFalse,
+    );
+  });
+
+  test('a state carries its revision; one without it still decodes', () {
+    const full = RoomStateMsg(
+      rev: 9,
+      epoch: 2,
+      songs: [yt],
+      offset: 3,
+      index: 3,
+      playing: true,
+      positionMs: 50,
+      durationMs: 1000,
+      shuffle: false,
+      repeat: RepeatMode.off,
+    );
+    expect((roundTrip(full)! as RoomStateMsg).rev, 9);
+    final old = {...full.toJson()}..remove('rev');
+    final s = RoomMessage.decode('state', old)! as RoomStateMsg;
+    expect(s.rev, isNull);
+    expect(s.songs.single.videoId, 'v1');
+  });
+
+  test('a beat round-trips and plays over its full state', () {
+    const full = RoomStateMsg(
+      rev: 9,
+      epoch: 2,
+      songs: [yt, loc],
+      offset: 3,
+      index: 3,
+      playing: true,
+      positionMs: 50,
+      durationMs: 1000,
+      shuffle: false,
+      repeat: RepeatMode.off,
+    );
+    final beat =
+        roundTrip(
+              const RoomBeatMsg(
+                rev: 9,
+                index: 4,
+                playing: false,
+                positionMs: 70,
+                durationMs: null,
+                shuffle: true,
+                repeat: RepeatMode.one,
+              ),
+            )!
+            as RoomBeatMsg;
+    expect(beat.toJson().containsKey('songs'), isFalse);
+    final s = beat.over(full);
+    expect(s.rev, 9);
+    expect(s.epoch, 2);
+    expect(s.songs, same(full.songs));
+    expect(s.offset, 3);
+    expect(s.index, 4);
+    expect(s.playing, isFalse);
+    expect(s.positionMs, 70);
+    expect(s.durationMs, isNull);
+    expect(s.shuffle, isTrue);
+    expect(s.repeat, RepeatMode.one);
+    expect(RoomMessage.decode('beat', {'v': 1, 'index': 1}), isNull);
   });
 
   test('messages round-trip', () {

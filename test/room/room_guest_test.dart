@@ -639,6 +639,33 @@ void main() {
     expect(r.requests.last.args['startIndex'], 3);
   });
 
+  guestTest('a guest follows beats, and asks again for a full state it '
+      'lost', (r) {
+    r.hostPlays([track('a'), track('b')]);
+    r.join();
+    expect(r.guestSong, 'a');
+    // Heartbeats are beats; they keep the guest in step.
+    r.hostBackend.setPosition(const Duration(seconds: 40));
+    r.async.elapse(const Duration(seconds: 3));
+    expect(r.hub.sent.whereType<RoomBeatMsg>(), isNotEmpty);
+    expect(r.guestMs, closeTo(r.hostMs, 1000));
+    // The full state for an added song is lost on the way.
+    r.hub.lose = (m) => m is RoomStateMsg;
+    r.hostPlayer.appendToQueue([track('c')]);
+    r.settle();
+    r.hub.lose = null;
+    r.hub.sent.clear();
+    expect(r.guestPlayer.state.queue.length, 2);
+    // The next beat has a revision this guest does not hold: it says hello
+    // (once) and gets the full state.
+    r.async.elapse(const Duration(seconds: 2));
+    r.settle();
+    expect(r.hub.sent.whereType<RoomHelloMsg>().length, 1);
+    expect(r.guestPlayer.state.queue.map((t) => t.id), ['a', 'b', 'c']);
+    expect(r.guestSong, 'a');
+    expect(r.guestPlayer.state.playing, isTrue);
+  });
+
   guestTest('hello stops after the first state', (r) {
     r.hostPlays([track('a')]);
     r.join();
