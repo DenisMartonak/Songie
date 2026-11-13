@@ -309,10 +309,14 @@ class RoomHost {
     final end = min(len, offset + kRoomQueueWindow);
     final epoch = _player.stateEpoch;
     final window = s.queue.sublist(offset, end);
-    // An untagged entry is the host's own.
+    // An untagged entry is the host's own, and so is one tagged by someone
+    // this room never saw (left from an earlier room).
     final bys = [
       for (var i = offset; i < end; i++)
-        s.addedBy.elementAtOrNull(i) ?? _me.userId,
+        switch (s.addedBy.elementAtOrNull(i)) {
+          final id? when _faces.containsKey(id) => id,
+          _ => _me.userId,
+        },
     ];
     final windowFaces = {for (final id in bys) id: ?_faces[id]};
     final same =

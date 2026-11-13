@@ -408,6 +408,15 @@ void main() {
     expect(s.faces['ug']!.avatarUrl, 'https://x/new.jpg');
   });
 
+  hostTest("tags left from an earlier room count as the host's", (r) {
+    r.player.playQueue([track('a'), track('b')], addedBy: ['old', 'uh']);
+    r.async.elapse(const Duration(milliseconds: 300));
+    r.hello();
+    final s = r.states.last;
+    expect(s.songs.map((x) => x.by), ['uh', 'uh']);
+    expect(s.faces.keys.toSet(), {'uh'});
+  });
+
   hostTest('faces list only the adders in the window', (r) {
     r.playQueue(['a', 'b']);
     r.hello();

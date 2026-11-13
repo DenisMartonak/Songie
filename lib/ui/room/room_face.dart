@@ -18,7 +18,7 @@ class RoomFaceDot extends ConsumerWidget {
     final faces = ref.watch(roomFacesProvider);
     final face = faces?.of(addedBy);
     if (faces == null || face == null) return const SizedBox.shrink();
-    final id = addedBy ?? faces.untagged;
+    final id = faces.faces.containsKey(addedBy) ? addedBy : faces.untagged;
     return Tooltip(
       key: Key('room.face.$id'),
       message: face.name,

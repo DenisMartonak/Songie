@@ -35,10 +35,14 @@ class RoomFaces {
   /// null as a guest (its songs come tagged, or from a host before tags).
   final String? untagged;
 
-  /// The face for a queue entry tagged [addedBy]; null when unknown.
+  /// The face for a queue entry tagged [addedBy]; null when unknown. While
+  /// hosting, a tag this room doesn't know (left from an earlier room) is
+  /// the host's, like an untagged one.
   RoomFace? of(String? addedBy) {
-    final id = addedBy ?? untagged;
-    return id == null ? null : faces[id];
+    final face = addedBy == null ? null : faces[addedBy];
+    if (face != null) return face;
+    final host = untagged;
+    return host == null ? null : faces[host];
   }
 }
 
