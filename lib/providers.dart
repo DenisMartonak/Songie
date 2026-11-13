@@ -50,6 +50,7 @@ import 'remote/remote_controller.dart';
 import 'remote/remote_host.dart';
 import 'remote/remote_protocol.dart';
 import 'friends/friends_backend.dart';
+import 'friends/friends_service.dart';
 import 'room/room_backend.dart';
 import 'room/room_channel.dart';
 import 'room/room_service.dart';
@@ -778,6 +779,31 @@ final playerInputsProvider = Provider<PlayerInputs>(
 final friendsBackendProvider = Provider<FriendsBackend>(
   (ref) => SupabaseFriendsBackend(() => Supabase.instance.client),
 );
+
+/// The signed-in account's friends and requests: loads on sign-in, every 5
+/// minutes and after each change; cleared on sign-out.
+final friendsServiceProvider = Provider<FriendsService>((ref) {
+  final service = FriendsService(ref.watch(friendsBackendProvider));
+  ref.onDispose(service.dispose);
+  void follow(String? userId) {
+    if (userId == null) {
+      service.signedOut();
+    } else {
+      unawaited(service.signedIn(userId));
+    }
+  }
+
+  follow(ref.read(_remoteUserIdProvider));
+  ref.listen(_remoteUserIdProvider, (_, next) => follow(next));
+  return service;
+});
+
+/// [FriendsService.state] as it changes.
+final friendsStateProvider = StreamProvider<FriendsState>((ref) async* {
+  final service = ref.watch(friendsServiceProvider);
+  yield service.state;
+  yield* service.states;
+});
 
 /// The room tables behind Supabase. Not overridden in `main()`: the client
 /// is read only when a call is made, so a signed-out app never touches
