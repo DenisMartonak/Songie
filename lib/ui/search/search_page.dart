@@ -14,6 +14,7 @@ import '../motion/fade_slide_in.dart';
 import '../motion/motion.dart';
 import '../motion/pressable.dart';
 import '../shell/adaptive_shell.dart';
+import '../friends/user_search_results.dart';
 import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
 import '../ytm/ytm_result_tiles.dart';
@@ -68,6 +69,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   /// The selected YouTube Music tab (kept across queries).
   YtmSearchKind _kind = YtmSearchKind.songs;
 
+  /// Whether the Songies Users tab is selected instead of [_kind].
+  bool _users = false;
+
   /// The tabs opened for [_searched], whose results are kept.
   Set<YtmSearchKind> _opened = {YtmSearchKind.songs};
 
@@ -76,16 +80,20 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   void _search(String query) {
     if (query.trim() != _searched.trim()) {
-      _opened = {_kind};
+      // On Songies Users nothing of YouTube Music is asked for the new query.
+      _opened = _users ? {} : {_kind};
       _libraryExpanded = false;
     }
     _searched = query;
   }
 
   void _select(YtmSearchKind kind) => setState(() {
+    _users = false;
     _kind = kind;
     _opened = {..._opened, kind};
   });
+
+  void _selectUsers() => setState(() => _users = true);
 
   @override
   void initState() {
@@ -150,8 +158,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             child: _Results(
               query: _searched,
               kind: _kind,
+              users: _users,
               opened: _opened,
               onSelect: _select,
+              onSelectUsers: _selectUsers,
               libraryExpanded: _libraryExpanded,
               onExpandLibrary: () => setState(() => _libraryExpanded = true),
             ),
@@ -199,16 +209,22 @@ class _Results extends ConsumerWidget {
   const _Results({
     required this.query,
     required this.kind,
+    required this.users,
     required this.opened,
     required this.onSelect,
+    required this.onSelectUsers,
     required this.libraryExpanded,
     required this.onExpandLibrary,
   });
 
   final String query;
   final YtmSearchKind kind;
+
+  /// The Songies Users tab is selected (YouTube Music is not asked).
+  final bool users;
   final Set<YtmSearchKind> opened;
   final ValueChanged<YtmSearchKind> onSelect;
+  final VoidCallback onSelectUsers;
   final bool libraryExpanded;
   final VoidCallback onExpandLibrary;
 
@@ -233,9 +249,9 @@ class _Results extends ConsumerWidget {
     // Tabs opened for this query stay subscribed, so switching back shows
     // their results without asking again.
     for (final k in opened) {
-      if (k != kind) ref.watch(ytmSearchProvider((q, k)));
+      if (users || k != kind) ref.watch(ytmSearchProvider((q, k)));
     }
-    final remote = ref.watch(ytmSearchProvider((q, kind)));
+    final remote = users ? null : ref.watch(ytmSearchProvider((q, kind)));
     // A short section, so the tabs stay on the first screen.
     final shownSongs = libraryExpanded
         ? songs
@@ -264,8 +280,17 @@ class _Results extends ConsumerWidget {
             key: const ValueKey('library.showAll'),
           ),
       ],
-      _Tabs(selected: kind, onSelect: onSelect, key: const ValueKey('tabs')),
-      ..._remote(context, ref, q, remote, colors),
+      _Tabs(
+        selected: users ? null : kind,
+        onSelect: onSelect,
+        usersSelected: users,
+        onSelectUsers: onSelectUsers,
+        key: const ValueKey('tabs'),
+      ),
+      if (remote == null)
+        UserSearchResults(query: q, key: const ValueKey('users'))
+      else
+        ..._remote(context, ref, q, remote, colors),
     ];
     // A new query is a new list, so its results fade in again.
     return ListView(
@@ -363,13 +388,22 @@ class _ShowAll extends StatelessWidget {
   }
 }
 
-/// The YouTube Music result tabs: Songs · Videos · Albums · Artists ·
-/// Playlists.
+/// The result tabs: YouTube Music's Songs · Videos · Albums · Artists ·
+/// Playlists, then Songies Users.
 class _Tabs extends StatelessWidget {
-  const _Tabs({required this.selected, required this.onSelect, super.key});
+  const _Tabs({
+    required this.selected,
+    required this.onSelect,
+    required this.usersSelected,
+    required this.onSelectUsers,
+    super.key,
+  });
 
-  final YtmSearchKind selected;
+  /// The selected YouTube Music tab; null while Songies Users is.
+  final YtmSearchKind? selected;
   final ValueChanged<YtmSearchKind> onSelect;
+  final bool usersSelected;
+  final VoidCallback onSelectUsers;
 
   @override
   Widget build(BuildContext context) {
@@ -389,6 +423,15 @@ class _Tabs extends StatelessWidget {
                 key: Key('search.tab.${kind.name}'),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: _Tab(
+              label: 'Songies Users',
+              selected: usersSelected,
+              onTap: onSelectUsers,
+              key: const Key('search.tab.users'),
+            ),
+          ),
         ],
       ),
     );

@@ -32,6 +32,7 @@ import 'package:songies/youtube/ytdlp_client.dart';
 
 import '../account/fake_account_backend.dart';
 import 'fake_audio_backend.dart';
+import 'fake_friends_backend.dart';
 import 'fake_cloud_sync.dart';
 
 import 'package:songies/innertube/yt_sign_in.dart';
@@ -223,6 +224,9 @@ class UiHarness {
   /// Accounts over [accountBackend], made on first use.
   late final AccountService accounts = AccountService(accountBackend);
 
+  /// The friends server; [FakeFriendsBackend.me] is who acts.
+  late FakeFriendsBackend friendsBackend = FakeFriendsBackend();
+
   /// Cloud sync as Settings → Account sees it; never signed in.
   late final FakeCloudSync cloudSync = FakeCloudSync(db, stamp);
 
@@ -322,6 +326,7 @@ class UiHarness {
     denoInstallerProvider.overrideWithValue(denoInstaller),
     accountServiceProvider.overrideWithValue(accounts),
     cloudSyncProvider.overrideWithValue(cloudSync),
+    friendsBackendProvider.overrideWithValue(friendsBackend),
   ];
 
   /// An app showing [routes], starting at [initialLocation]; with

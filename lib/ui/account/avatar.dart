@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../account/account_service.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../friends/friend_dot.dart';
 import 'auth_screens.dart';
 
 /// The account's round picture: the uploaded one, else the username's first
@@ -130,8 +131,13 @@ class AccountButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(accountStateProvider).value;
+    final waiting = ref.watch(friendRequestsWaitingProvider);
     return Tooltip(
-      message: state is SignedIn ? state.profile.username : 'Log in',
+      message: state is! SignedIn
+          ? 'Log in'
+          : waiting
+          ? '${state.profile.username} · friend requests waiting'
+          : state.profile.username,
       child: InkResponse(
         key: const Key('shell.account'),
         radius: size / 2 + 6,
@@ -143,7 +149,13 @@ class AccountButton extends ConsumerWidget {
         // Beside the Home header's buttons it takes their 48 px.
         child: Padding(
           padding: EdgeInsets.all(push ? 10 : 4),
-          child: const AccountAvatar(size: size),
+          child: const Stack(
+            clipBehavior: Clip.none,
+            children: [
+              AccountAvatar(size: size),
+              Positioned(top: -1, right: -1, child: FriendDot()),
+            ],
+          ),
         ),
       ),
     );

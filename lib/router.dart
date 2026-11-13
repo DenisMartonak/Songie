@@ -15,6 +15,8 @@ import 'ui/shell/adaptive_shell.dart';
 import 'ui/shell/fade_through_branches.dart';
 import 'ui/stats/stats_page.dart';
 import 'ui/account/profile_page.dart';
+import 'ui/friends/friend_page.dart';
+import 'ui/friends/friends_page.dart';
 import 'ui/widgets/page_surface.dart';
 import 'ui/ytm/album_page.dart';
 import 'ui/ytm/artist_page.dart';
@@ -74,6 +76,30 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
                 state,
                 const PageSurface(child: ProfilePage()),
               ),
+              routes: [
+                GoRoute(
+                  path: 'friends',
+                  pageBuilder: (context, state) => sharedAxisPage(
+                    context,
+                    state,
+                    const PageSurface(child: FriendsPage()),
+                  ),
+                  routes: [
+                    GoRoute(
+                      path: ':userId',
+                      pageBuilder: (context, state) => sharedAxisPage(
+                        context,
+                        state,
+                        PageSurface(
+                          child: FriendPage(
+                            userId: state.pathParameters['userId']!,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
             // Inside the shell so desktop keeps its title bar, sidebar and
             // player bar; Settings is not a tab, so it shares Home's branch.
