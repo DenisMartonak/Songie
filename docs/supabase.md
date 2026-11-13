@@ -65,6 +65,24 @@ The fifth migration lets cloud sync carry saved artists. Apply it like the other
 - It adds `saved_artists` to the table names `sync_rows` accepts (the `sync_rows_tbl_rule` check, dropped and added again) and to the list in `push_rows` (replaced with the same body otherwise). Nothing else changes; `pull_rows` and the Realtime notice name no tables.
 - Until it is applied the server refuses saved-artist rows as invalid, and the app skips refused rows for good, so apply it first.
 
+### Friends (`20261114120000_friends.sql`)
+
+The sixth migration lets accounts become friends: one asks, the other accepts. Apply it like the others (once, after the saved artists one), and before releasing the app version with friends.
+
+- The `friendships` table: one row per pair of accounts, `pending` (a request from `requester` to `addressee`) or `accepted`. A unique index on the unordered pair keeps A→B and B→A from both existing. Rows go when either account is deleted.
+- Row rules: a signed-in user can read only the rows they are in. There is no insert, update or delete grant; apps change rows only through the functions.
+- `send_friend_request` (a new request, or accepts theirs when the other person already asked; returns `pending` or `accepted`; fails with `self_request` or `unknown_user`), `accept_friend_request` (only the person asked; fails with `not_requested`) and `remove_friend` (deletes the pair's row either way round: declines, cancels or unfriends). All are `security definer`, callable by signed-in users only, and take a lock on the pair so crossed requests sent at once end as one accepted row.
+- Finding people needs nothing new: profiles (username and picture) were already readable by every signed-in user.
+
+After applying it, check by hand. You need three accounts, A, B and C; in the SQL editor run as each with `set role authenticated; select set_config('request.jwt.claim.sub', '<user id>', false);`.
+
+1. As A: `select send_friend_request('<B>');` returns `pending`. As B: `select * from friendships;` shows the row. As C it shows nothing.
+2. As B: `select accept_friend_request('<A>');` and the row's status is `accepted`. As A: `select accept_friend_request('<B>');` fails with `not_requested`.
+3. Crossed requests: as C `send_friend_request('<A>')` returns `pending`; then as A `send_friend_request('<C>')` returns `accepted`, and there is one row for A and C.
+4. As A: `send_friend_request('<A>')` fails with `self_request`; `send_friend_request(gen_random_uuid())` fails with `unknown_user`.
+5. As A: `insert into friendships values (...)`, `update friendships set status = 'accepted'` and `delete from friendships` all fail with permission denied.
+6. As A: `select remove_friend('<C>');` removes their row; calling it again is fine. Deleting account B (Authentication, Users) removes the A–B row.
+
 ## 2. Email sign-in settings
 
 1. Under Authentication, Sign In / Providers, in the user sign-up settings: allow new users to sign up, and turn Confirm email on.
