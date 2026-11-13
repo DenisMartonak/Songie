@@ -24,6 +24,10 @@ class NowPlayingScrubber extends ConsumerStatefulWidget {
   /// Height of the band that takes touches, centred on the track.
   static const double touchHeight = 32;
 
+  /// How far the page lifts the scrubber over the artist line; that much of
+  /// the band's top takes no touch.
+  static const double topInset = 10;
+
   /// From the track's centre down to the top of the time labels.
   static const double labelGap = 8;
 
@@ -98,15 +102,21 @@ class _NowPlayingScrubberState extends ConsumerState<NowPlayingScrubber> {
                 ),
                 child: slider!,
               ),
-              child: Slider(
-                key: const Key('nowPlaying.scrubber'),
-                value: _drag ?? fraction,
-                secondaryTrackValue: buffered,
-                onChanged: canSeek ? (v) => setState(() => _drag = v) : null,
-                onChangeEnd: (v) {
-                  setState(() => _drag = null);
-                  ref.read(playerViewProvider).seek(total * v);
-                },
+              // The page draws the scrubber a little higher, over the lower
+              // edge of the artist line: the top of the band takes no touch.
+              child: ClipRect(
+                clipBehavior: Clip.none,
+                clipper: const _SkipTop(NowPlayingScrubber.topInset),
+                child: Slider(
+                  key: const Key('nowPlaying.scrubber'),
+                  value: _drag ?? fraction,
+                  secondaryTrackValue: buffered,
+                  onChanged: canSeek ? (v) => setState(() => _drag = v) : null,
+                  onChangeEnd: (v) {
+                    setState(() => _drag = null);
+                    ref.read(playerViewProvider).seek(total * v);
+                  },
+                ),
               ),
             ),
           ),
@@ -346,4 +356,18 @@ class _ControlButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A clip that only narrows hit testing (with Clip.none nothing is cut off):
+/// the top [inset] px of the child take no touch.
+class _SkipTop extends CustomClipper<Rect> {
+  const _SkipTop(this.inset);
+
+  final double inset;
+
+  @override
+  Rect getClip(Size size) => Rect.fromLTRB(0, inset, size.width, size.height);
+
+  @override
+  bool shouldReclip(_SkipTop old) => old.inset != inset;
 }

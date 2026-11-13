@@ -807,7 +807,7 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
                 // Drawn a little higher than its slot: the top of its touch
                 // band overlaps the space under the artist.
                 Transform.translate(
-                  offset: const Offset(0, -10),
+                  offset: const Offset(0, -NowPlayingScrubber.topInset),
                   child: const NowPlayingScrubber(),
                 ),
                 const NowPlayingControls(),

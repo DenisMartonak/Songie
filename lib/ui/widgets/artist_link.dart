@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,6 +21,7 @@ class ArtistLink extends ConsumerStatefulWidget {
     this.enabled = true,
     this.style,
     this.maxLines = 1,
+    this.suffix,
     super.key,
   });
 
@@ -30,15 +32,60 @@ class ArtistLink extends ConsumerStatefulWidget {
   final TextStyle? style;
   final int maxLines;
 
+  /// Plain text after the link on the same line (one ellipsis for both), such
+  /// as " · album". The link is then a span of that text, so the line lays
+  /// out like a single string.
+  final String? suffix;
+
   @override
   ConsumerState<ArtistLink> createState() => _ArtistLinkState();
 }
 
 class _ArtistLinkState extends ConsumerState<ArtistLink> {
   bool _hover = false;
+  late final TapGestureRecognizer _tap = TapGestureRecognizer()..onTap = _open;
+
+  @override
+  void dispose() {
+    _tap.dispose();
+    super.dispose();
+  }
+
+  void _open() => openArtist(
+    context,
+    ref,
+    browseId: widget.browseId,
+    track: widget.track,
+    name: firstArtistName(widget.text),
+  );
 
   @override
   Widget build(BuildContext context) {
+    final suffix = widget.suffix;
+    if (suffix != null) {
+      final linked = widget.enabled && widget.text.trim().isNotEmpty;
+      final base = widget.style ?? DefaultTextStyle.of(context).style;
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: widget.text,
+              style: linked && _hover
+                  ? base.copyWith(decoration: TextDecoration.underline)
+                  : null,
+              recognizer: linked ? _tap : null,
+              mouseCursor: linked ? SystemMouseCursors.click : null,
+              onEnter: linked ? (_) => setState(() => _hover = true) : null,
+              onExit: linked ? (_) => setState(() => _hover = false) : null,
+            ),
+            TextSpan(text: suffix),
+          ],
+        ),
+        maxLines: widget.maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: widget.style,
+      );
+    }
     final base = widget.style ?? DefaultTextStyle.of(context).style;
     final text = Text(
       widget.text,
@@ -55,13 +102,7 @@ class _ArtistLinkState extends ConsumerState<ArtistLink> {
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => openArtist(
-          context,
-          ref,
-          browseId: widget.browseId,
-          track: widget.track,
-          name: firstArtistName(widget.text),
-        ),
+        onTap: _open,
         child: text,
       ),
     );

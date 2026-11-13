@@ -134,11 +134,7 @@ void main() {
       await pumpApp(tester);
       await real(tester, () => h.player.playQueue([yt]));
       await settle(tester);
-      // The scrubber's touch band overlaps the lower edge of the artist
-      // line, so tap its upper half.
-      await tester.tapAt(
-        tester.getTopLeft(find.text('Yt artist')) + const Offset(8, 3),
-      );
+      await tester.tap(find.text('Yt artist'));
       await settle(tester);
       expect(find.text('artist UCyt'), findsOneWidget);
     });
@@ -267,6 +263,32 @@ void main() {
       ];
       expect(seeks, hasLength(1));
       expect(seeks.single, closeTo(100000, 1000));
+    });
+
+    uiTest('the scrubber track still seeks (its band skips the artist line)', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await playThree(tester);
+      h.backend.clearCalls();
+      final box = tester.getRect(find.byKey(const Key('nowPlaying.scrubber')));
+
+      // Off the band's top the track still seeks.
+      await tester.tapAt(box.center + Offset(-box.width / 4, 0));
+      await settle(tester);
+      expect(h.backend.calls.where((c) => c.startsWith('seek:')), hasLength(1));
+    });
+
+    uiTest('a tap on the lower edge of the artist line does not seek', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await playThree(tester);
+      h.backend.clearCalls();
+      final artist = tester.getRect(find.text('Artist one'));
+      await tester.tapAt(artist.bottomLeft + const Offset(8, -2));
+      await settle(tester);
+      expect(h.backend.calls.where((c) => c.startsWith('seek:')), isEmpty);
     });
 
     uiTest('dragging the scrubber previews the time, then seeks', (

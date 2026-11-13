@@ -35,25 +35,11 @@ class YtmSongRow extends ConsumerWidget {
         style: style,
       );
     }
-    final link = ArtistLink(
+    return ArtistLink(
       text: artists,
       browseId: firstArtistId(song.artists),
       style: style,
-    );
-    if (!hasAlbum) return link;
-    // The link takes the room it needs; the album fills what is left.
-    return Row(
-      children: [
-        Flexible(child: link),
-        Expanded(
-          child: Text(
-            ' · $album',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: style,
-          ),
-        ),
-      ],
+      suffix: hasAlbum ? ' · $album' : null,
     );
   }
 

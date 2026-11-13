@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/innertube/ytm_models.dart';
@@ -88,8 +89,10 @@ void main() {
   uiTest('shows the title, artists, album and duration', (tester) async {
     await pumpRow(tester, _lucky);
     expect(find.text('Get Lucky'), findsOneWidget);
-    expect(find.text('Daft Punk, Pharrell Williams'), findsOneWidget);
-    expect(find.text(' · Random Access Memories'), findsOneWidget);
+    expect(
+      find.text('Daft Punk, Pharrell Williams · Random Access Memories'),
+      findsOneWidget,
+    );
     expect(find.text('6:09'), findsOneWidget);
     expect(
       tester.widget(find.byKey(const Key('ytm.song.v1'))),
@@ -108,10 +111,39 @@ void main() {
     tester,
   ) async {
     await pumpRow(tester, _lucky);
-    await tester.tap(find.text('Daft Punk, Pharrell Williams'));
+    // The start of the line is the artist; the album after it plays.
+    final line = find.textContaining('Daft Punk');
+    await tester.tapAt(tester.getTopLeft(line) + const Offset(10, 6));
     await settle(tester);
     expect(find.text('artist UCdaft'), findsOneWidget);
     expect(h.radio.played, isEmpty);
+  });
+
+  uiTest('tapping the album part of the subtitle plays', (tester) async {
+    await pumpRow(tester, _lucky);
+    final line = find.textContaining('Daft Punk');
+    await tester.tapAt(tester.getTopRight(line) - const Offset(10, -6));
+    await settle(tester);
+    expect(find.text('artist UCdaft'), findsNothing);
+    expect([for (final s in h.radio.played) s.videoId], ['v1']);
+  });
+
+  uiTest('a long artist line is not cut at half the width', (tester) async {
+    const long = YtmSong(
+      videoId: 'v3',
+      title: 'T',
+      artists: [YtmArtistRef(name: 'Long artist')],
+      album: 'Al',
+    );
+    await pumpRow(tester, long);
+    final line = find.textContaining('Long artist');
+    final text = tester.widget<Text>(line);
+    expect(text.textSpan!.toPlainText(), contains('artist · Al'));
+    // Not ellipsized: the whole line fits where half the width would not.
+    expect(
+      tester.renderObject<RenderParagraph>(line).didExceedMaxLines,
+      isFalse,
+    );
   });
 
   uiTest('tapping the title plays', (tester) async {
