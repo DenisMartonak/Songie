@@ -208,6 +208,30 @@ void main() {
     expect(find.byType(HomePage), findsOneWidget);
   });
 
+  testWidgets('an artist opens from Now Playing in the tab underneath it', (
+    tester,
+  ) async {
+    final router = await pumpRouter(tester);
+    for (final tab in ['/library', '/home']) {
+      router.go(tab);
+      await tester.pumpAndSettle();
+      openNowPlaying(router);
+      await tester.pumpAndSettle();
+      expect(find.byType(NowPlayingPage), findsOneWidget);
+
+      tester.element(find.byType(NowPlayingPage)).goYtmArtist('UCx');
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(router.state.uri.path, '$tab/ytm/artist/UCx');
+      expect(find.byType(ArtistPage), findsOneWidget);
+      expect(find.byType(NowPlayingPage), findsNothing);
+
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ArtistPage), findsNothing);
+    }
+  });
+
   testWidgets('openNowPlaying pushes once, then does nothing', (tester) async {
     final router = await pumpRouter(tester);
 

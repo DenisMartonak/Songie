@@ -43,6 +43,7 @@ class ArtistLink extends ConsumerStatefulWidget {
 
 class _ArtistLinkState extends ConsumerState<ArtistLink> {
   bool _hover = false;
+  bool _busy = false;
   late final TapGestureRecognizer _tap = TapGestureRecognizer()..onTap = _open;
 
   @override
@@ -51,13 +52,21 @@ class _ArtistLinkState extends ConsumerState<ArtistLink> {
     super.dispose();
   }
 
-  void _open() => openArtist(
-    context,
-    ref,
-    browseId: widget.browseId,
-    track: widget.track,
-    name: firstArtistName(widget.text),
-  );
+  Future<void> _open() async {
+    if (_busy) return;
+    _busy = true;
+    try {
+      await openArtist(
+        context,
+        ref,
+        browseId: widget.browseId,
+        track: widget.track,
+        name: firstArtistName(widget.text),
+      );
+    } finally {
+      if (mounted) _busy = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

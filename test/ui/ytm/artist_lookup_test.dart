@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,6 +70,18 @@ void main() {
     ytm.radioAnswer = Ok(_radio(const []));
     expect(await lookup.forTrack(_yt()), isNull);
     expect(await lookup.forTrack(_yt()), isNull);
+    expect(ytm.radioCalls, hasLength(1));
+  });
+
+  test('concurrent forTrack calls share one radio request', () async {
+    final gate = ytm.radioGate = Completer();
+    final a = lookup.forTrack(_yt());
+    final b = lookup.forTrack(_yt());
+    gate.complete(
+      Ok(_radio(const [YtmArtistRef(browseId: 'UC9', name: 'A')])),
+    );
+    expect(await a, 'UC9');
+    expect(await b, 'UC9');
     expect(ytm.radioCalls, hasLength(1));
   });
 

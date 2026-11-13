@@ -25,16 +25,21 @@ class ArtistLookup {
   ArtistLookup(this._ytm);
 
   final YtmService _ytm;
-  final _found = <String, String?>{};
+  // The request in flight or its answer, so concurrent calls share one.
+  final _found = <String, Future<String?>>{};
 
-  Future<String?> forTrack(Track t) async {
+  Future<String?> forTrack(Track t) {
     final videoId = t.ytVideoId;
-    if (t.source != 'yt' || videoId == null) return null;
-    if (_found.containsKey(videoId)) return _found[videoId];
+    if (t.source != 'yt' || videoId == null) return Future.value(null);
+    return _found[videoId] ??= _ask(videoId);
+  }
+
+  Future<String?> _ask(String videoId) async {
     final result = await _ytm.radio(videoId);
     if (result case Ok(:final value)) {
-      return _found[videoId] = firstArtistId(value.current?.artists ?? []);
+      return firstArtistId(value.current?.artists ?? []);
     }
+    _found.remove(videoId);
     return null;
   }
 }

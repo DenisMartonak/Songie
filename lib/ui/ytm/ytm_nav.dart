@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../router.dart' show nowPlayingLocation;
+
 /// The tabs whose branches hold YouTube Music pages (see `router.dart`).
 const _tabs = {'home', 'search', 'library'};
 
@@ -23,8 +25,13 @@ extension YtmNav on BuildContext {
   void goYtmPlaylist(String browseId) => _pushInTab('ytm/playlist', browseId);
 
   void _pushInTab(String kind, String id) {
-    final root = tabRootOf(GoRouter.of(this).state.uri.path) ?? '';
-    push('$root/$kind/${Uri.encodeComponent(id)}');
+    final router = GoRouter.of(this);
+    // Now Playing sits outside the tab shell; a page pushed on it would be
+    // redirected into a tab beneath it and break the Navigator. Close it
+    // first, so the page opens in the tab it covered.
+    if (router.state.uri.path == nowPlayingLocation) router.pop();
+    final root = tabRootOf(router.state.uri.path) ?? '';
+    router.push('$root/$kind/${Uri.encodeComponent(id)}');
   }
 }
 

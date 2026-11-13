@@ -103,6 +103,9 @@ class FakeYtmService implements YtmService {
   final radioCalls = <String>[];
   Result<YtmRadio> radioAnswer = const Ok(YtmRadio([], null));
 
+  /// When set, `radio` answers only when this completes.
+  Completer<Result<YtmRadio>>? radioGate;
+
   @override
   Future<Result<YtmRadio>> radio(
     String videoId, {
@@ -110,6 +113,7 @@ class FakeYtmService implements YtmService {
     String? continuation,
   }) async {
     radioCalls.add(videoId);
+    if (radioGate case final gate?) return gate.future;
     return radioAnswer;
   }
 

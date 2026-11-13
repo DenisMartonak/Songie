@@ -16,7 +16,7 @@ import 'ytm_shelf_row.dart';
 const int kArtistTopSongs = 5;
 
 /// Whether the artist is saved to the library.
-final _artistSavedProvider = StreamProvider.family<bool, String>(
+final _artistSavedProvider = StreamProvider.autoDispose.family<bool, String>(
   (ref, browseId) =>
       ref.watch(savedArtistsRepositoryProvider).watchIsSaved(browseId),
 );
@@ -51,14 +51,15 @@ class _ArtistPageState extends ConsumerState<ArtistPage> {
     final artist = page.artist;
     final top = page.topSongs;
     final radio = page.radioPlaylistId;
-    final saved =
-        ref.watch(_artistSavedProvider(artist.browseId)).value ?? false;
+    final savedState = ref.watch(_artistSavedProvider(artist.browseId));
+    final saved = savedState.value ?? false;
     if (!_refreshed) {
       // A saved artist keeps the name and picture YouTube shows now.
       _refreshed = true;
-      scheduleMicrotask(
-        () => ref.read(savedArtistsRepositoryProvider).refresh(artist),
-      );
+      scheduleMicrotask(() {
+        if (!mounted) return;
+        ref.read(savedArtistsRepositoryProvider).refresh(artist);
+      });
     }
     final shown = _allTopSongs ? top : top.take(kArtistTopSongs).toList();
     return CustomScrollView(
@@ -81,7 +82,11 @@ class _ArtistPageState extends ConsumerState<ArtistPage> {
                 key: const Key('ytm.save'),
                 icon: saved ? Icons.bookmark : Icons.bookmark_add_outlined,
                 label: saved ? 'Saved' : 'Save',
-                onPressed: () => _toggleSaved(artist, saved),
+                // Not until the saved state is known: a tap would save an
+                // artist that is already saved.
+                onPressed: savedState.hasValue
+                    ? () => _toggleSaved(artist, saved)
+                    : null,
               ),
               // The radio starts from the first top song.
               if (radio != null && top.isNotEmpty)

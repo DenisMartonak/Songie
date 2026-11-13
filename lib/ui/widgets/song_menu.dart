@@ -19,6 +19,7 @@ import '../remote/play_on.dart';
 import '../../room/room_protocol.dart' show RoomOp, roleAllows;
 import '../room/room_button.dart' show roomGuestRoleProvider;
 import '../ytm/artist_lookup.dart';
+import 'artist_link.dart' show firstArtistName;
 import '../ytm/ytm_nav.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
@@ -353,7 +354,7 @@ Future<void> showSongMenu(
           ref,
           browseId: song.artistId,
           track: song.track,
-          name: song.track?.artist ?? '',
+          name: firstArtistName(song.track?.artist ?? ''),
         );
       }
     case SongMenuAction.goToAlbum:
