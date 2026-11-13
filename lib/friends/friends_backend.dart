@@ -85,6 +85,38 @@ String? usernameSearchPattern(String query) {
   return '${escapeLike(kept)}%';
 }
 
+/// Runs [call], turning server and network failures into
+/// [FriendsException]s.
+Future<T> guardFriendsCall<T>(Future<T> Function() call) async {
+  try {
+    return await call();
+  } on PostgrestException catch (e) {
+    throw FriendsException(switch (e.message) {
+      final m when m.contains('self_request') => FriendsError.selfRequest,
+      final m when m.contains('unknown_user') => FriendsError.unknownUser,
+      final m when m.contains('not_requested') => FriendsError.notRequested,
+      _ => FriendsError.other,
+    });
+  } on SocketException {
+    throw const FriendsException(FriendsError.offline);
+  } on TimeoutException {
+    throw const FriendsException(FriendsError.offline);
+  } on http.ClientException {
+    throw const FriendsException(FriendsError.offline);
+  } on AuthRetryableFetchException {
+    throw const FriendsException(FriendsError.offline);
+  } on TlsException {
+    // A Wi-Fi login page or a broken connection.
+    throw const FriendsException(FriendsError.offline);
+  } on FriendsException {
+    rethrow;
+  } catch (e) {
+    // Anything else (a garbled reply): a failure the UI can show.
+    AppLog.w('friends: call failed (${e.runtimeType})');
+    throw const FriendsException(FriendsError.other);
+  }
+}
+
 typedef FriendsRpc = Future<Object?> Function(
   String fn,
   Map<String, Object?> params,
@@ -105,38 +137,6 @@ class SupabaseFriendsBackend implements FriendsBackend {
 
   SupabaseClient get _c => _client!();
 
-  /// Runs [call], turning server and network failures into
-  /// [FriendsException]s.
-  Future<T> _guard<T>(Future<T> Function() call) async {
-    try {
-      return await call();
-    } on PostgrestException catch (e) {
-      throw FriendsException(switch (e.message) {
-        final m when m.contains('self_request') => FriendsError.selfRequest,
-        final m when m.contains('unknown_user') => FriendsError.unknownUser,
-        final m when m.contains('not_requested') => FriendsError.notRequested,
-        _ => FriendsError.other,
-      });
-    } on SocketException {
-      throw const FriendsException(FriendsError.offline);
-    } on TimeoutException {
-      throw const FriendsException(FriendsError.offline);
-    } on http.ClientException {
-      throw const FriendsException(FriendsError.offline);
-    } on AuthRetryableFetchException {
-      throw const FriendsException(FriendsError.offline);
-    } on TlsException {
-      // A Wi-Fi login page or a broken connection.
-      throw const FriendsException(FriendsError.offline);
-    } on FriendsException {
-      rethrow;
-    } catch (e) {
-      // Anything else (a garbled reply): a failure the UI can show.
-      AppLog.w('friends: call failed (${e.runtimeType})');
-      throw const FriendsException(FriendsError.other);
-    }
-  }
-
   FriendUser _user(Map<String, dynamic> row) {
     final path = row['avatar_path'] as String?;
     return FriendUser(
@@ -149,7 +149,7 @@ class SupabaseFriendsBackend implements FriendsBackend {
   }
 
   @override
-  Future<List<FriendRow>> load(String me) => _guard(() async {
+  Future<List<FriendRow>> load(String me) => guardFriendsCall(() async {
     final rows = await _c
         .from('friendships')
         .select('requester, addressee, status');
@@ -175,21 +175,22 @@ class SupabaseFriendsBackend implements FriendsBackend {
   });
 
   @override
-  Future<List<FriendUser>> search(String me, String query) => _guard(() async {
-    final pattern = usernameSearchPattern(query);
-    if (pattern == null) return const [];
-    final rows = await _c
-        .from('profiles')
-        .select('id, username, avatar_path')
-        .ilike('username', pattern)
-        .neq('id', me)
-        .order('username')
-        .limit(20);
-    return [for (final r in rows) _user(r)];
-  });
+  Future<List<FriendUser>> search(String me, String query) =>
+      guardFriendsCall(() async {
+        final pattern = usernameSearchPattern(query);
+        if (pattern == null) return const [];
+        final rows = await _c
+            .from('profiles')
+            .select('id, username, avatar_path')
+            .ilike('username', pattern)
+            .neq('id', me)
+            .order('username')
+            .limit(20);
+        return [for (final r in rows) _user(r)];
+      });
 
   @override
-  Future<FriendLink?> send(String other) => _guard(() async {
+  Future<FriendLink?> send(String other) => guardFriendsCall(() async {
     final status = await _rpc('send_friend_request', {'p_other': other});
     return switch (status) {
       'pending' => FriendLink.outgoing,
@@ -200,9 +201,9 @@ class SupabaseFriendsBackend implements FriendsBackend {
 
   @override
   Future<void> accept(String other) =>
-      _guard(() => _rpc('accept_friend_request', {'p_other': other}));
+      guardFriendsCall(() => _rpc('accept_friend_request', {'p_other': other}));
 
   @override
   Future<void> remove(String other) =>
-      _guard(() => _rpc('remove_friend', {'p_other': other}));
+      guardFriendsCall(() => _rpc('remove_friend', {'p_other': other}));
 }

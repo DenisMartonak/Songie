@@ -49,6 +49,7 @@ import 'remote/remote_channel.dart';
 import 'remote/remote_controller.dart';
 import 'remote/remote_host.dart';
 import 'remote/remote_protocol.dart';
+import 'friends/activity_backend.dart';
 import 'friends/friends_backend.dart';
 import 'friends/friends_service.dart';
 import 'room/room_backend.dart';
@@ -778,6 +779,11 @@ final playerInputsProvider = Provider<PlayerInputs>(
 /// [roomBackendProvider]).
 final friendsBackendProvider = Provider<FriendsBackend>(
   (ref) => SupabaseFriendsBackend(() => Supabase.instance.client),
+);
+
+/// The activity rows behind Supabase (lazy like [friendsBackendProvider]).
+final activityBackendProvider = Provider<ActivityBackend>(
+  (ref) => SupabaseActivityBackend(() => Supabase.instance.client),
 );
 
 /// The signed-in account's friends and requests: loads on sign-in, every 5

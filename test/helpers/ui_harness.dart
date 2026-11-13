@@ -31,6 +31,7 @@ import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/youtube/ytdlp_client.dart';
 
 import '../account/fake_account_backend.dart';
+import 'fake_activity_backend.dart';
 import 'fake_audio_backend.dart';
 import 'fake_friends_backend.dart';
 import 'fake_cloud_sync.dart';
@@ -227,6 +228,9 @@ class UiHarness {
   /// The friends server; [FakeFriendsBackend.me] is who acts.
   late FakeFriendsBackend friendsBackend = FakeFriendsBackend();
 
+  /// The activity server; [FakeActivityBackend.me] is who acts.
+  late FakeActivityBackend activityBackend = FakeActivityBackend();
+
   /// Cloud sync as Settings → Account sees it; never signed in.
   late final FakeCloudSync cloudSync = FakeCloudSync(db, stamp);
 
@@ -327,6 +331,7 @@ class UiHarness {
     accountServiceProvider.overrideWithValue(accounts),
     cloudSyncProvider.overrideWithValue(cloudSync),
     friendsBackendProvider.overrideWithValue(friendsBackend),
+    activityBackendProvider.overrideWithValue(activityBackend),
   ];
 
   /// An app showing [routes], starting at [initialLocation]; with
