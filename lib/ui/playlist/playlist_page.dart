@@ -30,6 +30,7 @@ import '../motion/shimmer.dart';
 import '../remote/play_on.dart';
 import '../room/room_button.dart' show roomGuestRoleProvider;
 import '../room/room_panel.dart' show showRoomPanel;
+import '../widgets/artist_link.dart';
 import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
 import '../island/island_controller.dart';
@@ -1260,13 +1261,17 @@ class _TrackRow extends ConsumerWidget {
                           Expanded(
                             child: Opacity(
                               opacity: dim,
-                              child: Text(
-                                track.artist,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: colors.mutedText,
-                                  fontSize: 12,
+                              // Only as wide as its text, so the rest of the
+                              // row stays a play tap.
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: ArtistLink(
+                                  text: track.artist,
+                                  track: track,
+                                  style: TextStyle(
+                                    color: colors.mutedText,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                             ),

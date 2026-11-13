@@ -17,6 +17,7 @@ import '../../room/room_protocol.dart' show RoomRole;
 import '../room/room_button.dart';
 import '../room/room_strip.dart';
 import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
+import '../widgets/artist_link.dart';
 import '../widgets/artwork.dart';
 import '../widgets/favorite_star.dart';
 import '../widgets/song_menu.dart';
@@ -91,11 +92,15 @@ class _NowPlaying extends ConsumerWidget {
               MenuSong.track(track),
               anchor: d.globalPosition & Size.zero,
             ),
-      child: _row(track, colors),
+      child: _row(
+        track,
+        colors,
+        linkEnabled: ref.watch(remoteLinkProvider).value == null,
+      ),
     );
   }
 
-  Widget _row(Track track, SongiesColors colors) {
+  Widget _row(Track track, SongiesColors colors, {required bool linkEnabled}) {
     return Row(
       children: [
         Hero(
@@ -134,10 +139,10 @@ class _NowPlaying extends ConsumerWidget {
                   ),
                 ],
               ),
-              Text(
-                track.artist,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              ArtistLink(
+                text: track.artist,
+                track: track,
+                enabled: linkEnabled,
                 style: TextStyle(color: colors.mutedText, fontSize: 11.5),
               ),
             ],

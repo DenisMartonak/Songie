@@ -88,10 +88,8 @@ void main() {
   uiTest('shows the title, artists, album and duration', (tester) async {
     await pumpRow(tester, _lucky);
     expect(find.text('Get Lucky'), findsOneWidget);
-    expect(
-      find.text('Daft Punk, Pharrell Williams · Random Access Memories'),
-      findsOneWidget,
-    );
+    expect(find.text('Daft Punk, Pharrell Williams'), findsOneWidget);
+    expect(find.text(' · Random Access Memories'), findsOneWidget);
     expect(find.text('6:09'), findsOneWidget);
     expect(
       tester.widget(find.byKey(const Key('ytm.song.v1'))),
@@ -103,6 +101,24 @@ void main() {
     await pumpRow(tester, _lucky);
     await tester.tap(find.text('Get Lucky'));
     await settle(tester);
+    expect([for (final s in h.radio.played) s.videoId], ['v1']);
+  });
+
+  uiTest('tapping the artist opens the artist and does not play', (
+    tester,
+  ) async {
+    await pumpRow(tester, _lucky);
+    await tester.tap(find.text('Daft Punk, Pharrell Williams'));
+    await settle(tester);
+    expect(find.text('artist UCdaft'), findsOneWidget);
+    expect(h.radio.played, isEmpty);
+  });
+
+  uiTest('tapping the title plays', (tester) async {
+    await pumpRow(tester, _lucky);
+    await tester.tap(find.text('Get Lucky'));
+    await settle(tester);
+    expect(find.text('artist UCdaft'), findsNothing);
     expect([for (final s in h.radio.played) s.videoId], ['v1']);
   });
 

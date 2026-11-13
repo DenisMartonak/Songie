@@ -5,8 +5,10 @@ import '../../innertube/ytm_models.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../shell/player_bar.dart' show formatDuration;
+import '../widgets/artist_link.dart';
 import '../widgets/song_menu.dart';
 import '../widgets/favorite_star.dart';
+import 'artist_lookup.dart' show firstArtistId;
 import 'ytm_result_tiles.dart';
 
 /// A YouTube Music song (or video): art, title, artists and album, duration
@@ -19,6 +21,42 @@ class YtmSongRow extends ConsumerWidget {
   final YtmSong song;
   final VoidCallback? onTap;
 
+  /// The artists (a link to the first one's page), then the album.
+  Widget? _subtitle(SongiesColors colors, String? album) {
+    final style = TextStyle(color: colors.mutedText, fontSize: 12);
+    final artists = song.artistLine;
+    final hasAlbum = album != null && album.trim().isNotEmpty;
+    if (artists.trim().isEmpty && !hasAlbum) return null;
+    if (artists.trim().isEmpty) {
+      return Text(
+        album!,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      );
+    }
+    final link = ArtistLink(
+      text: artists,
+      browseId: firstArtistId(song.artists),
+      style: style,
+    );
+    if (!hasAlbum) return link;
+    // The link takes the room it needs; the album fills what is left.
+    return Row(
+      children: [
+        Flexible(child: link),
+        Expanded(
+          child: Text(
+            ' · $album',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
@@ -29,10 +67,7 @@ class YtmSongRow extends ConsumerWidget {
       rowKey: Key('ytm.song.${song.videoId}'),
       art: YtmArtwork(song.thumbnailUrl, seed: song.videoId),
       title: song.title,
-      subtitle: [
-        song.artistLine,
-        ?album,
-      ].where((p) => p.trim().isNotEmpty).join(' · '),
+      subtitleWidget: _subtitle(colors, album),
       onTap:
           onTap ?? () => ref.read(radioControllerProvider).playWithRadio(song),
       onLongPress: menu.onLongPress,

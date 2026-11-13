@@ -70,6 +70,15 @@ void main() {
             path: '/library',
             builder: (_, _) => const Scaffold(body: Text('Library stub')),
           ),
+          GoRoute(
+            path: '/search',
+            builder: (_, _) => Scaffold(
+              body: Consumer(
+                builder: (_, ref, _) =>
+                    Text('search: ${ref.watch(searchQueryProvider)}'),
+              ),
+            ),
+          ),
         ],
         extraOverrides: extraOverrides,
       ),
@@ -103,6 +112,27 @@ void main() {
     expect(shownTitles(tester), ['Song t1', 'Song t2', 'Song t3']);
     expect(find.text('3:20'), findsNWidgets(3));
   });
+
+  uiTest(
+    'tapping a track\'s artist opens the artist; tapping its title plays',
+    (tester) async {
+      final id = await threeSongs(tester);
+      await pumpPage(tester, id);
+
+      // A local track has no artist page of its own: Search for the name.
+      await tester.tap(find.text('Artist').first);
+      await settle(tester);
+      expect(find.text('search: Artist'), findsOneWidget);
+      expect(h.player.state.current, isNull);
+
+      GoRouter.of(tester.element(find.text('search: Artist')))
+          .go('/playlist/$id');
+      await settle(tester);
+      await tester.tap(find.text('Song t2'));
+      await settle(tester);
+      expect(h.player.state.current?.id, 't2');
+    },
+  );
 
   uiTest('dragging row 3 above row 1 reorders the playlist', (tester) async {
     final id = await threeSongs(tester);
