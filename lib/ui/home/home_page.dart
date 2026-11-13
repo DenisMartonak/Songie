@@ -20,7 +20,6 @@ import '../remote/devices_button.dart';
 import '../room/room_button.dart';
 import '../shell/adaptive_shell.dart';
 import '../account/avatar.dart' show AccountButton;
-import '../stats/listening_card.dart';
 import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
 import '../ytm/consent_sheet.dart';
@@ -176,7 +175,6 @@ class HomePage extends ConsumerWidget {
                             ),
                           ),
                         ),
-                        const SliverToBoxAdapter(child: ListeningCard()),
                         SliverToBoxAdapter(
                           child: ScrollingShelf(
                             title: 'Your playlists',
@@ -190,8 +188,6 @@ class HomePage extends ConsumerWidget {
                           ),
                         ),
                       ],
-                      if (!loading && playlists.isEmpty)
-                        const SliverToBoxAdapter(child: ListeningCard()),
                       if (recentTracks.isNotEmpty) ...[
                         const SliverToBoxAdapter(
                           child: _SectionTitle('Recently played'),

@@ -117,6 +117,19 @@ void main() {
     expect(find.byKey(const Key('shell.account')), findsOneWidget);
   });
 
+  uiTest('Home has no listening stats (they live on the profile)', (
+    tester,
+  ) async {
+    await seedLibrary(tester);
+    await pumpHome(tester);
+    expect(find.byKey(const Key('home.listening')), findsNothing);
+  });
+
+  uiTest('nor does an empty Home', (tester) async {
+    await pumpHome(tester);
+    expect(find.byKey(const Key('home.listening')), findsNothing);
+  });
+
   uiTest('the library part comes first, then one row per shelf', (
     tester,
   ) async {
