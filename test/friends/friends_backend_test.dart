@@ -12,6 +12,31 @@ void main() {
     expect(escapeLike('den'), 'den');
   });
 
+  test('a search pattern keeps only username letters', () {
+    expect(usernameSearchPattern('De'), 'de%');
+    expect(usernameSearchPattern('  a_b.c '), r'a\_b.c%');
+    // `*` is a wildcard to the server: it never reaches it.
+    expect(usernameSearchPattern('**'), isNull);
+    expect(usernameSearchPattern('a*'), isNull);
+    expect(usernameSearchPattern('d*e%n'), 'den%');
+  });
+
+  test('unexpected failures become FriendsExceptions', () async {
+    final answers = <Object? Function()>[
+      () => throw const HandshakeException('captive portal'),
+      () => throw const FormatException('<html>502'),
+    ];
+    final b = SupabaseFriendsBackend.withRpc(
+      (fn, params) async => answers.removeAt(0)(),
+    );
+    for (final want in [FriendsError.offline, FriendsError.other]) {
+      await expectLater(
+        b.accept('u2'),
+        throwsA(isA<FriendsException>().having((e) => e.error, 'error', want)),
+      );
+    }
+  });
+
   test('send maps pending and accepted; server errors map', () async {
     final answers = <Object? Function()>[
       () => 'pending',

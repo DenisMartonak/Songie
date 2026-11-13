@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../account/supabase_config.dart' show kAvatarBucket;
+import '../core/log.dart';
 
 /// A Songies user as friends see them.
 @immutable
@@ -75,6 +76,15 @@ abstract interface class FriendsBackend {
 String escapeLike(String q) =>
     q.replaceAllMapped(RegExp(r'[\\%_]'), (m) => '\\${m[0]}');
 
+/// The `ilike` pattern for usernames starting with [query], or null when
+/// fewer than 2 username characters remain. Only what a username may hold
+/// (a-z, 0-9, `_` and `.`) is kept: the server reads `*` as a wildcard too.
+String? usernameSearchPattern(String query) {
+  final kept = query.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_.]'), '');
+  if (kept.length < 2) return null;
+  return '${escapeLike(kept)}%';
+}
+
 typedef FriendsRpc = Future<Object?> Function(
   String fn,
   Map<String, Object?> params,
@@ -115,6 +125,15 @@ class SupabaseFriendsBackend implements FriendsBackend {
       throw const FriendsException(FriendsError.offline);
     } on AuthRetryableFetchException {
       throw const FriendsException(FriendsError.offline);
+    } on TlsException {
+      // A Wi-Fi login page or a broken connection.
+      throw const FriendsException(FriendsError.offline);
+    } on FriendsException {
+      rethrow;
+    } catch (e) {
+      // Anything else (a garbled reply): a failure the UI can show.
+      AppLog.w('friends: call failed (${e.runtimeType})');
+      throw const FriendsException(FriendsError.other);
     }
   }
 
@@ -157,10 +176,12 @@ class SupabaseFriendsBackend implements FriendsBackend {
 
   @override
   Future<List<FriendUser>> search(String me, String query) => _guard(() async {
+    final pattern = usernameSearchPattern(query);
+    if (pattern == null) return const [];
     final rows = await _c
         .from('profiles')
         .select('id, username, avatar_path')
-        .ilike('username', '${escapeLike(query.trim().toLowerCase())}%')
+        .ilike('username', pattern)
         .neq('id', me)
         .order('username')
         .limit(20);

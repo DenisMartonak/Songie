@@ -83,6 +83,20 @@ void main() {
     expect(label(tester, 'd1'), 'Add friend');
   });
 
+  uiTest('typing on the Songies Users tab asks YouTube Music nothing', (
+    tester,
+  ) async {
+    await signedIn();
+    await pumpSearch(tester);
+    await type(tester, 'de');
+    await openUsers(tester);
+    h.ytm.calls.clear();
+    await type(tester, 'dex');
+    await type(tester, 'zed');
+    expect(h.ytm.calls, isEmpty);
+    expect(find.byKey(const Key('friends.user.z1')), findsOneWidget);
+  });
+
   uiTest('short queries and nobody found say so', (tester) async {
     await signedIn();
     await pumpSearch(tester);

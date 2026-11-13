@@ -18,6 +18,9 @@ class FakeFriendsBackend implements FriendsBackend {
 
   String me = '';
 
+  /// Each load waits for the first gate here, if any (taken in turn).
+  final loadGates = <Future<void>>[];
+
   void addUser(String id, String username, {String? avatarUrl}) =>
       users[id] = FriendUser(id: id, username: username, avatarUrl: avatarUrl);
 
@@ -42,6 +45,13 @@ class FakeFriendsBackend implements FriendsBackend {
   Future<List<FriendRow>> load(String me) async {
     calls.add('load');
     _check();
+    // What the server holds when asked, delivered once the gate opens.
+    final rows = _rowsFor(me);
+    if (loadGates.isNotEmpty) await loadGates.removeAt(0);
+    return rows;
+  }
+
+  List<FriendRow> _rowsFor(String me) {
     return [
       for (final MapEntry(key: (requester, addressee), value: accepted)
           in _rows.entries)

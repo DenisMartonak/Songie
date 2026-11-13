@@ -54,6 +54,11 @@ class FriendsService {
   /// is dropped.
   int _session = 0;
 
+  /// Numbers loads as they start; one that lands after a newer one was
+  /// applied is dropped (it holds older rows).
+  int _loads = 0;
+  int _applied = 0;
+
   FriendsState get state => _state;
 
   /// The current state, then each change (subscribed at once, so none is
@@ -92,8 +97,10 @@ class FriendsService {
     final me = _me;
     if (me == null) return;
     final session = _session;
+    final load = ++_loads;
     final rows = await _backend.load(me);
-    if (session != _session) return;
+    if (session != _session || load < _applied) return;
+    _applied = load;
     List<FriendUser> of(FriendLink link) => [
       for (final r in rows)
         if (r.link == link) r.user,

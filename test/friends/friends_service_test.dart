@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/friends/friends_backend.dart';
@@ -128,6 +130,25 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(seen.last.linkOf('b'), isNull);
     await sub.cancel();
+    service.dispose();
+  });
+
+  test('an older load landing last does not undo a newer one', () async {
+    backend.me = 'a';
+    await as('b', () => backend.send('a'));
+    await service.signedIn('a');
+    expect(service.state.linkOf('b'), FriendLink.incoming);
+    // A slow refresh (say, opening the Friends page) is under way...
+    final slow = Completer<void>();
+    backend.loadGates.add(slow.future);
+    final r1 = service.refresh();
+    await Future<void>.delayed(Duration.zero);
+    // ...when the request is accepted, and that refresh lands first.
+    await service.accept('b');
+    expect(service.state.linkOf('b'), FriendLink.friend);
+    slow.complete();
+    await r1;
+    expect(service.state.linkOf('b'), FriendLink.friend);
     service.dispose();
   });
 

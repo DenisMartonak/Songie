@@ -80,7 +80,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   void _search(String query) {
     if (query.trim() != _searched.trim()) {
-      _opened = {_kind};
+      // On Songies Users nothing of YouTube Music is asked for the new query.
+      _opened = _users ? {} : {_kind};
       _libraryExpanded = false;
     }
     _searched = query;
