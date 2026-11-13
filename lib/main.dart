@@ -449,6 +449,7 @@ Future<ProviderContainer> runSongies({
   container.listen(cloudSyncFollowerProvider, (_, _) {});
   container.listen(remoteHostFollowerProvider, (_, _) {});
   container.listen(activityPublisherProvider, (_, _) {});
+  container.listen(playlistSharingProvider, (_, _) {});
   // Reads two device-local settings only: no keyring, no network, no timer.
   // Awaited, so the first Home load already knows whether to go signed in.
   await container.read(ytAuthProvider.notifier).load();

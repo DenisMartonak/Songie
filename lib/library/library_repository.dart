@@ -522,7 +522,9 @@ class LibraryRepository {
       if (p == null) return _notFound('playlist $id');
       final current =
           await (_db.select(_db.playlistEntries)
-                ..where((e) => e.playlistId.equals(id) & e.deleted.equals(false))
+                ..where(
+                  (e) => e.playlistId.equals(id) & e.deleted.equals(false),
+                )
                 ..orderBy([
                   (e) => OrderingTerm.asc(e.position),
                   (e) => OrderingTerm.asc(e.id),
@@ -590,6 +592,19 @@ class LibraryRepository {
       return const Ok(null);
     });
   }
+
+  /// The live playlist [id], or null.
+  Future<Playlist?> playlistById(String id) => _livePlaylist(id);
+
+  /// This account's shared playlists, as they change.
+  Stream<List<Playlist>> watchSharedPlaylists() => (_db.select(
+    _db.playlists,
+  )..where((p) => p.shareCode.isNotNull() & p.deleted.equals(false))).watch();
+
+  /// The live playlists followed from someone's share.
+  Future<List<Playlist>> followedPlaylists() => (_db.select(
+    _db.playlists,
+  )..where((p) => p.followCode.isNotNull() & p.deleted.equals(false))).get();
 
   /// The live playlist [id] and its later changes (null once deleted).
   Stream<Playlist?> watchPlaylist(String id) {

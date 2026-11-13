@@ -53,6 +53,7 @@ import 'friends/activity_backend.dart';
 import 'friends/activity_publisher.dart';
 import 'friends/friends_backend.dart';
 import 'friends/friends_service.dart';
+import 'playlists/playlist_sharing.dart';
 import 'playlists/sharing_backend.dart';
 import 'room/room_backend.dart';
 import 'room/room_channel.dart';
@@ -835,6 +836,23 @@ final activityPublisherProvider = Provider<ActivityPublisher>((ref) {
 final sharingBackendProvider = Provider<SharingBackend>(
   (ref) => SupabaseSharingBackend(() => Supabase.instance.client),
 );
+
+/// Playlist sharing: keeps this account's shares and follows current while
+/// signed in. `main()` listens to it once so it follows the account.
+final playlistSharingProvider = Provider<PlaylistSharing>((ref) {
+  final sharing = PlaylistSharing(
+    backend: ref.watch(sharingBackendProvider),
+    library: ref.watch(libraryRepositoryProvider),
+    tracksFor: (songs) => tracksForSongs(songs, ref.read(ytTrackStoreProvider)),
+  );
+  ref.onDispose(sharing.dispose);
+  if (ref.read(_remoteUserIdProvider) != null) sharing.signedIn();
+  ref.listen(_remoteUserIdProvider, (previous, next) {
+    if (previous != next) sharing.signedOut();
+    if (next != null) sharing.signedIn();
+  });
+  return sharing;
+});
 
 /// The signed-in account's friends and requests: loads on sign-in, every 5
 /// minutes and after each change; cleared on sign-out.
