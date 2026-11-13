@@ -723,13 +723,6 @@ void main() {
       await tester.tap(avatar);
       await tester.pumpAndSettle();
       expect(router.state.uri.path, '/settings');
-      expect(
-        tester
-            .widgetList<SettingsSectionTitle>(find.byType(SettingsSectionTitle))
-            .first
-            .title,
-        'Account',
-      );
     });
 
     testWidgets('without a custom title bar the avatar sits at the end of the '

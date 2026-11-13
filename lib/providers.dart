@@ -505,7 +505,7 @@ final cloudSyncFollowerProvider = Provider<void>((ref) {
   }, fireImmediately: true);
 });
 
-/// Cloud sync's state, for Settings → Account.
+/// Cloud sync's state, for the profile page.
 final cloudSyncStatusProvider = StreamProvider<SyncStatus>(
   (ref) => ref.watch(cloudSyncProvider).status,
 );

@@ -137,7 +137,7 @@ void main() {
     );
   }
 
-  uiTest('Settings starts with Account: Sign up and Log in when signed out', (
+  uiTest('Settings starts with Music folders; the account is on the profile', (
     tester,
   ) async {
     await pumpSettings(tester);
@@ -145,10 +145,9 @@ void main() {
         .widgetList<SettingsSectionTitle>(find.byType(SettingsSectionTitle))
         .map((t) => t.title)
         .toList();
-    expect(titles.first, 'Account');
-    expect(titles[1], 'Music folders');
-    expect(find.widgetWithText(FilledButton, 'Sign up'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Log in'), findsOneWidget);
+    expect(titles.first, 'Music folders');
+    expect(titles, isNot(contains('Account')));
+    expect(find.widgetWithText(FilledButton, 'Sign up'), findsNothing);
   });
 
   group('music folders', () {

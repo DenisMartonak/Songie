@@ -11,7 +11,7 @@ import 'package:songies/account/username.dart';
 import 'package:songies/core/paths.dart';
 import 'package:songies/ui/account/account_section.dart';
 import 'package:songies/ui/account/avatar.dart';
-import 'package:songies/ui/settings/settings_page.dart';
+import 'package:songies/ui/account/profile_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 
 import '../../account/fake_account_backend.dart';
@@ -49,14 +49,14 @@ void main() {
     tmp.deleteSync(recursive: true);
   });
 
-  /// Settings with a top-bar avatar above it, as the shell shows it.
+  /// The profile page with a top-bar avatar above it, as the shell shows it.
   Future<void> pumpAccount(WidgetTester tester, {double width = 1000}) async {
-    tester.view.physicalSize = Size(width, 1400);
+    tester.view.physicalSize = Size(width, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       h.app(
-        initialLocation: '/settings',
+        initialLocation: '/profile',
         extraOverrides: [
           storageUsageProvider.overrideWith(
             (ref) async => const StorageUsage(artBytes: 0, databaseBytes: 0),
@@ -65,12 +65,12 @@ void main() {
         ],
         routes: [
           GoRoute(
-            path: '/settings',
+            path: '/profile',
             builder: (_, _) => const Scaffold(
               body: Column(
                 children: [
                   AccountAvatar(size: 28, key: Key('top.avatar')),
-                  Expanded(child: SettingsPage()),
+                  Expanded(child: ProfilePage()),
                 ],
               ),
             ),
@@ -90,7 +90,7 @@ void main() {
   Finder key(String k) => find.byKey(Key(k));
   Finder inTop(Finder f) => find.descendant(of: key('top.avatar'), matching: f);
   Finder inSection(Finder f) =>
-      find.descendant(of: find.byType(AccountSection), matching: f);
+      find.descendant(of: find.byType(ProfilePage), matching: f);
 
   /// Types into a field and rebuilds (enterText alone doesn't).
   Future<void> type(WidgetTester tester, Finder f, String text) async {
