@@ -25,7 +25,15 @@ class RoomHosting extends RoomStatus {
     required this.link,
     required this.people,
     required this.roles,
+    required this.me,
+    this.faces = const {},
   });
+
+  /// This account's user id: the queue's untagged songs are its.
+  final String me;
+
+  /// Who added the queue's songs, by user id (see `PlayerState.addedBy`).
+  final Map<String, RoomFace> faces;
 
   /// The 8 characters, without the dash.
   final String code;
@@ -45,7 +53,15 @@ class RoomGuesting extends RoomStatus {
     required this.people,
     required this.roles,
     this.held = false,
+    required this.me,
+    this.faces = const {},
   });
+
+  /// This account's user id.
+  final String me;
+
+  /// Who added the queue's songs, by user id, as the host last sent them.
+  final Map<String, RoomFace> faces;
 
   final RoomPresence host;
 
@@ -134,20 +150,26 @@ class RoomService {
     }
   }
 
-  RoomPresence _presence(String userId, String name, {required bool host}) =>
-      RoomPresence(
-        userId: userId,
-        deviceId: _deviceId,
-        name: name,
-        platform: _platform,
-        host: host,
-      );
+  RoomPresence _presence(
+    String userId,
+    String name,
+    String? avatarUrl, {
+    required bool host,
+  }) => RoomPresence(
+    userId: userId,
+    deviceId: _deviceId,
+    name: name,
+    platform: _platform,
+    host: host,
+    avatarUrl: avatarUrl,
+  );
 
   /// Opens a room hosted by this device; with [play], the room starts with
   /// that queue.
   Future<void> open({
     required String userId,
     required String name,
+    String? avatarUrl,
     List<Track>? play,
   }) async {
     _guardStart();
@@ -166,7 +188,7 @@ class RoomService {
         return;
       }
       final roomId = opened.roomId;
-      final me = _presence(userId, name, host: true);
+      final me = _presence(userId, name, avatarUrl, host: true);
       final host = RoomHost(
         channel: _channelFor(roomId),
         player: _player,
@@ -177,25 +199,16 @@ class RoomService {
       _roomId = roomId;
       _host = host;
       _listen(host.events, _onHostEvent);
-      _listen(host.people, (list) {
-        final s = _status;
-        if (s is RoomHosting && identical(_host, host)) {
-          _set(
-            RoomHosting(
-              code: s.code,
-              link: s.link,
-              people: list,
-              roles: host.roles,
-            ),
-          );
-        }
-      });
+      _listen(host.people, (list) => _hosting(host, people: list));
+      _listen(host.facesChanges, (_) => _hosting(host));
       _set(
         RoomHosting(
           code: opened.code,
           link: roomLink(opened.code),
           people: [me],
           roles: const {},
+          me: userId,
+          faces: host.faces,
         ),
       );
       await host.start();
@@ -224,6 +237,7 @@ class RoomService {
     String code, {
     required String userId,
     required String name,
+    String? avatarUrl,
   }) async {
     _guardStart();
     if (userId.isEmpty) {
@@ -252,7 +266,7 @@ class RoomService {
       final guest = RoomGuest(
         channel: _channelFor(roomId),
         player: _player,
-        me: _presence(userId, name, host: false),
+        me: _presence(userId, name, avatarUrl, host: false),
         tracksFor: _tracksFor,
       );
       final view = RoomGuestView(guest);
@@ -274,6 +288,8 @@ class RoomService {
             people: people,
             roles: {...guest.allRoles, _deviceId: guest.role},
             held: guest.held,
+            me: userId,
+            faces: guest.faces,
           ),
         );
       }
@@ -294,6 +310,7 @@ class RoomService {
       });
       _listen(guest.allRolesChanges, (_) => publish());
       _listen(guest.heldChanges, (_) => publish());
+      _listen(guest.facesChanges, (_) => publish());
       _listen(guest.cantPlay, (title) {
         _say("Can't play $title here, joining in at the next song");
       });
@@ -400,15 +417,21 @@ class RoomService {
     _roles(host);
   }
 
-  void _roles(RoomHost host) {
+  void _roles(RoomHost host) => _hosting(host);
+
+  /// Republishes the hosting status with [host]'s roles and faces (and
+  /// [people] when given).
+  void _hosting(RoomHost host, {List<RoomPresence>? people}) {
     final s = _status;
     if (s is RoomHosting && identical(_host, host)) {
       _set(
         RoomHosting(
           code: s.code,
           link: s.link,
-          people: s.people,
+          people: people ?? s.people,
           roles: host.roles,
+          me: s.me,
+          faces: host.faces,
         ),
       );
     }

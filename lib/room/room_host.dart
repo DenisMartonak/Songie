@@ -84,7 +84,9 @@ class RoomHost {
 
   /// Everyone who has been in this room, the host included, by user id:
   /// their songs keep their face after they leave.
-  final _faces = <String, RoomFace>{};
+  late final _faces = <String, RoomFace>{
+    _me.userId: RoomFace(name: _me.name, avatarUrl: _me.avatarUrl),
+  };
   final _facesChanges = StreamController<Map<String, RoomFace>>.broadcast();
 
   Map<String, RoomRole> get roles => Map.unmodifiable(_roles);
@@ -98,7 +100,6 @@ class RoomHost {
   Future<void> start() async {
     if (_running) return;
     _running = true;
-    _noteFace(_me);
     final s = _player.state;
     _last = s;
     _lastAtMs = _nowMs();

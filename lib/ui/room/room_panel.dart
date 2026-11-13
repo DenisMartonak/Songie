@@ -91,7 +91,11 @@ class _RoomPanelState extends ConsumerState<RoomPanel> {
     try {
       await ref
           .read(roomServiceProvider)
-          .open(userId: account.profile.id, name: account.profile.username);
+          .open(
+            userId: account.profile.id,
+            name: account.profile.username,
+            avatarUrl: account.profile.avatarUrl,
+          );
     } on StateError catch (e, s) {
       AppLog.w('room: open skipped', e, s);
     }

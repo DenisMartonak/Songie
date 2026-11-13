@@ -96,7 +96,12 @@ Future<void> joinRoomAsking(
     controller!.deselect();
   }
   try {
-    await service.join(code, userId: profile.id, name: profile.username);
+    await service.join(
+      code,
+      userId: profile.id,
+      name: profile.username,
+      avatarUrl: profile.avatarUrl,
+    );
   } on StateError catch (e, s) {
     // Another join or a room started meanwhile.
     AppLog.w('room: join skipped', e, s);

@@ -154,6 +154,55 @@ void main() {
     expect(host.service.guestView, isNull);
   });
 
+  inRoomTest("hosting status carries faces with the host's picture", (
+    async,
+    host,
+    guest,
+    backend,
+  ) {
+    done(
+      async,
+      host.service.open(
+        userId: 'u9',
+        name: 'denis',
+        avatarUrl: 'https://x/d.jpg',
+      ),
+    );
+    final s = host.service.status as RoomHosting;
+    expect(s.me, 'u9');
+    expect(
+      s.faces['u9'],
+      const RoomFace(name: 'denis', avatarUrl: 'https://x/d.jpg'),
+    );
+  });
+
+  inRoomTest("a guest's status carries the host's faces", (
+    async,
+    host,
+    guest,
+    backend,
+  ) {
+    done(
+      async,
+      host.service.open(userId: 'u1', name: 'Host', play: [track('a')]),
+    );
+    done(
+      async,
+      guest.service.join(
+        'ABCD2345',
+        userId: 'u2',
+        name: 'Guest',
+        avatarUrl: 'https://x/g.jpg',
+      ),
+    );
+    async.elapse(const Duration(milliseconds: 600));
+    final g = guest.service.status as RoomGuesting;
+    expect(g.me, 'u2');
+    expect(g.faces['u1']!.name, 'Host');
+    final h = host.service.status as RoomHosting;
+    expect(h.faces['u2']!.avatarUrl, 'https://x/g.jpg');
+  });
+
   inRoomTest('open with a queue starts it', (async, host, guest, backend) {
     done(
       async,
