@@ -53,6 +53,7 @@ import 'friends/activity_backend.dart';
 import 'friends/activity_publisher.dart';
 import 'friends/friends_backend.dart';
 import 'friends/friends_service.dart';
+import 'playlists/sharing_backend.dart';
 import 'room/room_backend.dart';
 import 'room/room_channel.dart';
 import 'room/room_service.dart';
@@ -829,6 +830,11 @@ final activityPublisherProvider = Provider<ActivityPublisher>((ref) {
   });
   return publisher;
 });
+
+/// Shared playlists behind Supabase (lazy like [friendsBackendProvider]).
+final sharingBackendProvider = Provider<SharingBackend>(
+  (ref) => SupabaseSharingBackend(() => Supabase.instance.client),
+);
 
 /// The signed-in account's friends and requests: loads on sign-in, every 5
 /// minutes and after each change; cleared on sign-out.

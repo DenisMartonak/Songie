@@ -41,7 +41,15 @@ class FriendRow {
 }
 
 /// Why a friends call failed (the server's error, or no connection).
-enum FriendsError { offline, selfRequest, unknownUser, notRequested, other }
+enum FriendsError {
+  offline,
+  selfRequest,
+  unknownUser,
+  notRequested,
+  notOwner,
+  tooLarge,
+  other,
+}
 
 class FriendsException implements Exception {
   const FriendsException(this.error);
@@ -95,6 +103,8 @@ Future<T> guardFriendsCall<T>(Future<T> Function() call) async {
       final m when m.contains('self_request') => FriendsError.selfRequest,
       final m when m.contains('unknown_user') => FriendsError.unknownUser,
       final m when m.contains('not_requested') => FriendsError.notRequested,
+      final m when m.contains('not_owner') => FriendsError.notOwner,
+      final m when m.contains('too_large') => FriendsError.tooLarge,
       _ => FriendsError.other,
     });
   } on SocketException {

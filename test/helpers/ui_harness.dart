@@ -34,6 +34,7 @@ import '../account/fake_account_backend.dart';
 import 'fake_activity_backend.dart';
 import 'fake_audio_backend.dart';
 import 'fake_friends_backend.dart';
+import 'fake_sharing_backend.dart';
 import 'fake_cloud_sync.dart';
 
 import 'package:songies/innertube/yt_sign_in.dart';
@@ -228,6 +229,9 @@ class UiHarness {
   /// The friends server; [FakeFriendsBackend.me] is who acts.
   late FakeFriendsBackend friendsBackend = FakeFriendsBackend();
 
+  /// The shared playlists server; [FakeSharingBackend.me] is who acts.
+  late FakeSharingBackend sharingBackend = FakeSharingBackend();
+
   /// The activity server; [FakeActivityBackend.me] is who acts.
   late FakeActivityBackend activityBackend = FakeActivityBackend();
 
@@ -332,6 +336,7 @@ class UiHarness {
     cloudSyncProvider.overrideWithValue(cloudSync),
     friendsBackendProvider.overrideWithValue(friendsBackend),
     activityBackendProvider.overrideWithValue(activityBackend),
+    sharingBackendProvider.overrideWithValue(sharingBackend),
   ];
 
   /// An app showing [routes], starting at [initialLocation]; with
