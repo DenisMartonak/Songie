@@ -16,6 +16,7 @@ import 'account_dialogs.dart';
 import 'account_section.dart';
 import 'auth_screens.dart';
 import 'avatar.dart';
+import '../friends/friend_dot.dart';
 import 'inline_username.dart';
 import 'picture_viewer.dart';
 
@@ -285,6 +286,8 @@ class _FriendsRow extends ConsumerWidget {
                 ),
               ),
             ),
+            const FriendDot(),
+            const SizedBox(width: 8),
             Icon(Icons.chevron_right_rounded, color: colors.mutedText),
           ],
         ),
