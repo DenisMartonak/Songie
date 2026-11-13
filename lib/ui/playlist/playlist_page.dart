@@ -30,6 +30,7 @@ import '../motion/shimmer.dart';
 import '../remote/play_on.dart';
 import '../room/room_button.dart' show roomGuestRoleProvider;
 import '../room/room_panel.dart' show showRoomPanel;
+import '../playlists/share_playlist_sheet.dart';
 import '../widgets/artist_link.dart';
 import '../widgets/artwork.dart';
 import '../widgets/name_dialog.dart';
@@ -162,10 +163,16 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     bool canQueue(PlaylistTrack row) =>
         guestRole == null ||
         (roleAllows(guestRole, RoomOp.addNext) && row.track.source != 'local');
+    final signedIn = ref.watch(accountStateProvider).value is SignedIn;
     final listenTogether =
         list.isNotEmpty &&
-        ref.watch(accountStateProvider).value is SignedIn &&
+        signedIn &&
         ref.watch(roomStatusProvider.select((s) => s.value is RoomIdle));
+    // Playlist sharing: followed playlists are read-only.
+    final playlistRow = ref.watch(playlistRowProvider(_id)).value;
+    final followed = playlistRow?.isFollowed ?? false;
+    final ended = playlistRow?.followEnded ?? false;
+    final owner = playlistRow?.followOwner ?? '';
 
     return CustomScrollView(
       slivers: [
@@ -197,8 +204,22 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
             // In a room this device controls no other one.
             playOn: !ref.watch(inRoomProvider),
             onSendTo: _sendTo,
+            followed: followed,
+            canShare:
+                signedIn && !followed && summary.id != kFavoritesPlaylistId,
           ),
         ),
+        if (followed || ended)
+          _sideSafe(
+            SliverToBoxAdapter(
+              child: _SharingLine(
+                text: followed
+                    ? 'Following · by $owner'
+                    : '$owner stopped sharing this',
+                following: followed,
+              ),
+            ),
+          ),
         if (summary.source == 'yt' || list.any((r) => r.track.source == 'yt'))
           _sideSafe(
             SliverToBoxAdapter(
@@ -213,7 +234,11 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
         else if (skeleton)
           _sideSafe(const SliverToBoxAdapter(child: _SkeletonRows()))
         else if (list.isEmpty)
-          _sideSafe(SliverToBoxAdapter(child: _EmptyPlaylist(onAdd: _addSongs)))
+          _sideSafe(
+            SliverToBoxAdapter(
+              child: _EmptyPlaylist(onAdd: followed ? null : _addSongs),
+            ),
+          )
         else
           _sideSafe(
             SliverReorderableList(
@@ -224,7 +249,12 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
                 final row = list[i];
                 return Dismissible(
                   key: ValueKey(row.entryId),
-                  direction: canQueue(row)
+                  // A followed playlist's rows only queue (no removing).
+                  direction: followed
+                      ? (canQueue(row)
+                            ? DismissDirection.startToEnd
+                            : DismissDirection.none)
+                      : canQueue(row)
                       ? DismissDirection.horizontal
                       : DismissDirection.endToStart,
                   // Swiping right queues the song and springs back; swiping
@@ -246,7 +276,8 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
                     playing: playing,
                     onTap: () => _playFrom(list, i),
                     onLocate: () => _locate(row),
-                    onRemove: () => _removeEntry(row.entryId),
+                    onRemove: followed ? null : () => _removeEntry(row.entryId),
+                    reorderable: !followed,
                   ),
                 );
               },
@@ -540,6 +571,24 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
         await _addSongs();
       case _MenuAction.listenTogether:
         await _listenTogether();
+      case _MenuAction.share:
+        await showSharePlaylistSheet(context, _id);
+      case _MenuAction.makeCopy:
+        final router = GoRouter.of(context);
+        final islands = Islands.of(context);
+        final copy = await ref
+            .read(playlistSharingProvider)
+            .copy(playlistId: _id);
+        islands.show('Copied to your library', kind: IslandKind.success);
+        router.go('/library/playlist/$copy');
+      case _MenuAction.stopFollowing:
+        await ref.read(playlistSharingProvider).stopFollowing(_id);
+        if (!mounted) return;
+        if (Navigator.canPop(context)) {
+          context.pop();
+        } else {
+          context.go('/library');
+        }
     }
   }
 
@@ -614,6 +663,9 @@ enum _MenuAction {
   delete,
   addSongs,
   listenTogether,
+  share,
+  makeCopy,
+  stopFollowing,
 }
 
 /// The hero's pinned top bar.
@@ -676,7 +728,15 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
     required this.devices,
     required this.playOn,
     required this.onSendTo,
+    this.followed = false,
+    this.canShare = false,
   });
+
+  /// Followed from someone's share: no editing (Make a copy, Stop following).
+  final bool followed;
+
+  /// Offers Share (signed in, the user's own playlist).
+  final bool canShare;
 
   /// The safe-area padding: the bar sits below [EdgeInsets.top], and the
   /// content keeps clear of the sides.
@@ -785,6 +845,8 @@ class _HeroDelegate extends SliverPersistentHeaderDelegate {
                         devices: devices,
                         playOn: playOn,
                         onSendTo: onSendTo,
+                        followed: followed,
+                        canShare: canShare,
                       ),
                     ),
                   ],
@@ -949,9 +1011,15 @@ class _HeroActions extends StatelessWidget {
     required this.devices,
     required this.playOn,
     required this.onSendTo,
+    required this.followed,
+    required this.canShare,
   });
 
   final bool canPlay;
+
+  /// Followed (read-only): Make a copy and Stop following, no editing.
+  final bool followed;
+  final bool canShare;
 
   /// Favorites: no Rename and no Delete.
   final bool builtIn;
@@ -989,26 +1057,46 @@ class _HeroActions extends StatelessWidget {
             icon: const Icon(Icons.more_horiz),
             onSelected: onMenu,
             itemBuilder: (_) => [
-              if (!builtIn)
+              if (!builtIn && !followed)
                 const PopupMenuItem(
                   value: _MenuAction.rename,
                   child: Text('Rename'),
                 ),
-              const PopupMenuItem(
-                key: Key('playlist.changeCover'),
-                value: _MenuAction.changeCover,
-                child: Text('Change cover'),
-              ),
-              if (hasOwnCover)
+              if (!followed)
+                const PopupMenuItem(
+                  key: Key('playlist.changeCover'),
+                  value: _MenuAction.changeCover,
+                  child: Text('Change cover'),
+                ),
+              if (hasOwnCover && !followed)
                 const PopupMenuItem(
                   key: Key('playlist.removeCover'),
                   value: _MenuAction.removeCover,
                   child: Text('Remove cover'),
                 ),
-              const PopupMenuItem(
-                value: _MenuAction.addSongs,
-                child: Text('Add songs'),
-              ),
+              if (!followed)
+                const PopupMenuItem(
+                  value: _MenuAction.addSongs,
+                  child: Text('Add songs'),
+                ),
+              if (canShare)
+                const PopupMenuItem(
+                  key: Key('playlist.share'),
+                  value: _MenuAction.share,
+                  child: Text('Share'),
+                ),
+              if (followed) ...[
+                const PopupMenuItem(
+                  key: Key('playlist.makeCopy'),
+                  value: _MenuAction.makeCopy,
+                  child: Text('Make a copy'),
+                ),
+                const PopupMenuItem(
+                  key: Key('playlist.stopFollowing'),
+                  value: _MenuAction.stopFollowing,
+                  child: Text('Stop following'),
+                ),
+              ],
               if (listenTogether)
                 const PopupMenuItem(
                   key: Key('playlist.listenTogether'),
@@ -1028,7 +1116,7 @@ class _HeroActions extends StatelessWidget {
                   child: Text('Add to queue on ${d.name}'),
                 ),
               ],
-              if (!builtIn)
+              if (!builtIn && !followed)
                 const PopupMenuItem(
                   value: _MenuAction.delete,
                   child: Text('Delete'),
@@ -1159,11 +1247,15 @@ class _TrackRow extends ConsumerWidget {
     required this.onTap,
     required this.onLocate,
     required this.onRemove,
+    this.reorderable = true,
     super.key,
   });
 
   final String playlistId;
   final PlaylistTrack row;
+
+  /// Shows the drag handle (not on a followed playlist).
+  final bool reorderable;
   final int index;
 
   /// The player's current track is this row's (played from this playlist).
@@ -1174,8 +1266,8 @@ class _TrackRow extends ConsumerWidget {
   final VoidCallback onTap;
   final VoidCallback onLocate;
 
-  /// Removes the row (with Undo).
-  final VoidCallback onRemove;
+  /// Removes the row (with Undo); null on a followed playlist.
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1303,17 +1395,20 @@ class _TrackRow extends ConsumerWidget {
                   song: song,
                   onRemoveFromPlaylist: onRemove,
                 ),
-                ReorderableDragStartListener(
-                  index: index,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Icon(
-                      Icons.drag_handle,
-                      size: 22,
-                      color: colors.mutedText,
+                if (reorderable)
+                  ReorderableDragStartListener(
+                    index: index,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Icon(
+                        Icons.drag_handle,
+                        size: 22,
+                        color: colors.mutedText,
+                      ),
                     ),
-                  ),
-                ),
+                  )
+                else
+                  const SizedBox(width: 12),
               ],
             ),
           ),
@@ -1340,6 +1435,37 @@ class _MissingTag extends StatelessWidget {
           maxLines: 1,
           style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
         ),
+      ),
+    );
+  }
+}
+
+/// "Following · by ‹owner›" on a followed playlist, or that its owner
+/// stopped sharing it.
+class _SharingLine extends StatelessWidget {
+  const _SharingLine({required this.text, required this.following});
+
+  final String text;
+  final bool following;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Padding(
+      key: Key(following ? 'playlist.following' : 'playlist.ended'),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Row(
+        children: [
+          Icon(
+            following ? Icons.link_rounded : Icons.link_off_rounded,
+            size: 18,
+            color: colors.mutedText,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: TextStyle(color: colors.mutedText)),
+          ),
+        ],
       ),
     );
   }
@@ -1374,7 +1500,8 @@ class _SwipeBackground extends StatelessWidget {
 class _EmptyPlaylist extends StatelessWidget {
   const _EmptyPlaylist({required this.onAdd});
 
-  final VoidCallback onAdd;
+  /// Add songs; null on a followed playlist.
+  final VoidCallback? onAdd;
 
   @override
   Widget build(BuildContext context) {

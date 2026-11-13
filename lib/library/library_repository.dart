@@ -601,6 +601,13 @@ class LibraryRepository {
     _db.playlists,
   )..where((p) => p.shareCode.isNotNull() & p.deleted.equals(false))).watch();
 
+  /// This account's live playlist shared under [code], if any.
+  Future<Playlist?> playlistBySharedCode(String code) =>
+      (_db.select(_db.playlists)
+            ..where((p) => p.shareCode.equals(code) & p.deleted.equals(false))
+            ..limit(1))
+          .getSingleOrNull();
+
   /// The live playlists followed from someone's share.
   Future<List<Playlist>> followedPlaylists() => (_db.select(
     _db.playlists,

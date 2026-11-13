@@ -9,6 +9,7 @@ import '../../youtube/yt_models.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
 import '../remote/remote_islands.dart';
+import '../playlists/playlist_invites.dart';
 import '../room/room_islands.dart';
 
 /// What the user is told for a [PlayerState.error]. [notice] supplies the last
@@ -90,6 +91,8 @@ class PlayerErrorIslands extends ConsumerWidget {
     );
     // The same single host tells when a remote link ends, and the room's
     // notices.
-    return RemoteEndedIslands(child: RoomIslands(child: child));
+    return RemoteEndedIslands(
+      child: RoomIslands(child: PlaylistInvites(child: child)),
+    );
   }
 }
