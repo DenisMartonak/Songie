@@ -176,6 +176,8 @@ class _Transport extends ConsumerWidget {
     final role = ref.watch(roomGuestRoleProvider);
     final control = role == null || role == RoomRole.full;
     final canPlay = hasTrack && control;
+    // A guest holding quiet (headphones out, a call) plays again to rejoin.
+    final held = ref.watch(roomGuestHeldProvider);
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -200,7 +202,9 @@ class _Transport extends ConsumerWidget {
             ),
             _PlayPauseButton(
               playing: playing,
-              onPressed: canPlay ? player.togglePlay : null,
+              onPressed: canPlay || (hasTrack && held)
+                  ? player.togglePlay
+                  : null,
             ),
             _BarButton(
               key: const Key('playerBar.next'),

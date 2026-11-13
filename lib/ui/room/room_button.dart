@@ -16,6 +16,15 @@ final roomGuestRoleProvider = Provider<RoomRole?>(
   },
 );
 
+/// Whether this device is a room guest holding quiet on its own; its play
+/// button then rejoins the room, whatever its role.
+final roomGuestHeldProvider = Provider<bool>(
+  (ref) => switch (ref.watch(roomStatusProvider).value) {
+    RoomGuesting(:final held) => held,
+    _ => false,
+  },
+);
+
 /// Whether the player UI may offer [op]: always outside a room and to a
 /// host; to a guest, as its [role] allows.
 bool roomLets(RoomRole? role, RoomOp op) =>

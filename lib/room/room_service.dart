@@ -44,6 +44,7 @@ class RoomGuesting extends RoomStatus {
     required this.role,
     required this.people,
     required this.roles,
+    this.held = false,
   });
 
   final RoomPresence host;
@@ -54,6 +55,10 @@ class RoomGuesting extends RoomStatus {
 
   /// Every guest device's role, by device id, as the host sent them.
   final Map<String, RoomRole> roles;
+
+  /// This device went quiet on its own (headphones out, a call); its play
+  /// button rejoins the room whatever its role.
+  final bool held;
 }
 
 /// Something to tell the user (shown as an island).
@@ -268,6 +273,7 @@ class RoomService {
             role: guest.role,
             people: people,
             roles: {...guest.allRoles, _deviceId: guest.role},
+            held: guest.held,
           ),
         );
       }
@@ -287,6 +293,7 @@ class RoomService {
         publish();
       });
       _listen(guest.allRolesChanges, (_) => publish());
+      _listen(guest.heldChanges, (_) => publish());
       _listen(guest.cantPlay, (title) {
         _say("Can't play $title here, joining in at the next song");
       });

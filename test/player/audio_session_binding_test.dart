@@ -38,6 +38,9 @@ class _GuestView implements PlayerView, LocalHold {
   final calls = <String>[];
 
   @override
+  bool heldLocally = false;
+
+  @override
   Future<void> holdLocally() async => calls.add('hold');
 
   @override
@@ -185,6 +188,21 @@ void main() {
         player: player,
         inputs: PlayerInputs(player, room: () => guest),
       );
+    });
+
+    test('an interruption holds even while the room is paused', () async {
+      await player.pause();
+      await send(_begin(AudioInterruptionType.pause));
+      expect(guest.calls, ['hold']);
+      await send(_end(AudioInterruptionType.pause));
+      expect(guest.calls, ['hold', 'resume']);
+    });
+
+    test('an interruption leaves an earlier hold to the user', () async {
+      guest.heldLocally = true;
+      await send(_begin(AudioInterruptionType.pause));
+      await send(_end(AudioInterruptionType.pause));
+      expect(guest.calls, isEmpty);
     });
 
     test('becoming noisy holds locally, without asking the room', () async {

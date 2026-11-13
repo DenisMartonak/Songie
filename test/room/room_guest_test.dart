@@ -38,9 +38,13 @@ class _Resolver extends TrackResolver {
   final failing = <String>{};
   final resolved = <String>[];
 
+  /// When set, resolving waits for it (a song still loading).
+  Completer<void>? gate;
+
   @override
   Future<Result<AudioSourceRef>> resolve(Track t) async {
     resolved.add(t.id);
+    await gate?.future;
     if (failing.contains(t.id)) {
       return const Err(Failure(FailureKind.unsupported, 'stream failed'));
     }
@@ -556,6 +560,47 @@ void main() {
     r.settle();
     expect(r.guestPlayer.state.playing, isTrue);
     expect(r.guestSeeks, isNotEmpty);
+    expect(r.guestMs, closeTo(r.hostMs, 1000));
+  });
+
+  guestTest('held reports its changes', (r) {
+    final seen = <bool>[];
+    final sub = r.guest.heldChanges.listen(seen.add);
+    r.hostPlays([track('a')]);
+    r.join();
+    expect(r.view.heldLocally, isFalse);
+    r.view.holdLocally();
+    r.view.holdLocally();
+    r.settle();
+    expect(r.view.heldLocally, isTrue);
+    r.view.resumeLocally();
+    r.settle();
+    expect(r.view.heldLocally, isFalse);
+    expect(seen, [true, false]);
+    sub.cancel();
+  });
+
+  guestTest('a hold while a song loads is not undone when it starts', (r) {
+    r.hostPlays([track('a'), track('b')]);
+    r.hostBackend.setPosition(const Duration(seconds: 20));
+    // Joining mid-song: the guest loads a, then seeks and plays.
+    final gate = r.guestResolver.gate = Completer<void>();
+    r.join();
+    r.view.holdLocally();
+    r.async.flushMicrotasks();
+    gate.complete();
+    r.guestResolver.gate = null;
+    // Before the next heartbeat could quiet it again.
+    r.async.elapse(const Duration(milliseconds: 100));
+    expect(r.guestPlayer.state.playing, isFalse);
+    r.async.elapse(const Duration(seconds: 4));
+    expect(r.guestPlayer.state.playing, isFalse);
+    // Not taken for a song this guest cannot play.
+    expect(r.cantPlay, isEmpty);
+    r.view.play();
+    r.settle();
+    expect(r.guestSong, 'a');
+    expect(r.guestPlayer.state.playing, isTrue);
     expect(r.guestMs, closeTo(r.hostMs, 1000));
   });
 

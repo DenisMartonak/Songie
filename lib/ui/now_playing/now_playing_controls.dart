@@ -6,7 +6,8 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
 import '../../room/room_protocol.dart' show RoomOp;
-import '../room/room_button.dart' show roomGuestRoleProvider, roomLets;
+import '../room/room_button.dart'
+    show roomGuestHeldProvider, roomGuestRoleProvider, roomLets;
 import '../shell/player_bar.dart' show formatDuration;
 import '../widgets/steady_track_shape.dart';
 
@@ -167,6 +168,8 @@ class NowPlayingControls extends ConsumerWidget {
     // A room's guest controls the music only with Full control.
     final role = ref.watch(roomGuestRoleProvider);
     bool may(RoomOp op) => roomLets(role, op);
+    // A guest holding quiet (headphones out, a call) plays again to rejoin.
+    final held = ref.watch(roomGuestHeldProvider);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -190,7 +193,9 @@ class NowPlayingControls extends ConsumerWidget {
         ),
         _PlayPauseButton(
           playing: playing,
-          onPressed: hasTrack && may(RoomOp.toggle) ? player.togglePlay : null,
+          onPressed: hasTrack && (may(RoomOp.toggle) || held)
+              ? player.togglePlay
+              : null,
         ),
         _ControlButton(
           key: const Key('nowPlaying.next'),
