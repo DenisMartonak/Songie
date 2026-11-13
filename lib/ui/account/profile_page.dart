@@ -16,6 +16,7 @@ import 'account_dialogs.dart';
 import 'account_section.dart';
 import 'auth_screens.dart';
 import 'avatar.dart';
+import 'inline_username.dart';
 import 'picture_viewer.dart';
 
 /// Your profile: the picture, username and email, your listening stats,
@@ -213,33 +214,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    profile.username,
-                    key: const Key('account.username'),
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  InlineUsername(username: profile.username),
                   Text(
                     profile.email,
                     key: const Key('account.email'),
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: colors.mutedText, fontSize: 13),
-                  ),
-                  // Replaced by tapping the picture and the name.
-                  Wrap(
-                    children: [
-                      action(
-                        'account.changeUsername',
-                        Icons.edit_outlined,
-                        'Change username',
-                        () =>
-                            showChangeUsernameDialog(context, profile.username),
-                      ),
-                    ],
                   ),
                 ],
               ),

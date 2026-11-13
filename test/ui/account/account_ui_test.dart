@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
@@ -132,7 +132,7 @@ void main() {
     // No picture yet: the first letter.
     expect(inSection(find.text('D')), findsOneWidget);
     expect(inTop(find.text('D')), findsOneWidget);
-    expect(inSection(find.text('Change username')), findsOneWidget);
+    expect(inSection(find.byTooltip('Change username')), findsOneWidget);
     expect(key('profile.avatar'), findsOneWidget);
     expect(inSection(find.text('Log out')), findsOneWidget);
     expect(inSection(find.text('Delete account')), findsOneWidget);
@@ -433,33 +433,73 @@ void main() {
     expect(find.text('Signed in'), findsOneWidget);
   });
 
-  uiTest('change username updates the section and the top-bar avatar', (
-    tester,
-  ) async {
+  /// Taps the name on the profile, turning it into a field.
+  Future<void> editName(WidgetTester tester) async {
+    await tapAndSettle(tester, key('account.username'));
+    expect(key('account.newUsername'), findsOneWidget);
+  }
+
+  uiTest('tap the name to edit it; Enter saves', (tester) async {
     await signedIn('den@x.com', 'den');
     h.accountBackend.takenUsernames.add('taken');
     await pumpAccount(tester);
     expect(inTop(find.text('D')), findsOneWidget);
+    await editName(tester);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(
+      tester.widget<TextField>(key('account.newUsername')).controller!.text,
+      'den',
+    );
 
-    // Change username: a taken one is refused inline.
-    await tapAndSettle(tester, key('account.changeUsername'));
+    // A taken one is refused by the server and stays in the field.
     await type(tester, key('account.newUsername'), 'Taken');
-    await tester.pump();
     expect(
       tester.widget<TextField>(key('account.newUsername')).controller!.text,
       'taken',
     );
-    await tapAndSettle(tester, key('account.saveUsername'));
+    await tapAndSettle(tester, key('profile.saveUsername'));
     expect(find.text('That username is taken.'), findsWidgets);
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(key('account.newUsername'), findsOneWidget);
 
     await type(tester, key('account.newUsername'), 'neo');
     await tester.pump(const Duration(milliseconds: 500));
-    await tapAndSettle(tester, key('account.saveUsername'));
-    expect(find.byType(AlertDialog), findsNothing);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(key('account.newUsername'), findsNothing);
     expect(find.text('Username changed'), findsOneWidget);
-    expect(inSection(find.text('neo')), findsOneWidget);
+    expect(tester.widget<Text>(key('account.username')).data, 'neo');
     expect(inTop(find.text('N')), findsOneWidget);
+  });
+
+  uiTest('Esc restores the old name without saving', (tester) async {
+    await signedIn('den@x.com', 'den');
+    await pumpAccount(tester);
+    await editName(tester);
+    await type(tester, key('account.newUsername'), 'neo');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester);
+    expect(key('account.newUsername'), findsNothing);
+    expect(tester.widget<Text>(key('account.username')).data, 'den');
+    expect(h.accountBackend.calls, isNot(contains('updateUsername')));
+  });
+
+  uiTest('a taken name cannot be saved once checked', (tester) async {
+    await signedIn('den@x.com', 'den');
+    h.accountBackend.takenUsernames.add('taken');
+    await pumpAccount(tester);
+    await editName(tester);
+    await type(tester, key('account.newUsername'), 'taken');
+    // The availability check runs after a pause.
+    await tester.pump(const Duration(milliseconds: 500));
+    await settle(tester);
+    expect(
+      tester.widget<IconButton>(key('profile.saveUsername')).onPressed,
+      isNull,
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(h.accountBackend.calls, isNot(contains('updateUsername')));
+    expect(key('account.newUsername'), findsOneWidget);
   });
 
   /// Opens the picture viewer from the profile's picture.
