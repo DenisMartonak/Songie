@@ -132,6 +132,7 @@ class RoomPresence {
     required this.platform,
     required this.host,
     this.v = kRoomProtocol,
+    this.beats = true,
   });
 
   final String userId;
@@ -140,6 +141,10 @@ class RoomPresence {
   final String platform;
   final bool host;
   final int v;
+
+  /// Whether this device follows [RoomBeatMsg]s. Builds before them leave
+  /// it out, and the host sends them full states only.
+  final bool beats;
 
   bool get compatible => v == kRoomProtocol;
 
@@ -150,6 +155,7 @@ class RoomPresence {
     'name': name,
     'platform': platform,
     'host': host,
+    'beats': beats,
   };
 
   static RoomPresence? fromJson(Object? j) {
@@ -161,6 +167,7 @@ class RoomPresence {
       final name = j['name'];
       final platform = j['platform'];
       final host = j['host'];
+      final beats = j['beats'];
       if (v is! int) return null;
       if (userId is! String || userId.isEmpty) return null;
       if (deviceId is! String || deviceId.isEmpty) return null;
@@ -172,6 +179,7 @@ class RoomPresence {
         platform: platform is String ? platform : '',
         host: host is bool ? host : false,
         v: v,
+        beats: beats is bool ? beats : false,
       );
     } on Object {
       return null;
@@ -194,6 +202,7 @@ sealed class RoomMessage {
       if (payload['v'] != kRoomProtocol) return null;
       return switch (event) {
         'state' => RoomStateMsg._decode(payload),
+        'beat' => RoomBeatMsg._decode(payload),
         'roles' => RoomRolesMsg._decode(payload),
         'request' => RoomRequestMsg._decode(payload),
         'hello' => RoomHelloMsg._decode(payload),
@@ -208,9 +217,12 @@ sealed class RoomMessage {
 }
 
 /// The host's playback state. [songs] is the queue window starting at
-/// [offset]; [index] is into the full queue.
+/// [offset]; [index] is into the full queue. [rev] names this window (epoch,
+/// offset and songs) for the [RoomBeatMsg]s that follow; hosts before beats
+/// leave it out.
 class RoomStateMsg extends RoomMessage {
   const RoomStateMsg({
+    this.rev,
     required this.epoch,
     required this.songs,
     required this.offset,
@@ -222,6 +234,7 @@ class RoomStateMsg extends RoomMessage {
     required this.repeat,
   });
 
+  final int? rev;
   final int epoch;
   final List<RoomSong> songs;
   final int offset;
@@ -238,6 +251,7 @@ class RoomStateMsg extends RoomMessage {
   @override
   Map<String, Object?> toJson() => {
     'v': kRoomProtocol,
+    'rev': ?rev,
     'epoch': epoch,
     'songs': [for (final s in songs) s.toJson()],
     'offset': offset,
@@ -250,6 +264,7 @@ class RoomStateMsg extends RoomMessage {
   };
 
   static RoomStateMsg? _decode(Map<Object?, Object?> j) {
+    final rev = j['rev'];
     final epoch = j['epoch'];
     final songs = _songs(j['songs']);
     final offset = j['offset'];
@@ -271,9 +286,91 @@ class RoomStateMsg extends RoomMessage {
       return null;
     }
     return RoomStateMsg(
+      rev: rev is int ? rev : null,
       epoch: epoch,
       songs: songs,
       offset: offset,
+      index: index,
+      playing: playing,
+      positionMs: positionMs,
+      durationMs: durationMs as int?,
+      shuffle: shuffle,
+      repeat: repeat,
+    );
+  }
+}
+
+/// The host's playback state without its songs, while they are those of
+/// the [RoomStateMsg] with the same [rev]. A guest that holds another
+/// revision asks for the full state (hello). Older guests ignore it, so the
+/// host sends it only when every guest present [RoomPresence.beats].
+class RoomBeatMsg extends RoomMessage {
+  const RoomBeatMsg({
+    required this.rev,
+    required this.index,
+    required this.playing,
+    required this.positionMs,
+    required this.durationMs,
+    required this.shuffle,
+    required this.repeat,
+  });
+
+  final int rev;
+  final int index;
+  final bool playing;
+  final int positionMs;
+  final int? durationMs;
+  final bool shuffle;
+  final RepeatMode repeat;
+
+  @override
+  String get event => 'beat';
+
+  @override
+  Map<String, Object?> toJson() => {
+    'v': kRoomProtocol,
+    'rev': rev,
+    'index': index,
+    'playing': playing,
+    'position_ms': positionMs,
+    'duration_ms': durationMs,
+    'shuffle': shuffle,
+    'repeat': repeat.name,
+  };
+
+  /// [full]'s window with this beat's playback.
+  RoomStateMsg over(RoomStateMsg full) => RoomStateMsg(
+    rev: rev,
+    epoch: full.epoch,
+    songs: full.songs,
+    offset: full.offset,
+    index: index,
+    playing: playing,
+    positionMs: positionMs,
+    durationMs: durationMs,
+    shuffle: shuffle,
+    repeat: repeat,
+  );
+
+  static RoomBeatMsg? _decode(Map<Object?, Object?> j) {
+    final rev = j['rev'];
+    final index = j['index'];
+    final playing = j['playing'];
+    final positionMs = j['position_ms'];
+    final durationMs = j['duration_ms'];
+    final shuffle = j['shuffle'];
+    final repeat = _byName(RepeatMode.values, j['repeat']);
+    if (rev is! int ||
+        index is! int ||
+        playing is! bool ||
+        positionMs is! int ||
+        (durationMs != null && durationMs is! int) ||
+        shuffle is! bool ||
+        repeat == null) {
+      return null;
+    }
+    return RoomBeatMsg(
+      rev: rev,
       index: index,
       playing: playing,
       positionMs: positionMs,

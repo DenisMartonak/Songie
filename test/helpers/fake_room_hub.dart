@@ -15,6 +15,10 @@ class FakeRoomHub {
   /// Sends from dropped or unjoined devices are not recorded.
   final List<RoomMessage> sent = [];
 
+  /// When it returns true for a sent message, the message is recorded but
+  /// never arrives (lost on the way).
+  bool Function(RoomMessage m)? lose;
+
   RoomChannel channelFor(String deviceId) =>
       _channels.putIfAbsent(deviceId, () => _FakeChannel(this, deviceId));
 
@@ -47,6 +51,7 @@ class FakeRoomHub {
   void _deliver(_FakeChannel from, RoomMessage m) {
     if (!_online(from)) return;
     sent.add(m);
+    if (lose?.call(m) ?? false) return;
     final wire = jsonDecode(jsonEncode(m.toJson()));
     final decoded = RoomMessage.decode(m.event, wire);
     if (decoded == null) return;
