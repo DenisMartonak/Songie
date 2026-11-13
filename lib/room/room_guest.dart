@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show mapEquals;
+
 import '../core/log.dart';
 import '../data/database.dart';
 import '../player/player_inputs.dart';
@@ -108,6 +110,13 @@ class RoomGuest {
   var _tracks = const <Track>[];
   var _map = const <int?>[];
 
+  /// Who added each of [_tracks] (a user id), in step with them.
+  var _bys = const <String?>[];
+
+  /// The latest full state's faces (see [faces]).
+  Map<String, RoomFace> _faces = const {};
+  final _facesChanges = StreamController<Map<String, RoomFace>>.broadcast();
+
   /// Whether the player holds [_tracks] (loaded with `playQueue`).
   bool _loaded = false;
 
@@ -131,6 +140,10 @@ class RoomGuest {
 
   /// Whether this device is holding quiet on its own (see [hold]).
   bool get held => _held;
+
+  /// Who the queue's adders are, by user id, as the host last sent them.
+  Map<String, RoomFace> get faces => _faces;
+  Stream<Map<String, RoomFace>> get facesChanges => _facesChanges.stream;
 
   /// [held] as it changes.
   Stream<bool> get heldChanges => _heldChanges.stream;
@@ -322,6 +335,10 @@ class RoomGuest {
           _unreachable = null;
           _takeOver();
           _full = m;
+          if (!mapEquals(m.faces, _faces)) {
+            _faces = Map.unmodifiable(m.faces);
+            _facesChanges.add(_faces);
+          }
           _pending = (m, _now());
           _drain();
         case RoomBeatMsg():
@@ -403,7 +420,8 @@ class RoomGuest {
     for (var i = 0; i < a.length; i++) {
       if (a[i].videoId != b[i].videoId ||
           a[i].title != b[i].title ||
-          a[i].artist != b[i].artist) {
+          a[i].artist != b[i].artist ||
+          a[i].by != b[i].by) {
         return false;
       }
     }
@@ -432,6 +450,7 @@ class RoomGuest {
       final tracks = await _tracksFor(songs);
       if (!_running) return;
       final playable = <Track>[];
+      final bys = <String?>[];
       final map = <int?>[];
       for (var i = 0; i < songs.length; i++) {
         final t = i < tracks.length && !songs[i].local ? tracks[i] : null;
@@ -440,6 +459,7 @@ class RoomGuest {
         } else {
           map.add(playable.length);
           playable.add(t);
+          bys.add(songs[i].by);
         }
       }
       final sameEpoch = m.epoch == _epoch;
@@ -449,6 +469,7 @@ class RoomGuest {
       _epoch = m.epoch;
       _songs = songs;
       _tracks = playable;
+      _bys = bys;
       _map = map;
       _target = null;
       if (!sameEpoch) _failed.clear();
@@ -458,7 +479,7 @@ class RoomGuest {
           sameEpoch &&
           held &&
           next != null &&
-          await _player.replaceQueueAroundCurrent(playable, next);
+          await _player.replaceQueueAroundCurrent(playable, next, addedBy: bys);
       if (!_running) return;
     }
     _offset = offset;
@@ -486,7 +507,7 @@ class RoomGuest {
     if (!_loaded || !_playerHoldsQueue()) {
       if (_player.state.shuffle) _player.setShuffle(false);
       _loaded = true;
-      await _player.playQueue(_tracks, startIndex: target);
+      await _player.playQueue(_tracks, startIndex: target, addedBy: _bys);
       if (await _stopped()) return;
       _checkStarted(target);
     } else if (_player.state.index != target) {

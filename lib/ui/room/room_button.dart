@@ -25,6 +25,36 @@ final roomGuestHeldProvider = Provider<bool>(
   },
 );
 
+/// Who added the queue's songs while this device is in a room.
+class RoomFaces {
+  const RoomFaces(this.faces, {this.untagged});
+
+  final Map<String, RoomFace> faces;
+
+  /// Whose an untagged queue entry is: the host's own id while hosting,
+  /// null as a guest (its songs come tagged, or from a host before tags).
+  final String? untagged;
+
+  /// The face for a queue entry tagged [addedBy]; null when unknown. While
+  /// hosting, a tag this room doesn't know (left from an earlier room) is
+  /// the host's, like an untagged one.
+  RoomFace? of(String? addedBy) {
+    final face = addedBy == null ? null : faces[addedBy];
+    if (face != null) return face;
+    final host = untagged;
+    return host == null ? null : faces[host];
+  }
+}
+
+/// [RoomFaces] while this device hosts or follows a room; null otherwise.
+final roomFacesProvider = Provider<RoomFaces?>(
+  (ref) => switch (ref.watch(roomStatusProvider).value) {
+    RoomHosting(:final faces, :final me) => RoomFaces(faces, untagged: me),
+    RoomGuesting(:final faces) => RoomFaces(faces),
+    _ => null,
+  },
+);
+
 /// Whether the player UI may offer [op]: always outside a room and to a
 /// host; to a guest, as its [role] allows.
 bool roomLets(RoomRole? role, RoomOp op) =>

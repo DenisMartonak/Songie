@@ -554,6 +554,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
       await service.open(
         userId: account.profile.id,
         name: account.profile.username,
+        avatarUrl: account.profile.avatarUrl,
         play: [for (final r in rows) r.track],
       );
     } on StateError catch (e, s) {

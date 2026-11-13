@@ -28,8 +28,37 @@ class AccountAvatar extends ConsumerWidget {
       );
     }
     final profile = state.profile;
-    final initial = _Initial(username: profile.username, size: size);
-    final url = profile.avatarUrl;
+    return PersonAvatar(
+      name: profile.username,
+      url: profile.avatarUrl,
+      size: size,
+      imageKey: const Key('account.avatar.image'),
+    );
+  }
+}
+
+/// A person's round picture: [url], else [name]'s first letter on a colour
+/// from the name (also when the picture fails to load).
+class PersonAvatar extends StatelessWidget {
+  const PersonAvatar({
+    required this.name,
+    required this.url,
+    required this.size,
+    this.imageKey,
+    super.key,
+  });
+
+  final String name;
+  final String? url;
+  final double size;
+
+  /// The picture's key, when there is one.
+  final Key? imageKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = _Initial(username: name, size: size);
+    final url = this.url;
     return SizedBox.square(
       dimension: size,
       child: ClipOval(
@@ -37,7 +66,7 @@ class AccountAvatar extends ConsumerWidget {
             ? initial
             : Image.network(
                 url,
-                key: const Key('account.avatar.image'),
+                key: imageKey,
                 width: size,
                 height: size,
                 fit: BoxFit.cover,

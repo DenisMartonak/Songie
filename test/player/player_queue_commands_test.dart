@@ -177,6 +177,58 @@ void main() {
     });
   });
 
+  group('addedBy', () {
+    final a = track('a');
+    final b = track('b');
+    final c = track('c');
+    List<(String, String?)> pairs() => [
+      for (var i = 0; i < player.state.queue.length; i++)
+        (player.state.queue[i].id, player.state.addedBy[i]),
+    ];
+
+    test(
+      'queue entries carry who added them through moves and shuffle',
+      () async {
+        await player.playQueue([a, b], addedBy: ['u1', 'u1']);
+        await player.addToQueue([c], addedBy: ['u2']);
+        await player.appendToQueue([c], addedBy: ['u3']);
+        expect(ids(player.state.queue), ['a', 'c', 'b', 'c']);
+        expect(player.state.addedBy, ['u1', 'u2', 'u1', 'u3']);
+
+        player.move(3, 1);
+        expect(pairs(), [('a', 'u1'), ('c', 'u3'), ('c', 'u2'), ('b', 'u1')]);
+        final before = pairs();
+
+        player.setShuffle(true);
+        expect(pairs(), unorderedEquals(before));
+        player.setShuffle(false);
+        expect(pairs(), before);
+
+        final i = player.state.addedBy.indexOf('u2');
+        await player.removeAt(i);
+        expect(player.state.addedBy, isNot(contains('u2')));
+        expect(player.state.addedBy, contains('u3'));
+      },
+    );
+
+    test(
+      'untagged commands leave tags null; currentAddedBy follows index',
+      () async {
+        await player.playQueue([a, b]);
+        expect(player.state.addedBy, [null, null]);
+        expect(player.state.currentAddedBy, isNull);
+        final done = await player.replaceQueueAroundCurrent(
+          [a, b, c],
+          0,
+          addedBy: ['h', 'g', 'g'],
+        );
+        expect(done, isTrue);
+        expect(player.state.currentAddedBy, 'h');
+        expect(player.state.addedBy, ['h', 'g', 'g']);
+      },
+    );
+  });
+
   test('queueEpoch changes with each playQueue call, not with edits', () async {
     final e0 = player.queueEpoch;
     final f = player.playQueue(ten);
