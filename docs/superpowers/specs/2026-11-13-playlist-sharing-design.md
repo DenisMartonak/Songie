@@ -109,6 +109,23 @@ documented in `docs/supabase.md`.
   - "Make a copy" and "Stop following";
   - every edit control hidden.
 
+## Known limit (accepted)
+
+An older Songies version on the **owner's** other device can clear the
+owner's share mark.
+
+1. The older version, before it updates, renames the shared playlist or
+   changes its cover.
+2. After it updates, sync's whole-row last-write-wins keeps its copy of the
+   row, which has no share code.
+3. The share stays live but frozen, and the owner's playlist shows as not
+   shared. Sharing it again makes a new link.
+
+This is a limit of the existing row-format mechanism, which saved artists
+share too. A follower's devices are not affected: followed playlists and
+their entries are always new-format rows, which an older version leaves
+alone.
+
 ## Non-goals
 
 No collaborative editing, no sharing with chosen friends only or in-app
