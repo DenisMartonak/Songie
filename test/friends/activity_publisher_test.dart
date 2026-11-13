@@ -31,6 +31,9 @@ void main() {
   late StreamController<Object?> roomChanges;
   String? room;
   late int topCalls;
+
+  /// What the stats give for the top 10 (a test may make it fail or hang).
+  late Future<TopSummary?> Function() topAnswer;
   late ActivityPublisher publisher;
 
   void play(Track? t, {bool playing = true}) {
@@ -50,15 +53,16 @@ void main() {
     state = const PlayerState();
     room = null;
     topCalls = 0;
+    topAnswer = () async => const TopSummary(artists: ['Beyonce'], songs: []);
     publisher = ActivityPublisher(
       backend: backend,
       states: states.stream,
       current: () => state,
       roomCode: () => room,
       roomChanges: roomChanges.stream,
-      top: () async {
+      top: () {
         topCalls++;
-        return const TopSummary(artists: ['Beyonce'], songs: []);
+        return topAnswer();
       },
       now: () => DateTime(2026).add(async.elapsed),
     );
@@ -132,7 +136,7 @@ void main() {
   test('sharing off: nothing is published', () {
     fakeAsync((async) {
       start(async);
-      publisher.setSharing(const Sharing(listening: false, top: false));
+      publisher.setSharing(listening: false, top: false);
       async.flushMicrotasks();
       backend.calls.clear();
       play(track('a'));
@@ -140,7 +144,7 @@ void main() {
       expect(backend.calls, isNot(contains('publishNowPlaying')));
       expect(backend.calls, isNot(contains('publishTop')));
       // Back on: what plays goes out again.
-      publisher.setSharing(Sharing.on);
+      publisher.setSharing(listening: true, top: true);
       async.elapse(const Duration(seconds: 3));
       expect(published()!.title, 'Song a');
       stop(async);
@@ -157,6 +161,25 @@ void main() {
       expect(topCalls, 1);
       async.elapse(const Duration(minutes: 15));
       expect(topCalls, 2);
+      stop(async);
+    });
+  });
+
+  test('a failing top 10 neither escapes nor holds up a switch change', () {
+    fakeAsync((async) {
+      start(async);
+      topAnswer = () async => throw StateError('stats broke');
+      async.elapse(const Duration(hours: 2));
+      // A top 10 that never comes does not hold up saving a switch.
+      topAnswer = () => Completer<TopSummary?>().future;
+      var saved = false;
+      publisher.setSharing(top: false).then((_) => saved = true);
+      async.flushMicrotasks();
+      expect(saved, isTrue);
+      saved = false;
+      publisher.setSharing(top: true).then((_) => saved = true);
+      async.flushMicrotasks();
+      expect(saved, isTrue);
       stop(async);
     });
   });

@@ -57,9 +57,10 @@ void main() {
     expect(calls.last.$2, {'p_now': null, 'p_room_code': null});
     await b.publishNowPlaying(halo, roomCode: 'ABCD2345');
     expect(calls.last.$2, {'p_now': halo.toJson(), 'p_room_code': 'ABCD2345'});
-    await b.setSharing(const Sharing(listening: false, top: true));
+    await b.setSharing(listening: false);
     expect(calls.last.$1, 'set_sharing');
-    expect(calls.last.$2, {'p_listening': false, 'p_top': true});
+    // Only the switch that changed: null leaves the other as it is.
+    expect(calls.last.$2, {'p_listening': false, 'p_top': null});
     await b.publishTop(top);
     expect(calls.last.$2, {'p_top': top.toJson()});
 
@@ -92,7 +93,7 @@ void main() {
     f.me = 'a';
     expect((await f.friendActivity())['b']!.nowPlaying, halo);
     f.me = 'b';
-    await f.setSharing(const Sharing(listening: false, top: true));
+    await f.setSharing(listening: false);
     await f.publishNowPlaying(halo);
     f.me = 'a';
     final b = (await f.friendActivity())['b']!;

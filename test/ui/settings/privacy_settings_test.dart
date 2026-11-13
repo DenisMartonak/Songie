@@ -68,6 +68,21 @@ void main() {
     expect(find.text("You're offline"), findsOneWidget);
   });
 
+  uiTest("a switch saves only itself, not another device's old value", (
+    tester,
+  ) async {
+    await signedIn();
+    await pump(tester);
+    // Another device turns top sharing off while this screen is open.
+    await h.activityBackend.setSharing(top: false);
+    await tester.tap(find.byKey(const Key('privacy.listening')));
+    await settle(tester);
+    expect(
+      await h.activityBackend.mySharing(),
+      const Sharing(listening: false, top: false),
+    );
+  });
+
   uiTest('signed out it asks to log in', (tester) async {
     await pump(tester);
     expect(find.text('Log in to share with friends'), findsOneWidget);

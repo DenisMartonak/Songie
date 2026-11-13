@@ -34,25 +34,6 @@ create policy "activity: users read their own row"
   to authenticated
   using (user_id = (select auth.uid()));
 
--- Whether a and b are friends (an accepted request either way). Not callable
--- by apps.
-create function public.are_friends(a uuid, b uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select exists (
-    select 1 from public.friendships f
-    where f.status = 'accepted'
-      and ((f.requester = a and f.addressee = b)
-        or (f.requester = b and f.addressee = a))
-  );
-$$;
-
-revoke all on function public.are_friends(uuid, uuid) from public, anon, authenticated;
-
 -- Sharing ------------------------------------------------------------------------------
 
 -- The caller's two switches; both on when the account has no row yet.
@@ -68,7 +49,9 @@ as $$
   left join public.activity a on a.user_id = (select auth.uid());
 $$;
 
--- Sets the caller's switches; one turned off clears what it covers.
+-- Sets the caller's switches. A null one stays as it is (so a device showing
+-- an old value can't turn back on what another device turned off); one
+-- turned off clears what it covers.
 create function public.set_sharing(p_listening boolean, p_top boolean)
 returns void
 language plpgsql
@@ -82,20 +65,16 @@ begin
     raise exception 'not_signed_in';
   end if;
   insert into public.activity (user_id, share_listening, share_top)
-    values (me, p_listening, p_top)
+    values (me, coalesce(p_listening, true), coalesce(p_top, true))
   on conflict (user_id) do update
-    set share_listening = excluded.share_listening,
-        share_top = excluded.share_top;
-  if not p_listening then
-    update public.activity
-      set now_playing = null, now_updated_at = null, room_code = null
-      where user_id = me;
-  end if;
-  if not p_top then
-    update public.activity
-      set top = null, top_updated_at = null
-      where user_id = me;
-  end if;
+    set share_listening = coalesce(p_listening, public.activity.share_listening),
+        share_top = coalesce(p_top, public.activity.share_top);
+  update public.activity
+    set now_playing = null, now_updated_at = null, room_code = null
+    where user_id = me and not share_listening;
+  update public.activity
+    set top = null, top_updated_at = null
+    where user_id = me and not share_top;
 end;
 $$;
 
@@ -103,6 +82,8 @@ $$;
 
 -- What the caller plays now (null: nothing) and the code of the room it hosts
 -- (null: none). Nothing happens while the caller does not share listening.
+-- A code is kept only for an open room the caller hosts, so nobody can send
+-- friends into someone else's room; a song over 2 kB fails with too_large.
 create function public.publish_now_playing(p_now jsonb, p_room_code text)
 returns void
 language plpgsql
@@ -111,12 +92,18 @@ set search_path = ''
 as $$
 declare
   me uuid := (select auth.uid());
+  code text;
 begin
   if me is null then
     raise exception 'not_signed_in';
   end if;
+  if octet_length(p_now::text) > 2048 then
+    raise exception 'too_large';
+  end if;
+  select r.code into code from public.rooms r
+    where r.code = p_room_code and r.host_id = me and public.room_is_open(r);
   insert into public.activity (user_id, now_playing, now_updated_at, room_code)
-    values (me, p_now, now(), p_room_code)
+    values (me, p_now, now(), code)
   on conflict (user_id) do update
     set now_playing = excluded.now_playing,
         now_updated_at = excluded.now_updated_at,
@@ -126,7 +113,7 @@ end;
 $$;
 
 -- The caller's top 10 of the last 30 days. Nothing happens while the caller
--- does not share it.
+-- does not share it; over 16 kB fails with too_large.
 create function public.publish_top(p_top jsonb)
 returns void
 language plpgsql
@@ -138,6 +125,9 @@ declare
 begin
   if me is null then
     raise exception 'not_signed_in';
+  end if;
+  if octet_length(p_top::text) > 16384 then
+    raise exception 'too_large';
   end if;
   insert into public.activity (user_id, top, top_updated_at)
     values (me, p_top, now())
@@ -151,7 +141,8 @@ $$;
 -- Reading ------------------------------------------------------------------------------
 
 -- The caller's friends' activity: one row per friend that has a row, each
--- part only when that friend shares it.
+-- part only when that friend shares it. Starts from the caller's friendships
+-- (indexed), so it costs what the caller's friends do, not every account.
 create function public.friend_activity()
 returns table (
   user_id uuid,
@@ -170,8 +161,14 @@ as $$
     case when a.share_listening then a.now_updated_at end,
     case when a.share_listening then a.room_code end,
     case when a.share_top then a.top end
-  from public.activity a
-  where public.are_friends((select auth.uid()), a.user_id);
+  from public.friendships f
+  join public.activity a
+    on a.user_id = case
+      when f.requester = (select auth.uid()) then f.addressee
+      else f.requester
+    end
+  where f.status = 'accepted'
+    and (f.requester = (select auth.uid()) or f.addressee = (select auth.uid()));
 $$;
 
 revoke all on function public.my_sharing() from public, anon, authenticated;

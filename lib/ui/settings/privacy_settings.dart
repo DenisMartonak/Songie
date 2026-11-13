@@ -37,25 +37,34 @@ class _PrivacySettingsSectionState
     }
   }
 
-  Future<void> _set(Sharing next) async {
+  /// Saves one switch ([listening] or [top]), never the other's value as
+  /// this screen last saw it.
+  Future<void> _set({bool? listening, bool? top}) async {
     final before = _sharing;
+    if (before == null) return;
     final islands = Islands.of(context);
     setState(() {
-      _sharing = next;
+      _sharing = Sharing(
+        listening: listening ?? before.listening,
+        top: top ?? before.top,
+      );
       _busy = true;
     });
     try {
-      await ref.read(activityPublisherProvider).setSharing(next);
-    } on FriendsException catch (e) {
+      await ref
+          .read(activityPublisherProvider)
+          .setSharing(listening: listening, top: top);
+    } catch (e) {
       islands.show(
-        e.error == FriendsError.offline
+        e is FriendsException && e.error == FriendsError.offline
             ? "You're offline"
             : "Couldn't save that",
         kind: IslandKind.failure,
       );
       if (mounted) setState(() => _sharing = before);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    if (mounted) setState(() => _busy = false);
   }
 
   @override
@@ -92,9 +101,7 @@ class _PrivacySettingsSectionState
           SwitchListTile(
             key: const Key('privacy.listening'),
             value: sharing.listening,
-            onChanged: _busy
-                ? null
-                : (v) => _set(Sharing(listening: v, top: sharing.top)),
+            onChanged: _busy ? null : (v) => _set(listening: v),
             title: Text(
               "Share what I'm listening to",
               style: TextStyle(color: colors.text),
@@ -107,9 +114,7 @@ class _PrivacySettingsSectionState
           SwitchListTile(
             key: const Key('privacy.top'),
             value: sharing.top,
-            onChanged: _busy
-                ? null
-                : (v) => _set(Sharing(listening: sharing.listening, top: v)),
+            onChanged: _busy ? null : (v) => _set(top: v),
             title: Text(
               'Share my top 10 with friends',
               style: TextStyle(color: colors.text),

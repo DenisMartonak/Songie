@@ -78,16 +78,20 @@ class ActivityPublisher {
     }
   }
 
-  /// Saves the switches; turned back on, what plays goes out again.
-  Future<void> setSharing(Sharing s) async {
-    await _backend.setSharing(s);
-    sharing = s;
+  /// Saves the switches given (the others stay as they are); turned back
+  /// on, what plays goes out again. The top 10 goes out in the background.
+  Future<void> setSharing({bool? listening, bool? top}) async {
+    await _backend.setSharing(listening: listening, top: top);
+    sharing = Sharing(
+      listening: listening ?? sharing.listening,
+      top: top ?? sharing.top,
+    );
     if (!_running) return;
     _published = null;
-    if (s.listening) _changed();
-    if (s.top) {
+    if (listening == true) _changed();
+    if (top == true) {
       _topAt = null;
-      await _publishTop();
+      unawaited(_publishTop());
     }
   }
 
@@ -153,11 +157,15 @@ class ActivityPublisher {
     _topAt = _now();
     try {
       final top = await _top();
-      if (top == null || !_running) return;
+      if (top == null || !_running || !sharing.top) return;
       await _backend.publishTop(top);
     } on FriendsException catch (e) {
       _topAt = null;
       AppLog.w('activity: top failed (${e.error.name})');
+    } catch (e) {
+      // Working it out failed (the stats): tried again within the hour.
+      _topAt = null;
+      AppLog.w('activity: top failed (${e.runtimeType})');
     }
   }
 

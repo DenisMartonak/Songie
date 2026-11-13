@@ -31,19 +31,19 @@ class FakeActivityBackend implements ActivityBackend {
   }
 
   @override
-  Future<void> setSharing(Sharing s) async {
+  Future<void> setSharing({bool? listening, bool? top}) async {
     calls.add('setSharing');
     _check();
     final r = _row(me)
-      ..listening = s.listening
-      ..top = s.top;
-    if (!s.listening) {
+      ..listening = listening ?? _row(me).listening
+      ..top = top ?? _row(me).top;
+    if (!r.listening) {
       r
         ..now = null
         ..nowAt = null
         ..roomCode = null;
     }
-    if (!s.top) r.summary = null;
+    if (!r.top) r.summary = null;
   }
 
   @override

@@ -127,7 +127,7 @@ void main() {
   ) async {
     await asFay((a) async {
       await a.publishNowPlaying(halo);
-      await a.setSharing(const Sharing(listening: false, top: false));
+      await a.setSharing(listening: false, top: false);
     });
     await pump(tester, '/profile/friends/f1');
     expect(key('friend.notListening'), findsOneWidget);

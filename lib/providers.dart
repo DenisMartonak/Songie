@@ -816,6 +816,10 @@ final activityPublisherProvider = Provider<ActivityPublisher>((ref) {
     },
   );
   ref.onDispose(publisher.dispose);
+  // Cleared while the session still works: after it, the server refuses.
+  ref.onDispose(
+    ref.read(accountServiceProvider).addBeforeLogOut(publisher.signedOut),
+  );
   if (ref.read(_remoteUserIdProvider) != null) {
     unawaited(publisher.signedIn());
   }

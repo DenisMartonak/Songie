@@ -144,7 +144,10 @@ class Sharing {
 /// (`supabase/migrations/20261115120000_friend_activity.sql`).
 abstract interface class ActivityBackend {
   Future<Sharing> mySharing();
-  Future<void> setSharing(Sharing s);
+
+  /// Sets the switches given; one left null stays as the server has it (so
+  /// a stale view can't turn back on what another device turned off).
+  Future<void> setSharing({bool? listening, bool? top});
 
   /// What this account plays now (null: nothing) and the room it hosts.
   Future<void> publishNowPlaying(NowPlaying? now, {String? roomCode});
@@ -176,8 +179,8 @@ class SupabaseActivityBackend implements ActivityBackend {
   });
 
   @override
-  Future<void> setSharing(Sharing s) => guardFriendsCall(
-    () => _rpc('set_sharing', {'p_listening': s.listening, 'p_top': s.top}),
+  Future<void> setSharing({bool? listening, bool? top}) => guardFriendsCall(
+    () => _rpc('set_sharing', {'p_listening': listening, 'p_top': top}),
   );
 
   @override

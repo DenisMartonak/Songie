@@ -194,9 +194,7 @@ void main() {
         await befriend();
         await asB(() => activity.publishNowPlaying(halo));
         await service.refresh();
-        await asB(
-          () => activity.setSharing(const Sharing(listening: false, top: true)),
-        );
+        await asB(() => activity.setSharing(listening: false));
         await service.refresh();
         expect(service.state.activity['b']!.nowPlaying, isNull);
         expect(service.state.listening('b', DateTime.now()), isFalse);
