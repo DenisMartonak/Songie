@@ -73,7 +73,8 @@ class YtmTile extends StatelessWidget {
     required this.rowKey,
     required this.art,
     required this.title,
-    required this.subtitle,
+    this.subtitle = '',
+    this.subtitleWidget,
     required this.onTap,
     this.onLongPress,
     this.onSecondaryTapUp,
@@ -86,6 +87,9 @@ class YtmTile extends StatelessWidget {
   final Widget art;
   final String title;
   final String subtitle;
+
+  /// Replaces [subtitle] when given (a subtitle with a tappable part).
+  final Widget? subtitleWidget;
   final VoidCallback? onTap;
 
   /// Long-press and right-click (a song's menu).
@@ -121,7 +125,9 @@ class YtmTile extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  if (subtitle.isNotEmpty)
+                  if (subtitleWidget != null)
+                    subtitleWidget!
+                  else if (subtitle.isNotEmpty)
                     Text(
                       subtitle,
                       maxLines: 1,

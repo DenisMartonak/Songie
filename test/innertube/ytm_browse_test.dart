@@ -205,8 +205,21 @@ void main() {
       expect(page.similar, isNotEmpty);
       expect(page.similar.first.browseId, startsWith('UC'));
       expect(page.radioPlaylistId, startsWith('RDEM'));
+      expect(page.monthlyListeners, '68M');
       final req = transport.requests.single;
       expect(req.body['browseId'], 'UCRr1xG_2WIDs18a6cIiCxeA');
+    });
+
+    test('no monthlyListenerCount: monthlyListeners is null', () async {
+      final json = mutable('browse_artist');
+      ((json['header']! as Map)['musicImmersiveHeaderRenderer'] as Map).remove(
+        'monthlyListenerCount',
+      );
+      transport.reply(ok(json));
+      final page = ((await ytm.artist(
+        'UCRr1xG_2WIDs18a6cIiCxeA',
+      )) as Ok<YtmArtistPage>).value;
+      expect(page.monthlyListeners, isNull);
     });
 
     test('a carousel without contents drops alone', () async {

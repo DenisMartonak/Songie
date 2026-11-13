@@ -11,6 +11,8 @@ import '../../remote/remote_controller.dart' show RemoteLink;
 import '../remote/remote_strip.dart' show remoteStripText;
 import '../../room/room_protocol.dart' show RoomRole;
 import '../room/room_button.dart' show roomGuestRoleProvider;
+import '../../data/database.dart' show Track;
+import '../widgets/artist_link.dart';
 import '../widgets/artwork.dart';
 
 /// The phone's mini-player: 48 high with an 8 px side margin, filled with the
@@ -201,6 +203,8 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                                       ? track.artist
                                       : remoteStripText(link),
                                   colors: colors,
+                                  track: track,
+                                  linkEnabled: link == null,
                                 ),
                               ),
                             ),
@@ -249,6 +253,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
       ),
     );
   }
+
   /// Another device is controlled and plays nothing (or is still being
   /// reached): the pill tells which device, and opens Now Playing (with its
   /// devices button) as usual.
@@ -298,12 +303,19 @@ class _Titles extends StatelessWidget {
     required this.title,
     required this.artist,
     required this.colors,
+    required this.track,
+    required this.linkEnabled,
     super.key,
   });
 
   final String title;
   final String artist;
   final SongiesColors colors;
+  final Track track;
+
+  /// False while another device is controlled: the artist is then the strip's
+  /// text, not a name.
+  final bool linkEnabled;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -321,10 +333,10 @@ class _Titles extends StatelessWidget {
           height: 1.25,
         ),
       ),
-      Text(
-        artist,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      ArtistLink(
+        text: artist,
+        track: track,
+        enabled: linkEnabled,
         style: TextStyle(
           color: colors.text.withAlpha(153),
           fontSize: 10,

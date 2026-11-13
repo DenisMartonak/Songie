@@ -10,7 +10,7 @@ Future<Map<String, String>> snapshot(AppDatabase db) async {
 }
 
 /// Inserts one row into each synced table, with local seqs
-/// [firstSeq]..[firstSeq]+7 in the order of `SyncTable.values`.
+/// [firstSeq]..[firstSeq]+8 in the order of `SyncTable.values`.
 Future<void> seedOneOfEach(AppDatabase db, {int firstSeq = 1}) async {
   var s = firstSeq;
   String clock() => '0000000000001-00000-dev';
@@ -121,6 +121,19 @@ Future<void> seedOneOfEach(AppDatabase db, {int firstSeq = 1}) async {
           mainArtist: 'A',
           titleSnapshot: 'T',
           artistSnapshot: 'A',
+        ),
+      );
+  await db
+      .into(db.savedArtists)
+      .insert(
+        SavedArtistsCompanion.insert(
+          id: 'artist:UC$s',
+          clock: clock(),
+          originDevice: 'dev',
+          localSeq: s++,
+          browseId: 'UC',
+          name: 'N',
+          savedAt: at,
         ),
       );
 }

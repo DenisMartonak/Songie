@@ -202,3 +202,12 @@ class Listens extends Table with SyncColumns {
   TextColumn get artistSnapshot => text()();
   TextColumn get artworkRef => text().nullable()();
 }
+
+/// An artist the user saved. The row id is `artist:<browseId>`.
+@TableIndex(name: 'saved_artists_local_seq', columns: {#localSeq})
+class SavedArtists extends Table with SyncColumns {
+  TextColumn get browseId => text()();
+  TextColumn get name => text()();
+  TextColumn get thumbnailUrl => text().nullable()();
+  DateTimeColumn get savedAt => dateTime()();
+}

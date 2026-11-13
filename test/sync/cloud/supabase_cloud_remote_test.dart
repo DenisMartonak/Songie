@@ -231,6 +231,24 @@ void main() {
     expect((unknownTable.serverSeq, unknownTable.row), (4, null));
   });
 
+  test('rowFromServer reads a saved_artists row with fmt kRowFormat and parks the next', () {
+    Map<String, dynamic> artist(int fmt) => {
+      'tbl': 'saved_artists',
+      'id': 'artist:UC1',
+      'clock': '1800000000001-00000-x',
+      'origin_device': 'x',
+      'deleted': false,
+      'server_seq': 5,
+      'fmt': fmt,
+      'data': {'browseId': 'UC1', 'name': 'N', 'savedAt': 1700000000000},
+    };
+    final ok = rowFromServer(artist(kRowFormat));
+    expect(ok.row!.table, SyncTable.savedArtists);
+    expect(ok.row!.data['browseId'], 'UC1');
+    final newer = rowFromServer(artist(kRowFormat + 1));
+    expect((newer.serverSeq, newer.fmt, newer.row), (5, kRowFormat + 1, null));
+  });
+
   test('broadcastSeq reads the server seq of a changed message', () {
     expect(broadcastSeq({'server_seq': 7}), 7);
     expect(

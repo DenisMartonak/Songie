@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/innertube/ytm_models.dart';
+import 'package:songies/library/saved_artists_repository.dart';
 import 'package:songies/ui/ytm/artist_page.dart';
 
 import '../../helpers/ui_harness.dart';
@@ -81,6 +82,22 @@ void main() {
     expect(find.byKey(const Key('ytm.song.s7')), findsOneWidget);
   });
 
+  uiTest('shows the monthly listeners under the name', (tester) async {
+    h.ytm.artistAnswers['UCdaft'] = Ok(
+      YtmArtistPage(artist: _page.artist, monthlyListeners: '68M'),
+    );
+    await pumpPage(tester);
+
+    expect(find.text('68M monthly listeners'), findsOneWidget);
+  });
+
+  uiTest('no monthly listeners: no such line', (tester) async {
+    h.ytm.artistAnswers['UCdaft'] = Ok(_page);
+    await pumpPage(tester);
+
+    expect(find.textContaining('monthly listeners'), findsNothing);
+  });
+
   uiTest('five top songs or fewer: no Show all', (tester) async {
     h.ytm.artistAnswers['UCdaft'] = Ok(
       YtmArtistPage(
@@ -141,6 +158,61 @@ void main() {
     await pumpPage(tester);
     expect(find.byKey(const Key('ytm.radio')), findsNothing);
     expect(find.byKey(const Key('ytm.play')), findsOneWidget);
+  });
+
+  group('save', () {
+    late SavedArtistsRepository saved;
+    setUp(() => saved = SavedArtistsRepository(h.db, h.stamp));
+
+    uiTest('Save saves the artist and shows Saved to library', (tester) async {
+      h.ytm.artistAnswers['UCdaft'] = Ok(_page);
+      await pumpPage(tester);
+      expect(find.text('Save'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('ytm.save')));
+      await settle(tester);
+
+      expect(find.text('Saved to library'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('ytm.save')),
+          matching: find.text('Saved'),
+        ),
+        findsOneWidget,
+      );
+      final rows = await real(tester, () => saved.watchAll().first);
+      expect([for (final r in rows) r.browseId], ['UCdaft']);
+    });
+
+    uiTest('Saved tapped again removes it and shows Removed from library', (
+      tester,
+    ) async {
+      h.ytm.artistAnswers['UCdaft'] = Ok(_page);
+      await real(tester, () => saved.save(_page.artist));
+      await pumpPage(tester);
+      expect(find.text('Saved'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('ytm.save')));
+      await settle(tester);
+
+      expect(find.text('Removed from library'), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
+      expect(await real(tester, () => saved.watchAll().first), isEmpty);
+    });
+
+    uiTest('opening a saved artist whose name changed refreshes the row', (
+      tester,
+    ) async {
+      await real(
+        tester,
+        () => saved.save(const YtmArtist(browseId: 'UCdaft', name: 'Old name')),
+      );
+      h.ytm.artistAnswers['UCdaft'] = Ok(_page);
+      await pumpPage(tester);
+
+      final rows = await real(tester, () => saved.watchAll().first);
+      expect(rows.single.name, 'Daft Punk');
+    });
   });
 
   uiTest('a load error shows Couldn\'t load with Retry', (tester) async {

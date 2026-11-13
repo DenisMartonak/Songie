@@ -2,7 +2,9 @@ import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
+import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
@@ -48,6 +50,11 @@ void main() {
             builder: (_, _) => const Scaffold(body: Text('Shell stub')),
           ),
           GoRoute(path: '/now-playing', pageBuilder: nowPlayingPage),
+          GoRoute(
+            path: '/ytm/artist/:id',
+            builder: (_, s) =>
+                Scaffold(body: Text('artist ${s.pathParameters['id']}')),
+          ),
         ],
       ),
     );
@@ -93,6 +100,43 @@ void main() {
       await settle(tester);
       expect(h.player.state.playing, isFalse);
       expect(find.byTooltip('Play'), findsOneWidget);
+    });
+
+    uiTest('tapping the artist opens the artist page', (tester) async {
+      final yt = await real(tester, () async {
+        await h.db
+            .into(h.db.tracks)
+            .insert(
+              trackRow(
+                id: 'y1',
+                source: 'yt',
+                ytVideoId: 'v1',
+                title: 'Yt',
+                artist: 'Yt artist',
+              ),
+            );
+        return (h.db.select(
+          h.db.tracks,
+        )..where((t) => t.id.equals('y1'))).getSingle();
+      });
+      h.ytm.radioAnswer = const Ok(
+        YtmRadio(
+          [],
+          null,
+          current: YtmSong(
+            videoId: 'v1',
+            title: 'Yt',
+            artists: [YtmArtistRef(browseId: 'UCyt', name: 'Yt artist')],
+            durationMs: 1000,
+          ),
+        ),
+      );
+      await pumpApp(tester);
+      await real(tester, () => h.player.playQueue([yt]));
+      await settle(tester);
+      await tester.tap(find.text('Yt artist'));
+      await settle(tester);
+      expect(find.text('artist UCyt'), findsOneWidget);
     });
 
     uiTest('a downloaded YouTube song shows download_done', (tester) async {
@@ -219,6 +263,32 @@ void main() {
       ];
       expect(seeks, hasLength(1));
       expect(seeks.single, closeTo(100000, 1000));
+    });
+
+    uiTest('the scrubber track still seeks (its band skips the artist line)', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await playThree(tester);
+      h.backend.clearCalls();
+      final box = tester.getRect(find.byKey(const Key('nowPlaying.scrubber')));
+
+      // Off the band's top the track still seeks.
+      await tester.tapAt(box.center + Offset(-box.width / 4, 0));
+      await settle(tester);
+      expect(h.backend.calls.where((c) => c.startsWith('seek:')), hasLength(1));
+    });
+
+    uiTest('a tap on the lower edge of the artist line does not seek', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await playThree(tester);
+      h.backend.clearCalls();
+      final artist = tester.getRect(find.text('Artist one'));
+      await tester.tapAt(artist.bottomLeft + const Offset(8, -2));
+      await settle(tester);
+      expect(h.backend.calls.where((c) => c.startsWith('seek:')), isEmpty);
     });
 
     uiTest('dragging the scrubber previews the time, then seeks', (

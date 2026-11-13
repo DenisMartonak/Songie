@@ -32,6 +32,7 @@ import 'library/library_repository.dart';
 import 'library/library_scanner.dart';
 import 'library/play_history_repository.dart';
 import 'library/scan_queue.dart';
+import 'library/saved_artists_repository.dart';
 import 'library/search_repository.dart';
 import 'library/favorites.dart';
 import 'library/yt_tracks.dart';
@@ -1308,4 +1309,17 @@ final bugReportSenderProvider = Provider<BugReportSender>((ref) {
 /// Reads the device for a bug report; replaceable in tests.
 final deviceSummaryProvider = Provider<Future<DeviceSummary> Function()>(
   (ref) => readDeviceSummary,
+);
+
+/// Artists the user saved.
+final savedArtistsRepositoryProvider = Provider<SavedArtistsRepository>(
+  (ref) => SavedArtistsRepository(
+    ref.watch(databaseProvider),
+    ref.watch(syncStampProvider),
+  ),
+);
+
+/// Saved artists, newest first.
+final savedArtistsProvider = StreamProvider<List<SavedArtist>>(
+  (ref) => ref.watch(savedArtistsRepositoryProvider).watchAll(),
 );

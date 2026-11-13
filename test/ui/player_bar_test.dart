@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:songies/core/result.dart';
+import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/remote/remote_protocol.dart';
 import 'package:songies/room/room_protocol.dart';
@@ -62,6 +64,11 @@ void main() {
               bottomNavigationBar: const PlayerBar(),
             ),
           ),
+          GoRoute(
+            path: '/ytm/artist/:id',
+            builder: (_, s) =>
+                Scaffold(body: Text('artist ${s.pathParameters['id']}')),
+          ),
         ],
       ),
     );
@@ -97,6 +104,34 @@ void main() {
     if (f.evaluate().isEmpty) return null;
     return tester.widget<PopupMenuItem<Object?>>(f);
   }
+
+  uiTest('tapping the artist opens the artist page', (tester) async {
+    h.ytm.radioAnswer = const Ok(
+      YtmRadio(
+        [],
+        null,
+        current: YtmSong(
+          videoId: 'va',
+          title: 'Song a',
+          artists: [YtmArtistRef(browseId: 'UCa', name: 'Artist')],
+          durationMs: 1000,
+        ),
+      ),
+    );
+    await pump(tester);
+    await tester.runAsync(() => h.player.playQueue([roomTrack('a')]));
+    await flush(tester);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(PlayerBar),
+        matching: find.text('Artist'),
+      ),
+    );
+    await flush(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('artist UCa'), findsOneWidget);
+    await rig.dispose(tester);
+  });
 
   uiTest('no room: the controls work as always', (tester) async {
     await pump(tester);

@@ -6528,6 +6528,574 @@ class ListensCompanion extends UpdateCompanion<ListenRow> {
   }
 }
 
+class $SavedArtistsTable extends SavedArtists
+    with TableInfo<$SavedArtistsTable, SavedArtist> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SavedArtistsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clockMeta = const VerificationMeta('clock');
+  @override
+  late final GeneratedColumn<String> clock = GeneratedColumn<String>(
+    'clock',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _originDeviceMeta = const VerificationMeta(
+    'originDevice',
+  );
+  @override
+  late final GeneratedColumn<String> originDevice = GeneratedColumn<String>(
+    'origin_device',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedMeta = const VerificationMeta(
+    'deleted',
+  );
+  @override
+  late final GeneratedColumn<bool> deleted = GeneratedColumn<bool>(
+    'deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _localSeqMeta = const VerificationMeta(
+    'localSeq',
+  );
+  @override
+  late final GeneratedColumn<int> localSeq = GeneratedColumn<int>(
+    'local_seq',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _browseIdMeta = const VerificationMeta(
+    'browseId',
+  );
+  @override
+  late final GeneratedColumn<String> browseId = GeneratedColumn<String>(
+    'browse_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _thumbnailUrlMeta = const VerificationMeta(
+    'thumbnailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> thumbnailUrl = GeneratedColumn<String>(
+    'thumbnail_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _savedAtMeta = const VerificationMeta(
+    'savedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> savedAt = GeneratedColumn<DateTime>(
+    'saved_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    clock,
+    originDevice,
+    deleted,
+    localSeq,
+    browseId,
+    name,
+    thumbnailUrl,
+    savedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'saved_artists';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SavedArtist> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('clock')) {
+      context.handle(
+        _clockMeta,
+        clock.isAcceptableOrUnknown(data['clock']!, _clockMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_clockMeta);
+    }
+    if (data.containsKey('origin_device')) {
+      context.handle(
+        _originDeviceMeta,
+        originDevice.isAcceptableOrUnknown(
+          data['origin_device']!,
+          _originDeviceMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_originDeviceMeta);
+    }
+    if (data.containsKey('deleted')) {
+      context.handle(
+        _deletedMeta,
+        deleted.isAcceptableOrUnknown(data['deleted']!, _deletedMeta),
+      );
+    }
+    if (data.containsKey('local_seq')) {
+      context.handle(
+        _localSeqMeta,
+        localSeq.isAcceptableOrUnknown(data['local_seq']!, _localSeqMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localSeqMeta);
+    }
+    if (data.containsKey('browse_id')) {
+      context.handle(
+        _browseIdMeta,
+        browseId.isAcceptableOrUnknown(data['browse_id']!, _browseIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_browseIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('thumbnail_url')) {
+      context.handle(
+        _thumbnailUrlMeta,
+        thumbnailUrl.isAcceptableOrUnknown(
+          data['thumbnail_url']!,
+          _thumbnailUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('saved_at')) {
+      context.handle(
+        _savedAtMeta,
+        savedAt.isAcceptableOrUnknown(data['saved_at']!, _savedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_savedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SavedArtist map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SavedArtist(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      clock: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}clock'],
+      )!,
+      originDevice: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}origin_device'],
+      )!,
+      deleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}deleted'],
+      )!,
+      localSeq: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}local_seq'],
+      )!,
+      browseId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}browse_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      thumbnailUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}thumbnail_url'],
+      ),
+      savedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}saved_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SavedArtistsTable createAlias(String alias) {
+    return $SavedArtistsTable(attachedDatabase, alias);
+  }
+}
+
+class SavedArtist extends DataClass implements Insertable<SavedArtist> {
+  final String id;
+  final String clock;
+  final String originDevice;
+  final bool deleted;
+  final int localSeq;
+  final String browseId;
+  final String name;
+  final String? thumbnailUrl;
+  final DateTime savedAt;
+  const SavedArtist({
+    required this.id,
+    required this.clock,
+    required this.originDevice,
+    required this.deleted,
+    required this.localSeq,
+    required this.browseId,
+    required this.name,
+    this.thumbnailUrl,
+    required this.savedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['clock'] = Variable<String>(clock);
+    map['origin_device'] = Variable<String>(originDevice);
+    map['deleted'] = Variable<bool>(deleted);
+    map['local_seq'] = Variable<int>(localSeq);
+    map['browse_id'] = Variable<String>(browseId);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || thumbnailUrl != null) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl);
+    }
+    map['saved_at'] = Variable<DateTime>(savedAt);
+    return map;
+  }
+
+  SavedArtistsCompanion toCompanion(bool nullToAbsent) {
+    return SavedArtistsCompanion(
+      id: Value(id),
+      clock: Value(clock),
+      originDevice: Value(originDevice),
+      deleted: Value(deleted),
+      localSeq: Value(localSeq),
+      browseId: Value(browseId),
+      name: Value(name),
+      thumbnailUrl: thumbnailUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(thumbnailUrl),
+      savedAt: Value(savedAt),
+    );
+  }
+
+  factory SavedArtist.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SavedArtist(
+      id: serializer.fromJson<String>(json['id']),
+      clock: serializer.fromJson<String>(json['clock']),
+      originDevice: serializer.fromJson<String>(json['originDevice']),
+      deleted: serializer.fromJson<bool>(json['deleted']),
+      localSeq: serializer.fromJson<int>(json['localSeq']),
+      browseId: serializer.fromJson<String>(json['browseId']),
+      name: serializer.fromJson<String>(json['name']),
+      thumbnailUrl: serializer.fromJson<String?>(json['thumbnailUrl']),
+      savedAt: serializer.fromJson<DateTime>(json['savedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'clock': serializer.toJson<String>(clock),
+      'originDevice': serializer.toJson<String>(originDevice),
+      'deleted': serializer.toJson<bool>(deleted),
+      'localSeq': serializer.toJson<int>(localSeq),
+      'browseId': serializer.toJson<String>(browseId),
+      'name': serializer.toJson<String>(name),
+      'thumbnailUrl': serializer.toJson<String?>(thumbnailUrl),
+      'savedAt': serializer.toJson<DateTime>(savedAt),
+    };
+  }
+
+  SavedArtist copyWith({
+    String? id,
+    String? clock,
+    String? originDevice,
+    bool? deleted,
+    int? localSeq,
+    String? browseId,
+    String? name,
+    Value<String?> thumbnailUrl = const Value.absent(),
+    DateTime? savedAt,
+  }) => SavedArtist(
+    id: id ?? this.id,
+    clock: clock ?? this.clock,
+    originDevice: originDevice ?? this.originDevice,
+    deleted: deleted ?? this.deleted,
+    localSeq: localSeq ?? this.localSeq,
+    browseId: browseId ?? this.browseId,
+    name: name ?? this.name,
+    thumbnailUrl: thumbnailUrl.present ? thumbnailUrl.value : this.thumbnailUrl,
+    savedAt: savedAt ?? this.savedAt,
+  );
+  SavedArtist copyWithCompanion(SavedArtistsCompanion data) {
+    return SavedArtist(
+      id: data.id.present ? data.id.value : this.id,
+      clock: data.clock.present ? data.clock.value : this.clock,
+      originDevice: data.originDevice.present
+          ? data.originDevice.value
+          : this.originDevice,
+      deleted: data.deleted.present ? data.deleted.value : this.deleted,
+      localSeq: data.localSeq.present ? data.localSeq.value : this.localSeq,
+      browseId: data.browseId.present ? data.browseId.value : this.browseId,
+      name: data.name.present ? data.name.value : this.name,
+      thumbnailUrl: data.thumbnailUrl.present
+          ? data.thumbnailUrl.value
+          : this.thumbnailUrl,
+      savedAt: data.savedAt.present ? data.savedAt.value : this.savedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SavedArtist(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('browseId: $browseId, ')
+          ..write('name: $name, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('savedAt: $savedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    clock,
+    originDevice,
+    deleted,
+    localSeq,
+    browseId,
+    name,
+    thumbnailUrl,
+    savedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SavedArtist &&
+          other.id == this.id &&
+          other.clock == this.clock &&
+          other.originDevice == this.originDevice &&
+          other.deleted == this.deleted &&
+          other.localSeq == this.localSeq &&
+          other.browseId == this.browseId &&
+          other.name == this.name &&
+          other.thumbnailUrl == this.thumbnailUrl &&
+          other.savedAt == this.savedAt);
+}
+
+class SavedArtistsCompanion extends UpdateCompanion<SavedArtist> {
+  final Value<String> id;
+  final Value<String> clock;
+  final Value<String> originDevice;
+  final Value<bool> deleted;
+  final Value<int> localSeq;
+  final Value<String> browseId;
+  final Value<String> name;
+  final Value<String?> thumbnailUrl;
+  final Value<DateTime> savedAt;
+  final Value<int> rowid;
+  const SavedArtistsCompanion({
+    this.id = const Value.absent(),
+    this.clock = const Value.absent(),
+    this.originDevice = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.localSeq = const Value.absent(),
+    this.browseId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.thumbnailUrl = const Value.absent(),
+    this.savedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SavedArtistsCompanion.insert({
+    required String id,
+    required String clock,
+    required String originDevice,
+    this.deleted = const Value.absent(),
+    required int localSeq,
+    required String browseId,
+    required String name,
+    this.thumbnailUrl = const Value.absent(),
+    required DateTime savedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       clock = Value(clock),
+       originDevice = Value(originDevice),
+       localSeq = Value(localSeq),
+       browseId = Value(browseId),
+       name = Value(name),
+       savedAt = Value(savedAt);
+  static Insertable<SavedArtist> custom({
+    Expression<String>? id,
+    Expression<String>? clock,
+    Expression<String>? originDevice,
+    Expression<bool>? deleted,
+    Expression<int>? localSeq,
+    Expression<String>? browseId,
+    Expression<String>? name,
+    Expression<String>? thumbnailUrl,
+    Expression<DateTime>? savedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (clock != null) 'clock': clock,
+      if (originDevice != null) 'origin_device': originDevice,
+      if (deleted != null) 'deleted': deleted,
+      if (localSeq != null) 'local_seq': localSeq,
+      if (browseId != null) 'browse_id': browseId,
+      if (name != null) 'name': name,
+      if (thumbnailUrl != null) 'thumbnail_url': thumbnailUrl,
+      if (savedAt != null) 'saved_at': savedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SavedArtistsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? clock,
+    Value<String>? originDevice,
+    Value<bool>? deleted,
+    Value<int>? localSeq,
+    Value<String>? browseId,
+    Value<String>? name,
+    Value<String?>? thumbnailUrl,
+    Value<DateTime>? savedAt,
+    Value<int>? rowid,
+  }) {
+    return SavedArtistsCompanion(
+      id: id ?? this.id,
+      clock: clock ?? this.clock,
+      originDevice: originDevice ?? this.originDevice,
+      deleted: deleted ?? this.deleted,
+      localSeq: localSeq ?? this.localSeq,
+      browseId: browseId ?? this.browseId,
+      name: name ?? this.name,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      savedAt: savedAt ?? this.savedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (clock.present) {
+      map['clock'] = Variable<String>(clock.value);
+    }
+    if (originDevice.present) {
+      map['origin_device'] = Variable<String>(originDevice.value);
+    }
+    if (deleted.present) {
+      map['deleted'] = Variable<bool>(deleted.value);
+    }
+    if (localSeq.present) {
+      map['local_seq'] = Variable<int>(localSeq.value);
+    }
+    if (browseId.present) {
+      map['browse_id'] = Variable<String>(browseId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (thumbnailUrl.present) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl.value);
+    }
+    if (savedAt.present) {
+      map['saved_at'] = Variable<DateTime>(savedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SavedArtistsCompanion(')
+          ..write('id: $id, ')
+          ..write('clock: $clock, ')
+          ..write('originDevice: $originDevice, ')
+          ..write('deleted: $deleted, ')
+          ..write('localSeq: $localSeq, ')
+          ..write('browseId: $browseId, ')
+          ..write('name: $name, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('savedAt: $savedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6547,6 +7115,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $FontsTable fonts = $FontsTable(this);
   late final $LyricsTable lyrics = $LyricsTable(this);
   late final $ListensTable listens = $ListensTable(this);
+  late final $SavedArtistsTable savedArtists = $SavedArtistsTable(this);
   late final Index tracksLocalSeq = Index(
     'tracks_local_seq',
     'CREATE INDEX tracks_local_seq ON tracks (local_seq)',
@@ -6587,6 +7156,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'listens_local_seq',
     'CREATE INDEX listens_local_seq ON listens (local_seq)',
   );
+  late final Index savedArtistsLocalSeq = Index(
+    'saved_artists_local_seq',
+    'CREATE INDEX saved_artists_local_seq ON saved_artists (local_seq)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6605,6 +7178,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     fonts,
     lyrics,
     listens,
+    savedArtists,
     tracksLocalSeq,
     playlistsLocalSeq,
     playlistEntriesPlaylistPosition,
@@ -6615,6 +7189,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     lyricsLocalSeq,
     listensStartedAt,
     listensLocalSeq,
+    savedArtistsLocalSeq,
   ];
 }
 
@@ -9990,6 +10565,295 @@ typedef $$ListensTableProcessedTableManager =
       ListenRow,
       PrefetchHooks Function()
     >;
+typedef $$SavedArtistsTableCreateCompanionBuilder =
+    SavedArtistsCompanion Function({
+      required String id,
+      required String clock,
+      required String originDevice,
+      Value<bool> deleted,
+      required int localSeq,
+      required String browseId,
+      required String name,
+      Value<String?> thumbnailUrl,
+      required DateTime savedAt,
+      Value<int> rowid,
+    });
+typedef $$SavedArtistsTableUpdateCompanionBuilder =
+    SavedArtistsCompanion Function({
+      Value<String> id,
+      Value<String> clock,
+      Value<String> originDevice,
+      Value<bool> deleted,
+      Value<int> localSeq,
+      Value<String> browseId,
+      Value<String> name,
+      Value<String?> thumbnailUrl,
+      Value<DateTime> savedAt,
+      Value<int> rowid,
+    });
+
+class $$SavedArtistsTableFilterComposer
+    extends Composer<_$AppDatabase, $SavedArtistsTable> {
+  $$SavedArtistsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get browseId => $composableBuilder(
+    column: $table.browseId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get savedAt => $composableBuilder(
+    column: $table.savedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SavedArtistsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SavedArtistsTable> {
+  $$SavedArtistsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clock => $composableBuilder(
+    column: $table.clock,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get localSeq => $composableBuilder(
+    column: $table.localSeq,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get browseId => $composableBuilder(
+    column: $table.browseId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get savedAt => $composableBuilder(
+    column: $table.savedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SavedArtistsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SavedArtistsTable> {
+  $$SavedArtistsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get clock =>
+      $composableBuilder(column: $table.clock, builder: (column) => column);
+
+  GeneratedColumn<String> get originDevice => $composableBuilder(
+    column: $table.originDevice,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get deleted =>
+      $composableBuilder(column: $table.deleted, builder: (column) => column);
+
+  GeneratedColumn<int> get localSeq =>
+      $composableBuilder(column: $table.localSeq, builder: (column) => column);
+
+  GeneratedColumn<String> get browseId =>
+      $composableBuilder(column: $table.browseId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get savedAt =>
+      $composableBuilder(column: $table.savedAt, builder: (column) => column);
+}
+
+class $$SavedArtistsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SavedArtistsTable,
+          SavedArtist,
+          $$SavedArtistsTableFilterComposer,
+          $$SavedArtistsTableOrderingComposer,
+          $$SavedArtistsTableAnnotationComposer,
+          $$SavedArtistsTableCreateCompanionBuilder,
+          $$SavedArtistsTableUpdateCompanionBuilder,
+          (
+            SavedArtist,
+            BaseReferences<_$AppDatabase, $SavedArtistsTable, SavedArtist>,
+          ),
+          SavedArtist,
+          PrefetchHooks Function()
+        > {
+  $$SavedArtistsTableTableManager(_$AppDatabase db, $SavedArtistsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SavedArtistsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SavedArtistsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SavedArtistsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> clock = const Value.absent(),
+                Value<String> originDevice = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<int> localSeq = const Value.absent(),
+                Value<String> browseId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> thumbnailUrl = const Value.absent(),
+                Value<DateTime> savedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SavedArtistsCompanion(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                browseId: browseId,
+                name: name,
+                thumbnailUrl: thumbnailUrl,
+                savedAt: savedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String clock,
+                required String originDevice,
+                Value<bool> deleted = const Value.absent(),
+                required int localSeq,
+                required String browseId,
+                required String name,
+                Value<String?> thumbnailUrl = const Value.absent(),
+                required DateTime savedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SavedArtistsCompanion.insert(
+                id: id,
+                clock: clock,
+                originDevice: originDevice,
+                deleted: deleted,
+                localSeq: localSeq,
+                browseId: browseId,
+                name: name,
+                thumbnailUrl: thumbnailUrl,
+                savedAt: savedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SavedArtistsTable, SavedArtist>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SavedArtistsTable,
+                    SavedArtist
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SavedArtistsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SavedArtistsTable,
+      SavedArtist,
+      $$SavedArtistsTableFilterComposer,
+      $$SavedArtistsTableOrderingComposer,
+      $$SavedArtistsTableAnnotationComposer,
+      $$SavedArtistsTableCreateCompanionBuilder,
+      $$SavedArtistsTableUpdateCompanionBuilder,
+      (
+        SavedArtist,
+        BaseReferences<_$AppDatabase, $SavedArtistsTable, SavedArtist>,
+      ),
+      SavedArtist,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -10020,4 +10884,6 @@ class $AppDatabaseManager {
       $$LyricsTableTableManager(_db, _db.lyrics);
   $$ListensTableTableManager get listens =>
       $$ListensTableTableManager(_db, _db.listens);
+  $$SavedArtistsTableTableManager get savedArtists =>
+      $$SavedArtistsTableTableManager(_db, _db.savedArtists);
 }

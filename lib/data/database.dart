@@ -23,6 +23,7 @@ part 'database.g.dart';
     Fonts,
     Lyrics,
     Listens,
+    SavedArtists,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -33,7 +34,7 @@ class AppDatabase extends _$AppDatabase {
       AppDatabase(NativeDatabase.createInBackground(f));
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -74,6 +75,10 @@ class AppDatabase extends _$AppDatabase {
       // Home-network sync's paired devices, gone with it.
       if (from < 9) await m.deleteTable('peers');
       if (from < 10) await _upgradeCreditMarkers();
+      if (from < 11) {
+        await m.createTable(savedArtists);
+        await m.createIndex(savedArtistsLocalSeq);
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');

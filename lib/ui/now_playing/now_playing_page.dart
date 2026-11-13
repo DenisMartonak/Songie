@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/database.dart' show Track;
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/contrast.dart';
@@ -15,6 +16,7 @@ import '../lyrics/lyrics_strip.dart';
 import '../lyrics/lyrics_view.dart';
 import '../motion/motion.dart';
 import '../shell/adaptive_shell.dart';
+import '../widgets/artist_link.dart';
 import '../widgets/artwork.dart';
 import '../widgets/favorite_star.dart';
 import '../widgets/song_menu.dart';
@@ -790,6 +792,7 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
                               child: _TitleAndArtist(
                                 title: track.title,
                                 artist: track.artist,
+                                track: track,
                                 trackId: track.id,
                                 playing: playing,
                               ),
@@ -804,7 +807,7 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
                 // Drawn a little higher than its slot: the top of its touch
                 // band overlaps the space under the artist.
                 Transform.translate(
-                  offset: const Offset(0, -10),
+                  offset: const Offset(0, -NowPlayingScrubber.topInset),
                   child: const NowPlayingScrubber(),
                 ),
                 const NowPlayingControls(),
@@ -837,21 +840,23 @@ class _LyricsTab extends StatelessWidget {
   }
 }
 
-class _TitleAndArtist extends StatelessWidget {
+class _TitleAndArtist extends ConsumerWidget {
   const _TitleAndArtist({
     required this.title,
     required this.artist,
+    required this.track,
     required this.trackId,
     required this.playing,
   });
 
   final String title;
   final String artist;
+  final Track track;
   final String trackId;
   final bool playing;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -871,10 +876,11 @@ class _TitleAndArtist extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Flexible(
-              child: Text(
-                artist,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: ArtistLink(
+                text: artist,
+                track: track,
+                // Another device's track: its artist is not looked up here.
+                enabled: ref.watch(remoteLinkProvider).value == null,
                 style: TextStyle(
                   color: colors.text.withAlpha(179),
                   fontSize: 14,

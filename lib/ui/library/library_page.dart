@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/result.dart';
 import '../../library/library_repository.dart';
+import '../../data/database.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../motion/motion.dart';
@@ -11,6 +12,8 @@ import '../widgets/name_dialog.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
 import '../widgets/playlist_art.dart';
+import '../ytm/ytm_nav.dart';
+import '../ytm/ytm_result_tiles.dart';
 import 'add_folder_flow.dart';
 import 'import_dialog.dart';
 
@@ -20,6 +23,7 @@ enum _Filter {
   all('All', null),
   local('Local', 'local'),
   youtube('YouTube', 'yt'),
+  artists('Artists', null),
   downloaded('Downloaded', null);
 
   const _Filter(this.label, this.source);
@@ -75,6 +79,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final downloaded = _filter == _Filter.downloaded
         ? ref.watch(downloadEnabledPlaylistsProvider).value ?? const <String>{}
         : null;
+    final artists = ref.watch(savedArtistsProvider).value ?? const [];
     final bottom = MediaQuery.paddingOf(context).bottom;
     final motion = Motion.of(context);
     final chipMotion = AnimationStyle(
@@ -149,13 +154,20 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               error: (_, _) =>
                   const Center(child: Text("Couldn't load your playlists")),
               data: (all) {
-                if (all.isEmpty) return _EmptyLibrary(onAdd: _addFolder);
+                if (all.isEmpty && artists.isEmpty) {
+                  return _EmptyLibrary(onAdd: _addFolder);
+                }
                 final source = _filter.source;
+                final artistsOnly = _filter == _Filter.artists;
                 final shown = [
-                  for (final pl in all)
-                    if ((source == null || pl.source == source) &&
-                        (downloaded == null || downloaded.contains(pl.id)))
-                      pl,
+                  if (!artistsOnly)
+                    for (final pl in all)
+                      if ((source == null || pl.source == source) &&
+                          (downloaded == null || downloaded.contains(pl.id)))
+                        pl,
+                ];
+                final shownArtists = [
+                  if (_filter == _Filter.all || artistsOnly) ...artists,
                 ];
                 // Changing the filter cross-fades to the new list.
                 return AnimatedSwitcher(
@@ -165,9 +177,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   child: ListView.builder(
                     key: ValueKey(_filter),
                     padding: EdgeInsets.only(bottom: bottom + 16),
-                    itemCount: shown.length,
-                    itemBuilder: (context, i) =>
-                        _PlaylistTile(playlist: shown[i]),
+                    itemCount: shown.length + shownArtists.length,
+                    itemBuilder: (context, i) => i < shown.length
+                        ? _PlaylistTile(playlist: shown[i])
+                        : _ArtistTile(artist: shownArtists[i - shown.length]),
                   ),
                 );
               },
@@ -223,6 +236,57 @@ class _PlaylistTile extends StatelessWidget {
                     '$source · $songs',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: colors.mutedText, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ArtistTile extends StatelessWidget {
+  const _ArtistTile({required this.artist});
+
+  final SavedArtist artist;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return InkWell(
+      key: Key('library.artist.${artist.browseId}'),
+      onTap: () => context.goYtmArtist(artist.browseId),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            YtmArtwork(
+              artist.thumbnailUrl,
+              seed: artist.browseId,
+              size: 56,
+              circle: true,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    artist.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Artist',
                     style: TextStyle(color: colors.mutedText, fontSize: 12),
                   ),
                 ],

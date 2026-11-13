@@ -99,6 +99,24 @@ class FakeYtmService implements YtmService {
     playlistAnswers,
   );
 
+  /// `radio` requests (video ids), answered with [radioAnswer].
+  final radioCalls = <String>[];
+  Result<YtmRadio> radioAnswer = const Ok(YtmRadio([], null));
+
+  /// When set, `radio` answers only when this completes.
+  Completer<Result<YtmRadio>>? radioGate;
+
+  @override
+  Future<Result<YtmRadio>> radio(
+    String videoId, {
+    String? playlistId,
+    String? continuation,
+  }) async {
+    radioCalls.add(videoId);
+    if (radioGate case final gate?) return gate.future;
+    return radioAnswer;
+  }
+
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }

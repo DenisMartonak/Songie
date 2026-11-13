@@ -408,6 +408,7 @@ void main() {
     expect(await db.select(db.lyrics).get(), isEmpty);
     expect(await db.select(db.listens).get(), isEmpty);
     expect(await db.select(db.ytSeen).get(), isEmpty);
+    expect(await db.select(db.savedArtists).get(), isEmpty);
     expect(font.existsSync(), isFalse);
     expect(await db.select(db.tracks).get(), hasLength(1));
     expect(await db.select(db.localFiles).get(), hasLength(1));

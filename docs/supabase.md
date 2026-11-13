@@ -58,6 +58,13 @@ After applying it, check by hand (the migration has not been tried on the projec
 6. As B: `select * from rooms;` and `select * from room_members;` fail with permission denied.
 7. Realtime Inspector (dashboard, Realtime, Inspector; pick a user's access token, turn Private on) on `room:<room id>`: A and B can both join and receive. A message with event `request` from B arrives for A. A third account C, not in the room, can't join the topic. After A ends the room, nobody can newly join it (a client already connected may keep receiving until it reconnects).
 
+### Saved artists (`20261113120000_saved_artists.sql`)
+
+The fifth migration lets cloud sync carry saved artists. Apply it like the others (once, after the listen together one), and before releasing the app version that saves artists.
+
+- It adds `saved_artists` to the table names `sync_rows` accepts (the `sync_rows_tbl_rule` check, dropped and added again) and to the list in `push_rows` (replaced with the same body otherwise). Nothing else changes; `pull_rows` and the Realtime notice name no tables.
+- Until it is applied the server refuses saved-artist rows as invalid, and the app skips refused rows for good, so apply it first.
+
 ## 2. Email sign-in settings
 
 1. Under Authentication, Sign In / Providers, in the user sign-up settings: allow new users to sign up, and turn Confirm email on.

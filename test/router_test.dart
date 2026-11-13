@@ -9,6 +9,7 @@ import 'package:songies/account/account_service.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/innertube/ytm_models.dart';
+import 'package:songies/library/saved_artists_repository.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
@@ -34,6 +35,21 @@ import 'package:songies/theme/theme_spec.dart';
 
 import 'account/fake_account_backend.dart';
 import 'helpers/fake_audio_backend.dart';
+
+/// No saved artists; the artist and library pages read them.
+class _NoSavedArtists implements SavedArtistsRepository {
+  @override
+  Stream<List<SavedArtist>> watchAll() => Stream.value(const []);
+
+  @override
+  Stream<bool> watchIsSaved(String browseId) => Stream.value(false);
+
+  @override
+  Future<void> refresh(YtmArtist artist) async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class _NoTracks extends TrackResolver {
   @override
@@ -85,6 +101,7 @@ Future<GoRouter> pumpRouter(
         downloadBytesPerPlaylistProvider.overrideWith(
           (ref) => Stream.value(const []),
         ),
+        savedArtistsRepositoryProvider.overrideWithValue(_NoSavedArtists()),
         // YouTube Music pages, answered without a request.
         ytmAlbumProvider.overrideWith(
           (ref, id) async => YtmAlbumPage(
@@ -189,6 +206,30 @@ void main() {
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
     expect(find.byType(HomePage), findsOneWidget);
+  });
+
+  testWidgets('an artist opens from Now Playing in the tab underneath it', (
+    tester,
+  ) async {
+    final router = await pumpRouter(tester);
+    for (final tab in ['/library', '/home']) {
+      router.go(tab);
+      await tester.pumpAndSettle();
+      openNowPlaying(router);
+      await tester.pumpAndSettle();
+      expect(find.byType(NowPlayingPage), findsOneWidget);
+
+      tester.element(find.byType(NowPlayingPage)).goYtmArtist('UCx');
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(router.state.uri.path, '$tab/ytm/artist/UCx');
+      expect(find.byType(ArtistPage), findsOneWidget);
+      expect(find.byType(NowPlayingPage), findsNothing);
+
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ArtistPage), findsNothing);
+    }
   });
 
   testWidgets('openNowPlaying pushes once, then does nothing', (tester) async {

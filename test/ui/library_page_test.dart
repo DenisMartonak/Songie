@@ -12,6 +12,8 @@ import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/library/library_page.dart';
 import 'package:songies/ui/motion/motion.dart';
 import 'package:songies/library/favorites.dart';
+import 'package:songies/innertube/ytm_models.dart';
+import 'package:songies/library/saved_artists_repository.dart';
 
 import '../helpers/ui_harness.dart';
 
@@ -55,6 +57,12 @@ void main() {
             path: '/library/playlist/:id',
             builder: (_, state) => Scaffold(
               body: Text('Playlist page ${state.pathParameters['id']}'),
+            ),
+          ),
+          GoRoute(
+            path: '/library/ytm/artist/:id',
+            builder: (_, state) => Scaffold(
+              body: Text('Artist page ${state.pathParameters['id']}'),
             ),
           ),
         ],
@@ -229,6 +237,71 @@ void main() {
     expect(find.text('Tube mix'), findsOneWidget);
     expect(find.text('Mine'), findsNothing);
     expect(find.text('Other mix'), findsNothing);
+  });
+
+  group('saved artists', () {
+    Future<void> saveArtist(WidgetTester tester, String id, String name) =>
+        real(
+          tester,
+          () => SavedArtistsRepository(
+            h.db,
+            h.stamp,
+          ).save(YtmArtist(browseId: id, name: name)),
+        );
+
+    uiTest('All lists playlists then saved artists', (tester) async {
+      await real(tester, () => h.addPlaylist('Mine', []));
+      await saveArtist(tester, 'UCa', 'Daft Punk');
+      await saveArtist(tester, 'UCb', 'Justice');
+      await pumpLibrary(tester);
+
+      expect(find.text('Artist'), findsNWidgets(2));
+      final playlistY = tester.getTopLeft(find.text('Mine')).dy;
+      for (final e in tester.widgetList<Text>(find.text('Artist'))) {
+        expect(tester.getTopLeft(find.byWidget(e)).dy, greaterThan(playlistY));
+      }
+    });
+
+    uiTest('Artists chip shows only saved artists', (tester) async {
+      await real(tester, () => h.addPlaylist('Mine', []));
+      await saveArtist(tester, 'UCa', 'Daft Punk');
+      await pumpLibrary(tester);
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Artists'));
+      await settle(tester);
+      expect(find.text('Daft Punk'), findsOneWidget);
+      expect(find.text('Mine'), findsNothing);
+    });
+
+    uiTest('Local chip hides saved artists', (tester) async {
+      await real(tester, () => h.addPlaylist('Mine', []));
+      await saveArtist(tester, 'UCa', 'Daft Punk');
+      await pumpLibrary(tester);
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Local'));
+      await settle(tester);
+      expect(find.text('Mine'), findsOneWidget);
+      expect(find.text('Daft Punk'), findsNothing);
+    });
+
+    uiTest('tapping a saved artist row opens its page', (tester) async {
+      await saveArtist(tester, 'UCa', 'Daft Punk');
+      await pumpLibrary(tester);
+
+      await tester.tap(find.byKey(const Key('library.artist.UCa')));
+      await settle(tester);
+      expect(find.text('Artist page UCa'), findsOneWidget);
+    });
+
+    uiTest('no playlists but a saved artist does not show the empty state', (
+      tester,
+    ) async {
+      await saveArtist(tester, 'UCa', 'Daft Punk');
+      await pumpLibrary(tester);
+
+      expect(find.text('Daft Punk'), findsOneWidget);
+      expect(find.text('No playlists yet'), findsNothing);
+    });
   });
 
   group('new playlist', () {

@@ -99,6 +99,7 @@ The Report a bug form in Settings sends a report to a Discord channel through a 
 ## 5. Make a release (every time)
 
 0. Check the website is live: <https://denismartonak.github.io/Songie/r/ABCD2345> shows "You've been invited to listen together". From the first release after 1.4.0 the app shares room links on that site, so a release before the site works hands out dead links. See `docs/website.md`.
+0b. Apply pending Supabase migrations before tagging (`npx supabase@3 db push --remote`; see `docs/supabase.md`). The server refuses rows of tables it doesn't know, and refused rows are skipped for good.
 1. Pick the new version, for example `1.1.0`.
 2. The version is written in two places. Change both:
    - `version:` in `pubspec.yaml`, for example `version: 1.1.0+2`

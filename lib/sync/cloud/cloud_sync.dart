@@ -302,8 +302,9 @@ class CloudSync {
   }
 
   /// "Start empty": removes this device's playlists and entries (Favorites
-  /// stays, emptied), themes, fonts and their files, lyrics, listens and
-  /// YouTube seen-lists. Tracks, local files, downloads and settings stay.
+  /// stays, emptied), themes, fonts and their files, lyrics, listens,
+  /// saved artists and YouTube seen-lists. Tracks, local files, downloads and
+  /// settings stay.
   /// Rows are removed outright, so nothing of it goes to the new account.
   Future<void> wipeForNewAccount() async {
     final fonts = await _db.select(_db.fonts).get();
@@ -320,6 +321,7 @@ class CloudSync {
       await _db.delete(_db.fonts).go();
       await _db.delete(_db.lyrics).go();
       await _db.delete(_db.listens).go();
+      await _db.delete(_db.savedArtists).go();
     });
     final dir = _fontsDir;
     if (dir == null) return;

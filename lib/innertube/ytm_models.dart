@@ -134,6 +134,7 @@ class YtmArtistPage {
     this.singles = const [],
     this.similar = const [],
     this.radioPlaylistId,
+    this.monthlyListeners,
   });
 
   final YtmArtist artist;
@@ -142,6 +143,9 @@ class YtmArtistPage {
   final List<YtmAlbum> singles;
   final List<YtmArtist> similar;
   final String? radioPlaylistId;
+
+  /// The count only, e.g. `68M`.
+  final String? monthlyListeners;
 }
 
 class YtmAlbumPage {

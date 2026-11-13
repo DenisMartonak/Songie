@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,6 +15,12 @@ import 'ytm_shelf_row.dart';
 /// Top songs shown before Show all.
 const int kArtistTopSongs = 5;
 
+/// Whether the artist is saved to the library.
+final _artistSavedProvider = StreamProvider.autoDispose.family<bool, String>(
+  (ref, browseId) =>
+      ref.watch(savedArtistsRepositoryProvider).watchIsSaved(browseId),
+);
+
 /// A YouTube Music artist: picture and name, Play (the top songs) and Radio
 /// (the artist's radio), then Top songs, Albums, Singles and Fans also like.
 /// Sections YouTube left out are not shown.
@@ -27,6 +35,7 @@ class ArtistPage extends ConsumerStatefulWidget {
 
 class _ArtistPageState extends ConsumerState<ArtistPage> {
   bool _allTopSongs = false;
+  bool _refreshed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +51,16 @@ class _ArtistPageState extends ConsumerState<ArtistPage> {
     final artist = page.artist;
     final top = page.topSongs;
     final radio = page.radioPlaylistId;
+    final savedState = ref.watch(_artistSavedProvider(artist.browseId));
+    final saved = savedState.value ?? false;
+    if (!_refreshed) {
+      // A saved artist keeps the name and picture YouTube shows now.
+      _refreshed = true;
+      scheduleMicrotask(() {
+        if (!mounted) return;
+        ref.read(savedArtistsRepositoryProvider).refresh(artist);
+      });
+    }
     final shown = _allTopSongs ? top : top.take(kArtistTopSongs).toList();
     return CustomScrollView(
       slivers: [
@@ -49,12 +68,25 @@ class _ArtistPageState extends ConsumerState<ArtistPage> {
           child: YtmHero(
             kind: 'Artist',
             title: artist.name,
+            subtitle: page.monthlyListeners == null
+                ? null
+                : '${page.monthlyListeners} monthly listeners',
             thumbnailUrl: artist.thumbnailUrl,
             seed: artist.browseId,
             circle: true,
             actions: [
               YtmPlayButton(
                 onPressed: top.isEmpty ? null : () => playYtmList(ref, top),
+              ),
+              YtmHeroAction(
+                key: const Key('ytm.save'),
+                icon: saved ? Icons.bookmark : Icons.bookmark_add_outlined,
+                label: saved ? 'Saved' : 'Save',
+                // Not until the saved state is known: a tap would save an
+                // artist that is already saved.
+                onPressed: savedState.hasValue
+                    ? () => _toggleSaved(artist, saved)
+                    : null,
               ),
               // The radio starts from the first top song.
               if (radio != null && top.isNotEmpty)
@@ -102,6 +134,30 @@ class _ArtistPageState extends ConsumerState<ArtistPage> {
         ),
       ],
     );
+  }
+
+  Future<void> _toggleSaved(YtmArtist artist, bool saved) async {
+    final islands = Islands.of(context);
+    final repo = ref.read(savedArtistsRepositoryProvider);
+    final result = saved
+        ? await repo.unsave(artist.browseId)
+        : await repo.save(artist);
+    switch (result) {
+      case Ok():
+        islands.show(
+          saved ? 'Removed from library' : 'Saved to library',
+          kind: IslandKind.success,
+        );
+      case Err(:final failure):
+        AppLog.w(
+          'Artist ${saved ? 'unsave' : 'save'} ${artist.browseId} failed: '
+          '${failure.message}',
+        );
+        islands.show(
+          saved ? "Couldn't remove the artist" : "Couldn't save the artist",
+          kind: IslandKind.failure,
+        );
+    }
   }
 
   Future<void> _startRadio(YtmSong first, String playlistId) async {
