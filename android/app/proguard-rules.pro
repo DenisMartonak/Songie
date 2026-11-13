@@ -15,3 +15,9 @@
 # commons-compress unpacks the bundled Python/yt-dlp zips on first run.
 -keep class org.apache.commons.compress.archivers.zip.** { *; }
 -dontwarn org.apache.commons.compress.**
+
+# Room (used by WorkManager, the background update check) creates a database
+# with `Class.getDeclaredConstructor()` on the generated `*_Impl` class, so R8
+# sees no caller and removed the no-argument constructor: 1.5.0 crashed at
+# launch with NoSuchMethodException: WorkDatabase_Impl.<init> [].
+-keep class * extends androidx.room.RoomDatabase { <init>(); }

@@ -1,6 +1,7 @@
 package com.songies.songies
 
 import android.content.Intent
+import android.util.Log
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 
@@ -24,7 +25,12 @@ class MainActivity : AudioServiceActivity() {
         deviceInfo = DeviceInfoPlugin(messenger)
         updateNotifier = UpdateNotifierPlugin(this, messenger)
         // The background update check (SON-28); kept as is once scheduled.
-        UpdateNotifications.schedule(applicationContext)
+        // A failure here must never stop the app from opening (1.5.0 did).
+        try {
+            UpdateNotifications.schedule(applicationContext)
+        } catch (e: Exception) {
+            Log.w("Songies", "Scheduling the update check failed", e)
+        }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {

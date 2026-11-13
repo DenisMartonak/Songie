@@ -246,6 +246,11 @@ jobs:
             echo "::warning::This APK is signed with the Android debug key (manual build without signing secrets)."
           fi
 
+      - name: Check R8 kept what is reached by name
+        # 1.5.0 shipped without WorkDatabase_Impl's constructor and crashed at
+        # launch; debug builds aren't shrunk, so only the release APK shows it.
+        run: tool/check_apk_keeps.sh build/app/outputs/flutter-apk/app-release.apk
+
       - name: Name the APK
         run: |
           mkdir -p dist
