@@ -21,7 +21,7 @@ void showRoomIsland(BuildContext context, String text, {bool signIn = false}) {
         ? null
         : IslandAction(
             label: 'Sign in',
-            onPressed: () => router.go('/settings'),
+            onPressed: () => router.go('/profile'),
           ),
   );
 }

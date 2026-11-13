@@ -40,8 +40,8 @@ void main() {
                 const Scaffold(body: RoomIslands(child: Text('Home'))),
           ),
           GoRoute(
-            path: '/settings',
-            builder: (_, _) => const Scaffold(body: Text('Settings page')),
+            path: '/profile',
+            builder: (_, _) => const Scaffold(body: Text('Profile page')),
           ),
         ],
       ),
@@ -112,7 +112,7 @@ void main() {
       );
       await tester.tap(find.text('Sign in'));
       await tester.pumpAndSettle();
-      expect(find.text('Settings page'), findsOneWidget);
+      expect(find.text('Profile page'), findsOneWidget);
       await rig.dispose(tester);
     });
   });

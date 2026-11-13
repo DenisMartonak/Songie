@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../account/account_service.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import 'auth_screens.dart';
 
 /// The account's round picture: the uploaded one, else the username's first
 /// letter on a colour from the username; a person icon when signed out.
@@ -115,10 +116,14 @@ Color avatarColor(String username) {
   return HSLColor.fromAHSL(1, (hash % 360).toDouble(), 0.5, 0.42).toColor();
 }
 
-/// The top bar's account button (key `shell.account`): the avatar, opening
-/// Settings, where Account is the first section.
+/// The account button (key `shell.account`): your avatar, opening your
+/// profile; signed out, a person icon opening Log in.
 class AccountButton extends ConsumerWidget {
-  const AccountButton({super.key});
+  const AccountButton({this.push = false, super.key});
+
+  /// Whether the profile opens on top of the current page (with Back), as
+  /// from Home on a phone, rather than in its place.
+  final bool push;
 
   static const double size = 28;
 
@@ -130,7 +135,11 @@ class AccountButton extends ConsumerWidget {
       child: InkResponse(
         key: const Key('shell.account'),
         radius: size / 2 + 6,
-        onTap: () => context.go('/settings'),
+        onTap: () => state is! SignedIn
+            ? showAuthScreen(context, AuthStart.logIn)
+            : push
+            ? context.push('/profile')
+            : context.go('/profile'),
         child: const Padding(
           padding: EdgeInsets.all(4),
           child: AccountAvatar(size: size),

@@ -35,8 +35,8 @@ void main() {
             ),
           ),
           GoRoute(
-            path: '/settings',
-            builder: (_, _) => const Scaffold(body: Text('Settings page')),
+            path: '/profile',
+            builder: (_, _) => const Scaffold(body: Text('Profile page')),
           ),
         ],
       ),
@@ -69,7 +69,7 @@ void main() {
     expect(find.text('Start a room'), findsNothing);
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
-    expect(find.text('Settings page'), findsOneWidget);
+    expect(find.text('Profile page'), findsOneWidget);
     await rig.dispose(tester);
   });
 

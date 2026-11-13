@@ -57,6 +57,10 @@ void main() {
             builder: (_, _) => const Scaffold(body: Text('Elsewhere')),
           ),
           GoRoute(
+            path: '/profile',
+            builder: (_, _) => const Scaffold(body: Text('Profile page')),
+          ),
+          GoRoute(
             path: '/home/playlist/:id',
             builder: (_, s) =>
                 Scaffold(body: Text('Playlist ${s.pathParameters['id']}')),
@@ -84,6 +88,31 @@ void main() {
   });
 
   double top(WidgetTester tester, Finder f) => tester.getTopLeft(f).dy;
+
+  uiTest('the phone header has your picture before Settings', (tester) async {
+    await h.accounts.signUp('den@x.com', 'password1', 'den');
+    await h.accounts.verifySignup('den@x.com', h.accountBackend.goodCode);
+    await pumpHome(tester);
+    final avatar = find.byKey(const Key('shell.account'));
+    expect(avatar, findsOneWidget);
+    expect(
+      tester.getCenter(avatar).dx,
+      lessThan(tester.getCenter(find.byKey(const Key('home.settings'))).dx),
+    );
+    await tester.tap(avatar);
+    await settle(tester);
+    expect(find.text('Profile page'), findsOneWidget);
+  });
+
+  uiTest('the phone header fits at 360 px', (tester) async {
+    await h.accounts.signUp('den@x.com', 'password1', 'den');
+    await h.accounts.verifySignup('den@x.com', h.accountBackend.goodCode);
+    await pumpHome(tester);
+    tester.view.physicalSize = const Size(360, 1600);
+    await settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('shell.account')), findsOneWidget);
+  });
 
   uiTest('the library part comes first, then one row per shelf', (
     tester,

@@ -24,6 +24,7 @@ import 'package:songies/ui/motion/equalizer_bars.dart';
 import 'package:songies/ui/motion/motion.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/search/search_page.dart';
+import 'package:songies/ui/account/auth_screens.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 import 'package:songies/ui/shell/bottom_nav.dart';
@@ -693,7 +694,7 @@ void main() {
     });
 
     testWidgets('desktop top bar shows the avatar between search and the '
-        'window buttons; tapping opens Settings', (tester) async {
+        'window buttons; signed out, tapping opens Log in', (tester) async {
       await pumpApp(tester, desktop);
       final avatar = find.byKey(const Key('shell.account'));
       expect(
@@ -722,7 +723,8 @@ void main() {
 
       await tester.tap(avatar);
       await tester.pumpAndSettle();
-      expect(router.state.uri.path, '/settings');
+      expect(find.byType(AuthScreen), findsOneWidget);
+      expect(router.state.uri.path, isNot('/settings'));
     });
 
     testWidgets('without a custom title bar the avatar sits at the end of the '
