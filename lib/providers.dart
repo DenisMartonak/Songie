@@ -799,11 +799,9 @@ final friendsServiceProvider = Provider<FriendsService>((ref) {
 });
 
 /// [FriendsService.state] as it changes.
-final friendsStateProvider = StreamProvider<FriendsState>((ref) async* {
-  final service = ref.watch(friendsServiceProvider);
-  yield service.state;
-  yield* service.states;
-});
+final friendsStateProvider = StreamProvider<FriendsState>(
+  (ref) => ref.watch(friendsServiceProvider).states,
+);
 
 /// The room tables behind Supabase. Not overridden in `main()`: the client
 /// is read only when a call is made, so a signed-out app never touches

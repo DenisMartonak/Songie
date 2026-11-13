@@ -116,6 +116,21 @@ void main() {
     service.dispose();
   });
 
+  test('a new listener gets the current state first, then changes', () async {
+    backend.me = 'a';
+    await service.signedIn('a');
+    await service.send('b');
+    final seen = <FriendsState>[];
+    final sub = service.states.listen(seen.add);
+    await Future<void>.delayed(Duration.zero);
+    expect(seen.single.linkOf('b'), FriendLink.outgoing);
+    await service.remove('b');
+    await Future<void>.delayed(Duration.zero);
+    expect(seen.last.linkOf('b'), isNull);
+    await sub.cancel();
+    service.dispose();
+  });
+
   test('search under 2 letters asks nothing', () async {
     backend.me = 'a';
     await service.signedIn('a');

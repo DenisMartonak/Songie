@@ -55,7 +55,14 @@ class FriendsService {
   int _session = 0;
 
   FriendsState get state => _state;
-  Stream<FriendsState> get states => _states.stream;
+
+  /// The current state, then each change (subscribed at once, so none is
+  /// missed in between).
+  Stream<FriendsState> get states => Stream<FriendsState>.multi((c) {
+    c.add(_state);
+    final sub = _states.stream.listen(c.add, onDone: c.close);
+    c.onCancel = sub.cancel;
+  });
 
   void _set(FriendsState s) {
     _state = s;

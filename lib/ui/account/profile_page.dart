@@ -233,6 +233,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           ],
         ),
       ),
+      const _FriendsRow(),
       const StatsBody(),
       const SettingsSectionTitle('Account'),
       const SyncStatusLine(),
@@ -252,6 +253,43 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         ),
       ),
     ];
+  }
+}
+
+/// Opens your friends: "Friends · 2".
+class _FriendsRow extends ConsumerWidget {
+  const _FriendsRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final count = ref.watch(
+      friendsStateProvider.select((s) => s.value?.friends.length ?? 0),
+    );
+    return InkWell(
+      key: const Key('profile.friends'),
+      onTap: () => context.push('/profile/friends'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(Icons.people_outline_rounded, color: colors.text),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                count == 0 ? 'Friends' : 'Friends · $count',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: colors.mutedText),
+          ],
+        ),
+      ),
+    );
   }
 }
 
