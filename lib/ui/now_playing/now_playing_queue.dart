@@ -9,6 +9,7 @@ import '../motion/equalizer_bars.dart';
 import '../motion/pressable.dart';
 import '../../room/room_protocol.dart' show RoomRole;
 import '../room/room_button.dart' show roomGuestRoleProvider;
+import '../room/room_face.dart';
 import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
 import '../widgets/favorite_star.dart';
@@ -32,6 +33,10 @@ class NowPlayingQueue extends ConsumerWidget {
     final queue =
         ref.watch(playerViewStateProvider.select((s) => s.value?.queue)) ??
         const <Track>[];
+    // In a room: who added each entry (rows rebuild when a tag changes).
+    final addedBy =
+        ref.watch(playerViewStateProvider.select((s) => s.value?.addedBy)) ??
+        const <String?>[];
     final playingIndex = ref.watch(
       playerViewStateProvider.select((s) => s.value?.index ?? -1),
     );
@@ -64,6 +69,7 @@ class NowPlayingQueue extends ConsumerWidget {
             child: _QueueRow(
               index: playingIndex,
               track: queue[playingIndex],
+              addedBy: addedBy.elementAtOrNull(playingIndex),
               current: true,
               playing: playing,
               onTap: edit ? () => player.playAt(playingIndex) : null,
@@ -96,6 +102,7 @@ class NowPlayingQueue extends ConsumerWidget {
                   index: q,
                   dragIndex: edit ? i : null,
                   track: queue[q],
+                  addedBy: addedBy.elementAtOrNull(q),
                   current: false,
                   playing: playing,
                   onTap: edit ? () => player.playAt(q) : null,
@@ -159,6 +166,7 @@ class _QueueRow extends StatelessWidget {
     required this.index,
     this.dragIndex,
     required this.track,
+    this.addedBy,
     required this.current,
     required this.playing,
     required this.onTap,
@@ -172,6 +180,9 @@ class _QueueRow extends StatelessWidget {
   /// drag handle.
   final int? dragIndex;
   final Track track;
+
+  /// Who put it in the room's queue (see [RoomFaceDot]).
+  final String? addedBy;
   final bool current;
 
   /// Whether playback is running (the playing row's bars move).
@@ -236,6 +247,8 @@ class _QueueRow extends StatelessWidget {
                     ],
                   ),
                 ),
+                RoomFaceDot(addedBy: addedBy, size: 22),
+                const SizedBox(width: 8),
                 FavoriteStar(song: MenuSong.track(track)),
                 if (dragIndex case final dragIndex?)
                   ReorderableDragStartListener(

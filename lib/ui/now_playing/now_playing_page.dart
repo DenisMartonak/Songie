@@ -15,6 +15,7 @@ import '../island/island_host.dart';
 import '../lyrics/lyrics_strip.dart';
 import '../lyrics/lyrics_view.dart';
 import '../motion/motion.dart';
+import '../room/room_face.dart';
 import '../shell/adaptive_shell.dart';
 import '../widgets/artist_link.dart';
 import '../widgets/artwork.dart';
@@ -673,6 +674,10 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
     final playing = ref.watch(
       playerViewStateProvider.select((s) => s.value?.playing ?? false),
     );
+    // In a room: who put the playing song in the queue.
+    final addedBy = ref.watch(
+      playerViewStateProvider.select((s) => s.value?.currentAddedBy),
+    );
     if (track == null) {
       return Center(
         child: Text(
@@ -797,6 +802,8 @@ class _PlayerTabState extends ConsumerState<_PlayerTab> {
                                 playing: playing,
                               ),
                             ),
+                            RoomFaceDot(addedBy: addedBy, size: 28),
+                            const SizedBox(width: 8),
                             FavoriteStar(song: MenuSong.track(track), size: 26),
                           ],
                         ),
