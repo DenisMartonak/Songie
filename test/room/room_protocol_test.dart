@@ -42,6 +42,23 @@ void main() {
     expect(RoomPresence.fromJson({'v': 1}), isNull);
     // Beats: this build takes them; a build before them leaves the key out.
     expect(back.beats, isTrue);
+    const withPicture = RoomPresence(
+      userId: 'u',
+      deviceId: 'd',
+      name: 'N',
+      platform: 'linux',
+      host: false,
+      avatarUrl: 'https://x/p.jpg',
+    );
+    expect(
+      RoomPresence.fromJson(withPicture.toJson())!.avatarUrl,
+      'https://x/p.jpg',
+    );
+    expect(back.avatarUrl, isNull);
+    expect(
+      RoomPresence.fromJson({...p.toJson(), 'avatarUrl': 3})!.avatarUrl,
+      isNull,
+    );
     expect(
       RoomPresence.fromJson({...p.toJson()}..remove('beats'))!.beats,
       isFalse,
@@ -66,6 +83,49 @@ void main() {
     final s = RoomMessage.decode('state', old)! as RoomStateMsg;
     expect(s.rev, isNull);
     expect(s.songs.single.videoId, 'v1');
+  });
+
+  test('songs carry who added them; faces round-trip', () {
+    const face = RoomFace(name: 'ann', avatarUrl: 'https://x/a.jpg');
+    const full = RoomStateMsg(
+      rev: 1,
+      epoch: 2,
+      songs: [RoomSong(videoId: 'v1', title: 'Halo', artist: 'B', by: 'u1')],
+      offset: 0,
+      index: 0,
+      playing: true,
+      positionMs: 0,
+      durationMs: null,
+      shuffle: false,
+      repeat: RepeatMode.off,
+      faces: {'u1': face},
+    );
+    final back = roundTrip(full)! as RoomStateMsg;
+    expect(back.songs.single.by, 'u1');
+    expect(back.faces, {'u1': face});
+    expect(const RoomFace(name: 'ann'), isNot(face));
+
+    final json = full.toJson();
+    final old = {
+      ...json,
+      'songs': [
+        {...(json['songs']! as List).single as Map}..remove('by'),
+      ],
+    }..remove('faces');
+    final s = RoomMessage.decode('state', old)! as RoomStateMsg;
+    expect(s.songs.single.by, isNull);
+    expect(s.faces, isEmpty);
+
+    final bad =
+        RoomMessage.decode('state', {
+              ...json,
+              'faces': {'u1': 3},
+            })!
+            as RoomStateMsg;
+    expect(bad.faces, isEmpty);
+    final badBy = RoomSong.fromJson({...yt.toJson(), 'by': 5});
+    expect(badBy, isNotNull);
+    expect(badBy!.by, isNull);
   });
 
   test('a beat round-trips and plays over its full state', () {
@@ -99,6 +159,7 @@ void main() {
     expect(s.rev, 9);
     expect(s.epoch, 2);
     expect(s.songs, same(full.songs));
+    expect(s.faces, same(full.faces));
     expect(s.offset, 3);
     expect(s.index, 4);
     expect(s.playing, isFalse);

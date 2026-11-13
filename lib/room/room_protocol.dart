@@ -62,6 +62,7 @@ class RoomSong {
     this.album,
     this.durationMs,
     this.artUrl,
+    this.by,
   });
 
   final String? videoId;
@@ -70,6 +71,10 @@ class RoomSong {
   final String? album;
   final int? durationMs;
   final String? artUrl;
+
+  /// Who put it in the room's queue (a user id; see `RoomStateMsg.faces`).
+  /// Hosts before it leave it out.
+  final String? by;
 
   bool get local => videoId == null;
 
@@ -80,6 +85,7 @@ class RoomSong {
     'album': album,
     'durationMs': durationMs,
     'artUrl': artUrl,
+    'by': ?by,
   };
 
   static RoomSong? fromJson(Object? j) {
@@ -91,6 +97,7 @@ class RoomSong {
       final album = j['album'];
       final durationMs = j['durationMs'];
       final artUrl = j['artUrl'];
+      final by = j['by'];
       if (title is! String || artist is! String) return null;
       if (videoId != null && videoId is! String) return null;
       if (album != null && album is! String) return null;
@@ -103,6 +110,7 @@ class RoomSong {
         album: album as String?,
         durationMs: durationMs as int?,
         artUrl: artUrl as String?,
+        by: by is String ? by : null,
       );
     } on Object {
       return null;
@@ -121,6 +129,44 @@ List<RoomSong>? _songs(Object? o) {
   return out;
 }
 
+/// A person as shown beside the songs they added: name and picture.
+class RoomFace {
+  const RoomFace({required this.name, this.avatarUrl});
+
+  final String name;
+
+  /// The picture's public URL; null without one (the initial shows).
+  final String? avatarUrl;
+
+  Map<String, Object?> toJson() => {'name': name, 'avatarUrl': avatarUrl};
+
+  static RoomFace? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final name = j['name'];
+    final avatarUrl = j['avatarUrl'];
+    if (name is! String) return null;
+    return RoomFace(
+      name: name,
+      avatarUrl: avatarUrl is String ? avatarUrl : null,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is RoomFace && other.name == name && other.avatarUrl == avatarUrl;
+
+  @override
+  int get hashCode => Object.hash(name, avatarUrl);
+}
+
+Map<String, RoomFace> _faces(Object? o) {
+  if (o is! Map) return const {};
+  return {
+    for (final e in o.entries)
+      if (e.key is String) e.key! as String: ?RoomFace.fromJson(e.value),
+  };
+}
+
 /// A member of the room channel, as tracked by Presence.
 ///
 /// Decodes any integer `v`, so a host on another version can be told apart.
@@ -133,6 +179,7 @@ class RoomPresence {
     required this.host,
     this.v = kRoomProtocol,
     this.beats = true,
+    this.avatarUrl,
   });
 
   final String userId;
@@ -146,6 +193,9 @@ class RoomPresence {
   /// it out, and the host sends them full states only.
   final bool beats;
 
+  /// The account's picture (public URL); null without one.
+  final String? avatarUrl;
+
   bool get compatible => v == kRoomProtocol;
 
   Map<String, Object?> toJson() => {
@@ -156,6 +206,7 @@ class RoomPresence {
     'platform': platform,
     'host': host,
     'beats': beats,
+    'avatarUrl': ?avatarUrl,
   };
 
   static RoomPresence? fromJson(Object? j) {
@@ -168,6 +219,7 @@ class RoomPresence {
       final platform = j['platform'];
       final host = j['host'];
       final beats = j['beats'];
+      final avatarUrl = j['avatarUrl'];
       if (v is! int) return null;
       if (userId is! String || userId.isEmpty) return null;
       if (deviceId is! String || deviceId.isEmpty) return null;
@@ -180,6 +232,7 @@ class RoomPresence {
         host: host is bool ? host : false,
         v: v,
         beats: beats is bool ? beats : false,
+        avatarUrl: avatarUrl is String ? avatarUrl : null,
       );
     } on Object {
       return null;
@@ -232,6 +285,7 @@ class RoomStateMsg extends RoomMessage {
     required this.durationMs,
     required this.shuffle,
     required this.repeat,
+    this.faces = const {},
   });
 
   final int? rev;
@@ -244,6 +298,9 @@ class RoomStateMsg extends RoomMessage {
   final int? durationMs;
   final bool shuffle;
   final RepeatMode repeat;
+
+  /// Who the songs' [RoomSong.by] ids are, for the ids in [songs].
+  final Map<String, RoomFace> faces;
 
   @override
   String get event => 'state';
@@ -261,6 +318,8 @@ class RoomStateMsg extends RoomMessage {
     'duration_ms': durationMs,
     'shuffle': shuffle,
     'repeat': repeat.name,
+    if (faces.isNotEmpty)
+      'faces': {for (final e in faces.entries) e.key: e.value.toJson()},
   };
 
   static RoomStateMsg? _decode(Map<Object?, Object?> j) {
@@ -296,6 +355,7 @@ class RoomStateMsg extends RoomMessage {
       durationMs: durationMs as int?,
       shuffle: shuffle,
       repeat: repeat,
+      faces: _faces(j['faces']),
     );
   }
 }
@@ -350,6 +410,7 @@ class RoomBeatMsg extends RoomMessage {
     durationMs: durationMs,
     shuffle: shuffle,
     repeat: repeat,
+    faces: full.faces,
   );
 
   static RoomBeatMsg? _decode(Map<Object?, Object?> j) {
