@@ -9,6 +9,7 @@ import 'package:songies/account/account_service.dart';
 import 'package:songies/core/result.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/innertube/ytm_models.dart';
+import 'package:songies/library/saved_artists_repository.dart';
 import 'package:songies/player/audio_backend.dart';
 import 'package:songies/player/player_service.dart';
 import 'package:songies/player/track_resolver.dart';
@@ -34,6 +35,21 @@ import 'package:songies/theme/theme_spec.dart';
 
 import 'account/fake_account_backend.dart';
 import 'helpers/fake_audio_backend.dart';
+
+/// No saved artists; the artist and library pages read them.
+class _NoSavedArtists implements SavedArtistsRepository {
+  @override
+  Stream<List<SavedArtist>> watchAll() => Stream.value(const []);
+
+  @override
+  Stream<bool> watchIsSaved(String browseId) => Stream.value(false);
+
+  @override
+  Future<void> refresh(YtmArtist artist) async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class _NoTracks extends TrackResolver {
   @override
@@ -85,6 +101,7 @@ Future<GoRouter> pumpRouter(
         downloadBytesPerPlaylistProvider.overrideWith(
           (ref) => Stream.value(const []),
         ),
+        savedArtistsRepositoryProvider.overrideWithValue(_NoSavedArtists()),
         // YouTube Music pages, answered without a request.
         ytmAlbumProvider.overrideWith(
           (ref, id) async => YtmAlbumPage(
