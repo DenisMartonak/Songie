@@ -13,7 +13,6 @@ import 'ui/settings/themes/theme_editor_page.dart';
 import 'ui/settings/themes/themes_page.dart';
 import 'ui/shell/adaptive_shell.dart';
 import 'ui/shell/fade_through_branches.dart';
-import 'ui/stats/stats_page.dart';
 import 'ui/account/profile_page.dart';
 import 'ui/friends/friend_page.dart';
 import 'ui/friends/friends_page.dart';
@@ -56,16 +55,6 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
               routes: [
                 _playlistRoute(),
                 ..._ytmRoutes(),
-                // Listening stats, opened from Home's card; the shell (and
-                // the player) stay around it.
-                GoRoute(
-                  path: 'stats',
-                  pageBuilder: (context, state) => sharedAxisPage(
-                    context,
-                    state,
-                    const PageSurface(child: StatsPage()),
-                  ),
-                ),
               ],
             ),
             // Your profile: like Settings, inside the shell in Home's branch.
