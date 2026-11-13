@@ -666,6 +666,64 @@ void main() {
     expect(r.guestPlayer.state.playing, isTrue);
   });
 
+  /// Another guest device `q` (user `uq`) asking the host to add [ids].
+  void queueAdds(Rig r, List<String> ids) {
+    final q = r.hub.channelFor('q');
+    if (!r.hub.channelFor('q').present.any((p) => p.deviceId == 'q')) {
+      q.join(who('uq', 'q'));
+      r.async.flushMicrotasks();
+      r.host.setRole('q', RoomRole.queue);
+      r.async.flushMicrotasks();
+    }
+    q.send(
+      RoomRequestMsg(
+        from: 'q',
+        id: 'q-${ids.join()}',
+        op: RoomOp.addToEnd,
+        args: {
+          'songs': [
+            for (final id in ids)
+              RoomSong(
+                videoId: 'v$id',
+                title: 'Title $id',
+                artist: 'a',
+              ).toJson(),
+          ],
+        },
+      ),
+    );
+    r.async.flushMicrotasks();
+  }
+
+  guestTest("the guest's queue carries who added each song", (r) {
+    r.hostPlays([track('a')]);
+    r.join();
+    queueAdds(r, ['b']);
+    r.settle();
+    expect(r.guestPlayer.state.addedBy, ['uh', 'uq']);
+    expect(r.guest.faces.keys, containsAll(['uh', 'uq']));
+  });
+
+  guestTest("another person's copy of the same song updates the face", (r) {
+    r.hostPlays([track('a')]);
+    r.join();
+    queueAdds(r, ['b']);
+    r.settle();
+    expect(r.guestPlayer.state.addedBy, ['uh', 'uq']);
+    r.host.setRole('g', RoomRole.full);
+    r.async.flushMicrotasks();
+    // Within one debounce: the guest sees the same songs, another adder.
+    r.hostPlayer.removeAt(1);
+    r.guest.request(RoomOp.addToEnd, {
+      'songs': [
+        const RoomSong(videoId: 'vb', title: 'Title b', artist: 'a').toJson(),
+      ],
+    });
+    r.settle();
+    expect(r.guestPlayer.state.queue.map((t) => t.id), ['a', 'b']);
+    expect(r.guestPlayer.state.addedBy, ['uh', 'ug']);
+  });
+
   guestTest('hello stops after the first state', (r) {
     r.hostPlays([track('a')]);
     r.join();
