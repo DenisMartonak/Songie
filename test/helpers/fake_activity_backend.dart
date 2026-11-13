@@ -64,7 +64,8 @@ class FakeActivityBackend implements ActivityBackend {
     _check();
     final r = _row(me);
     if (!r.top) return;
-    r.summary = top;
+    // As stored on the server: through JSON, at most 10 of each.
+    r.summary = TopSummary.fromJson(top.toJson());
   }
 
   @override
