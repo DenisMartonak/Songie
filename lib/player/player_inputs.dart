@@ -11,6 +11,9 @@ abstract interface class LocalHold {
 
   /// Plays with the room again, at the host's song and position.
   Future<void> resumeLocally();
+
+  /// Whether this device is holding quiet (see [holdLocally]).
+  bool get heldLocally;
 }
 
 /// Where this device's own playback inputs go: keyboard shortcuts, the
@@ -45,6 +48,14 @@ class PlayerInputs {
   Future<void> hold() {
     if (room case final LocalHold r) return r.holdLocally();
     return _player.pause();
+  }
+
+  /// Whether an interruption starting now should [hold] this device: when
+  /// it plays, and while a room guest that is not held yet even when the
+  /// room is paused, so the host playing on mid-call stays quiet here.
+  bool get holdsForInterruption {
+    if (room case final LocalHold r) return !r.heldLocally;
+    return _player.state.playing;
   }
 
   /// The interruption [hold] was for ended and asks to resume.

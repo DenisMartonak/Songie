@@ -54,6 +54,7 @@ class RoomGuest {
   final _people = StreamController<List<RoomPresence>>.broadcast();
   final _ended = StreamController<RoomLeaveReason>.broadcast();
   final _cantPlay = StreamController<String>.broadcast();
+  final _heldChanges = StreamController<bool>.broadcast();
 
   bool _running = false;
   bool _started = false;
@@ -123,6 +124,9 @@ class RoomGuest {
   /// Whether this device is holding quiet on its own (see [hold]).
   bool get held => _held;
 
+  /// [held] as it changes.
+  Stream<bool> get heldChanges => _heldChanges.stream;
+
   /// Every guest device's role as the host last sent them, by device id
   /// (a device missing from it is a listener).
   Map<String, RoomRole> get allRoles => _roleMap;
@@ -182,7 +186,7 @@ class RoomGuest {
   /// until [rejoin].
   Future<void> hold() async {
     if (!_running) return;
-    _held = true;
+    _setHeld(true);
     if (_player.state.playing) await _player.pause();
   }
 
@@ -191,9 +195,15 @@ class RoomGuest {
   /// host does.
   Future<void> rejoin() async {
     if (!_running || !_held) return;
-    _held = false;
+    _setHeld(false);
     _pending ??= _last;
     await _drain();
+  }
+
+  void _setHeld(bool held) {
+    if (_held == held) return;
+    _held = held;
+    _heldChanges.add(held);
   }
 
   Future<void> leave() => _finish(RoomLeaveReason.left);
@@ -449,12 +459,12 @@ class RoomGuest {
       if (_player.state.shuffle) _player.setShuffle(false);
       _loaded = true;
       await _player.playQueue(_tracks, startIndex: target);
-      if (!_running) return;
+      if (await _stopped()) return;
       _checkStarted(target);
     } else if (_player.state.index != target) {
       if (_aheadAtSongEnd(m, receivedAt, target)) return;
       await _player.playAt(target);
-      if (!_running) return;
+      if (await _stopped()) return;
       _checkStarted(target);
     }
     if (_failed.contains(_tracks[target].id)) {
@@ -470,16 +480,26 @@ class RoomGuest {
     );
     if ((_player.state.position - expected).abs() > kRoomDriftLimit) {
       await _player.seek(expected);
-      if (!_running) return;
+      if (await _stopped()) return;
     }
     if (m.playing && !_player.state.playing) {
       await _player.play();
-      if (!_running) return;
+      if (await _stopped()) return;
       _checkStarted(target);
       if (_failed.contains(_tracks[target].id)) await _wait(song);
     } else if (!m.playing && _player.state.playing) {
       await _player.pause();
     }
+  }
+
+  /// After an await in [_apply]: whether to stop applying, because the guest
+  /// left or was held meanwhile (a hold during a song load must not be
+  /// undone by the load starting the song).
+  Future<bool> _stopped() async {
+    if (!_running) return true;
+    if (!_held) return false;
+    if (_player.state.playing) await _player.pause();
+    return true;
   }
 
   /// After asking the player to start [target]: if it landed elsewhere or is
@@ -584,6 +604,8 @@ class RoomGuestView implements PlayerView, LocalHold {
   Future<void> holdLocally() => _guest.hold();
   @override
   Future<void> resumeLocally() => _guest.rejoin();
+  @override
+  bool get heldLocally => _guest.held;
   @override
   Future<void> next() => _ask(RoomOp.next);
   @override

@@ -25,8 +25,9 @@ class AudioSessionBinding {
 /// interruption ends with resume.
 ///
 /// Ducking is left to the platform. After an interruption, playback resumes
-/// only if it was playing when the interruption began and the interruption
-/// ended with type [AudioInterruptionType.pause].
+/// only if it was playing when the interruption began (a room guest: if it
+/// was not held yet) and the interruption ended with type
+/// [AudioInterruptionType.pause].
 AudioSessionBinding bindAudioSession({
   required Stream<void> becomingNoisy,
   required Stream<AudioInterruptionEvent> interruptions,
@@ -40,7 +41,7 @@ AudioSessionBinding bindAudioSession({
     interruptions.listen((event) {
       if (event.begin) {
         if (event.type == AudioInterruptionType.duck) return;
-        if (player.state.playing) {
+        if (input.holdsForInterruption) {
           wasPlaying = true;
           input.hold();
         }

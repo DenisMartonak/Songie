@@ -10,7 +10,8 @@ import '../now_playing/now_playing_page.dart' show nowPlayingArtHeroTag;
 import '../../remote/remote_controller.dart' show RemoteLink;
 import '../remote/remote_strip.dart' show remoteStripText;
 import '../../room/room_protocol.dart' show RoomRole;
-import '../room/room_button.dart' show roomGuestRoleProvider;
+import '../room/room_button.dart'
+    show roomGuestHeldProvider, roomGuestRoleProvider;
 import '../../data/database.dart' show Track;
 import '../widgets/artist_link.dart';
 import '../widgets/artwork.dart';
@@ -125,6 +126,8 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     // A room's guest skips and pauses only with Full control.
     final role = ref.watch(roomGuestRoleProvider);
     final control = role == null || role == RoomRole.full;
+    // A guest holding quiet (headphones out, a call) plays again to rejoin.
+    final held = ref.watch(roomGuestHeldProvider);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: MiniPlayer.sideMargin),
@@ -228,7 +231,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                             ? Icons.pause_rounded
                             : Icons.play_arrow_rounded,
                       ),
-                      onPressed: control
+                      onPressed: control || held
                           ? () => ref.read(playerViewProvider).togglePlay()
                           : null,
                     ),

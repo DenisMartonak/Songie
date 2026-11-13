@@ -171,6 +171,29 @@ void main() {
     await rig.dispose(tester);
   });
 
+  uiTest('a held listener\'s play button rejoins the room', (tester) async {
+    await pump(tester);
+    await rig.joinAs(tester, RoomRole.listener);
+    GestureDetector play() => tester.widget<GestureDetector>(
+      find.byKey(const Key('playerBar.playPause')),
+    );
+    // Headphones out: this device goes quiet on its own.
+    await rig.run(tester, rig.service!.guestView!.holdLocally());
+    expect(h.player.state.playing, isFalse);
+    expect(play().onTap, isNotNull);
+    expect(enabled(tester, 'playerBar.next'), isFalse);
+
+    rig.hub.sent.clear();
+    await tester.tap(find.byKey(const Key('playerBar.playPause')));
+    await rig.run(tester, Future.value());
+    expect(h.player.state.playing, isTrue);
+    expect(rig.hostPlayer.state.playing, isTrue);
+    expect(rig.hub.sent.whereType<RoomRequestMsg>(), isEmpty);
+    // In step again: a listener cannot pause the room.
+    expect(play().onTap, isNull);
+    await rig.dispose(tester);
+  });
+
   uiTest('full control: the controls work, through the host', (tester) async {
     await pump(tester);
     await rig.joinAs(tester, RoomRole.full);
