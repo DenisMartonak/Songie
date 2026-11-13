@@ -101,6 +101,23 @@ After applying it, check by hand with accounts A and B (friends) and C (not a fr
 5. As A: writing to `activity` directly (insert, update, delete) fails with permission denied. `publish_now_playing` with a code that isn't a room A hosts stores no room code.
 6. Deleting account A removes A's row.
 
+### Playlist sharing (`20261116120000_playlist_sharing.sql`)
+
+The eighth migration lets an account share a playlist by link: anyone signed in with the link can follow it (their copy updates from it) or copy it. Apply it like the others (once, after the friend activity one), and before releasing the app version with playlist sharing. The website must serve `/p/<code>` links by then too.
+
+- The `shared_playlists` table: a 12-letter code, the owner, the playlist's name and a snapshot of its songs (YouTube songs only), and when it was last updated. Row rules on, no policy and no grant: apps use the functions only. Rows go with the owner's account; stopping a share deletes its row.
+- `share_playlist` (stores a snapshot under a fresh code and returns it), `update_shared_playlist` and `stop_sharing_playlist` (owner only, else `not_owner`), and `get_shared_playlist` (the name, the owner's username, the songs, when it was updated and whether the caller owns it; no rows when the code is unknown or stopped). Snapshots over 512 kB fail with `too_large`. All are `security definer`, callable by signed-in users only.
+- The link's code is what lets someone read a share; 12 letters from 31 make it unguessable.
+
+After applying it, check by hand with accounts A (owner) and B, as for friends:
+
+1. As A: `select share_playlist('Gym', '[{"videoId":"v1","title":"Halo","artist":"Beyonce"}]');` returns a 12-letter code. As B: `select * from get_shared_playlist('<code>');` shows the name, A's username, the song and `is_mine` false.
+2. As A: `select update_shared_playlist('<code>', 'Gym 2', '[]');` and B sees the change.
+3. As B: `update_shared_playlist` and `stop_sharing_playlist` on A's code fail with `not_owner`; `select * from shared_playlists;` fails with permission denied.
+4. As A: `select stop_sharing_playlist('<code>');` then B's `get_shared_playlist` returns no rows. Stopping again is fine.
+5. A snapshot over 512 kB fails with `too_large`.
+6. Deleting account A removes A's shares.
+
 ## 2. Email sign-in settings
 
 1. Under Authentication, Sign In / Providers, in the user sign-up settings: allow new users to sign up, and turn Confirm email on.
