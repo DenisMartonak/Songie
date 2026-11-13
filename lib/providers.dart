@@ -49,6 +49,7 @@ import 'remote/remote_channel.dart';
 import 'remote/remote_controller.dart';
 import 'remote/remote_host.dart';
 import 'remote/remote_protocol.dart';
+import 'friends/friends_backend.dart';
 import 'room/room_backend.dart';
 import 'room/room_channel.dart';
 import 'room/room_service.dart';
@@ -770,6 +771,12 @@ final playerInputsProvider = Provider<PlayerInputs>(
     ref.watch(playerServiceProvider),
     room: () => ref.read(roomServiceProvider).guestView,
   ),
+);
+
+/// Friendships and profiles behind Supabase (lazy like
+/// [roomBackendProvider]).
+final friendsBackendProvider = Provider<FriendsBackend>(
+  (ref) => SupabaseFriendsBackend(() => Supabase.instance.client),
 );
 
 /// The room tables behind Supabase. Not overridden in `main()`: the client
