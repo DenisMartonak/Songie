@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- GitHub Pages serves this page for every unknown address, which is how
-       room links (/Songie/r/<CODE>) reach it. The base keeps assets working
+       room links (/Songie/r/<CODE>) and shared playlist links
+       (/Songie/p/<CODE>) reach it. The base keeps assets working
        at any depth. -->
   <base href="/Songie/">
   <title>You’ve been invited to listen together · Songies</title>
@@ -108,10 +109,23 @@
         </div>
       </section>
 
+      <section data-view="playlist" hidden>
+        <div class="invite-body">
+          <h1>Someone shared a playlist with you</h1>
+          <p>Songies should ask to open. If it doesn’t, use the button.</p>
+          <a class="btn" href="./" data-open-playlist>Open Songies</a>
+          <div class="get">
+            <p>Don’t have Songies yet? Following a playlist needs the app and a Songies account.</p>
+            <a class="btn btn-quiet" href="https://github.com/DenisMartonak/Songie/releases/latest" data-download><span data-download-label>All downloads</span></a>
+          </div>
+        </div>
+      </section>
+
       <section data-view="bad-code" hidden>
         <div class="invite-body">
           <h1>This link doesn’t look right</h1>
-          <p>Room links end in a code like ABCD-2345. Ask for the link again, or type the code into Songies.</p>
+          <p data-bad-room>Room links end in a code like ABCD-2345. Ask for the link again, or type the code into Songies.</p>
+          <p data-bad-playlist hidden>Playlist links end in a 12-letter code. Ask for the link again.</p>
           <a class="btn btn-quiet" href="./">Go to the Songies home page</a>
         </div>
       </section>
@@ -130,23 +144,43 @@
     import { mountMark } from './assets/js/mark.js';
     import { upgradeDownloadLinks, detectPlatform } from './assets/js/download.js';
     import { roomCodeFromPath, formatRoomCode, appLink, shouldAutoOpen } from './assets/js/room.js';
+    import { playlistCodeFromPath, playlistAppLink } from './assets/js/playlist.js';
 
     // ?preview=<path> lets tool/website_preview.sh show this page locally.
     const path = new URLSearchParams(location.search).get('preview') ?? location.pathname;
     const code = roomCodeFromPath(path);
+    const playlistCode = code ? null : playlistCodeFromPath(path);
     const segs = path.split('/').filter(Boolean);
-    const view = code ? 'room' : segs.includes('r') ? 'bad-code' : 'not-found';
+    const badPlaylist = !code && !playlistCode && segs.includes('p');
+    const view = code
+      ? 'room'
+      : playlistCode
+        ? 'playlist'
+        : segs.includes('r') || badPlaylist
+          ? 'bad-code'
+          : 'not-found';
     document.querySelector(`[data-view="${view}"]`).hidden = false;
-    mountMark(document.querySelector('[data-mark]'), { rings: view === 'room' });
+    if (badPlaylist) {
+      document.querySelector('[data-bad-room]').hidden = true;
+      document.querySelector('[data-bad-playlist]').hidden = false;
+    }
+    mountMark(document.querySelector('[data-mark]'), { rings: view === 'room' || view === 'playlist' });
 
+    // The app address to open, and a per-link key so it opens once per tab.
+    const link = code ? appLink(code) : playlistCode ? playlistAppLink(playlistCode) : null;
+    if (playlistCode) {
+      document.title = 'Someone shared a playlist with you · Songies';
+      document.querySelector('[data-open-playlist]').href = link;
+    }
     if (code) {
-      const link = appLink(code);
       document.querySelector('[data-code]').textContent = formatRoomCode(code);
       document.querySelector('[data-open]').href = link;
+    }
+    if (link) {
       upgradeDownloadLinks();
       // Ask the browser to open Songies straight away, once per tab; the
       // button is the fallback when the prompt is dismissed or blocked.
-      const key = `songies-opened:${code}`;
+      const key = `songies-opened:${code ?? playlistCode}`;
       let opened = false;
       try {
         opened = sessionStorage.getItem(key) === '1';

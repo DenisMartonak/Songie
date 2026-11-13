@@ -84,6 +84,7 @@ import 'youtube/android_ytdlp_runner.dart';
 import 'youtube/desktop_ytdlp_runner.dart';
 import 'youtube/share_intents.dart';
 import 'room/linux_link_registration.dart';
+import 'playlists/playlist_links.dart' show PlaylistLinkListener;
 import 'room/room_link_listener.dart';
 
 import 'package:app_links/app_links.dart';
@@ -496,10 +497,18 @@ Future<ProviderContainer> runSongies({
       showImportDialog(context, initialLink: link, router: router);
     });
 
+    // One link stream for both listeners (a broadcast stream: both see the
+    // link the app was opened with).
+    final links = AppLinks().uriLinkStream;
     // Room links (songies://room/<code>) hand the code to the room page.
     RoomLinkListener(
-      AppLinks().uriLinkStream,
+      links,
       (code) => container.read(roomInviteProvider.notifier).set(code),
+    );
+    // Shared playlist links (songies://playlist/<code>).
+    PlaylistLinkListener(
+      links,
+      (code) => container.read(playlistInviteProvider.notifier).set(code),
     );
   });
 

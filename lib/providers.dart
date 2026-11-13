@@ -933,6 +933,21 @@ final roomInviteProvider = NotifierProvider<RoomInvite, String?>(
   RoomInvite.new,
 );
 
+/// A shared playlist's code from an opened link, until the app has offered
+/// to follow or copy it.
+class PlaylistInvite extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String code) => state = code;
+
+  void clear() => state = null;
+}
+
+final playlistInviteProvider = NotifierProvider<PlaylistInvite, String?>(
+  PlaylistInvite.new,
+);
+
 /// Starts controlling [device]: pauses this device's playback first, so the
 /// two don't play at once.
 Future<void> selectRemote(

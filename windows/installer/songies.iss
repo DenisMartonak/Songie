@@ -74,7 +74,8 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Registry]
-; songies://room/<code> links start Songies (or reach the running one).
+; songies://room/<code> and songies://playlist/<code> links start Songies (or
+; reach the running one).
 Root: HKCU; Subkey: "Software\Classes\songies"; ValueType: string; ValueName: ""; ValueData: "URL:Songies"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\songies"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
 Root: HKCU; Subkey: "Software\Classes\songies\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""

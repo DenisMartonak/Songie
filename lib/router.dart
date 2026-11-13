@@ -52,10 +52,7 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
                 state,
                 const PageSurface(child: HomePage()),
               ),
-              routes: [
-                _playlistRoute(),
-                ..._ytmRoutes(),
-              ],
+              routes: [_playlistRoute(), ..._ytmRoutes()],
             ),
             // Your profile: like Settings, inside the shell in Home's branch.
             GoRoute(

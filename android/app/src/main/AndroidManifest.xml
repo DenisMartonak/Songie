@@ -55,6 +55,13 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="songies" android:host="room"/>
             </intent-filter>
+            <!-- Shared playlist links: songies://playlist/<code>. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="songies" android:host="playlist"/>
+            </intent-filter>
         </activity>
         <!-- audio_service: media session, notification and headset buttons. -->
         <service android:name="com.ryanheise.audioservice.AudioService"
