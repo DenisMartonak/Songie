@@ -27,14 +27,27 @@ abstract class RoomChannel {
 }
 
 /// [RoomChannel] on Supabase Realtime. Thin, like
-/// `SupabaseCloudRemote.changes` (only [onStatus] and [join]'s ordering are
-/// unit-tested); reconnecting is the client's own. While this device is off
-/// the channel it reports no one present.
+/// `SupabaseCloudRemote.changes` (only [events], [onStatus] and [join]'s
+/// ordering are unit-tested); reconnecting is the client's own. While this
+/// device is off the channel it reports no one present.
 class SupabaseRoomChannel implements RoomChannel {
   SupabaseRoomChannel(this._client, this._roomId);
 
   final SupabaseClient Function() _client;
   final String _roomId;
+
+  /// The broadcast events this channel listens for: one per [RoomMessage]
+  /// kind ([RoomMessage.event]). A kind missing here never reaches the other
+  /// devices.
+  static const List<String> events = [
+    'state',
+    'beat',
+    'roles',
+    'request',
+    'hello',
+    'kick',
+    'end',
+  ];
 
   RealtimeChannel? _channel;
   RoomPresence? _me;
@@ -68,14 +81,7 @@ class SupabaseRoomChannel implements RoomChannel {
     );
     _channel = channel;
     channel.onPresenceSync((_) => _onSync(channel));
-    for (final event in const [
-      'state',
-      'roles',
-      'request',
-      'hello',
-      'kick',
-      'end',
-    ]) {
+    for (final event in events) {
       channel.onBroadcast(
         event: event,
         callback: (payload) => _onBroadcast(channel, event, payload),
