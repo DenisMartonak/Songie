@@ -19,7 +19,6 @@ import '../bug_report/bug_report_form.dart';
 import '../update/update_dialog.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
-import '../shell/adaptive_shell.dart' show phoneBreakpoint;
 import 'storage_usage.dart';
 import 'discord_settings.dart' show discordSupportedProvider;
 import 'settings_categories.dart';
@@ -63,46 +62,63 @@ class SettingsPage extends ConsumerWidget {
         ? category
         : (category == null ? null : SettingsCategory.library);
     final bottom = MediaQuery.paddingOf(context).bottom;
-    final wide = MediaQuery.sizeOf(context).width >= phoneBreakpoint;
+    return LayoutBuilder(
+      builder: (context, constraints) =>
+          constraints.maxWidth >= kSettingsTwoPaneWidth
+          ? _twoPane(context, visible, shown, bottom)
+          : _onePane(context, visible, shown, bottom),
+    );
+  }
 
-    if (wide) {
-      final current = shown ?? SettingsCategory.library;
-      return SafeArea(
-        bottom: false,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: 280,
-              child: ListView(
-                padding: EdgeInsets.only(bottom: bottom + 16),
-                children: [
-                  const _Header('Settings', back: false),
-                  for (final c in visible)
-                    _CategoryTile(
-                      c,
-                      selected: c == current,
-                      onTap: () => context.go('/settings/${c.slug}'),
-                    ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                key: ValueKey(current),
-                padding: EdgeInsets.only(bottom: bottom + 16),
-                children: [
-                  _Header(current.title, back: false),
-                  ...current.sections,
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
+  Widget _twoPane(
+    BuildContext context,
+    List<SettingsCategory> visible,
+    SettingsCategory? shown,
+    double bottom,
+  ) {
+    final current = shown ?? SettingsCategory.library;
     return SafeArea(
+      bottom: false,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 280,
+            child: ListView(
+              padding: EdgeInsets.only(bottom: bottom + 16),
+              children: [
+                const _Header('Settings', back: false),
+                for (final c in visible)
+                  _CategoryTile(
+                    c,
+                    selected: c == current,
+                    onTap: () => context.go('/settings/${c.slug}'),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              key: ValueKey(current),
+              padding: EdgeInsets.only(bottom: bottom + 16),
+              children: [
+                _Header(current.title, back: false),
+                _PageTitle(current.title, child: _Sections(current)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _onePane(
+    BuildContext context,
+    List<SettingsCategory> visible,
+    SettingsCategory? shown,
+    double bottom,
+  ) {
+    final list = SafeArea(
       bottom: false,
       child: ListView(
         key: ValueKey(shown),
@@ -117,10 +133,54 @@ class SettingsPage extends ConsumerWidget {
                     onTap: () => context.push('/settings/${c.slug}'),
                   ),
               ]
-            : [_Header(shown.title, back: true), ...shown.sections],
+            : [
+                _Header(shown.title, back: true),
+                _PageTitle(shown.title, child: _Sections(shown)),
+              ],
       ),
     );
+    if (shown == null) return list;
+    // Opened directly (a link, or a wide layout narrowed), a category page is
+    // alone in its stack: Back goes to the list instead of leaving the app.
+    return PopScope(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/settings');
+      },
+      child: list,
+    );
   }
+}
+
+/// The width Settings needs to show the category list beside a category:
+/// the 280 px list and room for the category's rows.
+const double kSettingsTwoPaneWidth = 680;
+
+/// A category's sections, top to bottom.
+class _Sections extends StatelessWidget {
+  const _Sections(this.category);
+
+  final SettingsCategory category;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: category.sections,
+  );
+}
+
+/// The title of the Settings page around its sections, so a section titled
+/// the same as the page doesn't repeat it.
+class _PageTitle extends InheritedWidget {
+  const _PageTitle(this.title, {required super.child});
+
+  final String title;
+
+  static String? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_PageTitle>()?.title;
+
+  @override
+  bool updateShouldNotify(_PageTitle old) => title != old.title;
 }
 
 /// A page title, with a Back arrow when [back]. Back pops, or goes to the
@@ -216,13 +276,16 @@ class SettingsSectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
+    // The page already says it ("Privacy" on Privacy): keep only the action.
+    final repeated = _PageTitle.of(context) == title;
+    if (repeated && trailing == null) return const SizedBox(height: 8);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 8, 4),
       child: Row(
         children: [
           Expanded(
             child: Text(
-              title,
+              repeated ? '' : title,
               style: TextStyle(
                 color: colors.text,
                 fontSize: 18,

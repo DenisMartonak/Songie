@@ -42,7 +42,7 @@ class Sidebar extends ConsumerWidget {
     final playlists = ref.watch(playlistsProvider).value ?? const [];
     final current = shell.currentIndex;
     // Settings and your profile share Home's branch but are not Home.
-    final onSettings = path == '/settings';
+    final onSettings = path == '/settings' || path.startsWith('/settings/');
     final homeSelected = current == 0 && !onSettings && path != '/profile';
     final playlistSelected = playlists.indexWhere(
       (p) => path.endsWith('/playlist/${p.id}'),

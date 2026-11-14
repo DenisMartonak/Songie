@@ -226,6 +226,81 @@ void main() {
       expect(find.byTooltip('Back'), findsNothing);
     });
 
+    uiTest('Android Back on a category opened directly goes to the list', (
+      tester,
+    ) async {
+      final router = await pumpAt(
+        tester,
+        const Size(400, 900),
+        location: '/settings/about',
+      );
+      await tester.binding.handlePopRoute();
+      await settle(tester);
+      expect(router.state.uri.path, '/settings');
+      expect(tile('about'), findsOneWidget);
+    });
+
+    uiTest('a page title is not repeated by its section title', (tester) async {
+      await pumpAt(tester, const Size(400, 900), location: '/settings/privacy');
+      expect(find.text('Privacy'), findsOneWidget);
+      expect(find.text('Crash reports'), findsOneWidget);
+    });
+
+    uiTest('a wide window whose Settings area is narrow uses the phone list', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1000, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        h.app(
+          initialLocation: '/settings',
+          extraOverrides: [
+            storageUsageProvider.overrideWith(
+              (ref) async => const StorageUsage(artBytes: 0, databaseBytes: 0),
+            ),
+          ],
+          routes: [
+            // A sidebar and the lyrics panel leave Settings 500 px.
+            GoRoute(
+              path: '/settings',
+              builder: (_, _) => const Scaffold(
+                body: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(width: 500, child: SettingsPage()),
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/settings/:category',
+              builder: (_, s) => Scaffold(
+                body: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: 500,
+                    child: SettingsPage(
+                      category: settingsCategoryFromSlug(
+                        s.pathParameters['category'],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      await settle(tester);
+      final router = GoRouter.of(tester.element(find.byType(SettingsPage)));
+      expect(find.byKey(const Key('settings.addFolder')), findsNothing);
+      await tester.tap(tile('about'));
+      await settle(tester);
+      expect(router.state.uri.path, '/settings/about');
+      expect(tile('library'), findsNothing);
+      expect(find.byTooltip('Back'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     uiTest('an unknown category shows Library', (tester) async {
       await pumpAt(tester, const Size(1000, 900), location: '/settings/nope');
       expect(find.byKey(const Key('settings.addFolder')), findsOneWidget);

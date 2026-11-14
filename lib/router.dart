@@ -136,9 +136,15 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
                     ),
                   ),
                 );
-                return MediaQuery.sizeOf(context).width >= phoneBreakpoint
-                    ? NoTransitionPage<void>(key: state.pageKey, child: page)
-                    : sharedAxisPage(context, state, page);
+                return sharedAxisPage(
+                  context,
+                  state,
+                  page,
+                  // Beside the list, a category swaps in place. One page type
+                  // either way, so a resize updates the page instead of
+                  // replacing it.
+                  still: (width) => width >= kSettingsTwoPaneWidth,
+                );
               },
             ),
           ],
@@ -225,23 +231,31 @@ GoRoute _ytmRoute(String kind, Widget Function(String id) page) => GoRoute(
 Page<void> sharedAxisPage(
   BuildContext context,
   GoRouterState state,
-  Widget child,
-) {
+  Widget child, {
+  bool Function(double width)? still,
+}) {
   final duration = Motion.of(context).emphasized;
   return CustomTransitionPage<void>(
     key: state.pageKey,
     transitionDuration: duration,
     reverseTransitionDuration: duration,
     child: child,
-    transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-        SharedAxisTransition(
-          animation: animation,
-          secondaryAnimation: secondaryAnimation,
-          transitionType: SharedAxisTransitionType.horizontal,
-          // The page surface paints the background; don't cover the shell.
-          fillColor: Colors.transparent,
-          child: child,
-        ),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      Widget slide(bool still) => SharedAxisTransition(
+        // Still: shown as if the slide were over, with the same widgets, so
+        // a resize keeps the page's state.
+        animation: still ? kAlwaysCompleteAnimation : animation,
+        secondaryAnimation: still
+            ? kAlwaysDismissedAnimation
+            : secondaryAnimation,
+        transitionType: SharedAxisTransitionType.horizontal,
+        // The page surface paints the background; don't cover the shell.
+        fillColor: Colors.transparent,
+        child: child,
+      );
+      if (still == null) return slide(false);
+      return LayoutBuilder(builder: (context, c) => slide(still(c.maxWidth)));
+    },
   );
 }
 

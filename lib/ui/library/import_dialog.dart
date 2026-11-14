@@ -118,7 +118,7 @@ class _ImportDialogState extends ConsumerState<ImportDialog> {
 
   void _openSettings() {
     Navigator.of(context).pop();
-    widget.router.go('/settings');
+    widget.router.go('/settings/youtube');
   }
 
   @override

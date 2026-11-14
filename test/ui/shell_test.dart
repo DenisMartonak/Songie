@@ -627,6 +627,17 @@ void main() {
       expect(homeMarked(), isFalse);
     });
 
+    testWidgets('on a Settings category the sidebar marks Settings, not '
+        'Home', (tester) async {
+      await pumpApp(tester, desktop);
+      bool marked(String key) =>
+          (tester.widget(find.byKey(Key(key))) as dynamic).selected as bool;
+      router.go('/settings/about');
+      await tester.pumpAndSettle();
+      expect(marked('sidebar.home'), isFalse);
+      expect(marked('sidebar.settings'), isTrue);
+    });
+
     testWidgets(
       'typing in the title-bar search sets the query and opens Search',
       (tester) async {

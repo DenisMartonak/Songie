@@ -168,6 +168,17 @@ void main() {
       tester.widget<SettingsPage>(find.byType(SettingsPage)).category,
       SettingsCategory.about,
     );
+
+    // Crossing the phone width on a category updates the page in place.
+    final before = ModalRoute.of(tester.element(find.byType(SettingsPage)));
+    tester.view.physicalSize = const Size(1000, 800);
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(400, 800);
+    await tester.pumpAndSettle();
+    expect(
+      ModalRoute.of(tester.element(find.byType(SettingsPage))),
+      same(before),
+    );
   });
 
   testWidgets('/ytm/album/MPREb_x opens the album page inside the shell, and '

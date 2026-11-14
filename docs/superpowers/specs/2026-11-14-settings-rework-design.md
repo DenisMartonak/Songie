@@ -31,23 +31,28 @@ and links can't point at a category.
   | Discord    | `/settings/discord`    | Discord status |
   | About      | `/settings/about`      | version, device ID, report a bug, check for updates, export log |
 
-- **Phone (narrower than 720 px):**
+- **One pane (Settings narrower than 680 px: phones, or a narrow desktop
+  window once the sidebar and lyrics panel take their room):**
   - `/settings` lists the categories, each with an icon and a short line
     of what's inside.
-  - Tapping a category pushes its page, which has a Back arrow.
-- **Wide (720 px or more):**
+  - Tapping a category pushes its page, which has a Back arrow. Back, and
+    Android's Back, return to the list even when the page was opened
+    directly.
+- **Two panes (Settings 680 px wide or more), the builder's call after
+  review:**
   - The list sits on the left, 280 px wide, and the chosen category shows
     on the right.
   - Picking a category swaps the right side, so pages don't stack.
   - Plain `/settings` shows Library, highlighted in the list.
 - **Category pages** reuse the existing section widgets unchanged. Their
   section titles stay as subheadings, for example "Music folders" and
-  "Storage" on Library.
+  "Storage" on Library. A section titled the same as its page ("Privacy"
+  on Privacy) doesn't repeat the title.
 - **Unchanged:**
   - `/settings/themes` and the theme editor.
   - Every setting's behavior.
-  - The importer's link to `/settings`, which shows Library on wide
-    windows and the list on phones.
+- **The importer's "Open Settings" link** for a missing yt-dlp opens
+  YouTube (the builder's call after review).
 - **An unknown category** in the address shows Library.
 
 ## Non-goals

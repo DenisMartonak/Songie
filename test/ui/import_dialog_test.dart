@@ -42,8 +42,9 @@ void main() {
             ],
           ),
           GoRoute(
-            path: '/settings',
-            builder: (_, _) => const Scaffold(body: Text('Settings stub')),
+            path: '/settings/youtube',
+            builder: (_, _) =>
+                const Scaffold(body: Text('YouTube settings stub')),
           ),
         ],
       ),
@@ -201,7 +202,7 @@ void main() {
     await tester.tap(find.text('Open Settings'));
     await settle(tester);
     expect(find.byType(AlertDialog), findsNothing);
-    expect(find.text('Settings stub'), findsOneWidget);
+    expect(find.text('YouTube settings stub'), findsOneWidget);
   });
 
   uiTest('a throwing import does not leave the dialog busy', (tester) async {
