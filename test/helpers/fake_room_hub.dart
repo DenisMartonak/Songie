@@ -6,7 +6,8 @@ import 'package:songies/room/room_protocol.dart';
 
 /// An in-memory `room:<id>` channel for tests: one [channelFor] per
 /// device. Sends reach every other joined, connected device a microtask
-/// later, after a JSON round trip (so tests exercise the protocol).
+/// later, after a JSON round trip (so tests exercise the protocol). Like the
+/// real channel, only the events in [SupabaseRoomChannel.events] arrive.
 class FakeRoomHub {
   final _channels = <String, _FakeChannel>{};
   final _dropped = <String>{};
@@ -52,6 +53,7 @@ class FakeRoomHub {
     if (!_online(from)) return;
     sent.add(m);
     if (lose?.call(m) ?? false) return;
+    if (!SupabaseRoomChannel.events.contains(m.event)) return;
     final wire = jsonDecode(jsonEncode(m.toJson()));
     final decoded = RoomMessage.decode(m.event, wire);
     if (decoded == null) return;
