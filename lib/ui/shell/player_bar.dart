@@ -22,11 +22,12 @@ import '../widgets/artwork.dart';
 import '../widgets/favorite_star.dart';
 import '../widgets/song_menu.dart';
 import '../widgets/steady_track_shape.dart';
+import 'right_pane_state.dart';
 
 /// The desktop's bottom player bar, 72 px high: the current track on the left;
 /// shuffle, previous, play/pause, next, repeat and a scrubber in the middle;
-/// lyrics, queue and volume on the right. The background is the surface
-/// blended with the theme's tint at 40 %.
+/// lyrics, queue, devices and volume on the right. The background is the
+/// surface blended with the theme's tint at 40 %.
 class PlayerBar extends ConsumerWidget {
   const PlayerBar({super.key});
 
@@ -96,18 +97,37 @@ class _NowPlaying extends ConsumerWidget {
         track,
         colors,
         linkEnabled: ref.watch(remoteLinkProvider).value == null,
+        openNowPlaying: () => openNowPlaying(GoRouter.of(context)),
       ),
     );
   }
 
-  Widget _row(Track track, SongiesColors colors, {required bool linkEnabled}) {
+  Widget _row(
+    Track track,
+    SongiesColors colors, {
+    required bool linkEnabled,
+    required VoidCallback openNowPlaying,
+  }) {
+    // The cover and the title open Now Playing.
+    Widget opener(Key key, Widget child) => MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(key: key, onTap: openNowPlaying, child: child),
+    );
     return Row(
       children: [
-        Hero(
-          tag: nowPlayingArtHeroTag,
-          // Stays visible under the desktop panel after the flight.
-          placeholderBuilder: (_, _, child) => child,
-          child: Artwork(track.artworkRef, size: 46, radius: 6, seed: track.id),
+        opener(
+          const Key('playerBar.cover'),
+          Hero(
+            tag: nowPlayingArtHeroTag,
+            // Stays visible under the desktop panel after the flight.
+            placeholderBuilder: (_, _, child) => child,
+            child: Artwork(
+              track.artworkRef,
+              size: 46,
+              radius: 6,
+              seed: track.id,
+            ),
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -120,14 +140,17 @@ class _NowPlaying extends ConsumerWidget {
               Row(
                 children: [
                   Flexible(
-                    child: Text(
-                      track.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colors.text,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                    child: opener(
+                      const Key('playerBar.title'),
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.text,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -411,7 +434,10 @@ class _QueueAndVolume extends ConsumerWidget {
     final volume = ref.watch(
       playerViewStateProvider.select((s) => s.value?.volume ?? 1.0),
     );
-    final lyricsOpen = ref.watch(lyricsPanelOpenProvider);
+    final open = ref.watch(rightPaneOpenProvider) == true;
+    final content = ref.watch(rightPaneContentProvider);
+    final lyricsShown = open && content == RightPaneContent.lyrics;
+    final queueShown = open && content == RightPaneContent.queue;
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -419,22 +445,25 @@ class _QueueAndVolume extends ConsumerWidget {
           key: const Key('playerBar.lyrics'),
           tooltip: 'Lyrics',
           iconSize: 20,
-          color: lyricsOpen ? colors.accent : colors.mutedText,
-          isSelected: lyricsOpen,
+          color: lyricsShown ? colors.accent : colors.mutedText,
+          isSelected: lyricsShown,
           icon: const Icon(Icons.lyrics_outlined),
           selectedIcon: const Icon(Icons.lyrics),
-          onPressed: () => ref.read(lyricsPanelOpenProvider.notifier).toggle(),
+          onPressed: () =>
+              ref.read(rightPaneProvider).toggle(RightPaneContent.lyrics),
         ),
-        const DevicesButton(),
-        const RoomButton(),
         IconButton(
           key: const Key('playerBar.queue'),
           tooltip: 'Queue',
           iconSize: 20,
-          color: colors.mutedText,
+          color: queueShown ? colors.accent : colors.mutedText,
+          isSelected: queueShown,
           icon: const Icon(Icons.queue_music_rounded),
-          onPressed: () => openNowPlaying(GoRouter.of(context)),
+          selectedIcon: const Icon(Icons.queue_music_rounded),
+          onPressed: () =>
+              ref.read(rightPaneProvider).toggle(RightPaneContent.queue),
         ),
+        const DevicesButton(),
         // The volume gives way first in narrow desktop windows (a signed-in
         // bar has four buttons here): its icon, then the slider itself.
         Flexible(

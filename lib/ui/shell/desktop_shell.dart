@@ -9,10 +9,11 @@ import '../../theme/app_theme.dart';
 import '../account/avatar.dart';
 import '../downloads/downloads_banner.dart';
 import '../island/island_host.dart';
-import '../lyrics/lyrics_panel.dart';
 import 'go_tab.dart';
 import 'player_bar.dart';
 import 'player_error_islands.dart';
+import 'right_pane.dart';
+import 'right_pane_state.dart';
 import 'runtime_prompt.dart';
 import 'sidebar.dart';
 import 'title_bar.dart';
@@ -60,9 +61,9 @@ bool _isTyping() {
       context.findAncestorWidgetOfExactType<EditableText>() != null;
 }
 
-/// Desktop layout: title bar on top, sidebar, the current page and (when
-/// open) the lyrics panel in the middle, the player bar below. Hosts the
-/// global keyboard shortcuts.
+/// Desktop layout: title bar on top, sidebar, the current page and the right
+/// pane in the middle, the player bar below. Hosts the global keyboard
+/// shortcuts.
 class DesktopShell extends ConsumerStatefulWidget {
   const DesktopShell(this.shell, {super.key});
 
@@ -81,14 +82,14 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   /// Holds focus when no text field does, so shortcuts always have a target.
   final _rootFocus = FocusNode(debugLabel: 'shell root');
 
-  /// The user's own choice; the lyrics panel can hold the sidebar collapsed
+  /// The user's own choice; the right pane can hold the sidebar collapsed
   /// for a while without changing it.
   bool _sidebarCollapsed = false;
 
-  /// Below this width an open lyrics panel holds the sidebar collapsed.
+  /// Below this width an open right pane holds the sidebar collapsed.
   static const _roomyWidth = 1000.0;
 
-  /// The narrowest the main pane gets beside the panel; narrower, the panel
+  /// The narrowest the main pane gets beside the right pane; narrower, it
   /// lies over the right of the content instead.
   static const _minMainWidth = 360.0;
 
@@ -167,7 +168,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
     // Through the room while a guest: the role decides.
     final player = ref.read(playerInputsProvider);
     final hasTitleBar = ref.watch(hasCustomTitleBarProvider);
-    final panelOpen = ref.watch(lyricsPanelOpenProvider);
+    final paneOpen = ref.watch(rightPaneOpenProvider) == true;
     // Keep the field in step when something else sets the query.
     ref.listen(searchQueryProvider, (_, query) {
       if (_searchController.text != query) _searchController.text = query;
@@ -219,18 +220,18 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       final width = constraints.maxWidth;
-                      // On a narrow window the open panel holds the sidebar
+                      // On a narrow window the open pane holds the sidebar
                       // collapsed; the user's own choice comes back when it
                       // closes or the window widens.
-                      final squeezed = panelOpen && width < _roomyWidth;
+                      final squeezed = paneOpen && width < _roomyWidth;
                       final collapsed = _sidebarCollapsed || squeezed;
                       final sidebarWidth = collapsed
                           ? Sidebar.collapsedWidth
                           : Sidebar.expandedWidth;
-                      // Main pane's right gap, then the panel and its gap.
+                      // Main pane's right gap, then the right pane and its gap.
                       final mainBeside =
-                          width - sidebarWidth - 8 - (LyricsPanel.width + 8);
-                      final overlay = panelOpen && mainBeside < _minMainWidth;
+                          width - sidebarWidth - 8 - (RightPane.width + 8);
+                      final overlay = paneOpen && mainBeside < _minMainWidth;
                       final main = Padding(
                         padding: const EdgeInsets.only(right: 8, bottom: 8),
                         child: ClipRRect(
@@ -278,7 +279,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                           ),
                           Expanded(
                             child: overlay
-                                // Too narrow to share: the panel lies over
+                                // Too narrow to share: the pane lies over
                                 // the right of the content.
                                 ? Stack(
                                     fit: StackFit.expand,
@@ -288,7 +289,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                                         top: 0,
                                         right: 0,
                                         bottom: 0,
-                                        child: LyricsPanel(),
+                                        child: RightPane(),
                                       ),
                                     ],
                                   )
@@ -296,7 +297,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                           ),
                           // Beside the main pane, which gives it room as it
                           // opens.
-                          if (!overlay) const LyricsPanel(),
+                          if (!overlay) const RightPane(),
                         ],
                       );
                     },

@@ -142,7 +142,33 @@ void main() {
     for (final k in ['shuffle', 'previous', 'next', 'repeat']) {
       expect(enabled(tester, 'playerBar.$k'), isTrue, reason: k);
     }
-    expect(find.byKey(const Key('room.button')), findsOneWidget);
+    await rig.dispose(tester);
+  });
+
+  uiTest('the player bar has Lyrics, Queue and Devices, and no room button', (
+    tester,
+  ) async {
+    await pump(tester);
+    await tester.runAsync(() => h.player.playQueue([roomTrack('a')]));
+    await flush(tester);
+    final bar = find.byType(PlayerBar);
+    double x(String key) => tester.getCenter(find.byKey(Key(key))).dx;
+    for (final k in ['playerBar.lyrics', 'playerBar.queue', 'devices.button']) {
+      expect(
+        find.descendant(of: bar, matching: find.byKey(Key(k))),
+        findsOneWidget,
+        reason: k,
+      );
+    }
+    expect(x('playerBar.lyrics'), lessThan(x('playerBar.queue')));
+    expect(x('playerBar.queue'), lessThan(x('devices.button')));
+    expect(x('devices.button'), lessThan(x('playerBar.volume')));
+    expect(find.byKey(const Key('room.button')), findsNothing);
+    // The Queue button stays on this page; Now Playing opens from the cover.
+    await tester.tap(find.byKey(const Key('playerBar.queue')));
+    await flush(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('Local song'), findsOneWidget);
     await rig.dispose(tester);
   });
 
@@ -163,6 +189,19 @@ void main() {
     expect(await cursorOver(tester, play), SystemMouseCursors.click);
     await rig.dispose(tester);
   });
+
+  for (final k in ['playerBar.cover', 'playerBar.title']) {
+    uiTest('$k shows the hand cursor (it opens Now Playing)', (tester) async {
+      await pump(tester);
+      await tester.runAsync(() => h.player.playQueue([roomTrack('a')]));
+      await flush(tester);
+      expect(
+        await cursorOver(tester, find.byKey(Key(k))),
+        SystemMouseCursors.click,
+      );
+      await rig.dispose(tester);
+    });
+  }
 
   uiTest('an inert play button keeps the arrow', (tester) async {
     await pump(tester);
@@ -375,7 +414,7 @@ void main() {
       await pump(tester, width: width);
       await tester.runAsync(() => h.player.playQueue([roomTrack('a')]));
       await flush(tester);
-      expect(find.byKey(const Key('room.button')), findsOneWidget);
+      expect(find.byKey(const Key('playerBar.queue')), findsOneWidget);
       expect(find.byKey(const Key('devices.button')), findsOneWidget);
       expect(tester.takeException(), isNull);
       await rig.joinAs(tester, RoomRole.full);

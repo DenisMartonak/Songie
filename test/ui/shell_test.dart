@@ -830,7 +830,16 @@ void main() {
       await tester.tap(find.byKey(const Key('playerBar.repeat')));
       expect(player.state.repeat, RepeatMode.all);
 
-      await tester.tap(find.byKey(const Key('playerBar.queue')));
+      // The cover and the title open Now Playing (the Queue button shows
+      // the queue in the right pane instead: right_pane_test).
+      final home = router.state.uri.path;
+      await tester.tap(find.byKey(const Key('playerBar.cover')));
+      await tester.pumpAndSettle();
+      expect(router.state.uri.path, nowPlayingLocation);
+      router.pop();
+      await tester.pumpAndSettle();
+      expect(router.state.uri.path, home);
+      await tester.tap(find.byKey(const Key('playerBar.title')));
       await tester.pumpAndSettle();
       expect(router.state.uri.path, nowPlayingLocation);
     });
