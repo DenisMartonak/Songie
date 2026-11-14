@@ -5,6 +5,7 @@ import 'package:songies/room/room_protocol.dart';
 import 'package:songies/room/room_service.dart';
 import 'package:songies/ui/room/room_button.dart';
 import 'package:songies/ui/room/room_islands.dart';
+import 'package:songies/ui/room/room_panel.dart';
 
 import '../helpers/room_rig.dart';
 import '../helpers/ui_harness.dart';
@@ -44,6 +45,33 @@ void main() {
     await flush(tester);
   }
 
+  Future<void> pumpEmbedded(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1000, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      h.app(
+        initialLocation: '/',
+        extraOverrides: rig.overrides,
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => Scaffold(
+              body: RoomIslands(
+                child: ListView(children: [RoomPanel(embedded: true)]),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/profile',
+            builder: (_, _) => const Scaffold(body: Text('Profile page')),
+          ),
+        ],
+      ),
+    );
+    await flush(tester);
+  }
+
   Future<void> openPanel(WidgetTester tester) async {
     await tester.tap(find.byKey(const Key('room.button')));
     await tester.pumpAndSettle();
@@ -57,6 +85,27 @@ void main() {
     expect(find.text('Join a room'), findsOneWidget);
     await rig.dispose(tester);
   });
+
+  uiTest('embedded in a list: idle shows Start a room and Join a room', (
+    tester,
+  ) async {
+    await pumpEmbedded(tester);
+    expect(find.text('Start a room'), findsOneWidget);
+    expect(find.text('Join a room'), findsOneWidget);
+    await rig.dispose(tester);
+  });
+
+  uiTest(
+    'embedded, signed out: Sign in goes to /profile and nothing is popped',
+    (tester) async {
+      rig.profile = null;
+      await pumpEmbedded(tester);
+      await tester.tap(find.text('Sign in'));
+      await tester.pumpAndSettle();
+      expect(find.text('Profile page'), findsOneWidget);
+      await rig.dispose(tester);
+    },
+  );
 
   uiTest('signed out: the panel asks to sign in', (tester) async {
     rig.profile = null;

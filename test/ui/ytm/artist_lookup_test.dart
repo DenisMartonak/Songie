@@ -54,17 +54,20 @@ void main() {
     expect(ytm.radioCalls, isEmpty);
   });
 
-  test('forTrack of a yt track returns the first artist with a browseId', () async {
-    ytm.radioAnswer = Ok(
-      _radio(const [
-        YtmArtistRef(name: 'A'),
-        YtmArtistRef(browseId: 'UC2', name: 'B'),
-        YtmArtistRef(browseId: 'UC3', name: 'C'),
-      ]),
-    );
-    expect(await lookup.forTrack(_yt()), 'UC2');
-    expect(ytm.radioCalls, ['vy1']);
-  });
+  test(
+    'forTrack of a yt track returns the first artist with a browseId',
+    () async {
+      ytm.radioAnswer = Ok(
+        _radio(const [
+          YtmArtistRef(name: 'A'),
+          YtmArtistRef(browseId: 'UC2', name: 'B'),
+          YtmArtistRef(browseId: 'UC3', name: 'C'),
+        ]),
+      );
+      expect(await lookup.forTrack(_yt()), 'UC2');
+      expect(ytm.radioCalls, ['vy1']);
+    },
+  );
 
   test('forTrack caches: two calls, one radio request', () async {
     ytm.radioAnswer = Ok(_radio(const []));
@@ -77,9 +80,7 @@ void main() {
     final gate = ytm.radioGate = Completer();
     final a = lookup.forTrack(_yt());
     final b = lookup.forTrack(_yt());
-    gate.complete(
-      Ok(_radio(const [YtmArtistRef(browseId: 'UC9', name: 'A')])),
-    );
+    gate.complete(Ok(_radio(const [YtmArtistRef(browseId: 'UC9', name: 'A')])));
     expect(await a, 'UC9');
     expect(await b, 'UC9');
     expect(ytm.radioCalls, hasLength(1));
@@ -109,12 +110,8 @@ void main() {
               path: '/home',
               builder: (_, _) => Consumer(
                 builder: (context, ref, _) => TextButton(
-                  onPressed: () => openArtist(
-                    context,
-                    ref,
-                    track: _yt(),
-                    name: 'Nobody',
-                  ),
+                  onPressed: () =>
+                      openArtist(context, ref, track: _yt(), name: 'Nobody'),
                   child: const Text('open'),
                 ),
               ),

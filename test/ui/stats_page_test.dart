@@ -180,9 +180,8 @@ void main() {
         routes: [
           GoRoute(
             path: '/',
-            builder: (_, _) => const Scaffold(
-              body: SingleChildScrollView(child: StatsBody()),
-            ),
+            builder: (_, _) =>
+                const Scaffold(body: SingleChildScrollView(child: StatsBody())),
           ),
         ],
       ),
@@ -362,33 +361,34 @@ void main() {
     expect(h.player.state.queue.map((t) => t.id), ['s1']);
   });
 
-  uiTest('tapping a top artist whose song is a yt track opens the artist page', (
-    tester,
-  ) async {
-    size(tester, const Size(400, 800));
-    await real(
-      tester,
-      () => h.db
-          .into(h.db.tracks)
-          .insert(trackRow(id: 's1', source: 'yt', ytVideoId: 'vs1')),
-    );
-    h.ytm.radioAnswer = const Ok(
-      YtmRadio(
-        [],
-        null,
-        current: YtmSong(
-          videoId: 'vs1',
-          title: 'T',
-          artists: [YtmArtistRef(browseId: 'UCone', name: 'Artist 1')],
-          durationMs: 1000,
+  uiTest(
+    'tapping a top artist whose song is a yt track opens the artist page',
+    (tester) async {
+      size(tester, const Size(400, 800));
+      await real(
+        tester,
+        () => h.db
+            .into(h.db.tracks)
+            .insert(trackRow(id: 's1', source: 'yt', ytVideoId: 'vs1')),
+      );
+      h.ytm.radioAnswer = const Ok(
+        YtmRadio(
+          [],
+          null,
+          current: YtmSong(
+            videoId: 'vs1',
+            title: 'T',
+            artists: [YtmArtistRef(browseId: 'UCone', name: 'Artist 1')],
+            durationMs: 1000,
+          ),
         ),
-      ),
-    );
-    await pumpPage(tester);
-    await tester.tap(find.byKey(const Key('stats.artist.0')));
-    await settle(tester);
-    expect(find.text('artist UCone'), findsOneWidget);
-  });
+      );
+      await pumpPage(tester);
+      await tester.tap(find.byKey(const Key('stats.artist.0')));
+      await settle(tester);
+      expect(find.text('artist UCone'), findsOneWidget);
+    },
+  );
 
   uiTest('an artist without a known page opens Search for their name', (
     tester,

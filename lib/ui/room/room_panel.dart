@@ -60,7 +60,10 @@ bool _isPhone(RoomPresence p) => p.platform == 'android' || p.platform == 'ios';
 /// people and their roles, and End room; while a guest, everyone's role and
 /// Leave.
 class RoomPanel extends ConsumerStatefulWidget {
-  const RoomPanel({super.key});
+  const RoomPanel({this.embedded = false, super.key});
+
+  /// Sits inside a pane or list: no scroll view of its own, tighter padding.
+  final bool embedded;
 
   @override
   ConsumerState<RoomPanel> createState() => _RoomPanelState();
@@ -114,7 +117,7 @@ class _RoomPanelState extends ConsumerState<RoomPanel> {
 
   void _signIn() {
     final router = GoRouter.of(context);
-    Navigator.of(context).pop();
+    if (!widget.embedded) Navigator.of(context).pop();
     router.go('/profile');
   }
 
@@ -159,35 +162,42 @@ class _RoomPanelState extends ConsumerState<RoomPanel> {
         ref.watch(roomStatusProvider).value ??
         ref.read(roomServiceProvider).status;
     final account = ref.watch(accountStateProvider).value;
+    final column = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.group_rounded, color: colors.accent),
+            const SizedBox(width: 10),
+            Text(
+              'Listen together',
+              style: TextStyle(
+                color: colors.text,
+                fontSize: widget.embedded ? 15 : 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        ...switch (status) {
+          RoomHosting() => _hosting(status, colors),
+          RoomGuesting() => _guesting(status, colors),
+          RoomIdle() =>
+            account is SignedIn ? _idle(account, colors) : _signedOut(colors),
+        },
+      ],
+    );
+    if (widget.embedded) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: column,
+      );
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.group_rounded, color: colors.accent),
-              const SizedBox(width: 10),
-              Text(
-                'Listen together',
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ...switch (status) {
-            RoomHosting() => _hosting(status, colors),
-            RoomGuesting() => _guesting(status, colors),
-            RoomIdle() =>
-              account is SignedIn ? _idle(account, colors) : _signedOut(colors),
-          },
-        ],
-      ),
+      child: column,
     );
   }
 

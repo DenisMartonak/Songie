@@ -4,12 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../friends/activity_backend.dart';
-import '../../friends/friends_backend.dart';
 import '../../friends/friends_service.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
-import '../account/avatar.dart' show PersonAvatar;
+import 'friend_row.dart';
 import 'page_bar.dart';
 import 'user_row.dart';
 
@@ -72,7 +70,7 @@ class _FriendsPageState extends ConsumerState<FriendsPage> {
               if (state.incoming.isNotEmpty) ...[
                 const _Section('Requests'),
                 for (final u in state.incoming)
-                  _PersonRow(
+                  FriendRow(
                     key: Key('friends.incoming.${u.id}'),
                     user: u,
                     actions: [
@@ -93,7 +91,7 @@ class _FriendsPageState extends ConsumerState<FriendsPage> {
               if (state.outgoing.isNotEmpty) ...[
                 const _Section('Sent'),
                 for (final u in state.outgoing)
-                  _PersonRow(
+                  FriendRow(
                     key: Key('friends.outgoing.${u.id}'),
                     user: u,
                     actions: [
@@ -108,7 +106,7 @@ class _FriendsPageState extends ConsumerState<FriendsPage> {
               if (state.friends.isNotEmpty) ...[
                 const _Section('Friends'),
                 for (final u in state.friends)
-                  _PersonRow(
+                  FriendRow(
                     key: Key('friends.friend.${u.id}'),
                     user: u,
                     listening: state.listening(u.id, now)
@@ -192,67 +190,6 @@ class _ActionState extends State<_Action> {
       child: widget.filled
           ? FilledButton(onPressed: onPressed, child: child)
           : OutlinedButton(onPressed: onPressed, child: child),
-    );
-  }
-}
-
-class _PersonRow extends StatelessWidget {
-  const _PersonRow({
-    required this.user,
-    this.actions = const [],
-    this.listening,
-    this.onTap,
-    super.key,
-  });
-
-  final FriendUser user;
-
-  /// What they play now, shown under their name.
-  final NowPlaying? listening;
-  final List<Widget> actions;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<SongiesColors>()!;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            PersonAvatar(name: user.username, url: user.avatarUrl, size: 44),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user.username,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (listening case final song?)
-                    Text(
-                      '♪ ${song.title} · ${song.artist}',
-                      key: Key('friends.listening.${user.id}'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colors.accent, fontSize: 12),
-                    ),
-                ],
-              ),
-            ),
-            ...actions,
-            if (onTap != null)
-              Icon(Icons.chevron_right_rounded, color: colors.mutedText),
-          ],
-        ),
-      ),
     );
   }
 }
