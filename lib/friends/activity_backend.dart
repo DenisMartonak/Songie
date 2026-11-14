@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'friends_backend.dart' show FriendsRpc, guardFriendsCall;
+import 'stats_summary.dart';
 
 /// A song as friends see it: title, artist and, for a YouTube song, its
 /// video id (its cover comes from it).
@@ -47,64 +48,16 @@ class NowPlaying {
   int get hashCode => Object.hash(title, artist, videoId);
 }
 
-/// Someone's top 10 artists and songs of the last 30 days (no minutes).
-@immutable
-class TopSummary {
-  const TopSummary({required this.artists, required this.songs});
-
-  static const int most = 10;
-
-  final List<String> artists;
-  final List<NowPlaying> songs;
-
-  bool get isEmpty => artists.isEmpty && songs.isEmpty;
-
-  Map<String, Object?> toJson() => {
-    'artists': [
-      for (final a in artists.take(most)) {'name': a},
-    ],
-    'songs': [for (final s in songs.take(most)) s.toJson()],
-  };
-
-  /// Lenient: entries of the wrong shape are skipped; null when [j] is not
-  /// a map.
-  static TopSummary? fromJson(Object? j) {
-    if (j is! Map) return null;
-    final artists = j['artists'];
-    final songs = j['songs'];
-    return TopSummary(
-      artists: [
-        if (artists is List)
-          for (final a in artists)
-            if (a is Map && a['name'] is String) a['name'] as String,
-      ].take(most).toList(),
-      songs: [
-        if (songs is List)
-          for (final s in songs) ?NowPlaying.fromJson(s),
-      ].take(most).toList(),
-    );
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is TopSummary &&
-      listEquals(other.artists, artists) &&
-      listEquals(other.songs, songs);
-
-  @override
-  int get hashCode =>
-      Object.hash(Object.hashAll(artists), Object.hashAll(songs));
-}
-
 /// What a friend shares: what they play now (and since when), the room they
-/// host, and their top 10. Each part is null when not shared.
+/// host, and their stats. Each part is null when not shared.
 @immutable
 class FriendActivity {
   const FriendActivity({
     this.nowPlaying,
     this.nowUpdatedAt,
     this.roomCode,
-    this.top,
+    this.stats,
+    this.sharesStats = true,
   });
 
   /// Older than this, a "now playing" is not believed (the app may have
@@ -114,7 +67,11 @@ class FriendActivity {
   final NowPlaying? nowPlaying;
   final DateTime? nowUpdatedAt;
   final String? roomCode;
-  final TopSummary? top;
+  final StatsSummary? stats;
+
+  /// Whether they share their stats (false: their stats are private, not
+  /// just not published yet).
+  final bool sharesStats;
 
   bool listeningAt(DateTime now) {
     final at = nowUpdatedAt;
@@ -151,7 +108,7 @@ abstract interface class ActivityBackend {
 
   /// What this account plays now (null: nothing) and the room it hosts.
   Future<void> publishNowPlaying(NowPlaying? now, {String? roomCode});
-  Future<void> publishTop(TopSummary top);
+  Future<void> publishTop(StatsSummary summary);
 
   /// Each friend's shared activity, by user id.
   Future<Map<String, FriendActivity>> friendActivity();
@@ -193,8 +150,8 @@ class SupabaseActivityBackend implements ActivityBackend {
       );
 
   @override
-  Future<void> publishTop(TopSummary top) =>
-      guardFriendsCall(() => _rpc('publish_top', {'p_top': top.toJson()}));
+  Future<void> publishTop(StatsSummary summary) =>
+      guardFriendsCall(() => _rpc('publish_top', {'p_top': summary.toJson()}));
 
   @override
   Future<Map<String, FriendActivity>> friendActivity() =>
@@ -209,7 +166,8 @@ class SupabaseActivityBackend implements ActivityBackend {
                   row['now_updated_at'] as String? ?? '',
                 ),
                 roomCode: row['room_code'] as String?,
-                top: TopSummary.fromJson(row['top']),
+                stats: StatsSummary.fromJson(row['top']),
+                sharesStats: row['share_top'] != false,
               ),
         };
       });

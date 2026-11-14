@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:songies/friends/activity_backend.dart';
+import 'package:songies/friends/stats_summary.dart';
 
 /// Activity rows in memory, following the server's rules
 /// (`supabase/migrations/20261115120000_friend_activity.sql`). [me] is who
@@ -59,13 +62,13 @@ class FakeActivityBackend implements ActivityBackend {
   }
 
   @override
-  Future<void> publishTop(TopSummary top) async {
+  Future<void> publishTop(StatsSummary summary) async {
     calls.add('publishTop');
     _check();
     final r = _row(me);
     if (!r.top) return;
-    // As stored on the server: through JSON, at most 10 of each.
-    r.summary = TopSummary.fromJson(top.toJson());
+    // As stored on the server: through JSON.
+    r.summary = StatsSummary.fromJson(jsonDecode(jsonEncode(summary.toJson())));
   }
 
   @override
@@ -79,16 +82,17 @@ class FakeActivityBackend implements ActivityBackend {
             nowPlaying: r.listening ? r.now : null,
             nowUpdatedAt: r.listening ? r.nowAt : null,
             roomCode: r.listening ? r.roomCode : null,
-            top: r.top ? r.summary : null,
+            stats: r.top ? r.summary : null,
+            sharesStats: r.top,
           ),
     };
   }
 
   /// [id]'s row as stored (for tests).
-  ({NowPlaying? now, String? roomCode, TopSummary? top})? rowOf(String id) {
+  ({NowPlaying? now, String? roomCode, StatsSummary? stats})? rowOf(String id) {
     final r = _rows[id];
     if (r == null) return null;
-    return (now: r.now, roomCode: r.roomCode, top: r.summary);
+    return (now: r.now, roomCode: r.roomCode, stats: r.summary);
   }
 }
 
@@ -98,5 +102,5 @@ class _Row {
   NowPlaying? now;
   DateTime? nowAt;
   String? roomCode;
-  TopSummary? summary;
+  StatsSummary? summary;
 }

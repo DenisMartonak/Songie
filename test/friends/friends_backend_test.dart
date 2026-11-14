@@ -95,6 +95,37 @@ void main() {
     expect(calls.last.$2, {'p_other': 'u2'});
   });
 
+  test('friendCount calls friend_count', () async {
+    final calls = <(String, Map<String, Object?>)>[];
+    final answers = <Object?>[3, null];
+    final b = SupabaseFriendsBackend.withRpc((fn, params) async {
+      calls.add((fn, params));
+      return answers.removeAt(0);
+    });
+    expect(await b.friendCount('u2'), 3);
+    expect(calls.single.$1, 'friend_count');
+    expect(calls.single.$2, {'p_user': 'u2'});
+    // Not a friend: the server says nothing.
+    expect(await b.friendCount('u3'), isNull);
+  });
+
+  test('the fake counts friends only for itself and its friends', () async {
+    final f = FakeFriendsBackend()
+      ..addUser('a', 'ann')
+      ..addUser('b', 'ben')
+      ..addUser('c', 'cat');
+    f.me = 'a';
+    await f.send('b');
+    f.me = 'b';
+    await f.send('a');
+    f.me = 'c';
+    await f.send('b');
+    f.me = 'a';
+    expect(await f.friendCount('a'), 1);
+    expect(await f.friendCount('b'), 1);
+    expect(await f.friendCount('c'), isNull);
+  });
+
   test('the fake follows the server rules', () async {
     final f = FakeFriendsBackend()
       ..addUser('a', 'ann')

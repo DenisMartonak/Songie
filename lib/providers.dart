@@ -53,6 +53,7 @@ import 'friends/activity_backend.dart';
 import 'friends/activity_publisher.dart';
 import 'friends/friends_backend.dart';
 import 'friends/friends_service.dart';
+import 'friends/stats_summary.dart';
 import 'playlists/playlist_sharing.dart';
 import 'playlists/sharing_backend.dart';
 import 'room/room_backend.dart';
@@ -793,14 +794,10 @@ final activityPublisherProvider = Provider<ActivityPublisher>((ref) {
     roomChanges: room.statuses,
     top: () async {
       final month = await stats.period(StatsPeriod.month);
-      return TopSummary(
-        artists: [
-          for (final a in month.topArtists.take(TopSummary.most)) a.name,
-        ],
-        songs: [
-          for (final song in month.topSongs.take(TopSummary.most))
-            NowPlaying(title: song.title, artist: song.displayArtist),
-        ],
+      final now = DateTime.now();
+      return StatsSummary(
+        at: DateTime(now.year, now.month, now.day),
+        periods: {StatsPeriod.month: month},
       );
     },
   );

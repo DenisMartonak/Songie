@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/friends/activity_backend.dart';
+import 'package:songies/friends/stats_summary.dart';
 import 'package:songies/room/room_service.dart';
+import 'package:songies/stats/stats_models.dart';
 import 'package:songies/ui/friends/friend_page.dart';
 import 'package:songies/ui/friends/friends_page.dart';
 
@@ -86,9 +88,31 @@ void main() {
     await asFay((a) async {
       await a.publishNowPlaying(halo);
       await a.publishTop(
-        TopSummary(
-          artists: [for (var i = 1; i <= 12; i++) 'Artist $i'],
-          songs: const [halo],
+        StatsSummary(
+          at: DateTime(2026, 11, 14),
+          periods: {
+            StatsPeriod.month: PeriodStats(
+              period: StatsPeriod.month,
+              total: const Duration(hours: 1),
+              previousTotal: null,
+              buckets: const [],
+              topArtists: [
+                for (var i = 1; i <= 12; i++)
+                  ArtistStat(name: 'Artist $i', plays: 1, heard: Duration.zero),
+              ],
+              topSongs: const [
+                SongStat(
+                  trackId: 'yt:v1',
+                  title: 'Halo',
+                  artist: 'Beyonce',
+                  mainArtist: '',
+                  plays: 1,
+                  heard: Duration.zero,
+                  videoId: 'v1',
+                ),
+              ],
+            ),
+          },
         ),
       );
     });

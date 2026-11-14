@@ -1,40 +1,32 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/friends/activity_backend.dart';
+import 'package:songies/friends/stats_summary.dart';
+import 'package:songies/stats/stats_models.dart';
 
 import '../helpers/fake_activity_backend.dart';
 
 void main() {
   const halo = NowPlaying(title: 'Halo', artist: 'Beyonce', videoId: 'v1');
-  const top = TopSummary(
-    artists: ['Beyonce', 'Daft Punk'],
-    songs: [
-      halo,
-      NowPlaying(title: 'Local', artist: 'Me'),
-    ],
+  final top = StatsSummary(
+    at: DateTime(2026, 11, 14),
+    periods: {
+      StatsPeriod.month: const PeriodStats(
+        period: StatsPeriod.month,
+        total: Duration(minutes: 5),
+        previousTotal: null,
+        buckets: [],
+        topArtists: [
+          ArtistStat(name: 'Beyonce', plays: 1, heard: Duration(minutes: 5)),
+        ],
+        topSongs: [],
+      ),
+    },
   );
 
   test('models round-trip and reject bad shapes', () {
     expect(NowPlaying.fromJson(halo.toJson()), halo);
     expect(NowPlaying.fromJson(const {'title': 'x'}), isNull);
     expect(NowPlaying.fromJson('x'), isNull);
-    expect(TopSummary.fromJson(top.toJson()), top);
-    expect(
-      TopSummary.fromJson(const {
-        'artists': [
-          {'name': 'A'},
-          5,
-        ],
-        'songs': 'x',
-      }),
-      const TopSummary(artists: ['A'], songs: []),
-    );
-    expect(TopSummary.fromJson(null), isNull);
-    // At most 10 of each.
-    final many = TopSummary(
-      artists: [for (var i = 0; i < 15; i++) 'a$i'],
-      songs: const [],
-    );
-    expect(TopSummary.fromJson(many.toJson())!.artists, hasLength(10));
   });
 
   test('listeningAt ignores a status older than 15 minutes', () {
@@ -75,13 +67,22 @@ void main() {
         'now_updated_at': '2026-11-13T12:00:00Z',
         'room_code': 'ABCD2345',
         'top': null,
+        'share_top': false,
       },
+      {'user_id': 'u3', 'top': top.toJson()},
     ];
     final got = await b.friendActivity();
     expect(got['u2']!.nowPlaying, halo);
     expect(got['u2']!.roomCode, 'ABCD2345');
     expect(got['u2']!.nowUpdatedAt, DateTime.utc(2026, 11, 13, 12));
-    expect(got['u2']!.top, isNull);
+    expect(got['u2']!.stats, isNull);
+    expect(got['u2']!.sharesStats, isFalse);
+    // Missing share_top: shared.
+    expect(got['u3']!.sharesStats, isTrue);
+    expect(
+      got['u3']!.stats!.periods[StatsPeriod.month]!.topArtists.single.name,
+      'Beyonce',
+    );
   });
 
   test('the fake hides what is not shared', () async {
@@ -99,6 +100,16 @@ void main() {
     final b = (await f.friendActivity())['b']!;
     expect(b.nowPlaying, isNull);
     expect(b.roomCode, isNull);
-    expect(b.top, top);
+    expect(b.sharesStats, isTrue);
+    expect(
+      b.stats!.periods[StatsPeriod.month]!.topArtists.single.name,
+      'Beyonce',
+    );
+    f.me = 'b';
+    await f.setSharing(top: false);
+    f.me = 'a';
+    final hidden = (await f.friendActivity())['b']!;
+    expect(hidden.stats, isNull);
+    expect(hidden.sharesStats, isFalse);
   });
 }

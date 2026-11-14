@@ -78,6 +78,10 @@ abstract interface class FriendsBackend {
 
   /// Ends whatever there is with [other]: declines, cancels or unfriends.
   Future<void> remove(String other);
+
+  /// How many friends [userId] has; null unless it is the signed-in user or
+  /// one of their friends.
+  Future<int?> friendCount(String userId);
 }
 
 /// [q] for a `like` pattern: `\`, `%` and `_` match themselves.
@@ -217,4 +221,10 @@ class SupabaseFriendsBackend implements FriendsBackend {
   @override
   Future<void> remove(String other) =>
       guardFriendsCall(() => _rpc('remove_friend', {'p_other': other}));
+
+  @override
+  Future<int?> friendCount(String userId) => guardFriendsCall(() async {
+    final n = await _rpc('friend_count', {'p_user': userId});
+    return n is num ? n.toInt() : null;
+  });
 }

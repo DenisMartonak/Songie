@@ -5,7 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/friends/activity_backend.dart';
 import 'package:songies/friends/activity_publisher.dart';
+import 'package:songies/friends/stats_summary.dart';
 import 'package:songies/player/player_service.dart';
+import 'package:songies/stats/stats_models.dart';
 
 import '../helpers/fake_activity_backend.dart';
 
@@ -33,7 +35,7 @@ void main() {
   late int topCalls;
 
   /// What the stats give for the top 10 (a test may make it fail or hang).
-  late Future<TopSummary?> Function() topAnswer;
+  late Future<StatsSummary?> Function() topAnswer;
   late ActivityPublisher publisher;
 
   void play(Track? t, {bool playing = true}) {
@@ -53,7 +55,21 @@ void main() {
     state = const PlayerState();
     room = null;
     topCalls = 0;
-    topAnswer = () async => const TopSummary(artists: ['Beyonce'], songs: []);
+    topAnswer = () async => StatsSummary(
+      at: DateTime(2026),
+      periods: {
+        StatsPeriod.month: const PeriodStats(
+          period: StatsPeriod.month,
+          total: Duration(minutes: 3),
+          previousTotal: null,
+          buckets: [],
+          topArtists: [
+            ArtistStat(name: 'Beyonce', plays: 1, heard: Duration(minutes: 3)),
+          ],
+          topSongs: [],
+        ),
+      },
+    );
     publisher = ActivityPublisher(
       backend: backend,
       states: states.stream,
@@ -155,7 +171,15 @@ void main() {
     fakeAsync((async) {
       start(async);
       expect(topCalls, 1);
-      expect(backend.rowOf('me')!.top!.artists, ['Beyonce']);
+      expect(
+        backend
+            .rowOf('me')!
+            .stats!
+            .periods[StatsPeriod.month]!
+            .topArtists
+            .map((a) => a.name),
+        ['Beyonce'],
+      );
       play(track('a'));
       async.elapse(const Duration(minutes: 50));
       expect(topCalls, 1);
@@ -171,7 +195,7 @@ void main() {
       topAnswer = () async => throw StateError('stats broke');
       async.elapse(const Duration(hours: 2));
       // A top 10 that never comes does not hold up saving a switch.
-      topAnswer = () => Completer<TopSummary?>().future;
+      topAnswer = () => Completer<StatsSummary?>().future;
       var saved = false;
       publisher.setSharing(top: false).then((_) => saved = true);
       async.flushMicrotasks();

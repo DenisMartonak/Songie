@@ -8,6 +8,7 @@ import '../../friends/activity_backend.dart';
 import '../../friends/friends_backend.dart';
 import '../../friends/friends_service.dart';
 import '../../providers.dart';
+import '../../stats/stats_models.dart';
 import '../../theme/app_theme.dart';
 import '../account/avatar.dart' show PersonAvatar;
 import 'page_bar.dart';
@@ -134,16 +135,16 @@ class _FriendPageState extends ConsumerState<FriendPage> {
                       : null,
                   onJoin: _join,
                 ),
-                if (state.activity[found.id]?.top case final top?
-                    when !top.isEmpty) ...[
-                  if (top.artists.isNotEmpty) ...[
+                if (state.activity[found.id]?.stats?.periods[StatsPeriod.month]
+                    case final top?) ...[
+                  if (top.topArtists.isNotEmpty) ...[
                     const _Heading('Top artists'),
-                    for (final (i, name) in top.artists.indexed)
-                      _Ranked(rank: i + 1, title: name),
+                    for (final (i, a) in top.topArtists.indexed)
+                      _Ranked(rank: i + 1, title: a.name),
                   ],
-                  if (top.songs.isNotEmpty) ...[
+                  if (top.topSongs.isNotEmpty) ...[
                     const _Heading('Top songs'),
-                    for (final (i, song) in top.songs.indexed)
+                    for (final (i, song) in top.topSongs.indexed)
                       _Ranked(
                         rank: i + 1,
                         title: song.title,

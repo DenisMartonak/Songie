@@ -32,6 +32,8 @@ class ArtistStat {
     required this.heard,
     this.artworkRef,
     this.sampleTrackId,
+    this.photoUrl,
+    this.browseId,
   });
 
   /// The most recently recorded spelling.
@@ -44,6 +46,22 @@ class ArtistStat {
 
   /// Id of that most-played song.
   final String? sampleTrackId;
+
+  /// The artist's own photo; null when unknown.
+  final String? photoUrl;
+
+  /// The artist's YouTube Music channel; null when unknown.
+  final String? browseId;
+
+  ArtistStat copyWith({String? photoUrl, String? browseId}) => ArtistStat(
+    name: name,
+    plays: plays,
+    heard: heard,
+    artworkRef: artworkRef,
+    sampleTrackId: sampleTrackId,
+    photoUrl: photoUrl ?? this.photoUrl,
+    browseId: browseId ?? this.browseId,
+  );
 }
 
 class SongStat {
@@ -55,6 +73,7 @@ class SongStat {
     required this.plays,
     required this.heard,
     this.artworkRef,
+    this.videoId,
   });
 
   final String trackId;
@@ -70,8 +89,26 @@ class SongStat {
   final int plays;
   final Duration heard;
 
+  /// The YouTube video, for a YouTube song; null for any other.
+  final String? videoId;
+
+  /// The cover from [videoId]; null without one.
+  String? get coverUrl =>
+      videoId == null ? null : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+
   /// The artist to show: the main artist, else the artist line.
   String get displayArtist => mainArtist.isEmpty ? artist : mainArtist;
+
+  SongStat copyWith({String? videoId}) => SongStat(
+    trackId: trackId,
+    title: title,
+    artist: artist,
+    mainArtist: mainArtist,
+    plays: plays,
+    heard: heard,
+    artworkRef: artworkRef,
+    videoId: videoId ?? this.videoId,
+  );
 }
 
 class PeriodStats {

@@ -118,4 +118,15 @@ class FakeFriendsBackend implements FriendsBackend {
     final pair = _pair(me, other);
     if (pair != null) _rows.remove(pair);
   }
+
+  @override
+  Future<int?> friendCount(String userId) async {
+    calls.add('friendCount');
+    _check();
+    bool friends(String a, String b) => _rows[_pair(a, b)] ?? false;
+    if (userId != me && !friends(me, userId)) return null;
+    return _rows.entries
+        .where((e) => e.value && (e.key.$1 == userId || e.key.$2 == userId))
+        .length;
+  }
 }

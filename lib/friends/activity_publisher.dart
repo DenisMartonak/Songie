@@ -4,6 +4,7 @@ import '../core/log.dart';
 import '../player/player_service.dart';
 import 'activity_backend.dart';
 import 'friends_backend.dart' show FriendsException;
+import 'stats_summary.dart';
 
 /// Publishes what this account plays now (and the room it hosts) and its top
 /// 10, for friends to see, as the account's sharing switches allow. Runs
@@ -34,7 +35,7 @@ class ActivityPublisher {
   final PlayerState Function() _current;
   final String? Function() _roomCode;
   final Stream<Object?> _roomChanges;
-  final Future<TopSummary?> Function() _top;
+  final Future<StatsSummary?> Function() _top;
   final DateTime Function() _now;
 
   bool _running = false;
