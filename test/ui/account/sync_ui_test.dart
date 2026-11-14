@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/account/account_service.dart';
 import 'package:songies/core/paths.dart';
-import 'package:songies/sync/cloud/sync_status.dart';
 import 'package:songies/ui/account/account_dialogs.dart';
 import 'package:songies/ui/account/profile_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
@@ -64,66 +63,13 @@ void main() {
     await h.accounts.verifySignup('den@x.com', h.accountBackend.goodCode);
   }
 
-  String statusText(WidgetTester tester) =>
-      tester.widget<Text>(key('account.syncStatus')).data!;
-
-  uiTest('Account shows Synced / Syncing… / Waiting for internet and Last '
-      'synced', (tester) async {
-    await signedIn();
-    h.cloudSync.emit(
-      SyncStatus(
-        SyncPhase.idle,
-        lastSynced: now.subtract(const Duration(minutes: 5)),
-      ),
-    );
-    await pumpAccount(tester);
-    expect(statusText(tester), 'Synced');
-    expect(find.text('Last synced 5 min ago'), findsOneWidget);
-    final syncNow = key('account.syncNow');
-    expect(tester.widget<TextButton>(syncNow).onPressed, isNotNull);
-
-    h.cloudSync.emit(const SyncStatus(SyncPhase.syncing));
+  /// Opens the profile's menu and taps Log out.
+  Future<void> logOut(WidgetTester tester) async {
+    await tester.tap(key('profile.menu'));
     await settle(tester);
-    expect(statusText(tester), 'Syncing…');
-    // Disabled while syncing.
-    expect(tester.widget<TextButton>(syncNow).onPressed, isNull);
-
-    h.cloudSync.emit(
-      SyncStatus(
-        SyncPhase.offline,
-        lastSynced: now.subtract(const Duration(hours: 2)),
-      ),
-    );
+    await tester.tap(key('account.logOut'));
     await settle(tester);
-    expect(statusText(tester), 'Waiting for internet');
-    expect(find.text('Last synced 2 h ago'), findsOneWidget);
-
-    h.cloudSync.emit(const SyncStatus(SyncPhase.error));
-    await settle(tester);
-    expect(statusText(tester), "Couldn't sync. Will try again.");
-    expect(find.textContaining('Last synced'), findsNothing);
-
-    h.cloudSync.emit(const SyncStatus(SyncPhase.clockWrong));
-    await settle(tester);
-    expect(
-      statusText(tester),
-      "Can't sync: this device's date and time are wrong.",
-    );
-
-    h.cloudSync.emit(SyncStatus(SyncPhase.idle, lastSynced: now));
-    await settle(tester);
-    expect(statusText(tester), 'Synced');
-    expect(find.text('Last synced just now'), findsOneWidget);
-    await tester.tap(syncNow);
-    await settle(tester);
-    expect(h.cloudSync.syncNowCalls, 1);
-  });
-
-  uiTest('signed out shows no sync status', (tester) async {
-    await pumpAccount(tester);
-    expect(key('account.syncStatus'), findsNothing);
-    expect(key('account.syncNow'), findsNothing);
-  });
+  }
 
   uiTest('log out with unsent changes asks first; Cancel keeps you signed '
       'in', (tester) async {
@@ -131,8 +77,7 @@ void main() {
     h.cloudSync.unsent = true;
     await pumpAccount(tester);
 
-    await tester.tap(key('account.logOut'));
-    await settle(tester);
+    await logOut(tester);
     // It tried to upload first; still unsent (offline), so it asks.
     expect(h.cloudSync.syncNowCalls, 1);
     expect(
@@ -148,8 +93,7 @@ void main() {
     expect(h.accounts.state, isA<SignedIn>());
     expect(h.accountBackend.calls, isNot(contains('logOut')));
 
-    await tester.tap(key('account.logOut'));
-    await settle(tester);
+    await logOut(tester);
     await tester.tap(key('account.confirmLogOut'));
     await settle(tester);
     expect(h.accounts.state, isA<SignedOut>());
@@ -163,8 +107,7 @@ void main() {
     h.cloudSync.onSyncNow = () => h.cloudSync.unsent = false;
     await pumpAccount(tester);
 
-    await tester.tap(key('account.logOut'));
-    await settle(tester);
+    await logOut(tester);
     expect(find.byType(AlertDialog), findsNothing);
     expect(h.accounts.state, isA<SignedOut>());
   });
@@ -268,15 +211,5 @@ void main() {
     expect(finished, isTrue);
     // The rest of the app is still there, nothing else was popped.
     expect(find.byKey(const Key('profile.page')), findsOneWidget);
-  });
-
-  uiTest('while the merge question is open the status reads Syncing… and '
-      'Sync now is off', (tester) async {
-    await signedIn();
-    // What CloudSync reports while it waits for the answer.
-    h.cloudSync.emit(const SyncStatus(SyncPhase.syncing));
-    await pumpAccount(tester);
-    expect(statusText(tester), 'Syncing…');
-    expect(tester.widget<TextButton>(key('account.syncNow')).onPressed, isNull);
   });
 }

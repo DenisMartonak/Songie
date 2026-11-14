@@ -55,13 +55,19 @@ String? profileUpdatedText(DateTime at, DateTime now) {
   return 'Updated $ago';
 }
 
-/// A profile, yours or a friend's: a header (picture, name, friend count,
-/// the page's [actions], what they listen to now) over their stats. The
-/// wide layout is used from [wideBreakpoint] of its own width. It scrolls
-/// over the whole width (the scrollbar at the window edge) with the
-/// content centered.
+/// A profile, yours or a friend's: a header (Back when the page can go
+/// back, picture, name, friend count, the page's [actions] and [menu], what
+/// they listen to now) over their stats. The wide layout is used from
+/// [wideBreakpoint] of its own width. It scrolls over the whole width (the
+/// scrollbar at the window edge) with the content centered.
 class ProfileView extends ConsumerStatefulWidget {
-  const ProfileView({required this.source, required this.actions, super.key});
+  const ProfileView({
+    required this.source,
+    required this.actions,
+    this.menu,
+    this.notice,
+    super.key,
+  });
 
   static const double wideBreakpoint = 840;
 
@@ -71,8 +77,15 @@ class ProfileView extends ConsumerStatefulWidget {
 
   final ProfileSource source;
 
-  /// The header's buttons (Edit profile, ⋯), supplied by the page.
+  /// The header's buttons (Edit profile), supplied by the page: under the
+  /// name on the phone, at the far right when wide.
   final List<Widget> actions;
+
+  /// The ⋯ button: top right on the phone, after [actions] when wide.
+  final Widget? menu;
+
+  /// Shown under the header, as a failed action's error.
+  final Widget? notice;
 
   @override
   ConsumerState<ProfileView> createState() => _ProfileViewState();
@@ -85,6 +98,9 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   /// The friend last found, kept while they leave the list (as the page
   /// pops after Remove friend).
   FriendUser? _friend;
+
+  /// Your stats last shown.
+  PeriodStats? _myStats;
 
   FriendsService? _service;
   Object? _watch;
@@ -144,10 +160,19 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final wide = width >= ProfileView.wideBreakpoint;
+        final back = context.canPop()
+            ? IconButton(
+                tooltip: 'Back',
+                color: Theme.of(context).extension<SongiesColors>()!.text,
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => context.pop(),
+              )
+            : null;
         final content = switch (widget.source) {
-          MyProfile() => _mine(wide),
-          FriendProfile(:final userId) => _friendOf(userId, wide),
+          MyProfile() => _mine(wide, back),
+          FriendProfile(:final userId) => _friendOf(userId, wide, back),
         };
+        final notice = widget.notice;
         final maxWidth = wide
             ? ProfileView.wideMaxWidth
             : ProfileView.phoneMaxWidth;
@@ -176,6 +201,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                 width: width,
                 child: centered(content.header),
               ),
+              if (notice != null) centered(notice),
               centered(content.body),
             ],
           ),
@@ -185,7 +211,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   }
 
   /// Your own profile.
-  ({Widget header, Widget body}) _mine(bool wide) {
+  ({Widget header, Widget body}) _mine(bool wide, Widget? back) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final account = ref.watch(accountStateProvider).value;
     final name = account is SignedIn ? account.profile.username : '';
@@ -200,11 +226,16 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       }),
     );
     final period = ref.watch(statsPeriodProvider);
-    final stats = ref.watch(periodStatsProvider(period)).value;
+    // The last period's stats stay until the chosen one arrives.
+    if (ref.watch(periodStatsProvider(period)).value case final s?) {
+      _myStats = s;
+    }
+    final stats = _myStats;
 
     Widget? count;
     if (friends != null && friends.loaded) {
       count = InkWell(
+        key: const Key('profile.friends'),
         onTap: () => context.push('/profile/friends'),
         borderRadius: BorderRadius.circular(8),
         child: Padding(
@@ -227,6 +258,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
         name: name,
         friendCount: count,
         actions: widget.actions,
+        menu: widget.menu,
+        leading: back,
         listening: player == null
             ? null
             : ProfileListening(song: player, wide: wide),
@@ -243,7 +276,11 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   }
 
   /// A friend's profile.
-  ({Widget header, Widget body}) _friendOf(String userId, bool wide) {
+  ({Widget header, Widget body}) _friendOf(
+    String userId,
+    bool wide,
+    Widget? back,
+  ) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     final state = ref.watch(friendsStateProvider).value ?? FriendsState.empty;
     for (final u in state.friends) {
@@ -252,13 +289,23 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     final user = _friend;
     if (user == null) {
       return (
-        header: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            state.loaded ? 'Not in your friends' : '',
-            key: const Key('profile.notFriend'),
-            style: TextStyle(color: colors.mutedText),
-          ),
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (back != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                child: back,
+              ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                state.loaded ? 'Not in your friends' : '',
+                key: const Key('profile.notFriend'),
+                style: TextStyle(color: colors.mutedText),
+              ),
+            ),
+          ],
         ),
         body: const SizedBox.shrink(),
       );
@@ -313,6 +360,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
         name: user.username,
         friendCount: count == null ? null : _CountText(count, colors: colors),
         actions: widget.actions,
+        menu: widget.menu,
+        leading: back,
         listening: song == null
             ? null
             : ProfileListening(

@@ -128,12 +128,16 @@ void main() {
     await settle(tester);
     expect(router.state.uri.path, '/profile/friends/f1');
     expect(find.text('user_f1'), findsOneWidget);
+    await tester.tap(key('profile.menu'));
+    await settle(tester);
     await tester.tap(key('friend.remove'));
     await settle(tester);
     expect(find.text('Remove user_f1 from your friends?'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await settle(tester);
     expect(h.friendsBackend.calls, isNot(contains('remove')));
+    await tester.tap(key('profile.menu'));
+    await settle(tester);
     await tester.tap(key('friend.remove'));
     await settle(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
@@ -151,11 +155,16 @@ void main() {
     );
   });
 
-  uiTest('the profile has a Friends row with the count', (tester) async {
+  uiTest('the profile shows the friend count; it opens your friends', (
+    tester,
+  ) async {
     await signedIn(friends: ['f1', 'f2'], incoming: ['i1']);
     final router = await pump(tester, '/profile');
-    expect(find.text('Friends · 2'), findsOneWidget);
-    await tester.tap(key('profile.friends'));
+    expect(
+      tester.widget<Text>(key('profile.friendCount')).textSpan!.toPlainText(),
+      '2 friends',
+    );
+    await tester.tap(key('profile.friendCount'));
     await settle(tester);
     expect(router.state.uri.path, '/profile/friends');
   });

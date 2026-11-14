@@ -118,17 +118,14 @@ void main() {
     });
     await pump(tester, '/profile/friends/f1');
     expect(
-      find.descendant(
-        of: key('friend.nowPlaying'),
-        matching: find.text('Halo'),
-      ),
-      findsOneWidget,
+      tester.widget<Text>(key('profile.listening')).textSpan!.toPlainText(),
+      'Listening to Halo · Beyonce',
     );
-    expect(key('friend.join'), findsNothing);
-    expect(find.text('Top artists'), findsOneWidget);
-    expect(find.text('Top songs'), findsOneWidget);
-    expect(find.text('Artist 10'), findsOneWidget);
-    expect(find.text('Artist 11'), findsNothing);
+    expect(key('profile.join'), findsNothing);
+    expect(find.text('Top 10 artists'), findsOneWidget);
+    expect(find.text('Top 10 songs'), findsOneWidget);
+    expect(find.text('Artist 5'), findsOneWidget);
+    expect(find.text('Artist 6'), findsNothing);
     await rig.dispose(tester);
   });
 
@@ -139,24 +136,61 @@ void main() {
     // The page asks again every minute while open.
     await tester.pump(const Duration(minutes: 1));
     await settle(tester);
-    expect(key('friend.join'), findsOneWidget);
-    await tester.tap(key('friend.join'));
+    expect(key('profile.join'), findsOneWidget);
+    await tester.tap(key('profile.join'));
     await rig.run(tester, Future.value());
     expect(rig.service!.status, isA<RoomGuesting>());
     await rig.dispose(tester);
   });
 
-  uiTest('a stale or unshared status says Not listening right now', (
-    tester,
-  ) async {
+  uiTest('an unshared status shows no listening and says they do not '
+      'share', (tester) async {
     await asFay((a) async {
       await a.publishNowPlaying(halo);
       await a.setSharing(listening: false, top: false);
     });
     await pump(tester, '/profile/friends/f1');
-    expect(key('friend.notListening'), findsOneWidget);
-    expect(find.text('Not listening right now'), findsOneWidget);
-    expect(find.text('Top artists'), findsNothing);
+    expect(key('profile.listening'), findsNothing);
+    expect(find.text("fay doesn't share their stats"), findsOneWidget);
+    expect(find.text('Top 10 artists'), findsNothing);
+    await rig.dispose(tester);
+  });
+
+  uiTest("a friend's page has Back and the menu, no Edit profile", (
+    tester,
+  ) async {
+    await pump(tester, '/profile/friends/f1');
+    expect(find.byTooltip('Back'), findsOneWidget);
+    expect(key('profile.edit'), findsNothing);
+    expect(find.text('Edit profile'), findsNothing);
+    final menu = tester.getRect(key('profile.menu'));
+    expect(menu.top, lessThan(tester.getRect(key('profile.name')).top));
+    await tester.tap(key('profile.menu'));
+    await settle(tester);
+    expect(key('friend.remove'), findsOneWidget);
+    expect(find.text('Remove friend'), findsOneWidget);
+    expect(key('account.logOut'), findsNothing);
+    await rig.dispose(tester);
+  });
+
+  uiTest('Remove friend asks, removes and goes back without a "Not in your '
+      'friends" frame', (tester) async {
+    await pump(tester, '/profile/friends');
+    await tester.tap(key('friends.friend.f1'));
+    await settle(tester);
+    await tester.tap(key('profile.menu'));
+    await settle(tester);
+    await tester.tap(key('friend.remove'));
+    await settle(tester);
+    expect(find.text('Remove fay from your friends?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(find.text('Not in your friends'), findsNothing);
+    }
+    await settle(tester);
+    expect(find.byType(FriendPage), findsNothing);
+    expect(key('friends.friend.f1'), findsNothing);
     await rig.dispose(tester);
   });
 }

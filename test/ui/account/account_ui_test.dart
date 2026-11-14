@@ -103,6 +103,9 @@ void main() {
   Finder inSection(Finder f) =>
       find.descendant(of: find.byType(ProfilePage), matching: f);
 
+  Finder inEdit(Finder f) =>
+      find.descendant(of: key('profile.editSheet'), matching: f);
+
   /// Types into a field and rebuilds (enterText alone doesn't).
   Future<void> type(WidgetTester tester, Finder f, String text) async {
     await tester.enterText(f, text);
@@ -113,6 +116,17 @@ void main() {
     await tester.tap(f);
     await settle(tester);
   }
+
+  /// Opens Edit profile (unless it is open already).
+  Future<void> openEdit(WidgetTester tester) async {
+    if (key('profile.editSheet').evaluate().isNotEmpty) return;
+    await tapAndSettle(tester, key('profile.edit'));
+    expect(key('profile.editSheet'), findsOneWidget);
+  }
+
+  /// Opens the profile's ⋯ menu.
+  Future<void> openMenu(WidgetTester tester) =>
+      tapAndSettle(tester, key('profile.menu'));
 
   uiTest('sign up -> code screen -> signed in shows username, email and '
       'picture', (tester) async {
@@ -139,16 +153,22 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
     expect(find.text('Signed in'), findsOneWidget);
     expect(inSection(find.text('den')), findsOneWidget);
-    expect(inSection(find.text('den@x.com')), findsOneWidget);
     // No picture yet: the first letter.
     expect(inSection(find.text('D')), findsOneWidget);
     expect(inTop(find.text('D')), findsOneWidget);
-    expect(inSection(find.byTooltip('Change username')), findsOneWidget);
-    expect(key('profile.avatar'), findsOneWidget);
-    expect(inSection(find.text('Log out')), findsOneWidget);
-    expect(inSection(find.text('Delete account')), findsOneWidget);
     expect(key('account.signUp'), findsNothing);
 
+    // The email, the name field and the picture are in Edit profile.
+    await openEdit(tester);
+    expect(inEdit(find.text('den@x.com')), findsOneWidget);
+    expect(inEdit(find.byTooltip('Change username')), findsOneWidget);
+    expect(inEdit(key('profile.avatar')), findsOneWidget);
+    await tapAndSettle(tester, key('profile.editDone'));
+
+    // Log out and Delete account are in the menu.
+    await openMenu(tester);
+    expect(find.text('Log out'), findsOneWidget);
+    expect(find.text('Delete account'), findsOneWidget);
     await tapAndSettle(tester, key('account.logOut'));
     expect(find.text('Signed out'), findsOneWidget);
     expect(key('account.signUp'), findsOneWidget);
@@ -444,8 +464,9 @@ void main() {
     expect(find.text('Signed in'), findsOneWidget);
   });
 
-  /// Taps the name on the profile, turning it into a field.
+  /// Taps the name in Edit profile, turning it into a field.
   Future<void> editName(WidgetTester tester) async {
+    await openEdit(tester);
     await tapAndSettle(tester, key('account.username'));
     expect(key('account.newUsername'), findsOneWidget);
   }
@@ -527,8 +548,9 @@ void main() {
     expect(key('account.newUsername'), findsOneWidget);
   });
 
-  /// Opens the picture viewer from the profile's picture.
+  /// Opens the picture viewer from the picture in Edit profile.
   Future<void> openViewer(WidgetTester tester) async {
+    await openEdit(tester);
     await tapAndSettle(tester, key('profile.avatar'));
     expect(key('profile.pictureViewer'), findsOneWidget);
   }
@@ -684,6 +706,7 @@ void main() {
     await signedIn('den@x.com', 'den');
     await pumpAccount(tester);
 
+    await openMenu(tester);
     await tapAndSettle(tester, key('account.delete'));
     expect(
       find.text(
@@ -697,6 +720,7 @@ void main() {
     expect(h.accountBackend.calls, isNot(contains('deleteMyAccount')));
     expect(inSection(find.text('den')), findsOneWidget);
 
+    await openMenu(tester);
     await tapAndSettle(tester, key('account.delete'));
     await tapAndSettle(tester, key('account.confirmDelete'));
     expect(h.accountBackend.calls, contains('deleteMyAccount'));
@@ -732,6 +756,7 @@ void main() {
     await signedIn('den@x.com', 'den');
     await pumpAccount(tester);
     h.accountBackend.everythingError = AccountError.offline;
+    await openMenu(tester);
     await tapAndSettle(tester, key('account.delete'));
     await tapAndSettle(tester, find.text('Delete'));
     expect(

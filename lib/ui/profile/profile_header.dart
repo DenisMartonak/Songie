@@ -6,11 +6,12 @@ import '../../theme/app_theme.dart';
 typedef ListeningTo = ({String title, String artist});
 
 /// The top of a profile: the picture, the name, the friend count, the
-/// page's [actions] and what they listen to now.
+/// page's [actions], its [menu] and what they listen to now.
 ///
-/// Phone: everything centered in one column, listening last. Wide: the
-/// picture on the left with listening under it, the name and count beside
-/// it, the actions at the far right.
+/// Phone: a top bar with [leading] (Back) on the left and the [menu] on the
+/// right, then everything centered in one column, listening last. Wide:
+/// [leading] above, the picture on the left with listening under it, the
+/// name and count beside it, the actions and the menu at the far right.
 class ProfileHeader extends StatelessWidget {
   const ProfileHeader({
     required this.avatar,
@@ -19,6 +20,8 @@ class ProfileHeader extends StatelessWidget {
     required this.actions,
     required this.listening,
     required this.wide,
+    this.menu,
+    this.leading,
     super.key,
   });
 
@@ -33,6 +36,12 @@ class ProfileHeader extends StatelessWidget {
   /// The "N friends" line; null until known.
   final Widget? friendCount;
   final List<Widget> actions;
+
+  /// The ⋯ button: top right on the phone, after [actions] when wide.
+  final Widget? menu;
+
+  /// Back, when the page can go back.
+  final Widget? leading;
 
   /// The "Listening to …" block; null when they aren't.
   final Widget? listening;
@@ -56,10 +65,13 @@ class ProfileHeader extends StatelessWidget {
     );
     final count = friendCount;
     final listen = listening;
+    final menu = this.menu;
+    final leading = this.leading;
+    final buttons = [...actions, ?menu];
 
     if (wide) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
+      final row = Padding(
+        padding: EdgeInsets.fromLTRB(24, leading == null ? 40 : 8, 24, 32),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -93,7 +105,7 @@ class ProfileHeader extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  for (final (i, a) in actions.indexed) ...[
+                  for (final (i, a) in buttons.indexed) ...[
                     if (i > 0) const SizedBox(width: 8),
                     a,
                   ],
@@ -103,10 +115,22 @@ class ProfileHeader extends StatelessWidget {
           ],
         ),
       );
+      if (leading == null) return row;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
+            child: Align(alignment: Alignment.centerLeft, child: leading),
+          ),
+          row,
+        ],
+      );
     }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+    final bar = leading != null || menu != null;
+    final column = Padding(
+      padding: EdgeInsets.fromLTRB(16, bar ? 4 : 24, 16, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -127,6 +151,20 @@ class ProfileHeader extends StatelessWidget {
           if (listen != null) ...[const SizedBox(height: 20), listen],
         ],
       ),
+    );
+    if (!bar) return column;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: SizedBox(
+            height: 48,
+            child: Row(children: [?leading, const Spacer(), ?menu]),
+          ),
+        ),
+        column,
+      ],
     );
   }
 }

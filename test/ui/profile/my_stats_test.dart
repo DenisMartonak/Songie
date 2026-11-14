@@ -1,5 +1,6 @@
-// The stats page: period picker, total and comparison, chart, top artists
-// and top songs, and the empty state.
+// Your own stats on your profile: the period picker, the total and the
+// change, the chart, tapping top artists and songs, the empty state.
+// (Moved from the old stats page's tests.)
 import 'dart:async';
 
 import 'package:drift/drift.dart' show Value;
@@ -13,12 +14,13 @@ import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/stats/stats_models.dart';
 import 'package:songies/stats/stats_repository.dart';
-import 'package:songies/ui/stats/stats_page.dart';
+import 'package:songies/data/settings_repository.dart';
+import 'package:songies/stats/artist_photos.dart';
+import 'package:songies/ui/profile/profile_view.dart';
 import 'package:songies/ui/widgets/page_surface.dart';
-import 'package:songies/ui/widgets/favorite_star.dart';
 
-import '../helpers/test_db.dart';
-import '../helpers/ui_harness.dart';
+import '../../helpers/test_db.dart';
+import '../../helpers/ui_harness.dart';
 
 /// Scripted stats per period, recording which periods were asked for.
 class _FakeStats implements StatsRepository {
@@ -104,6 +106,23 @@ final _empty = PeriodStats(
   topSongs: const [],
 );
 
+/// No photo lookups.
+class _NoPhotos extends ArtistPhotos {
+  _NoPhotos(SettingsRepository settings)
+    : super(
+        settings: settings,
+        saved: () async => const {},
+        browseIdForTrack: (_) async => null,
+        artist: (_) async => null,
+      );
+
+  @override
+  Future<void> load() async {}
+
+  @override
+  Future<void> fill(List<ArtistStat> artists, {bool force = false}) async {}
+}
+
 void main() {
   late UiHarness h;
   late _FakeStats stats;
@@ -137,7 +156,12 @@ void main() {
   }) async {
     await tester.pumpWidget(
       h.app(
-        extraOverrides: [_week],
+        extraOverrides: [
+          _week,
+          artistPhotosProvider.overrideWithValue(
+            _NoPhotos(SettingsRepository(h.db)),
+          ),
+        ],
         initialLocation: '/home/stats',
         disableAnimations: disableAnimations,
         routes: [
@@ -147,7 +171,9 @@ void main() {
             routes: [
               GoRoute(
                 path: 'stats',
-                builder: (_, _) => const PageSurface(child: StatsPage()),
+                builder: (_, _) => const PageSurface(
+                  child: ProfileView(source: MyProfile(), actions: []),
+                ),
               ),
               GoRoute(
                 path: 'ytm/artist/:id',
@@ -172,7 +198,7 @@ void main() {
       tester.widget<Text>(find.byKey(Key(key))).data!;
 
   Finder bars() => find.descendant(
-    of: find.byKey(const Key('stats.chart')),
+    of: find.byKey(const Key('profile.chart')),
     matching: find.byWidgetPredicate(
       (w) => switch (w.key) {
         ValueKey<String>(:final value) => value.startsWith('stats.bar.'),
@@ -181,43 +207,22 @@ void main() {
     ),
   );
 
-  uiTest('StatsBody shows the stats inside another page', (tester) async {
-    size(tester, const Size(400, 800));
-    await tester.pumpWidget(
-      h.app(
-        extraOverrides: [_week],
-        initialLocation: '/',
-        routes: [
-          GoRoute(
-            path: '/',
-            builder: (_, _) =>
-                const Scaffold(body: SingleChildScrollView(child: StatsBody())),
-          ),
-        ],
-      ),
-    );
-    await settle(tester);
-    expect(find.byKey(const Key('stats.chart')), findsOneWidget);
-    expect(find.text('Top artists'), findsOneWidget);
-    expect(find.text('Your listening'), findsNothing);
-  });
-
   uiTest('the picker switches periods and asks for each', (tester) async {
     size(tester, const Size(400, 800));
     await pumpPage(tester);
     expect(stats.watched, [StatsPeriod.week]);
-    expect(text(tester, 'stats.total'), '1,234 min');
+    expect(text(tester, 'profile.total'), '1,234');
 
-    await tester.tap(find.byKey(const Key('stats.period.month')));
+    await tester.tap(find.byKey(const Key('profile.period.month')));
     await settle(tester);
     expect(stats.watched.last, StatsPeriod.month);
-    expect(text(tester, 'stats.total'), '46 min');
+    expect(text(tester, 'profile.total'), '46');
 
-    await tester.tap(find.byKey(const Key('stats.period.halfYear')));
+    await tester.tap(find.byKey(const Key('profile.period.halfYear')));
     await settle(tester);
     expect(stats.watched.last, StatsPeriod.halfYear);
 
-    await tester.tap(find.byKey(const Key('stats.period.year')));
+    await tester.tap(find.byKey(const Key('profile.period.year')));
     await settle(tester);
     expect(stats.watched.last, StatsPeriod.year);
   });
@@ -226,16 +231,16 @@ void main() {
     size(tester, const Size(400, 800));
     await pumpPage(tester);
     // 1234 / 1102 = +11.98 %.
-    expect(text(tester, 'stats.change'), '+12% vs the previous 7 days');
+    expect(text(tester, 'profile.change'), '+12% vs the previous 7 days');
 
-    await tester.tap(find.byKey(const Key('stats.period.month')));
+    await tester.tap(find.byKey(const Key('profile.period.month')));
     await settle(tester);
-    expect(text(tester, 'stats.change'), '−8% vs the previous month');
+    expect(text(tester, 'profile.change'), '−8% vs the previous month');
 
-    await tester.tap(find.byKey(const Key('stats.period.halfYear')));
+    await tester.tap(find.byKey(const Key('profile.period.halfYear')));
     await settle(tester);
-    expect(text(tester, 'stats.total'), '300 min');
-    expect(find.byKey(const Key('stats.change')), findsNothing);
+    expect(text(tester, 'profile.total'), '300');
+    expect(find.byKey(const Key('profile.change')), findsNothing);
   });
 
   uiTest('an unchanged total says so', (tester) async {
@@ -246,7 +251,7 @@ void main() {
       previous: 100,
     );
     await pumpPage(tester);
-    expect(text(tester, 'stats.change'), 'Same as the previous 7 days');
+    expect(text(tester, 'profile.change'), 'Same as the previous 7 days');
   });
 
   uiTest('the chart has a bar per bucket; a tap shows its minutes', (
@@ -261,91 +266,9 @@ void main() {
     expect(find.text('Thu 29 Oct · 10 min'), findsOneWidget);
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
-    await tester.tap(find.byKey(const Key('stats.period.month')));
+    await tester.tap(find.byKey(const Key('profile.period.month')));
     await settle(tester);
     expect(bars(), findsNWidgets(30));
-  });
-
-  uiTest('top 5 artists and songs, then Show top 10', (tester) async {
-    size(tester, const Size(400, 800));
-    await pumpPage(tester);
-    expect(find.byKey(const Key('stats.artist.4')), findsOneWidget);
-    expect(find.byKey(const Key('stats.artist.5')), findsNothing);
-    expect(find.text('19 plays'), findsOneWidget);
-
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('stats.artists.more')),
-      200,
-    );
-    await tester.tap(find.byKey(const Key('stats.artists.more')));
-    await settle(tester);
-    expect(find.byKey(const Key('stats.artists.more')), findsNothing);
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('stats.artist.9')),
-      200,
-    );
-    expect(find.text('Artist 10'), findsWidgets);
-
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('stats.songs.more')),
-      200,
-    );
-    expect(find.byKey(const Key('stats.song.5')), findsNothing);
-    await tester.tap(find.byKey(const Key('stats.songs.more')));
-    await settle(tester);
-    await tester.scrollUntilVisible(find.byKey(const Key('stats.song.9')), 200);
-    expect(find.text('Snapshot 10'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('stats.song.9')),
-        matching: find.text('Artist 10 feat. Guest'),
-      ),
-      findsOneWidget,
-    );
-    // One play reads "1 play".
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('stats.song.0')),
-      -200,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('stats.song.0')),
-        matching: find.text('1 play'),
-      ),
-      findsOneWidget,
-    );
-    // Top songs show the main artist, not the whole artist line.
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('stats.song.0')),
-        matching: find.text('Artist 1'),
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Artist 1 feat. Guest'), findsNothing);
-  });
-
-  uiTest('a top song in the library has a star; a removed one has none', (
-    tester,
-  ) async {
-    size(tester, const Size(400, 800));
-    await real(tester, () => h.addTrack('s1', title: 'Live title'));
-    await pumpPage(tester);
-    await tester.scrollUntilVisible(find.byKey(const Key('stats.song.1')), 200);
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('stats.song.0')),
-        matching: find.byType(FavoriteStar),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('stats.song.1')),
-        matching: find.byType(FavoriteStar),
-      ),
-      findsNothing,
-    );
   });
 
   uiTest('tapping a song plays it; a removed song has no menu or tap', (
@@ -354,19 +277,22 @@ void main() {
     size(tester, const Size(400, 800));
     await real(tester, () => h.addTrack('s1', title: 'Live title'));
     await pumpPage(tester);
-    await tester.scrollUntilVisible(find.byKey(const Key('stats.song.1')), 200);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('profile.song.1')),
+      200,
+    );
 
     // Still in the library: the snapshot shows, the menu is there.
     expect(find.text('Snapshot 1'), findsOneWidget);
-    expect(find.byKey(const Key('stats.song.menu.0')), findsOneWidget);
+    expect(find.byKey(const Key('profile.song.menu.0')), findsOneWidget);
     // Removed: no menu.
-    expect(find.byKey(const Key('stats.song.menu.1')), findsNothing);
+    expect(find.byKey(const Key('profile.song.menu.1')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('stats.song.1')));
+    await tester.tap(find.byKey(const Key('profile.song.1')));
     await settle(tester);
     expect(h.player.state.queue, isEmpty);
 
-    await tester.tap(find.byKey(const Key('stats.song.0')));
+    await tester.tap(find.byKey(const Key('profile.song.0')));
     await settle(tester);
     expect(h.player.state.queue.map((t) => t.id), ['s1']);
   });
@@ -394,7 +320,7 @@ void main() {
         ),
       );
       await pumpPage(tester);
-      await tester.tap(find.byKey(const Key('stats.artist.0')));
+      await tester.tap(find.byKey(const Key('profile.artist.0')));
       await settle(tester);
       expect(find.text('artist UCone'), findsOneWidget);
     },
@@ -405,9 +331,9 @@ void main() {
   ) async {
     size(tester, const Size(400, 800));
     await pumpPage(tester);
-    await tester.tap(find.byKey(const Key('stats.artist.1')));
+    await tester.tap(find.byKey(const Key('profile.artist.1')));
     await settle(tester);
-    expect(find.byType(StatsPage), findsNothing);
+    expect(find.byType(ProfileView), findsNothing);
     expect(find.text('search: Artist 2'), findsOneWidget);
   });
 
@@ -419,7 +345,7 @@ void main() {
     // Go to artist rule).
     await real(tester, () => h.addTrack('s1'));
     await pumpPage(tester);
-    await tester.tap(find.byKey(const Key('stats.artist.0')));
+    await tester.tap(find.byKey(const Key('profile.artist.0')));
     await settle(tester);
     expect(find.text('search: Artist 1'), findsOneWidget);
     expect(find.textContaining('artist U'), findsNothing);
@@ -437,8 +363,12 @@ void main() {
     });
     await pumpPage(tester);
     expect(find.text('Snapshot 1'), findsOneWidget);
-    expect(find.byKey(const Key('stats.song.menu.0')), findsNothing);
-    await tester.tap(find.byKey(const Key('stats.song.0')));
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('profile.song.0')),
+      200,
+    );
+    expect(find.byKey(const Key('profile.song.menu.0')), findsNothing);
+    await tester.tap(find.byKey(const Key('profile.song.0')));
     await settle(tester);
     expect(h.player.state.queue, isEmpty);
   });
@@ -449,32 +379,32 @@ void main() {
     addTearDown(month.close);
     stats.held[StatsPeriod.month] = month;
     await pumpPage(tester);
-    expect(text(tester, 'stats.total'), '1,234 min');
+    expect(text(tester, 'profile.total'), '1,234');
 
-    await tester.tap(find.byKey(const Key('stats.period.month')));
+    await tester.tap(find.byKey(const Key('profile.period.month')));
     await settle(tester);
     expect(stats.watched.last, StatsPeriod.month);
     // Still the week's, dimmed, with nothing animating.
-    expect(text(tester, 'stats.total'), '1,234 min');
+    expect(text(tester, 'profile.total'), '1,234');
     expect(tester.binding.hasScheduledFrame, isFalse);
 
     month.add(stats.byPeriod[StatsPeriod.month]!);
     await settle(tester);
-    expect(text(tester, 'stats.total'), '46 min');
-    expect(text(tester, 'stats.change'), '\u22128% vs the previous month');
+    expect(text(tester, 'profile.total'), '46');
+    expect(text(tester, 'profile.change'), '\u22128% vs the previous month');
   });
 
   uiTest('an empty period shows only the message', (tester) async {
     size(tester, const Size(400, 800));
     await pumpPage(tester);
-    await tester.tap(find.byKey(const Key('stats.period.year')));
+    await tester.tap(find.byKey(const Key('profile.period.year')));
     await settle(tester);
-    expect(find.byKey(const Key('stats.empty')), findsOneWidget);
+    expect(find.byKey(const Key('profile.empty')), findsOneWidget);
     expect(find.text('Nothing played in this period yet'), findsOneWidget);
-    expect(find.byKey(const Key('stats.total')), findsNothing);
-    expect(find.byKey(const Key('stats.chart')), findsNothing);
-    expect(find.byKey(const Key('stats.artist.0')), findsNothing);
-    expect(find.byKey(const Key('stats.song.0')), findsNothing);
+    expect(find.byKey(const Key('profile.total')), findsNothing);
+    expect(find.byKey(const Key('profile.chart')), findsNothing);
+    expect(find.byKey(const Key('profile.artist.0')), findsNothing);
+    expect(find.byKey(const Key('profile.song.0')), findsNothing);
   });
 
   for (final s in const [Size(400, 800), Size(1280, 800)]) {
@@ -484,26 +414,26 @@ void main() {
       size(tester, s);
       await pumpPage(tester);
       for (final p in StatsPeriod.values) {
-        await tester.tap(find.byKey(Key('stats.period.${p.name}')));
+        await tester.tap(find.byKey(Key('profile.period.${p.name}')));
         await settle(tester);
         expect(tester.takeException(), isNull);
       }
-      await tester.tap(find.byKey(const Key('stats.period.month')));
+      await tester.tap(find.byKey(const Key('profile.period.month')));
       await settle(tester);
       await tester.scrollUntilVisible(
-        find.byKey(const Key('stats.artists.more')),
+        find.byKey(const Key('profile.artists.more')),
         200,
       );
-      await tester.tap(find.byKey(const Key('stats.artists.more')));
+      await tester.tap(find.byKey(const Key('profile.artists.more')));
       await settle(tester);
       await tester.scrollUntilVisible(
-        find.byKey(const Key('stats.songs.more')),
+        find.byKey(const Key('profile.songs.more')),
         200,
       );
-      await tester.tap(find.byKey(const Key('stats.songs.more')));
+      await tester.tap(find.byKey(const Key('profile.songs.more')));
       await settle(tester);
       await tester.scrollUntilVisible(
-        find.byKey(const Key('stats.song.9')),
+        find.byKey(const Key('profile.song.9')),
         200,
       );
       expect(tester.takeException(), isNull);
@@ -513,7 +443,7 @@ void main() {
   uiTest('with reduced motion nothing keeps animating', (tester) async {
     size(tester, const Size(400, 800));
     await pumpPage(tester, disableAnimations: true);
-    await tester.tap(find.byKey(const Key('stats.period.month')));
+    await tester.tap(find.byKey(const Key('profile.period.month')));
     await settle(tester);
     await tester.tap(find.byKey(const Key('stats.bar.3')));
     await tester.pump();

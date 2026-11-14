@@ -10,23 +10,17 @@ import '../../providers.dart';
 import '../../theme/app_theme.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
-import '../settings/settings_page.dart' show SettingsSectionTitle;
-import '../stats/stats_page.dart' show StatsBody;
+import '../profile/profile_view.dart';
 import 'account_dialogs.dart';
 import 'account_section.dart';
 import 'auth_screens.dart';
-import 'avatar.dart';
-import '../friends/friend_dot.dart';
-import 'inline_username.dart';
-import 'picture_viewer.dart';
+import 'edit_profile_sheet.dart';
 
-/// Your profile: the picture, username and email, your listening stats,
-/// then the account's sync status and actions. Signed out, Sign up and Log
-/// in (what a "Sign in" link lands on).
+/// Your profile: the [ProfileView] with Edit profile and a ⋯ menu (Log
+/// out, Delete account). Signed out, Sign up and Log in (what a "Sign in"
+/// link lands on).
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
-
-  static const double _maxContentWidth = 720;
 
   @override
   ConsumerState<ProfilePage> createState() => _ProfilePageState();
@@ -104,42 +98,104 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<SongiesColors>()!;
     final state = ref.watch(accountStateProvider).value;
-    final bottom = MediaQuery.paddingOf(context).bottom;
+    return KeyedSubtree(
+      key: const Key('profile.page'),
+      child: SafeArea(
+        bottom: false,
+        child: state is SignedIn ? _signedIn(context) : _signedOutPage(context),
+      ),
+    );
+  }
+
+  /// The failed action's message, if any.
+  Widget? _errorText(BuildContext context, {bool center = false}) {
     final error = _error;
-    return SafeArea(
-      bottom: false,
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: ProfilePage._maxContentWidth,
-          ),
-          child: SingleChildScrollView(
-            key: const Key('profile.page'),
-            padding: EdgeInsets.only(bottom: bottom + 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _TopBar(colors: colors),
-                if (state is SignedIn)
-                  ..._signedIn(context, colors, state.profile)
-                else
-                  ..._signedOut(context, colors),
-                if (error != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: Text(
-                      error,
-                      key: const Key('account.error'),
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
-              ],
+    if (error == null) return null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Text(
+        error,
+        key: const Key('account.error'),
+        textAlign: center ? TextAlign.center : TextAlign.start,
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      ),
+    );
+  }
+
+  Widget _signedIn(BuildContext context) {
+    final error = Theme.of(context).colorScheme.error;
+    final Widget menu = _busy
+        ? const SizedBox.square(
+            dimension: 48,
+            child: Center(
+              child: SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             ),
+          )
+        : PopupMenuButton<_Action>(
+            key: const Key('profile.menu'),
+            tooltip: 'More',
+            icon: const Icon(Icons.more_horiz_rounded),
+            onSelected: (a) => switch (a) {
+              _Action.logOut => _logOut(),
+              _Action.delete => _delete(),
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                key: Key('account.logOut'),
+                value: _Action.logOut,
+                child: ListTile(
+                  leading: Icon(Icons.logout_rounded),
+                  title: Text('Log out'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                key: const Key('account.delete'),
+                value: _Action.delete,
+                child: ListTile(
+                  iconColor: error,
+                  textColor: error,
+                  leading: const Icon(Icons.delete_outline_rounded),
+                  title: const Text('Delete account'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          );
+    return ProfileView(
+      source: const MyProfile(),
+      actions: [
+        FilledButton(
+          key: const Key('profile.edit'),
+          onPressed: _busy ? null : () => showEditProfile(context),
+          child: const Text('Edit profile'),
+        ),
+      ],
+      menu: menu,
+      notice: _errorText(context, center: true),
+    );
+  }
+
+  Widget _signedOutPage(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: ProfileView.phoneMaxWidth),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(bottom: bottom + 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _TopBar(colors: colors),
+              ..._signedOut(context, colors),
+              ?_errorText(context),
+            ],
           ),
         ),
       ),
@@ -173,128 +229,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       ),
     ),
   ];
-
-  List<Widget> _signedIn(
-    BuildContext context,
-    SongiesColors colors,
-    Profile profile,
-  ) {
-    final off = _busy;
-    Widget action(
-      String key,
-      IconData icon,
-      String label,
-      VoidCallback onPressed, {
-      Color? color,
-    }) => TextButton.icon(
-      key: Key(key),
-      style: color == null
-          ? null
-          : TextButton.styleFrom(foregroundColor: color),
-      onPressed: off ? null : onPressed,
-      icon: Icon(icon),
-      label: Text(label),
-    );
-
-    return [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: Row(
-          children: [
-            Tooltip(
-              message: 'Your picture',
-              child: InkResponse(
-                key: const Key('profile.avatar'),
-                radius: 54,
-                onTap: off ? null : () => showPictureViewer(context),
-                child: const AccountAvatar(size: 96),
-              ),
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  InlineUsername(username: profile.username),
-                  Text(
-                    profile.email,
-                    key: const Key('account.email'),
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: colors.mutedText, fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-            if (off)
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-          ],
-        ),
-      ),
-      const _FriendsRow(),
-      const StatsBody(),
-      const SettingsSectionTitle('Account'),
-      const SyncStatusLine(),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Wrap(
-          children: [
-            action('account.logOut', Icons.logout_rounded, 'Log out', _logOut),
-            action(
-              'account.delete',
-              Icons.delete_outline_rounded,
-              'Delete account',
-              _delete,
-              color: Theme.of(context).colorScheme.error,
-            ),
-          ],
-        ),
-      ),
-    ];
-  }
 }
 
-/// Opens your friends: "Friends · 2".
-class _FriendsRow extends ConsumerWidget {
-  const _FriendsRow();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = Theme.of(context).extension<SongiesColors>()!;
-    final count = ref.watch(
-      friendsStateProvider.select((s) => s.value?.friends.length ?? 0),
-    );
-    return InkWell(
-      key: const Key('profile.friends'),
-      onTap: () => context.push('/profile/friends'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(Icons.people_outline_rounded, color: colors.text),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                count == 0 ? 'Friends' : 'Friends · $count',
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const FriendDot(),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right_rounded, color: colors.mutedText),
-          ],
-        ),
-      ),
-    );
-  }
-}
+/// The ⋯ menu's items.
+enum _Action { logOut, delete }
 
 /// Back (when there is somewhere to go back to) and the page's title.
 class _TopBar extends StatelessWidget {
