@@ -19,6 +19,9 @@ const kUpdateSkippedVersion = 'update_skipped_version';
 const kYtdlpUseSystem = 'ytdlp_use_system';
 const kReduceMotion = 'reduce_motion';
 
+/// Whether the desktop right pane is open. Device-local: never synced.
+const kRightPaneOpen = 'right_pane_open';
+
 /// YouTube's anonymous visitor id (`visitorData`), sent on every Innertube
 /// request. Device-local: never synced, never tied to an account.
 const kYtVisitorData = 'yt_visitor_data';
