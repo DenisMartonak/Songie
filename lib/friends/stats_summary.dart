@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../stats/artist_photos.dart';
 import '../stats/stats_models.dart';
 import 'activity_backend.dart' show NowPlaying;
 
@@ -12,8 +13,10 @@ import 'activity_backend.dart' show NowPlaying;
 class StatsSummary {
   StatsSummary({required this.at, required this.periods, this.legacy = false});
 
-  /// Under the server's 64 kB limit, with room to spare.
-  static const int maxBytes = 60000;
+  /// Under the server's 64 kB limit, with room to spare: the server
+  /// measures the jsonb text (`p_top::text`), which adds a space after each
+  /// ':' and ',' that this compact JSON does not have.
+  static const int maxBytes = 54000;
 
   /// Entries kept per list.
   static const int most = 10;
@@ -92,6 +95,32 @@ class StatsSummary {
     return json;
   }
 
+  /// This device's stats on day [at]: every period from [period], with the
+  /// top artists' photos and pages from [photos] (looked up first, once,
+  /// for the artists of all periods).
+  static Future<StatsSummary> gather({
+    required DateTime at,
+    required Future<PeriodStats> Function(StatsPeriod) period,
+    required ArtistPhotos photos,
+  }) async {
+    final periods = {for (final p in StatsPeriod.values) p: await period(p)};
+    await photos.fill([for (final s in periods.values) ...s.topArtists]);
+    return StatsSummary(
+      at: at,
+      periods: {
+        for (final MapEntry(key: p, value: s) in periods.entries)
+          p: PeriodStats(
+            period: s.period,
+            total: s.total,
+            previousTotal: s.previousTotal,
+            buckets: s.buckets,
+            topArtists: photos.apply(s.topArtists),
+            topSongs: s.topSongs,
+          ),
+      },
+    );
+  }
+
   /// Lenient: entries of the wrong shape are skipped; null when [j] is not
   /// a map. A map without `periods` is an old payload.
   static StatsSummary? fromJson(Object? j) {
@@ -102,8 +131,7 @@ class StatsSummary {
     return StatsSummary(
       at: at,
       periods: {
-        for (final p in StatsPeriod.values)
-          p: ?_period(p, periods[p.name], at),
+        for (final p in StatsPeriod.values) p: ?_period(p, periods[p.name], at),
       },
     );
   }

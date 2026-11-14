@@ -62,7 +62,6 @@ import 'room/room_service.dart';
 import 'room/room_songs.dart';
 import 'stats/artist_photos.dart';
 import 'stats/stats_models.dart';
-import 'ui/ytm/artist_lookup.dart';
 import 'stats/stats_repository.dart';
 import 'theme/app_theme.dart';
 import 'theme/cover_palette.dart';
@@ -74,6 +73,7 @@ import 'sync/cloud/sync_status.dart';
 import 'theme/theme_service.dart';
 import 'theme/theme_spec.dart';
 import 'ui/shell/window_controls.dart';
+import 'ui/ytm/artist_lookup.dart';
 import 'update/release.dart';
 import 'update/update_checker.dart';
 import 'update/update_controller.dart';
@@ -785,7 +785,6 @@ final activityPublisherProvider = Provider<ActivityPublisher>((ref) {
   final player = ref.watch(playerServiceProvider);
   final room = ref.watch(roomServiceProvider);
   final stats = ref.watch(statsRepositoryProvider);
-  var photosLoaded = false;
   final publisher = ActivityPublisher(
     backend: ref.watch(activityBackendProvider),
     states: player.states,
@@ -795,30 +794,12 @@ final activityPublisherProvider = Provider<ActivityPublisher>((ref) {
       _ => null,
     },
     roomChanges: room.statuses,
-    top: () async {
-      final photos = ref.read(artistPhotosProvider);
-      if (!photosLoaded) {
-        photosLoaded = true;
-        await photos.load();
-      }
-      final periods = {
-        for (final p in StatsPeriod.values) p: await stats.period(p),
-      };
-      await photos.fill([for (final s in periods.values) ...s.topArtists]);
+    top: () {
       final now = DateTime.now();
-      return StatsSummary(
+      return StatsSummary.gather(
         at: DateTime(now.year, now.month, now.day),
-        periods: {
-          for (final e in periods.entries)
-            e.key: PeriodStats(
-              period: e.value.period,
-              total: e.value.total,
-              previousTotal: e.value.previousTotal,
-              buckets: e.value.buckets,
-              topArtists: photos.apply(e.value.topArtists),
-              topSongs: e.value.topSongs,
-            ),
-        },
+        period: stats.period,
+        photos: ref.read(artistPhotosProvider),
       );
     },
   );
@@ -1515,6 +1496,7 @@ final artistPhotosProvider = Provider<ArtistPhotos>((ref) {
       };
     },
   );
+  ref.onDispose(photos.dispose);
   return photos;
 });
 

@@ -113,4 +113,37 @@ void main() {
     expect(out[1].photoUrl, isNull);
     expect(out[1].browseId, isNull);
   });
+
+  test('fill without load keeps the stored photos', () async {
+    await make().fill([stat('A', track: 'x')]);
+    final second = make();
+    await second.fill([stat('B', track: 'y')]);
+    expect(second.of('A'), (browseId: 'B-x', photoUrl: 'url-B-x'));
+    final third = make();
+    await third.load();
+    expect(third.of('A'), isNotNull);
+    expect(third.of('B'), isNotNull);
+  });
+
+  test('load is done once and returns the same future', () async {
+    final p = make();
+    expect(identical(p.load(), p.load()), isTrue);
+  });
+
+  test('a saved artist without a photo is looked up by its page', () async {
+    savedMap = {'A': (browseId: 'SA', photoUrl: null)};
+    final p = make();
+    await p.fill([stat('A', track: 'x')]);
+    expect(trackCalls, isEmpty);
+    expect(artistCalls, ['SA']);
+    expect(p.of('A'), (browseId: 'SA', photoUrl: 'url-SA'));
+  });
+
+  test('dispose closes the changes stream', () async {
+    final p = make();
+    var done = false;
+    p.changes.listen((_) {}, onDone: () => done = true);
+    await p.dispose();
+    expect(done, isTrue);
+  });
 }

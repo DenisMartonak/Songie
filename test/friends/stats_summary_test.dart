@@ -1,8 +1,21 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:songies/data/settings_repository.dart';
 import 'package:songies/friends/stats_summary.dart';
+import 'package:songies/stats/artist_photos.dart';
 import 'package:songies/stats/stats_models.dart';
+
+import '../helpers/test_db.dart';
+
+/// [j] as Postgres prints jsonb (`p_top::text`): a space after each ':'
+/// and ',' between items.
+String jsonbText(Object? j) => switch (j) {
+  Map() =>
+    '{${[for (final e in j.entries) '${jsonEncode(e.key)}: ${jsonbText(e.value)}'].join(', ')}}',
+  List() => '[${[for (final v in j) jsonbText(v)].join(', ')}]',
+  _ => jsonEncode(j),
+};
 
 void main() {
   final at = DateTime(2026, 11, 14);
@@ -227,4 +240,76 @@ void main() {
     expect(g2.periods[StatsPeriod.month]!.topSongs, hasLength(1));
     expect(g2.periods[StatsPeriod.year]!.topArtists, isEmpty);
   });
+
+  test('maxBytes leaves room for the spaces jsonb text adds', () {
+    // Many short entries: the most separators per byte.
+    PeriodStats many(StatsPeriod p) => PeriodStats(
+      period: p,
+      total: const Duration(hours: 1),
+      previousTotal: const Duration(hours: 1),
+      buckets: [
+        for (var i = 0; i < 400; i++)
+          StatsBucket(
+            start: DateTime(2025, 1, 1).add(Duration(days: i)),
+            end: DateTime(2025, 1, 2).add(Duration(days: i)),
+            heard: const Duration(seconds: 1),
+          ),
+      ],
+      topArtists: [
+        for (var i = 0; i < 10; i++)
+          ArtistStat(name: 'a', plays: 1, heard: Duration.zero),
+      ],
+      topSongs: const [],
+    );
+    final j = StatsSummary(
+      at: at,
+      periods: {for (final p in StatsPeriod.values) p: many(p)},
+    ).toJson();
+    final compact = utf8.encode(jsonEncode(j)).length;
+    final spaced = utf8.encode(jsonbText(j)).length;
+    // The spaces add well under the room maxBytes keeps below 64 kB.
+    expect(
+      (spaced - compact) / compact,
+      lessThan((65536 - StatsSummary.maxBytes) / StatsSummary.maxBytes),
+    );
+  });
+
+  test(
+    'gather fills photos and pages from the cache into every period',
+    () async {
+      final db = testDb();
+      addTearDown(db.close);
+      final photos = ArtistPhotos(
+        settings: SettingsRepository(db),
+        saved: () async => const {},
+        browseIdForTrack: (t) async => 'UC-$t',
+        artist: (b) async => (browseId: b, photoUrl: 'https://img/$b'),
+      );
+      final s = await StatsSummary.gather(
+        at: at,
+        period: (p) async => PeriodStats(
+          period: p,
+          total: const Duration(minutes: 5),
+          previousTotal: null,
+          buckets: const [],
+          topArtists: [
+            ArtistStat(
+              name: 'Artist ${p.name}',
+              plays: 1,
+              heard: const Duration(minutes: 5),
+              sampleTrackId: p.name,
+            ),
+          ],
+          topSongs: const [],
+        ),
+        photos: photos,
+      );
+      for (final p in StatsPeriod.values) {
+        final a = s.periods[p]!.topArtists.single;
+        expect(a.browseId, 'UC-${p.name}');
+        expect(a.photoUrl, 'https://img/UC-${p.name}');
+      }
+      expect(s.at, at);
+    },
+  );
 }

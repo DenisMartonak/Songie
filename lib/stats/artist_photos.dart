@@ -8,7 +8,8 @@ import 'stats_models.dart';
 typedef ArtistPhoto = ({String browseId, String? photoUrl});
 
 /// Finds and remembers artist photos for the stats. A saved artist's photo
-/// is used as is; others are looked up through their most-played track.
+/// is used as is (a saved artist without one is looked up by its page);
+/// others are looked up through their most-played track.
 /// Answers are kept on the device; failed lookups are not, so they are
 /// asked again. Lookups run one at a time, at most once an hour.
 class ArtistPhotos {
@@ -32,16 +33,22 @@ class ArtistPhotos {
   final _changes = StreamController<void>.broadcast();
   DateTime? _lastPass;
   Future<void>? _running;
+  Future<void>? _loaded;
 
   ArtistPhoto? of(String name) => _photos[name];
 
   Stream<void> get changes => _changes.stream;
 
-  /// Reads the kept photos.
-  Future<void> load() async {
+  /// Reads the kept photos, once: later calls return the same future. A
+  /// failed read is tried again on the next call.
+  Future<void> load() => _loaded ??= _load().catchError((Object _) {
+    _loaded = null;
+  });
+
+  Future<void> _load() async {
+    final raw = await settings.getString(kArtistPhotos);
+    if (raw == null) return;
     try {
-      final raw = await settings.getString(kArtistPhotos);
-      if (raw == null) return;
       final map = jsonDecode(raw) as Map<String, dynamic>;
       for (final e in map.entries) {
         final v = e.value as Map<String, dynamic>;
@@ -71,6 +78,7 @@ class ArtistPhotos {
   }
 
   Future<void> _pass(List<ArtistStat> artists) async {
+    await load();
     var changed = false;
     Map<String, ArtistPhoto> savedNow = const {};
     try {
@@ -78,18 +86,22 @@ class ArtistPhotos {
     } catch (_) {}
     for (final a in artists) {
       final s = savedNow[a.name];
-      if (s != null) {
+      if (s != null && s.photoUrl != null) {
         if (_photos[a.name] != s) {
           _photos[a.name] = s;
           changed = true;
         }
         continue;
       }
-      if (_photos.containsKey(a.name)) continue;
+      // A saved artist without a photo still gives its page to look up.
+      final known = _photos[a.name];
+      if (known != null && (s == null || known.browseId == s.browseId)) {
+        continue;
+      }
       final track = a.sampleTrackId;
-      if (track == null) continue;
+      if (s == null && track == null) continue;
       try {
-        final id = await browseIdForTrack(track);
+        final id = s?.browseId ?? await browseIdForTrack(track!);
         if (id == null) continue;
         final found = await artist(id);
         if (found == null) continue;
@@ -120,4 +132,7 @@ class ArtistPhotos {
         null => a,
       },
   ];
+
+  /// Closes [changes].
+  Future<void> dispose() => _changes.close();
 }
