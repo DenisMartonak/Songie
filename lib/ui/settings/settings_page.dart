@@ -89,17 +89,17 @@ class SettingsPage extends ConsumerWidget {
               ],
             ),
           ),
-          const _FoldersSection(),
+          const FoldersSection(),
           const PlaybackSettingsSection(),
           const PrivacySettingsSection(),
-          const _AppearanceSection(),
+          const AppearanceSection(),
           const DiscordSettingsSection(),
           const YouTubeSettingsSection(),
           const DownloadsSettingsSection(),
-          const _StorageSection(),
+          const StorageSection(),
           const CrashReportsSettingsSection(),
-          const _LogsSection(),
-          const _AboutSection(),
+          const LogsSection(),
+          const AboutSection(),
         ],
       ),
     );
@@ -137,8 +137,8 @@ class SettingsSectionTitle extends StatelessWidget {
   }
 }
 
-class _FoldersSection extends ConsumerWidget {
-  const _FoldersSection();
+class FoldersSection extends ConsumerWidget {
+  const FoldersSection({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -338,8 +338,8 @@ class _FolderRow extends ConsumerWidget {
 }
 
 /// How the app looks and moves. Each row is one child of the column.
-class _AppearanceSection extends ConsumerWidget {
-  const _AppearanceSection();
+class AppearanceSection extends ConsumerWidget {
+  const AppearanceSection({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -407,8 +407,8 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _StorageSection extends ConsumerWidget {
-  const _StorageSection();
+class StorageSection extends ConsumerWidget {
+  const StorageSection({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -425,8 +425,8 @@ class _StorageSection extends ConsumerWidget {
   }
 }
 
-class _LogsSection extends ConsumerWidget {
-  const _LogsSection();
+class LogsSection extends ConsumerWidget {
+  const LogsSection({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -469,8 +469,8 @@ class _LogsSection extends ConsumerWidget {
   }
 }
 
-class _AboutSection extends ConsumerWidget {
-  const _AboutSection();
+class AboutSection extends ConsumerWidget {
+  const AboutSection({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
