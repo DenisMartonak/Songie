@@ -41,6 +41,14 @@ class _FakeStats implements StatsRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// These tests start at 7 days (the app's period now starts at 30).
+class _StartsAtWeek extends SelectedStatsPeriod {
+  @override
+  StatsPeriod build() => StatsPeriod.week;
+}
+
+final _week = statsPeriodProvider.overrideWith(_StartsAtWeek.new);
+
 List<StatsBucket> _days(int count, int minutesEach) => [
   for (var i = 0; i < count; i++)
     StatsBucket(
@@ -129,6 +137,7 @@ void main() {
   }) async {
     await tester.pumpWidget(
       h.app(
+        extraOverrides: [_week],
         initialLocation: '/home/stats',
         disableAnimations: disableAnimations,
         routes: [
@@ -176,6 +185,7 @@ void main() {
     size(tester, const Size(400, 800));
     await tester.pumpWidget(
       h.app(
+        extraOverrides: [_week],
         initialLocation: '/',
         routes: [
           GoRoute(

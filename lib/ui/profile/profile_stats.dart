@@ -79,6 +79,7 @@ class ProfileStats extends ConsumerWidget {
     required this.wide,
     required this.mine,
     this.note,
+    this.noteKey,
     super.key,
   });
 
@@ -89,6 +90,9 @@ class ProfileStats extends ConsumerWidget {
   final bool mine;
   final String? note;
 
+  /// The [note]'s key.
+  final Key? noteKey;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = stats;
@@ -96,7 +100,7 @@ class ProfileStats extends ConsumerWidget {
     final picker = pick == null
         ? null
         : _PeriodPicker(selected: period, onSelected: pick, wide: wide);
-    final noteLine = note == null ? null : _Note(note!);
+    final noteLine = note == null ? null : _Note(note!, textKey: noteKey);
     final side = wide ? 24.0 : 16.0;
 
     if (s == null) {
@@ -249,9 +253,10 @@ class _Muted extends StatelessWidget {
 }
 
 class _Note extends StatelessWidget {
-  const _Note(this.text);
+  const _Note(this.text, {this.textKey});
 
   final String text;
+  final Key? textKey;
 
   @override
   Widget build(BuildContext context) {
@@ -260,6 +265,7 @@ class _Note extends StatelessWidget {
       padding: const EdgeInsets.only(top: 8),
       child: Text(
         text,
+        key: textKey,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: colors.mutedText, fontSize: 12),

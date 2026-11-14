@@ -608,10 +608,10 @@ void main() {
   });
 
   group('providers', () {
-    test('the period starts at 7 days and can be changed', () {
+    test('the period starts at 30 days and can be changed', () {
       final c = ProviderContainer();
       addTearDown(c.dispose);
-      expect(c.read(statsPeriodProvider), StatsPeriod.week);
+      expect(c.read(statsPeriodProvider), StatsPeriod.month);
       c.read(statsPeriodProvider.notifier).select(StatsPeriod.year);
       expect(c.read(statsPeriodProvider), StatsPeriod.year);
     });

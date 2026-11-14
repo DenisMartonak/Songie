@@ -88,6 +88,9 @@ class FakeActivityBackend implements ActivityBackend {
     };
   }
 
+  /// Stores [summary] for [id] as is (an old app's payload, for tests).
+  void storeTop(String id, StatsSummary summary) => _row(id).summary = summary;
+
   /// [id]'s row as stored (for tests).
   ({NowPlaying? now, String? roomCode, StatsSummary? stats})? rowOf(String id) {
     final r = _rows[id];

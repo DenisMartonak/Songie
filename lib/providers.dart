@@ -911,6 +911,12 @@ final friendsStateProvider = StreamProvider<FriendsState>(
   (ref) => ref.watch(friendsServiceProvider).states,
 );
 
+/// How many friends [userId] has (a friend's, or your own); null when the
+/// server won't say.
+final friendCountProvider = FutureProvider.autoDispose.family<int?, String>(
+  (ref, userId) => ref.watch(friendsBackendProvider).friendCount(userId),
+);
+
 /// The room tables behind Supabase. Not overridden in `main()`: the client
 /// is read only when a call is made, so a signed-out app never touches
 /// Supabase, and tests that never open a room need no wiring.
@@ -1396,11 +1402,11 @@ final libraryTrackProvider = FutureProvider.autoDispose.family<Track?, String>(
   (ref, id) => ref.watch(libraryRepositoryProvider).trackById(id),
 );
 
-/// The stats page's chosen period. Session-only: it starts at 7 days on
+/// Your profile's chosen period. Session-only: it starts at 30 days on
 /// every launch.
 class SelectedStatsPeriod extends Notifier<StatsPeriod> {
   @override
-  StatsPeriod build() => StatsPeriod.week;
+  StatsPeriod build() => StatsPeriod.month;
 
   void select(StatsPeriod period) => state = period;
 }
