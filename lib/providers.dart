@@ -60,7 +60,9 @@ import 'room/room_backend.dart';
 import 'room/room_channel.dart';
 import 'room/room_service.dart';
 import 'room/room_songs.dart';
+import 'stats/artist_photos.dart';
 import 'stats/stats_models.dart';
+import 'ui/ytm/artist_lookup.dart';
 import 'stats/stats_repository.dart';
 import 'theme/app_theme.dart';
 import 'theme/cover_palette.dart';
@@ -1456,3 +1458,43 @@ final savedArtistsRepositoryProvider = Provider<SavedArtistsRepository>(
 final savedArtistsProvider = StreamProvider<List<SavedArtist>>(
   (ref) => ref.watch(savedArtistsRepositoryProvider).watchAll(),
 );
+
+/// Photos of the artists in the stats: saved artists first, else looked up
+/// through their most-played track.
+final artistPhotosProvider = Provider<ArtistPhotos>((ref) {
+  final photos = ArtistPhotos(
+    settings: ref.watch(settingsRepositoryProvider),
+    saved: () async {
+      final rows = await ref
+          .read(savedArtistsRepositoryProvider)
+          .watchAll()
+          .first;
+      return {
+        for (final r in rows)
+          r.name: (browseId: r.browseId, photoUrl: r.thumbnailUrl),
+      };
+    },
+    browseIdForTrack: (id) async {
+      final track = await ref.read(libraryRepositoryProvider).trackById(id);
+      if (track == null) return null;
+      return ref.read(artistLookupProvider).forTrack(track);
+    },
+    artist: (browseId) async {
+      final r = await ref.read(ytmServiceProvider).artist(browseId);
+      return switch (r) {
+        Ok(:final value) => (
+          browseId: browseId,
+          photoUrl: value.artist.thumbnailUrl,
+        ),
+        _ => null,
+      };
+    },
+  );
+  return photos;
+});
+
+/// Counts changes to the artist photos, so a screen showing them redraws.
+final artistPhotosChangesProvider = StreamProvider<int>((ref) {
+  var n = 0;
+  return ref.watch(artistPhotosProvider).changes.map((_) => ++n);
+});

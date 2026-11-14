@@ -148,3 +148,7 @@ class SettingsRepository {
   static bool _parse(String? v, bool fallback) =>
       v == null ? fallback : v == '1' || v == 'true';
 }
+
+/// Cached YouTube Music artist photos for the stats, as one JSON map
+/// `name -> {b: browseId, p: photoUrl}`. Device-local.
+const kArtistPhotos = 'artist_photos';
