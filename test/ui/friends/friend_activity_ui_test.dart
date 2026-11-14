@@ -41,8 +41,12 @@ void main() {
     h.activityBackend.me = 'u1';
   }
 
-  Future<void> pump(WidgetTester tester, String location) async {
-    tester.view.physicalSize = const Size(500, 1600);
+  Future<void> pump(
+    WidgetTester tester,
+    String location, {
+    Size size = const Size(500, 1600),
+  }) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
@@ -170,6 +174,31 @@ void main() {
     expect(key('friend.remove'), findsOneWidget);
     expect(find.text('Remove friend'), findsOneWidget);
     expect(key('account.logOut'), findsNothing);
+    await rig.dispose(tester);
+  });
+
+  uiTest("wide: a friend's page has only the menu at the far right", (
+    tester,
+  ) async {
+    await pump(tester, '/profile/friends/f1', size: const Size(1400, 900));
+    expect(key('profile.edit'), findsNothing);
+    expect(find.text('Edit profile'), findsNothing);
+    final menu = tester.getRect(key('profile.menu'));
+    // Content 1200 wide, centered in 1400, with 24 inside.
+    expect(menu.right, closeTo(1276, 1));
+    expect(menu.left, greaterThan(tester.getRect(key('profile.name')).right));
+    // Nothing else sits beside it in the header's button row.
+    final buttons = find.byWidgetPredicate(
+      (w) => w is ButtonStyleButton || w is IconButton,
+    );
+    final beside = tester
+        .widgetList(buttons)
+        .map((w) => tester.getRect(find.byWidget(w)))
+        .where((r) => (r.center.dy - menu.center.dy).abs() < menu.height / 2)
+        .where((r) => r.left > tester.getRect(key('profile.name')).right)
+        // An M3 IconButton is a ButtonStyleButton inside: one rect each.
+        .toSet();
+    expect(beside, {menu});
     await rig.dispose(tester);
   });
 

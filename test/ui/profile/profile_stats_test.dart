@@ -6,10 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:songies/core/result.dart';
 import 'package:songies/data/settings_repository.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/stats/artist_photos.dart';
 import 'package:songies/stats/stats_models.dart';
+import 'package:songies/theme/app_theme.dart';
+import 'package:songies/theme/contrast.dart';
 import 'package:songies/ui/profile/profile_stats.dart';
 import 'package:songies/ui/widgets/favorite_star.dart';
 
@@ -95,6 +98,7 @@ void main() {
   Future<void> pump(
     WidgetTester tester, {
     PeriodStats? stats,
+    bool noStats = false,
     StatsPeriod period = StatsPeriod.month,
     ValueChanged<StatsPeriod>? onPeriod,
     bool picker = true,
@@ -113,7 +117,7 @@ void main() {
             builder: (_, _) => Scaffold(
               body: SingleChildScrollView(
                 child: ProfileStats(
-                  stats: stats ?? _stats(),
+                  stats: noStats ? null : stats ?? _stats(),
                   period: period,
                   onPeriod: picker ? (onPeriod ?? (_) {}) : null,
                   wide: wide,
@@ -208,7 +212,7 @@ void main() {
     expect(find.text('Minutes listened'), findsOneWidget);
     expect(tester.widget<Text>(key('profile.total')).data, '2,418');
     expect(key('profile.chart'), findsOneWidget);
-    expect(find.text('+21% vs the previous month'), findsOneWidget);
+    expect(find.text('+21% vs the previous 30 days'), findsOneWidget);
   });
 
   uiTest('wide total reads "minutes listened in the last 30 days"', (
@@ -241,6 +245,49 @@ void main() {
     await tester.tap(key('profile.period.year'));
     await settle(tester);
     expect(chosen, [StatsPeriod.week, StatsPeriod.year]);
+  });
+
+  for (final wide in [false, true]) {
+    uiTest('the chosen period is a pill in the text color '
+        '(${wide ? 'wide' : 'phone'})', (tester) async {
+      size(tester, wide ? const Size(1280, 900) : const Size(400, 800));
+      await pump(tester, wide: wide);
+      final colors = Theme.of(tester.element(key('profile.period.month')))
+          .extension<SongiesColors>()!;
+      Material pill(StatsPeriod p) => tester.widget<Material>(
+        find
+            .ancestor(
+              of: key('profile.period.${p.name}'),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      Text label(StatsPeriod p) => tester.widget<Text>(
+        find.descendant(
+          of: key('profile.period.${p.name}'),
+          matching: find.byType(Text),
+        ),
+      );
+      expect(pill(StatsPeriod.month).color, colors.text);
+      expect(label(StatsPeriod.month).style!.color, readableOn(colors.text));
+      expect(pill(StatsPeriod.week).color, Colors.transparent);
+      expect(label(StatsPeriod.week).style!.color, colors.text);
+    });
+  }
+
+  uiTest("a friend's period missing from their summary says it's empty", (
+    tester,
+  ) async {
+    size(tester, const Size(400, 800));
+    await pump(tester, noStats: true, mine: false, period: StatsPeriod.year);
+    expect(key('profile.period.year'), findsOneWidget);
+    expect(find.text('Nothing played in this period yet'), findsOneWidget);
+  });
+
+  uiTest('your stats still loading show no empty message', (tester) async {
+    size(tester, const Size(400, 800));
+    await pump(tester, noStats: true);
+    expect(find.text('Nothing played in this period yet'), findsNothing);
   });
 
   uiTest('the note shows under the picker', (tester) async {
@@ -392,6 +439,17 @@ void main() {
     expect(h.ytStore.upserted, ['v1']);
     expect(h.player.state.queue.map((t) => t.ytVideoId), ['v1']);
     expect(h.player.state.queue.single.title, 'Song 1');
+  });
+
+  uiTest("a friend song that can't be stored says it couldn't play", (
+    tester,
+  ) async {
+    size(tester, const Size(400, 800));
+    await pump(tester, mine: false, stats: _stats(songs: _songs(friend: true)));
+    h.ytStore.failUpsert = const Failure(FailureKind.io, 'disk full');
+    await tapVisible(tester, 'profile.song.0');
+    expect(h.player.state.queue, isEmpty);
+    expect(find.text("Couldn't play this song"), findsOneWidget);
   });
 
   uiTest('own song row keeps menu and star', (tester) async {

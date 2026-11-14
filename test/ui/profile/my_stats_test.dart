@@ -235,7 +235,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('profile.period.month')));
     await settle(tester);
-    expect(text(tester, 'profile.change'), '−8% vs the previous month');
+    expect(text(tester, 'profile.change'), '−8% vs the previous 30 days');
 
     await tester.tap(find.byKey(const Key('profile.period.halfYear')));
     await settle(tester);
@@ -373,6 +373,36 @@ void main() {
     expect(h.player.state.queue, isEmpty);
   });
 
+  uiTest('one play reads "1 play"; top songs show the main artist', (
+    tester,
+  ) async {
+    await pumpPage(tester);
+    final song0 = find.byKey(const Key('profile.song.0'));
+    await tester.scrollUntilVisible(song0, 200);
+    expect(
+      find.descendant(of: song0, matching: find.text('1 play')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: song0, matching: find.text('Artist 1')),
+      findsOneWidget,
+    );
+    expect(find.text('Artist 1 feat. Guest'), findsNothing);
+    // The last has no known main artist: its artist line shows.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('profile.songs.more')),
+      200,
+    );
+    await tester.tap(find.byKey(const Key('profile.songs.more')));
+    await settle(tester);
+    final song9 = find.byKey(const Key('profile.song.9'));
+    await tester.scrollUntilVisible(song9, 200);
+    expect(
+      find.descendant(of: song9, matching: find.text('Artist 10 feat. Guest')),
+      findsOneWidget,
+    );
+  });
+
   uiTest('the old stats stay until the new period arrives', (tester) async {
     size(tester, const Size(400, 800));
     final month = StreamController<PeriodStats>();
@@ -391,7 +421,7 @@ void main() {
     month.add(stats.byPeriod[StatsPeriod.month]!);
     await settle(tester);
     expect(text(tester, 'profile.total'), '46');
-    expect(text(tester, 'profile.change'), '\u22128% vs the previous month');
+    expect(text(tester, 'profile.change'), '\u22128% vs the previous 30 days');
   });
 
   uiTest('an empty period shows only the message', (tester) async {

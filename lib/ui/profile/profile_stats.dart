@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/log.dart';
 import '../../innertube/ytm_models.dart';
 import '../../providers.dart';
 import '../../stats/stats_models.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/contrast.dart';
+import '../island/island_controller.dart';
+import '../island/island_host.dart';
 import '../motion/pressable.dart';
 import '../stats/stats_chart.dart';
 import '../widgets/artwork.dart';
@@ -29,7 +32,7 @@ String? statsChangeText(PeriodStats stats) {
           .round();
   final than = switch (stats.period) {
     StatsPeriod.week => 'the previous 7 days',
-    StatsPeriod.month => 'the previous month',
+    StatsPeriod.month => 'the previous 30 days',
     StatsPeriod.halfYear => 'the previous 6 months',
     StatsPeriod.year => 'the previous 12 months',
   };
@@ -104,11 +107,12 @@ class ProfileStats extends ConsumerWidget {
     final side = wide ? 24.0 : 16.0;
 
     if (s == null) {
+      // Yours are still loading; a friend's summary lacks this period.
       return Padding(
         padding: EdgeInsets.symmetric(horizontal: side),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [?picker, ?noteLine],
+          children: [?picker, ?noteLine, if (!mine) const _Empty()],
         ),
       );
     }
@@ -152,18 +156,7 @@ class ProfileStats extends ConsumerWidget {
     if (!numbers) {
       top = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ?picker,
-          ?noteLine,
-          if (!lists)
-            const Padding(
-              padding: EdgeInsets.only(top: 24),
-              child: _Muted(
-                'Nothing played in this period yet',
-                key: Key('profile.empty'),
-              ),
-            ),
-        ],
+        children: [?picker, ?noteLine, if (!lists) const _Empty()],
       );
     } else if (wide) {
       top = Row(
@@ -236,6 +229,20 @@ class ProfileStats extends ConsumerWidget {
   }
 }
 
+/// "Nothing played in this period yet".
+class _Empty extends StatelessWidget {
+  const _Empty();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.only(top: 24),
+    child: _Muted(
+      'Nothing played in this period yet',
+      key: Key('profile.empty'),
+    ),
+  );
+}
+
 class _Muted extends StatelessWidget {
   const _Muted(this.text, {super.key});
 
@@ -289,7 +296,6 @@ class _PeriodPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
-    final accent = ensureAccentContrast(colors.accent, colors.background);
 
     Widget option(StatsPeriod p, {required double width}) {
       final on = p == selected;
@@ -300,7 +306,7 @@ class _PeriodPicker extends StatelessWidget {
         label: 'Last ${_span(p)}',
         excludeSemantics: true,
         child: Material(
-          color: on ? accent : Colors.transparent,
+          color: on ? colors.text : Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: radius,
             side: wide && !on
@@ -319,7 +325,7 @@ class _PeriodPicker extends StatelessWidget {
                   _short(p),
                   maxLines: 1,
                   style: TextStyle(
-                    color: on ? readableOn(accent) : colors.text,
+                    color: on ? readableOn(colors.text) : colors.text,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -825,7 +831,9 @@ class _SongRow extends ConsumerWidget {
         art: art,
         title: song.title,
         subtitle: song.displayArtist,
-        onTap: videoId == null ? null : () => _playFriend(ref, videoId),
+        onTap: videoId == null
+            ? null
+            : () => _playFriend(context, ref, videoId),
         trailing: plays,
       );
     }
@@ -862,17 +870,27 @@ class _SongRow extends ConsumerWidget {
     );
   }
 
-  Future<void> _playFriend(WidgetRef ref, String videoId) async {
+  Future<void> _playFriend(
+    BuildContext context,
+    WidgetRef ref,
+    String videoId,
+  ) async {
+    final islands = Islands.of(context);
     final player = ref.read(playerInputsProvider);
-    final tracks = await ref.read(ytTrackStoreProvider).upsertAll([
-      YtmSong(
-        videoId: videoId,
-        title: song.title,
-        artists: [YtmArtistRef(name: song.displayArtist)],
-        thumbnailUrl: song.coverUrl,
-      ),
-    ]);
-    if (tracks.isEmpty) return;
-    await player.playQueue(tracks);
+    try {
+      final tracks = await ref.read(ytTrackStoreProvider).upsertAll([
+        YtmSong(
+          videoId: videoId,
+          title: song.title,
+          artists: [YtmArtistRef(name: song.displayArtist)],
+          thumbnailUrl: song.coverUrl,
+        ),
+      ]);
+      if (tracks.isEmpty) throw StateError('the song was not stored');
+      await player.playQueue(tracks);
+    } catch (e) {
+      AppLog.w("Couldn't play a friend's song $videoId: $e");
+      islands.show("Couldn't play this song", kind: IslandKind.failure);
+    }
   }
 }
