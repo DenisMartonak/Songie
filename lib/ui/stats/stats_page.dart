@@ -6,6 +6,7 @@ import '../../providers.dart';
 import '../../stats/stats_models.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/contrast.dart';
+import '../profile/profile_stats.dart' show statsChangeText;
 import '../widgets/artwork.dart';
 import '../widgets/song_menu.dart';
 import '../ytm/artist_lookup.dart';
@@ -135,28 +136,6 @@ class _StatsBodyState extends ConsumerState<StatsBody> {
         ),
     ];
   }
-}
-
-/// "+12% vs the previous 7 days", "−8% vs …" (a true minus), or "Same as
-/// the previous 7 days" when it rounds to 0 %. Null without a previous
-/// period.
-String? statsChangeText(PeriodStats stats) {
-  final previous = stats.previousTotal;
-  if (previous == null || previous == Duration.zero) return null;
-  final pct =
-      ((stats.total.inMilliseconds - previous.inMilliseconds) *
-              100 /
-              previous.inMilliseconds)
-          .round();
-  final than = switch (stats.period) {
-    StatsPeriod.week => 'the previous 7 days',
-    StatsPeriod.month => 'the previous month',
-    StatsPeriod.halfYear => 'the previous 6 months',
-    StatsPeriod.year => 'the previous 12 months',
-  };
-  if (pct == 0) return 'Same as $than';
-  final sign = pct > 0 ? '+' : '−';
-  return '$sign${pct.abs()}% vs $than';
 }
 
 class _Header extends StatelessWidget {
