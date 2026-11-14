@@ -7,10 +7,11 @@ import '../motion/motion.dart';
 import '../now_playing/now_playing_queue.dart';
 import 'right_pane_friends.dart';
 import 'right_pane_state.dart';
+import 'right_pane_strip.dart';
 
 /// The desktop's right pane, beside the main pane and on the same rounded
 /// surface: Friends, Lyrics or the Queue under a slim header with a close
-/// button. It slides open and shut; only what it shows is built, so lyrics
+/// button, or, closed, the strip of friends' faces. It slides open and shut; only what it shows is built, so lyrics
 /// are looked up only while it shows them.
 class RightPane extends ConsumerWidget {
   const RightPane({super.key});
@@ -41,8 +42,7 @@ class RightPane extends ConsumerWidget {
               ),
             ),
           )
-        // Task 5 puts the strip here.
-        : const SizedBox.shrink();
+        : const RightPaneStrip();
     final duration = Motion.of(context).standard;
     // Reduced motion: no AnimatedSize at all, which at zero duration would
     // re-dirty its own layout.

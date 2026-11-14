@@ -210,7 +210,8 @@ void main() {
 
     await tap(tester, close);
     expect(pane, findsNothing);
-    expect(tester.getTopRight(shell).dx, 1280 - 8);
+    // The strip stays, 40 px and its gap, beside the page and its own gap.
+    expect(tester.getTopRight(shell).dx, 1280 - 48 - 8);
     expect(tester.getTopRight(shell).dx, greaterThan(openRight));
 
     await tap(tester, lyricsButton);
@@ -350,15 +351,16 @@ void main() {
     final closing = tester.getSize(find.byType(RightPane)).width;
     expect(closing, greaterThan(0));
     expect(closing, lessThan(320 + 8));
+    expect(closing, greaterThan(40 + 8));
     await settle(tester);
-    expect(tester.getSize(find.byType(RightPane)).width, 0);
+    expect(tester.getSize(find.byType(RightPane)).width, 40 + 8);
 
     await tester.tap(lyricsButton);
     await tester.pump();
     await flush(tester);
     await tester.pump(const Duration(milliseconds: 100));
     final opening = tester.getSize(find.byType(RightPane)).width;
-    expect(opening, greaterThan(0));
+    expect(opening, greaterThan(40 + 8));
     expect(opening, lessThan(320 + 8));
     await settle(tester);
     expect(tester.getSize(find.byType(RightPane)).width, 320 + 8);
@@ -373,7 +375,7 @@ void main() {
     await tester.tap(close);
     await tester.pump();
     await flush(tester);
-    expect(tester.getSize(find.byType(RightPane)).width, 0);
+    expect(tester.getSize(find.byType(RightPane)).width, 40 + 8);
     await tester.tap(lyricsButton);
     await tester.pump();
     await flush(tester);
