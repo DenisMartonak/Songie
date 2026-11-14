@@ -84,7 +84,7 @@ class ProfileView extends ConsumerStatefulWidget {
   /// The ⋯ button: top right on the phone, after [actions] when wide.
   final Widget? menu;
 
-  /// Shown under the header, as a failed action's error.
+  /// Shown under the header, as a sync warning or a failed action's error.
   final Widget? notice;
 
   @override
@@ -127,25 +127,23 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   }
 
   /// Reads the kept artist photos, then looks up the missing ones for the
-  /// stats first shown (at most once an hour, see [ArtistPhotos.fill]).
+  /// top artists of every period at once, as the friends summary does (at
+  /// most once an hour, see [ArtistPhotos.fill]).
   Future<void> _fillPhotos() async {
     final photos = ref.read(artistPhotosProvider);
-    await photos.load();
-    if (!mounted) return;
-    // The rows read the kept photos when they build.
-    setState(() {});
-    final period = ref.read(statsPeriodProvider);
-    final done = Completer<PeriodStats>();
-    final sub = ref.listenManual(periodStatsProvider(period), (_, next) {
-      if (next.value case final s? when !done.isCompleted) done.complete(s);
-    }, fireImmediately: true);
+    final stats = ref.read(statsRepositoryProvider);
     try {
-      final stats = await done.future;
-      await photos.fill(stats.topArtists);
+      await photos.load();
+      if (!mounted) return;
+      // The rows read the kept photos when they build.
+      setState(() {});
+      final periods = [
+        for (final p in StatsPeriod.values) await stats.period(p),
+      ];
+      if (!mounted) return;
+      await photos.fill([for (final s in periods) ...s.topArtists]);
     } catch (_) {
       // Photos are a nicety.
-    } finally {
-      sub.close();
     }
   }
 

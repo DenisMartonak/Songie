@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/paths.dart';
+import 'package:songies/sync/cloud/sync_status.dart';
+import 'package:songies/theme/app_theme.dart';
 import 'package:songies/ui/account/avatar.dart';
 import 'package:songies/ui/account/profile_page.dart';
 import 'package:songies/ui/profile/profile_view.dart';
@@ -222,5 +224,56 @@ void main() {
     await settle(tester);
     expect(key('account.signUp'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  group('sync warning', () {
+    Future<void> showing(WidgetTester tester, SyncPhase phase) async {
+      await signedIn();
+      await pump(tester, '/profile');
+      h.cloudSync.emit(SyncStatus(phase));
+      await settle(tester);
+    }
+
+    uiTest('a wrong clock says so in the error color', (tester) async {
+      await showing(tester, SyncPhase.clockWrong);
+      const text = "Can't sync: this device's date and time are wrong.";
+      expect(find.text(text), findsOneWidget);
+      final style = tester.widget<Text>(find.text(text)).style!;
+      expect(
+        style.color,
+        Theme.of(tester.element(find.text(text))).colorScheme.error,
+      );
+      // Under the header, above the stats.
+      expect(
+        top(tester, find.text(text)),
+        greaterThan(top(tester, key('profile.name'))),
+      );
+    });
+
+    uiTest('a newer app elsewhere asks to update, muted', (tester) async {
+      await showing(tester, SyncPhase.updateNeeded);
+      const text = 'Update Songies to keep syncing';
+      expect(find.text(text), findsOneWidget);
+      final colors = Theme.of(tester.element(find.text(text)))
+          .extension<SongiesColors>()!;
+      expect(
+        tester.widget<Text>(find.text(text)).style!.color,
+        colors.mutedText,
+      );
+    });
+
+    for (final phase in [
+      SyncPhase.idle,
+      SyncPhase.syncing,
+      SyncPhase.offline,
+      SyncPhase.error,
+    ]) {
+      uiTest('${phase.name} shows nothing', (tester) async {
+        await showing(tester, phase);
+        expect(key('profile.syncWarning'), findsNothing);
+        expect(find.textContaining("Can't sync"), findsNothing);
+        expect(find.textContaining('Update Songies'), findsNothing);
+      });
+    }
   });
 }

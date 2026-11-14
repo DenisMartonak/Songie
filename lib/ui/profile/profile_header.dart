@@ -86,10 +86,13 @@ class ProfileHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 24),
+            // At least the picture's height, centered beside it; taller
+            // when large text needs it.
             Expanded(
-              child: SizedBox(
-                height: wideAvatar,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: wideAvatar),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -100,8 +103,8 @@ class ProfileHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            SizedBox(
-              height: wideAvatar,
+            ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: wideAvatar),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

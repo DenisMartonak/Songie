@@ -28,6 +28,11 @@ class _FakeStats implements StatsRepository {
   @override
   Stream<PeriodStats> watch(StatsPeriod p) => Stream.value(stats);
 
+  /// Each period's own artists, as the photo fill reads them.
+  @override
+  Future<PeriodStats> period(StatsPeriod p) async =>
+      _period(p, prefix: 'All ${p.name}');
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -210,6 +215,21 @@ void main() {
     await rig.dispose(tester);
   });
 
+  uiTest('wide: a long name at twice the text size fits', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final long = 'Maximilian' * 4;
+    final f = h.friendsBackend..addUser('l1', long);
+    await f.send('l1');
+    f.me = 'l1';
+    await f.accept('u1');
+    f.me = 'u1';
+    await pump(tester, const FriendProfile('l1'), size: const Size(1000, 900));
+    expect(tester.takeException(), isNull);
+    expect(key('profile.name'), findsOneWidget);
+    await rig.dispose(tester);
+  });
+
   uiTest('scroll view spans the window', (tester) async {
     await pump(tester, const FriendProfile('f1'), size: const Size(1400, 900));
     expect(tester.getSize(find.byType(Scrollable).first).width, 1400);
@@ -309,15 +329,17 @@ void main() {
     await rig.dispose(tester);
   });
 
-  uiTest('own profile: your stats, photos looked up once on open', (
-    tester,
-  ) async {
+  uiTest('own profile: your stats, photos looked up once on open for every '
+      'period', (tester) async {
     await pump(tester, const MyProfile());
     expect(plain(tester, 'profile.name'), 'me');
     expect(find.text('Mine 1'), findsOneWidget);
     expect(photos.loads, 1);
     expect(photos.filled, [
-      ['Mine 1', 'Mine 2', 'Mine 3'],
+      [
+        for (final p in StatsPeriod.values)
+          for (var i = 1; i <= 3; i++) 'All ${p.name} $i',
+      ],
     ]);
     await rig.dispose(tester);
   });

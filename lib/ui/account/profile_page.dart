@@ -15,6 +15,7 @@ import 'account_dialogs.dart';
 import 'account_section.dart';
 import 'auth_screens.dart';
 import 'edit_profile_sheet.dart';
+import 'sync_warning.dart';
 
 /// Your profile: the [ProfileView] with Edit profile and a ⋯ menu (Log
 /// out, Delete account). Signed out, Sign up and Log in (what a "Sign in"
@@ -176,7 +177,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         ),
       ],
       menu: menu,
-      notice: _errorText(context, center: true),
+      notice: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [const SyncWarning(), ?_errorText(context, center: true)],
+      ),
     );
   }
 
