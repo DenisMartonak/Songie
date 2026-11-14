@@ -131,126 +131,129 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: MiniPlayer.sideMargin),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => openNowPlaying(GoRouter.of(context)),
-        onHorizontalDragUpdate: control ? _onDragUpdate : null,
-        onHorizontalDragEnd: control ? _onDragEnd : null,
-        onHorizontalDragCancel: control ? _springBack : null,
-        child: Container(
-          key: const Key('miniPlayer.pill'),
-          height: MiniPlayer.height,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: colors.miniPlayer,
-            borderRadius: BorderRadius.circular(colors.radius),
-          ),
-          child: Stack(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Transform.translate(
-                        offset: Offset(_offset, 0),
-                        child: Row(
-                          children: [
-                            Hero(
-                              tag: nowPlayingArtHeroTag,
-                              // Stays visible while Now Playing is dragged
-                              // down.
-                              placeholderBuilder: (_, _, child) => child,
-                              child: AnimatedSwitcher(
-                                duration: motion.emphasized,
-                                child: Artwork(
-                                  track.artworkRef,
-                                  key: trackKey,
-                                  size: 34,
-                                  radius: 8,
-                                  seed: track.id,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => openNowPlaying(GoRouter.of(context)),
+          onHorizontalDragUpdate: control ? _onDragUpdate : null,
+          onHorizontalDragEnd: control ? _onDragEnd : null,
+          onHorizontalDragCancel: control ? _springBack : null,
+          child: Container(
+            key: const Key('miniPlayer.pill'),
+            height: MiniPlayer.height,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: colors.miniPlayer,
+              borderRadius: BorderRadius.circular(colors.radius),
+            ),
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Transform.translate(
+                          offset: Offset(_offset, 0),
+                          child: Row(
+                            children: [
+                              Hero(
+                                tag: nowPlayingArtHeroTag,
+                                // Stays visible while Now Playing is dragged
+                                // down.
+                                placeholderBuilder: (_, _, child) => child,
+                                child: AnimatedSwitcher(
+                                  duration: motion.emphasized,
+                                  child: Artwork(
+                                    track.artworkRef,
+                                    key: trackKey,
+                                    size: 34,
+                                    radius: 8,
+                                    seed: track.id,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnimatedSwitcher(
-                                duration: motion.emphasized,
-                                switchInCurve: Motion.emphasizedCurve,
-                                switchOutCurve: Motion.emphasizedCurve,
-                                layoutBuilder: (current, previous) => Stack(
-                                  alignment: Alignment.centerLeft,
-                                  children: [...previous, ?current],
-                                ),
-                                transitionBuilder: (child, animation) {
-                                  final incoming = child.key == trackKey;
-                                  final side =
-                                      (incoming ? _direction : -_direction) *
-                                      0.3;
-                                  return SlideTransition(
-                                    position: Tween(
-                                      begin: Offset(side, 0),
-                                      end: Offset.zero,
-                                    ).animate(animation),
-                                    child: FadeTransition(
-                                      opacity: animation,
-                                      child: child,
-                                    ),
-                                  );
-                                },
-                                child: _Titles(
-                                  key: trackKey,
-                                  title: track.title,
-                                  // While remote, the strip's text.
-                                  artist: link == null
-                                      ? track.artist
-                                      : remoteStripText(link),
-                                  colors: colors,
-                                  track: track,
-                                  linkEnabled: link == null,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: AnimatedSwitcher(
+                                  duration: motion.emphasized,
+                                  switchInCurve: Motion.emphasizedCurve,
+                                  switchOutCurve: Motion.emphasizedCurve,
+                                  layoutBuilder: (current, previous) => Stack(
+                                    alignment: Alignment.centerLeft,
+                                    children: [...previous, ?current],
+                                  ),
+                                  transitionBuilder: (child, animation) {
+                                    final incoming = child.key == trackKey;
+                                    final side =
+                                        (incoming ? _direction : -_direction) *
+                                        0.3;
+                                    return SlideTransition(
+                                      position: Tween(
+                                        begin: Offset(side, 0),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                      child: FadeTransition(
+                                        opacity: animation,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: _Titles(
+                                    key: trackKey,
+                                    title: track.title,
+                                    // While remote, the strip's text.
+                                    artist: link == null
+                                        ? track.artist
+                                        : remoteStripText(link),
+                                    colors: colors,
+                                    track: track,
+                                    linkEnabled: link == null,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    IconButton(
-                      key: const Key('miniPlayer.playPause'),
-                      tooltip: playing ? 'Pause' : 'Play',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 40,
-                        height: 40,
+                      IconButton(
+                        key: const Key('miniPlayer.playPause'),
+                        tooltip: playing ? 'Pause' : 'Play',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 40,
+                          height: 40,
+                        ),
+                        iconSize: 26,
+                        color: colors.text,
+                        disabledColor: colors.text.withAlpha(90),
+                        icon: Icon(
+                          playing
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                        ),
+                        onPressed: control || held
+                            ? () => ref.read(playerViewProvider).togglePlay()
+                            : null,
                       ),
-                      iconSize: 26,
-                      color: colors.text,
-                      disabledColor: colors.text.withAlpha(90),
-                      icon: Icon(
-                        playing
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                      ),
-                      onPressed: control || held
-                          ? () => ref.read(playerViewProvider).togglePlay()
-                          : null,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              Positioned(
-                left: 8,
-                right: 8,
-                bottom: 0,
-                height: 2,
-                child: Container(
-                  key: const Key('miniPlayer.track'),
-                  color: colors.text.withAlpha(51),
-                  alignment: Alignment.centerLeft,
-                  child: const _Progress(),
+                Positioned(
+                  left: 8,
+                  right: 8,
+                  bottom: 0,
+                  height: 2,
+                  child: Container(
+                    key: const Key('miniPlayer.track'),
+                    color: colors.text.withAlpha(51),
+                    alignment: Alignment.centerLeft,
+                    child: const _Progress(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -265,34 +268,37 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     final colors = Theme.of(context).extension<SongiesColors>()!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: MiniPlayer.sideMargin),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => openNowPlaying(GoRouter.of(context)),
-        child: Container(
-          key: const Key('miniPlayer.pill'),
-          height: MiniPlayer.height,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: colors.miniPlayer,
-            borderRadius: BorderRadius.circular(colors.radius),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.devices_rounded, size: 20, color: colors.accent),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  remoteStripText(link),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => openNowPlaying(GoRouter.of(context)),
+          child: Container(
+            key: const Key('miniPlayer.pill'),
+            height: MiniPlayer.height,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: colors.miniPlayer,
+              borderRadius: BorderRadius.circular(colors.radius),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.devices_rounded, size: 20, color: colors.accent),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    remoteStripText(link),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -256,21 +256,27 @@ class _PlayPauseButton extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Tooltip(
         message: playing ? 'Pause' : 'Play',
-        child: GestureDetector(
-          key: const Key('playerBar.playPause'),
-          behavior: HitTestBehavior.opaque,
-          onTap: onPressed,
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: colors.text.withAlpha(onPressed == null ? 90 : 255),
-            ),
-            child: Icon(
-              playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              size: 24,
-              color: colors.background,
+        child: MouseRegion(
+          // The hand only while it does something, like a Material button.
+          cursor: onPressed == null
+              ? MouseCursor.defer
+              : SystemMouseCursors.click,
+          child: GestureDetector(
+            key: const Key('playerBar.playPause'),
+            behavior: HitTestBehavior.opaque,
+            onTap: onPressed,
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: colors.text.withAlpha(onPressed == null ? 90 : 255),
+              ),
+              child: Icon(
+                playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                size: 24,
+                color: colors.background,
+              ),
             ),
           ),
         ),

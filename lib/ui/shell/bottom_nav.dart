@@ -132,40 +132,43 @@ class _TabButtonState extends State<_TabButton>
       selected: active,
       label: tab.label,
       excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        child: SizedBox(
-          width: BottomNav._tabWidth,
-          child: TweenAnimationBuilder<Color?>(
-            tween: ColorTween(end: active ? colors.text : colors.mutedText),
-            duration: Motion.of(context).standard,
-            builder: (context, color, _) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ScaleTransition(
-                  key: Key('nav.bounce.${widget.position}'),
-                  scale: _scale,
-                  child: SvgPicture.asset(
-                    active ? tab.activeIcon : tab.inactiveIcon,
-                    key: Key('nav.icon.${widget.position}'),
-                    width: BottomNav._iconSize,
-                    height: BottomNav._iconSize,
-                    colorFilter: ColorFilter.mode(color!, BlendMode.srcIn),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: SizedBox(
+            width: BottomNav._tabWidth,
+            child: TweenAnimationBuilder<Color?>(
+              tween: ColorTween(end: active ? colors.text : colors.mutedText),
+              duration: Motion.of(context).standard,
+              builder: (context, color, _) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ScaleTransition(
+                    key: Key('nav.bounce.${widget.position}'),
+                    scale: _scale,
+                    child: SvgPicture.asset(
+                      active ? tab.activeIcon : tab.inactiveIcon,
+                      key: Key('nav.icon.${widget.position}'),
+                      width: BottomNav._iconSize,
+                      height: BottomNav._iconSize,
+                      colorFilter: ColorFilter.mode(color!, BlendMode.srcIn),
+                    ),
                   ),
-                ),
-                const SizedBox(height: BottomNav._gap),
-                Text(
-                  tab.label,
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: BottomNav._labelSize,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                    height: 1.2,
+                  const SizedBox(height: BottomNav._gap),
+                  Text(
+                    tab.label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: BottomNav._labelSize,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                      height: 1.2,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

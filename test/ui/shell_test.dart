@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -343,6 +344,28 @@ void main() {
     testWidgets('no mini-player while the queue is empty', (tester) async {
       await pumpApp(tester, phone);
       expect(find.byType(MiniPlayer), findsNothing);
+    });
+
+    testWidgets('the mini-player and the tabs show the hand cursor', (
+      tester,
+    ) async {
+      await pumpApp(tester, phone);
+      await startPlaying(tester);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: Offset.zero);
+      for (final target in [
+        find.byKey(const Key('miniPlayer.pill')),
+        find.byKey(const Key('nav.icon.1')),
+      ]) {
+        await mouse.moveTo(tester.getCenter(target));
+        await tester.pump();
+        expect(
+          RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+          SystemMouseCursors.click,
+          reason: '$target',
+        );
+      }
     });
 
     testWidgets('mini-player appears 8 px above the nav, 48 high', (

@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -141,6 +143,32 @@ void main() {
       expect(enabled(tester, 'playerBar.$k'), isTrue, reason: k);
     }
     expect(find.byKey(const Key('room.button')), findsOneWidget);
+    await rig.dispose(tester);
+  });
+
+  /// The mouse cursor shown over [finder]'s centre.
+  Future<MouseCursor?> cursorOver(WidgetTester tester, Finder finder) async {
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(finder));
+    await tester.pump();
+    return RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1);
+  }
+
+  uiTest('the play button shows the hand cursor', (tester) async {
+    await pump(tester);
+    await rig.joinAs(tester, RoomRole.full);
+    final play = find.byKey(const Key('playerBar.playPause'));
+    expect(await cursorOver(tester, play), SystemMouseCursors.click);
+    await rig.dispose(tester);
+  });
+
+  uiTest('an inert play button keeps the arrow', (tester) async {
+    await pump(tester);
+    await rig.joinAs(tester, RoomRole.listener);
+    final play = find.byKey(const Key('playerBar.playPause'));
+    expect(await cursorOver(tester, play), SystemMouseCursors.basic);
     await rig.dispose(tester);
   });
 
