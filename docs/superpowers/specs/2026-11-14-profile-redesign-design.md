@@ -113,6 +113,10 @@ friends".
   already have `thumbnailUrl`; use them first. Answers are kept in a small
   persisted cache keyed by artist name so an hourly publish costs nothing
   after the first. Failures leave the field empty and retry next publish.
+  The cache filler is its own small service, run when the publisher
+  publishes and when your own profile opens, whatever the sharing switch
+  says (Claude's call: so your own profile gets photos even with sharing
+  off), at most one pass per hour.
 - Your own profile's artist rows use the same cached photo when known,
   else today's cover-of-top-song look.
 - Tapping an artist with a browse id opens their YTM page (friend's too);
