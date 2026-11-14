@@ -118,6 +118,15 @@ After applying it, check by hand with accounts A (owner) and B, as for friends:
 5. A snapshot over 512 kB fails with `too_large`.
 6. Deleting account A removes A's shares.
 
+### Usernames with capitals (`20261117120000_username_capitals.sql`)
+
+The ninth migration lets usernames hold capitals ("Denis"). Apply it like the others (once, after the playlist sharing one), and before releasing the app version that keeps capitals: until then, a sign-up or rename with a capital fails.
+
+- The `profiles_username_rule` check now allows A–Z too. A name is still unique in any case (the unique index is on `lower(username)`), so "Denis" and "denis" can't both exist. Existing names stay lowercase.
+- The sign-up trigger stores the name as typed instead of lowercasing it. `username_available` is unchanged; it already ignores case.
+
+After applying it, check in the app: sign up (or rename) as "Denis"; the profile shows "Denis"; another account can't take "denis".
+
 ## 2. Email sign-in settings
 
 1. Under Authentication, Sign In / Providers, in the user sign-up settings: allow new users to sign up, and turn Confirm email on.

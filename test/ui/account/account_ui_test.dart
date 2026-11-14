@@ -225,8 +225,8 @@ void main() {
     );
   });
 
-  uiTest('the username field lowercases, shows the rule hint and "That '
-      'username is taken." while typing', (tester) async {
+  uiTest('the username field keeps capitals, shows the rule hint and "That '
+      'username is taken." while typing (any case)', (tester) async {
     h.accountBackend.takenUsernames.add('taken');
     await pumpAccount(tester);
     await tapAndSettle(tester, key('account.signUp'));
@@ -235,7 +235,7 @@ void main() {
     await tester.pump();
     expect(
       tester.widget<TextField>(key('auth.username')).controller!.text,
-      'den',
+      'DeN',
     );
     expect(find.text(kUsernameHint), findsOneWidget);
     expect(find.text(kPasswordHint), findsOneWidget);
@@ -466,7 +466,7 @@ void main() {
     await type(tester, key('account.newUsername'), 'Taken');
     expect(
       tester.widget<TextField>(key('account.newUsername')).controller!.text,
-      'taken',
+      'Taken',
     );
     await tapAndSettle(tester, key('profile.saveUsername'));
     expect(find.text('That username is taken.'), findsWidgets);
@@ -480,6 +480,20 @@ void main() {
     expect(find.text('Username changed'), findsOneWidget);
     expect(tester.widget<Text>(key('account.username')).data, 'neo');
     expect(inTop(find.text('N')), findsOneWidget);
+  });
+
+  uiTest('changing only the capitals of your own name saves', (tester) async {
+    await signedIn('den@x.com', 'den');
+    await pumpAccount(tester);
+    await editName(tester);
+    await type(tester, key('account.newUsername'), 'Den');
+    await tester.pump(const Duration(milliseconds: 500));
+    await settle(tester);
+    // Your own name in other capitals is never reported as taken.
+    expect(find.text('That username is taken.'), findsNothing);
+    await tapAndSettle(tester, key('profile.saveUsername'));
+    expect(find.text('Username changed'), findsOneWidget);
+    expect(tester.widget<Text>(key('account.username')).data, 'Den');
   });
 
   uiTest('Esc restores the old name without saving', (tester) async {

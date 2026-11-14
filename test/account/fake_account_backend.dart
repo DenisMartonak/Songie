@@ -167,11 +167,19 @@ class FakeAccountBackend implements AccountBackend {
     emitUser(null);
   }
 
+  /// Whether [name] is held in any case (the server's unique index is on
+  /// `lower(username)`), apart from [except] (the caller's own name).
+  bool _taken(String name, {String? except}) => takenUsernames.any(
+    (t) =>
+        t.toLowerCase() == name.toLowerCase() &&
+        (except == null || t.toLowerCase() != except.toLowerCase()),
+  );
+
   @override
   Future<bool> usernameAvailable(String name) async {
     calls.add('usernameAvailable');
     _check();
-    return !takenUsernames.contains(name);
+    return !_taken(name);
   }
 
   @override
@@ -194,10 +202,10 @@ class FakeAccountBackend implements AccountBackend {
   Future<void> updateUsername(String id, String name) async {
     calls.add('updateUsername');
     _check();
-    if (takenUsernames.contains(name)) {
+    final p = profiles[id]!;
+    if (_taken(name, except: p.username)) {
       throw const AccountException(AccountError.usernameTaken);
     }
-    final p = profiles[id]!;
     takenUsernames.remove(p.username);
     takenUsernames.add(name);
     profiles[id] = (username: name, avatarPath: p.avatarPath);

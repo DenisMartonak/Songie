@@ -131,10 +131,14 @@ class FriendsService {
     }
     if (session != _session || load < _applied) return;
     _applied = load;
-    List<FriendUser> of(FriendLink link) => [
-      for (final r in rows)
-        if (r.link == link) r.user,
-    ]..sort((a, b) => a.username.compareTo(b.username));
+    List<FriendUser> of(FriendLink link) =>
+        [
+          for (final r in rows)
+            if (r.link == link) r.user,
+        ]..sort(
+          (a, b) =>
+              a.username.toLowerCase().compareTo(b.username.toLowerCase()),
+        );
     _set(
       FriendsState(
         friends: of(FriendLink.friend),

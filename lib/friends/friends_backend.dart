@@ -86,7 +86,8 @@ String escapeLike(String q) =>
 
 /// The `ilike` pattern for usernames starting with [query], or null when
 /// fewer than 2 username characters remain. Only what a username may hold
-/// (a-z, 0-9, `_` and `.`) is kept: the server reads `*` as a wildcard too.
+/// (letters, digits, `_` and `.`; `ilike` ignores case) is kept: the server
+/// reads `*` as a wildcard too.
 String? usernameSearchPattern(String query) {
   final kept = query.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_.]'), '');
   if (kept.length < 2) return null;

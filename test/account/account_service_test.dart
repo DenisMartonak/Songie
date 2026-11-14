@@ -86,10 +86,10 @@ void main() {
     }
   });
 
-  test('sign up returns needsCode and lowercases the username', () async {
+  test('sign up returns needsCode and keeps the capitals', () async {
     final step = await service.signUp('a@b.c', 'password1', ' Den_Cho ');
     expect(step, AuthStep.needsCode);
-    expect(backend.takenUsernames, contains('den_cho'));
+    expect(backend.takenUsernames, contains('Den_Cho'));
     expect(service.state, isA<SignedOut>());
   });
 
@@ -176,7 +176,7 @@ void main() {
       expect(backend.users['a@b.c']!.password, 'owner-pass1');
       final s = service.state;
       expect(s, isA<SignedIn>());
-      expect((s as SignedIn).profile.username, 'owner');
+      expect((s as SignedIn).profile.username, 'Owner');
 
       await service.logOut();
       await expectLater(
@@ -348,7 +348,7 @@ void main() {
       _throwsAccount(AccountError.usernameTaken),
     );
     await service.changeUsername('New.Name');
-    expect((service.state as SignedIn).profile.username, 'new.name');
+    expect((service.state as SignedIn).profile.username, 'New.Name');
   });
 
   test('changeAvatar uploads, then updates the path, then deletes the old file; an upload failure leaves the old path', () async {

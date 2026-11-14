@@ -467,29 +467,9 @@ class _Link extends StatelessWidget {
       TextButton(onPressed: onPressed, child: Text(label));
 }
 
-/// Lowercases what is typed, keeping the caret where it was.
-class _Lowercase extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final text = newValue.text.toLowerCase();
-    if (text == newValue.text) return newValue;
-    // Some letters lowercase to more than one character.
-    if (text.length != newValue.text.length) {
-      return TextEditingValue(
-        text: text,
-        selection: TextSelection.collapsed(offset: text.length),
-      );
-    }
-    return newValue.copyWith(text: text);
-  }
-}
-
-/// A username field: lowercases as typed, shows the rule, and after a pause
-/// in typing asks the server whether the name is free ("That username is
-/// taken."). [current] (the user's own name) is never reported as taken.
+/// A username field: shows the rule, and after a pause in typing asks the
+/// server whether the name is free ("That username is taken."). [current]
+/// (the user's own name, in any capitals) is never reported as taken.
 class UsernameField extends ConsumerStatefulWidget {
   const UsernameField({
     required this.controller,
@@ -542,7 +522,12 @@ class _UsernameFieldState extends ConsumerState<UsernameField> {
     _setTaken(false);
     widget.onChanged?.call();
     final name = normalizeUsername(text);
-    if (usernameProblem(name) != null || name == widget.current) return;
+    final current = widget.current;
+    // Your own name in other capitals is yours, never taken.
+    if (usernameProblem(name) != null ||
+        (current != null && sameUsername(name, current))) {
+      return;
+    }
     _timer = Timer(UsernameField.checkDelay, () async {
       final service = ref.read(accountServiceProvider);
       try {
@@ -569,7 +554,7 @@ class _UsernameFieldState extends ConsumerState<UsernameField> {
       autofocus: widget.autofocus,
       autocorrect: false,
       autofillHints: const [AutofillHints.newUsername],
-      inputFormatters: [_Lowercase(), LengthLimitingTextInputFormatter(20)],
+      inputFormatters: [LengthLimitingTextInputFormatter(20)],
       decoration: InputDecoration(
         labelText: 'Username',
         helperText: broken || _taken ? null : kUsernameHint,
