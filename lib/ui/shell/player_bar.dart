@@ -465,7 +465,7 @@ class _QueueAndVolume extends ConsumerWidget {
         ),
         const DevicesButton(),
         // The volume gives way first in narrow desktop windows (a signed-in
-        // bar has four buttons here): its icon, then the slider itself.
+        // bar has three buttons here): its icon, then the slider itself.
         Flexible(
           child: LayoutBuilder(
             builder: (context, box) {

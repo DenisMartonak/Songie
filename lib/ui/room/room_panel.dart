@@ -16,6 +16,7 @@ import '../../youtube/share_intents.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
 import '../shell/adaptive_shell.dart' show phoneBreakpoint;
+import '../shell/right_pane_state.dart';
 import 'join_room_dialog.dart';
 
 /// Opens the room panel: a popup dialog on desktop, a sheet that slides up
@@ -45,6 +46,16 @@ Future<void> showRoomPanel(BuildContext context, WidgetRef ref) {
       ),
     ),
   );
+}
+
+/// Shows the room from the app's shell: on the desktop, in the right pane
+/// on Friends, which has no room dialog; on a phone, in the sheet
+/// [showRoomPanel] opens. Now Playing keeps its own dialog.
+Future<void> showRoomInShell(BuildContext context, WidgetRef ref) {
+  if (MediaQuery.sizeOf(context).width < phoneBreakpoint) {
+    return showRoomPanel(context, ref);
+  }
+  return ref.read(rightPaneProvider).showFriends();
 }
 
 /// The label of [role] in the panel.
@@ -162,32 +173,41 @@ class _RoomPanelState extends ConsumerState<RoomPanel> {
         ref.watch(roomStatusProvider).value ??
         ref.read(roomServiceProvider).status;
     final account = ref.watch(accountStateProvider).value;
+    final children = <Widget>[
+      Row(
+        children: [
+          Icon(Icons.group_rounded, color: colors.accent),
+          const SizedBox(width: 10),
+          Text(
+            'Listen together',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: widget.embedded ? 15 : 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      ...switch (status) {
+        RoomHosting() => _hosting(status, colors),
+        RoomGuesting() => _guesting(status, colors),
+        RoomIdle() =>
+          account is SignedIn ? _idle(account, colors) : _signedOut(colors),
+      },
+    ];
     final column = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.group_rounded, color: colors.accent),
-            const SizedBox(width: 10),
-            Text(
-              'Listen together',
-              style: TextStyle(
-                color: colors.text,
-                fontSize: widget.embedded ? 15 : 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        ...switch (status) {
-          RoomHosting() => _hosting(status, colors),
-          RoomGuesting() => _guesting(status, colors),
-          RoomIdle() =>
-            account is SignedIn ? _idle(account, colors) : _signedOut(colors),
-        },
-      ],
+      children: widget.embedded
+          // In the desktop pane, chrome: its buttons must not take focus, or
+          // Space would re-press the last one clicked. The code field must,
+          // to be typed into.
+          ? [
+              for (final c in children)
+                c is TextField ? c : ExcludeFocus(child: c),
+            ]
+          : children,
     );
     if (widget.embedded) {
       return Padding(

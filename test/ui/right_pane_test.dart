@@ -2,12 +2,14 @@ import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/data/settings_repository.dart';
 import 'package:songies/lyrics/lyrics.dart';
 import 'package:songies/lyrics/lyrics_service.dart';
 import 'package:songies/providers.dart';
+import 'package:songies/room/room_service.dart';
 import 'package:songies/router.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/theme_spec.dart';
@@ -20,6 +22,7 @@ import 'package:songies/ui/shell/right_pane_state.dart';
 import 'package:songies/ui/shell/sidebar.dart';
 
 import '../helpers/fake_lyrics_service.dart';
+import '../helpers/room_rig.dart';
 import '../helpers/ui_harness.dart';
 
 void main() {
@@ -40,9 +43,10 @@ void main() {
   });
   tearDown(() => h.dispose());
 
-  Widget app() => ProviderScope(
+  Widget app({List<Override> extra = const []}) => ProviderScope(
     overrides: [
       ...h.overrides,
+      ...extra,
       lyricsServiceProvider.overrideWithValue(service),
       hasCustomTitleBarProvider.overrideWithValue(false),
     ],
@@ -70,9 +74,10 @@ void main() {
     WidgetTester tester, {
     bool play = true,
     Size size = const Size(1280, 800),
+    List<Override> extra = const [],
   }) async {
     await setUpWindow(tester, size);
-    await tester.pumpWidget(app());
+    await tester.pumpWidget(app(extra: extra));
     await settle(tester);
     if (play) {
       final tracks = await real(
@@ -438,6 +443,103 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(pane, findsOneWidget);
       expect(tester.getSize(sidebar).width, Sidebar.expandedWidth);
+    });
+  });
+
+  group('signed in', () {
+    late RoomRig rig;
+
+    setUp(() {
+      rig = RoomRig(h);
+      h.friendsBackend
+        ..addUser('u1', 'me')
+        ..me = 'u1';
+      h.activityBackend.me = 'u1';
+    });
+
+    final field = find.byKey(const Key('room.joinField'));
+
+    uiTest('the room code field in the pane takes typing, and Join joins', (
+      tester,
+    ) async {
+      await pumpApp(tester, extra: rig.overrides);
+      await rig.hostRoom(tester);
+      expect(find.descendant(of: pane, matching: field), findsOneWidget);
+      await tester.tap(field);
+      await tester.pump();
+      await tester.enterText(field, 'ABCD-2345');
+      await tester.pump();
+      expect(find.text('ABCD-2345'), findsOneWidget);
+      await tester.tap(find.text('Join a room'));
+      await rig.run(tester, Future.value());
+      expect(find.text('Not a room code or link'), findsNothing);
+      expect(rig.backend.calls, contains('join ABCD2345'));
+      await rig.dispose(tester);
+    });
+
+    uiTest('Space still toggles play after clicking Start a room', (
+      tester,
+    ) async {
+      await pumpApp(tester, extra: rig.overrides);
+      expect(h.player.state.playing, isTrue);
+      await tester.tap(find.text('Start a room'));
+      await rig.run(tester, Future.value());
+      expect(rig.service!.status, isA<RoomHosting>());
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await settle(tester);
+      expect(h.player.state.playing, isFalse);
+      await rig.dispose(tester);
+    });
+
+    uiTest('Space typed in the room code field types, not toggles play', (
+      tester,
+    ) async {
+      await pumpApp(tester, extra: rig.overrides);
+      expect(h.player.state.playing, isTrue);
+      await tester.tap(field);
+      await tester.pump();
+      await tester.enterText(field, 'AB');
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await settle(tester);
+      expect(h.player.state.playing, isTrue);
+      expect(tester.testTextInput.hasAnyClients, isTrue);
+      await rig.dispose(tester);
+    });
+
+    uiTest('holds a close watch only while the pane shows Friends', (
+      tester,
+    ) async {
+      await pumpApp(tester, extra: rig.overrides);
+      final friends = containerOf(tester).read(friendsServiceProvider);
+      expect(friends.closeWatches, 1);
+      await tap(tester, lyricsButton);
+      expect(friends.closeWatches, 0);
+      await tap(tester, lyricsButton);
+      expect(friends.closeWatches, 1);
+      await tap(tester, queueButton);
+      expect(friends.closeWatches, 0);
+      await tap(tester, queueButton);
+      expect(friends.closeWatches, 1);
+      await tap(tester, close);
+      expect(friends.closeWatches, 0);
+      await tap(tester, lyricsButton);
+      await tap(tester, lyricsButton);
+      expect(friends.closeWatches, 1);
+      await rig.dispose(tester);
+    });
+
+    uiTest('showing Friends after Lyrics loads the friends again', (
+      tester,
+    ) async {
+      await pumpApp(tester, extra: rig.overrides);
+      await tap(tester, lyricsButton);
+      final before = h.friendsBackend.calls.where((c) => c == 'load').length;
+      await tap(tester, lyricsButton);
+      expect(
+        h.friendsBackend.calls.where((c) => c == 'load').length,
+        greaterThan(before),
+      );
+      await rig.dispose(tester);
     });
   });
 }

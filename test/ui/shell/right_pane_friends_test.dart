@@ -91,7 +91,7 @@ void main() {
     );
     await pump(tester);
     expect(key('rightPane.friends'), findsOneWidget);
-    expect(find.text('Friends'), findsOneWidget);
+    expect(find.text('Your friends'), findsOneWidget);
     expect(
       find.descendant(
         of: key('rightPane.friend.f1'),

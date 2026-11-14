@@ -29,7 +29,7 @@ import '../motion/pressable.dart';
 import '../motion/shimmer.dart';
 import '../remote/play_on.dart';
 import '../room/room_button.dart' show roomGuestRoleProvider;
-import '../room/room_panel.dart' show showRoomPanel;
+import '../room/room_panel.dart' show showRoomInShell;
 import '../playlists/share_playlist_sheet.dart';
 import '../widgets/artist_link.dart';
 import '../widgets/artwork.dart';
@@ -608,7 +608,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
     }
   }
 
-  /// Opens a room playing this playlist, and the room panel to share it.
+  /// Opens a room playing this playlist, and shows the room to share it.
   Future<void> _listenTogether() async {
     final account = ref.read(accountStateProvider).value;
     final rows = _pending ?? ref.read(playlistTracksProvider(_id)).value;
@@ -628,7 +628,7 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
       return;
     }
     if (mounted && service.status is! RoomIdle) {
-      await showRoomPanel(context, ref);
+      await showRoomInShell(context, ref);
     }
   }
 

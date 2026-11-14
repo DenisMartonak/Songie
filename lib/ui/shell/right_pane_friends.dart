@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +15,7 @@ import '../room/room_panel.dart';
 
 /// The Friends view of the desktop right pane: the room panel, then your
 /// friends with what they play now and a Join button for those hosting.
+/// Nothing here takes focus but the room code field (see [RoomPanel]).
 class RightPaneFriends extends ConsumerStatefulWidget {
   const RightPaneFriends({super.key});
 
@@ -41,7 +44,9 @@ class _RightPaneFriendsState extends ConsumerState<RightPaneFriends> {
 
   void _follow(bool signedIn) {
     if (signedIn) {
-      _watch ??= _service.watchClosely();
+      if (_watch != null) return;
+      _watch = _service.watchClosely();
+      unawaited(_service.refresh().catchError((Object _) {}));
     } else if (_watch case final lease?) {
       _service.stopWatching(lease);
       _watch = null;
@@ -64,34 +69,41 @@ class _RightPaneFriendsState extends ConsumerState<RightPaneFriends> {
       key: const Key('rightPane.friends'),
       children: [
         const RoomPanel(embedded: true),
-        if (signedIn) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: Text(
-              'Friends',
-              style: TextStyle(
-                color: colors.text,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
+        if (signedIn)
+          ExcludeFocus(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                  child: Text(
+                    'Your friends',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (showFriends) ...[
+                  for (final u in state.friends)
+                    _friend(context, state, u, now),
+                  if (state.incoming.isNotEmpty)
+                    _Link(
+                      key: const Key('rightPane.requests'),
+                      label: state.incoming.length == 1
+                          ? '1 request'
+                          : '${state.incoming.length} requests',
+                    ),
+                  if (state.friends.isEmpty)
+                    const _Link(
+                      key: Key('rightPane.findFriends'),
+                      label: 'Find friends',
+                    ),
+                ],
+              ],
             ),
           ),
-          if (showFriends) ...[
-            for (final u in state.friends) _friend(context, state, u, now),
-            if (state.incoming.isNotEmpty)
-              _Link(
-                key: const Key('rightPane.requests'),
-                label: state.incoming.length == 1
-                    ? '1 request'
-                    : '${state.incoming.length} requests',
-              ),
-            if (state.friends.isEmpty)
-              const _Link(
-                key: Key('rightPane.findFriends'),
-                label: 'Find friends',
-              ),
-          ],
-        ],
       ],
     );
   }

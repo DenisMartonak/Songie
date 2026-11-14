@@ -9,12 +9,14 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:songies/core/result.dart';
+import 'package:songies/data/settings_repository.dart';
 import 'package:songies/data/database.dart';
 import 'package:songies/library/art_cache.dart';
 import 'package:songies/library/library_repository.dart';
 import 'package:songies/library/library_scanner.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/remote/remote_protocol.dart';
+import 'package:songies/room/room_service.dart';
 import 'package:songies/theme/app_theme.dart';
 import 'package:songies/theme/contrast.dart';
 import 'package:songies/theme/cover_palette.dart';
@@ -25,6 +27,7 @@ import 'package:songies/ui/motion/shimmer.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/library/add_songs_sheet.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
+import 'package:songies/ui/shell/right_pane_state.dart';
 import 'package:songies/ui/widgets/artwork.dart';
 import 'package:songies/library/favorites.dart';
 
@@ -311,6 +314,45 @@ void main() {
       gate.complete();
       await rig.run(tester, first);
       expect(rig.backend.calls.where((c) => c == 'open'), hasLength(1));
+      await rig.dispose(tester);
+    });
+    uiTest('Listen together on the desktop ends with the right pane on '
+        'Friends, no dialog', (tester) async {
+      final id = await threeSongs(tester);
+      await pumpPage(tester, id, extraOverrides: rig.overrides);
+      final container = containerOf(tester);
+      // Keeps the setting loaded, as the desktop shell does.
+      final sub = container.listen(rightPaneOpenProvider, (_, _) {});
+      addTearDown(sub.close);
+      container
+          .read(rightPaneContentProvider.notifier)
+          .show(RightPaneContent.lyrics);
+      await real(
+        tester,
+        () => SettingsRepository(h.db).setBool(kRightPaneOpen, false),
+      );
+      Future<void> until(bool? open) async {
+        for (var i = 0; i < 10; i++) {
+          if (container.read(rightPaneOpenProvider) == open) return;
+          await tester.runAsync(() => pumpEventQueue());
+          await tester.pump();
+        }
+      }
+
+      await until(false);
+      expect(container.read(rightPaneOpenProvider), isFalse);
+      await openMenu(tester);
+      await tester.tap(find.byKey(const Key('playlist.listenTogether')));
+      await rig.run(tester, Future.value());
+      await until(true);
+      await settle(tester);
+      expect(rig.service!.status, isA<RoomHosting>());
+      expect(find.byKey(const Key('room.popup')), findsNothing);
+      expect(container.read(rightPaneOpenProvider), isTrue);
+      expect(
+        container.read(rightPaneContentProvider),
+        RightPaneContent.friends,
+      );
       await rig.dispose(tester);
     });
   });

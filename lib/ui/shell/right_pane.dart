@@ -11,8 +11,9 @@ import 'right_pane_strip.dart';
 
 /// The desktop's right pane, beside the main pane and on the same rounded
 /// surface: Friends, Lyrics or the Queue under a slim header with a close
-/// button, or, closed, the strip of friends' faces. It slides open and shut; only what it shows is built, so lyrics
-/// are looked up only while it shows them.
+/// button, or, closed, the strip of friends' faces. It slides open and shut;
+/// only what it shows is built, so lyrics are looked up only while it shows
+/// them.
 class RightPane extends ConsumerWidget {
   const RightPane({super.key});
 
@@ -35,9 +36,7 @@ class RightPane extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(colors.radius + 4),
                 child: ColoredBox(
                   color: colors.background,
-                  // Like the rest of the chrome, its buttons must not take
-                  // focus, or Space would re-press the last one clicked.
-                  child: const ExcludeFocus(child: _OpenPane()),
+                  child: const _OpenPane(),
                 ),
               ),
             ),
@@ -56,7 +55,9 @@ class RightPane extends ConsumerWidget {
   }
 }
 
-/// The header and what the pane shows.
+/// The header and what the pane shows. Like the rest of the chrome, its
+/// buttons must not take focus, or Space would re-press the last one
+/// clicked; only Friends' room code field may, so a code can be typed.
 class _OpenPane extends ConsumerWidget {
   const _OpenPane();
 
@@ -67,45 +68,50 @@ class _OpenPane extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 6, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  switch (content) {
-                    RightPaneContent.friends => 'Friends',
-                    RightPaneContent.lyrics => 'Lyrics',
-                    RightPaneContent.queue => 'Queue',
-                  },
-                  key: const Key('rightPane.title'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+        ExcludeFocus(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 6, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    switch (content) {
+                      RightPaneContent.friends => 'Friends',
+                      RightPaneContent.lyrics => 'Lyrics',
+                      RightPaneContent.queue => 'Queue',
+                    },
+                    key: const Key('rightPane.title'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              IconButton(
-                key: const Key('rightPane.close'),
-                tooltip: 'Close',
-                iconSize: 20,
-                color: colors.mutedText,
-                icon: const Icon(Icons.close_rounded),
-                onPressed: () => ref.read(rightPaneProvider).close(),
-              ),
-            ],
+                IconButton(
+                  key: const Key('rightPane.close'),
+                  tooltip: 'Close',
+                  iconSize: 20,
+                  color: colors.mutedText,
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => ref.read(rightPaneProvider).close(),
+                ),
+              ],
+            ),
           ),
         ),
         Expanded(
           child: switch (content) {
+            // Keeps its own chrome out of focus.
             RightPaneContent.friends => const RightPaneFriends(),
-            RightPaneContent.lyrics => const LyricsView(
-              density: LyricsDensity.compact,
+            RightPaneContent.lyrics => const ExcludeFocus(
+              child: LyricsView(density: LyricsDensity.compact),
             ),
-            RightPaneContent.queue => const NowPlayingQueue(),
+            RightPaneContent.queue => const ExcludeFocus(
+              child: NowPlayingQueue(),
+            ),
           },
         ),
       ],

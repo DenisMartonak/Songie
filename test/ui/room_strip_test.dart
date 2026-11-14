@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:songies/data/settings_repository.dart';
 import 'package:songies/room/room_protocol.dart';
 import 'package:songies/room/room_service.dart';
 import 'package:songies/ui/room/room_strip.dart';
+import 'package:songies/ui/shell/right_pane_state.dart';
 
 import '../helpers/room_rig.dart';
 import '../helpers/ui_harness.dart';
@@ -18,8 +20,11 @@ void main() {
   });
   tearDown(() => h.dispose());
 
-  Future<void> pump(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1000, 900);
+  Future<void> pump(
+    WidgetTester tester, {
+    Size size = const Size(1000, 900),
+  }) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
@@ -41,6 +46,46 @@ void main() {
 
   final strip = find.byKey(const Key('room.strip'));
   final chip = find.byKey(const Key('room.chip'));
+  final popup = find.byKey(const Key('room.popup'));
+
+  /// Stores the right pane closed and on Lyrics, so showing Friends shows.
+  Future<void> paneClosedOnLyrics(WidgetTester tester) async {
+    final container = containerOf(tester);
+    // Keeps the setting loaded, as the desktop shell does.
+    final sub = container.listen(rightPaneOpenProvider, (_, _) {});
+    addTearDown(sub.close);
+    container
+        .read(rightPaneContentProvider.notifier)
+        .show(RightPaneContent.lyrics);
+    await real(
+      tester,
+      () => SettingsRepository(h.db).setBool(kRightPaneOpen, false),
+    );
+    for (
+      var i = 0;
+      i < 10 && container.read(rightPaneOpenProvider) != false;
+      i++
+    ) {
+      await tester.runAsync(() => pumpEventQueue());
+      await tester.pump();
+    }
+    expect(container.read(rightPaneOpenProvider), isFalse);
+  }
+
+  /// The pane is open on Friends.
+  Future<void> expectPaneOnFriends(WidgetTester tester) async {
+    final container = containerOf(tester);
+    for (
+      var i = 0;
+      i < 10 && container.read(rightPaneOpenProvider) != true;
+      i++
+    ) {
+      await tester.runAsync(() => pumpEventQueue());
+      await tester.pump();
+    }
+    expect(container.read(rightPaneOpenProvider), isTrue);
+    expect(container.read(rightPaneContentProvider), RightPaneContent.friends);
+  }
 
   uiTest('no room: no strip and no chip', (tester) async {
     await pump(tester);
@@ -89,25 +134,50 @@ void main() {
     await rig.dispose(tester);
   });
 
-  uiTest('host strip: "Your room · 2 listening", Manage opens the panel', (
-    tester,
-  ) async {
+  uiTest(
+    'host strip: "Your room · 2 listening", Manage shows the room in the right pane',
+    (tester) async {
+      await pump(tester);
+      await rig.run(tester, rig.service!.open(userId: 'u1', name: 'me'));
+      await rig.guestJoins(tester, 'g1', 'anna');
+      await rig.guestJoins(tester, 'g2', 'bob');
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: strip,
+          matching: find.text('Your room · 2 listening'),
+        ),
+        findsOneWidget,
+      );
+      await paneClosedOnLyrics(tester);
+      await tester.tap(
+        find.descendant(of: strip, matching: find.text('Manage')),
+      );
+      await tester.pumpAndSettle();
+      expect(popup, findsNothing);
+      await expectPaneOnFriends(tester);
+      await rig.dispose(tester);
+    },
+  );
+
+  uiTest('on the desktop, tapping the strip shows the room in the right '
+      'pane, not a dialog', (tester) async {
     await pump(tester);
-    await rig.run(tester, rig.service!.open(userId: 'u1', name: 'me'));
-    await rig.guestJoins(tester, 'g1', 'anna');
-    await rig.guestJoins(tester, 'g2', 'bob');
+    await rig.joinAs(tester, RoomRole.listener);
+    await paneClosedOnLyrics(tester);
+    await tester.tap(strip);
     await tester.pumpAndSettle();
-    expect(
-      find.descendant(
-        of: strip,
-        matching: find.text('Your room · 2 listening'),
-      ),
-      findsOneWidget,
-    );
-    await tester.tap(find.descendant(of: strip, matching: find.text('Manage')));
+    expect(popup, findsNothing);
+    await expectPaneOnFriends(tester);
+    await rig.dispose(tester);
+  });
+
+  uiTest('on a phone, tapping the strip opens the room sheet', (tester) async {
+    await pump(tester, size: const Size(400, 900));
+    await rig.joinAs(tester, RoomRole.listener);
+    await tester.tap(strip);
     await tester.pumpAndSettle();
-    expect(find.text('Listen together'), findsOneWidget);
-    expect(find.text('End room'), findsOneWidget);
+    expect(find.byKey(const Key('room.sheet')), findsOneWidget);
     await rig.dispose(tester);
   });
 }

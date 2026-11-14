@@ -23,7 +23,7 @@ String roomHostText(List<RoomPresence> people) =>
 
 /// Says which room this device is in, above the player bar (and the phone's
 /// mini player): a guest's has Leave, a host's Manage. Nothing outside a
-/// room. Tapping it opens the room panel.
+/// room. Tapping it shows the room (see [showRoomInShell]).
 class RoomStrip extends ConsumerWidget {
   const RoomStrip({super.key});
 
@@ -46,7 +46,7 @@ class RoomStrip extends ConsumerWidget {
       color: colors.accent.withAlpha(36),
       child: InkWell(
         key: const Key('room.strip'),
-        onTap: () => showRoomPanel(context, ref),
+        onTap: () => showRoomInShell(context, ref),
         child: Container(
           width: double.infinity,
           height: height,
@@ -84,7 +84,7 @@ class RoomStrip extends ConsumerWidget {
                 ),
                 onPressed: () => status is RoomGuesting
                     ? unawaited(ref.read(roomServiceProvider).leave())
-                    : showRoomPanel(context, ref),
+                    : showRoomInShell(context, ref),
                 child: Text(action!),
               ),
             ],
