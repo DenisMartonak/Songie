@@ -189,6 +189,31 @@ void main() {
     });
   });
 
+  test('publishes all four periods', () {
+    fakeAsync((async) {
+      PeriodStats of(StatsPeriod p) => PeriodStats(
+        period: p,
+        total: Duration(minutes: p.days),
+        previousTotal: null,
+        buckets: const [],
+        topArtists: const [],
+        topSongs: const [],
+      );
+      final summary = StatsSummary(
+        at: DateTime(2026),
+        periods: {for (final p in StatsPeriod.values) p: of(p)},
+      );
+      start(async);
+      topAnswer = () async => summary;
+      play(track('a'));
+      async.elapse(const Duration(minutes: 65));
+      final sent = backend.rowOf('me')!.stats!;
+      expect(sent.periods.keys, StatsPeriod.values);
+      expect(sent.periods[StatsPeriod.year]!.total, Duration(minutes: 365));
+      stop(async);
+    });
+  });
+
   test('a failing top 10 neither escapes nor holds up a switch change', () {
     fakeAsync((async) {
       start(async);

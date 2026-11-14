@@ -122,6 +122,24 @@ class StatsRepository {
         r.id: r,
     };
 
+    // YouTube video ids of the songs shown, from their tracks.
+    final videoIds = <String, String>{};
+    if (topSongs.isNotEmpty) {
+      final ids = [for (final s in topSongs) s.trackId];
+      final rows = await _db
+          .customSelect(
+            'SELECT id, yt_video_id FROM tracks '
+            "WHERE source = 'yt' AND yt_video_id IS NOT NULL "
+            'AND id IN (${List.filled(ids.length, '?').join(',')})',
+            variables: [for (final id in ids) Variable<String>(id)],
+            readsFrom: {_db.tracks},
+          )
+          .get();
+      for (final r in rows) {
+        videoIds[r.read<String>('id')] = r.read<String>('yt_video_id');
+      }
+    }
+
     return PeriodStats(
       period: p,
       total: Duration(milliseconds: totalMs),
@@ -156,6 +174,7 @@ class StatsRepository {
             artworkRef: snapshots[s.latestId]?.artworkRef,
             plays: s.plays,
             heard: Duration(milliseconds: s.heardMs),
+            videoId: videoIds[s.trackId],
           ),
       ],
     );

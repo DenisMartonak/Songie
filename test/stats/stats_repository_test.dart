@@ -422,6 +422,36 @@ void main() {
   });
 
   group('top songs', () {
+    test('songs carry the YouTube video id', () async {
+      Future<void> track(String id, String source, String? yt) => db
+          .into(db.tracks)
+          .insert(
+            TracksCompanion.insert(
+              id: id,
+              clock: '0000000000001-00000-dev',
+              originDevice: 'dev',
+              localSeq: 1,
+              source: source,
+              ytVideoId: Value(yt),
+              title: 'T',
+              artist: 'A',
+              searchText: 't',
+            ),
+          );
+      await track('y1', 'yt', 'vid1');
+      await track('l1', 'local', null);
+      await insert([
+        _listen(at: DateTime.utc(2026, 10, 28), trackId: 'y1'),
+        _listen(at: DateTime.utc(2026, 10, 28), trackId: 'l1'),
+        _listen(at: DateTime.utc(2026, 10, 28), trackId: 'gone'),
+      ]);
+      final songs = {
+        for (final s in (await repo.period(StatsPeriod.week)).topSongs)
+          s.trackId: s.videoId,
+      };
+      expect(songs, {'y1': 'vid1', 'l1': null, 'gone': null});
+    });
+
     test('ranked by plays then minutes, with the latest snapshot', () async {
       await insert([
         _listen(at: DateTime.utc(2026, 10, 28), trackId: 's1'),

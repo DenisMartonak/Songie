@@ -11,7 +11,7 @@ import '../island/island_host.dart';
 import 'settings_page.dart';
 
 /// Settings → Privacy: whether friends see what you're listening to and
-/// your top 10. Kept with the account on the server, so every device
+/// your stats. Kept with the account on the server, so every device
 /// agrees; shown once the server says.
 class PrivacySettingsSection extends ConsumerStatefulWidget {
   const PrivacySettingsSection({super.key});
@@ -116,11 +116,11 @@ class _PrivacySettingsSectionState
             value: sharing.top,
             onChanged: _busy ? null : (v) => _set(top: v),
             title: Text(
-              'Share my top 10 with friends',
+              'Share my stats with friends',
               style: TextStyle(color: colors.text),
             ),
             subtitle: Text(
-              'Your top artists and songs of the last 30 days, no minutes',
+              'Minutes, chart and top 10 artists and songs',
               style: TextStyle(color: colors.mutedText),
             ),
           ),

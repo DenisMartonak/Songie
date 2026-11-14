@@ -779,12 +779,13 @@ final activityBackendProvider = Provider<ActivityBackend>(
   (ref) => SupabaseActivityBackend(() => Supabase.instance.client),
 );
 
-/// Publishes what this account plays now and its top 10 for friends, while
-/// signed in. `main()` listens to it once so it follows the account.
+/// Publishes what this account plays now and its stats summary for friends,
+/// while signed in. `main()` listens to it once so it follows the account.
 final activityPublisherProvider = Provider<ActivityPublisher>((ref) {
   final player = ref.watch(playerServiceProvider);
   final room = ref.watch(roomServiceProvider);
   final stats = ref.watch(statsRepositoryProvider);
+  var photosLoaded = false;
   final publisher = ActivityPublisher(
     backend: ref.watch(activityBackendProvider),
     states: player.states,
@@ -795,11 +796,29 @@ final activityPublisherProvider = Provider<ActivityPublisher>((ref) {
     },
     roomChanges: room.statuses,
     top: () async {
-      final month = await stats.period(StatsPeriod.month);
+      final photos = ref.read(artistPhotosProvider);
+      if (!photosLoaded) {
+        photosLoaded = true;
+        await photos.load();
+      }
+      final periods = {
+        for (final p in StatsPeriod.values) p: await stats.period(p),
+      };
+      await photos.fill([for (final s in periods.values) ...s.topArtists]);
       final now = DateTime.now();
       return StatsSummary(
         at: DateTime(now.year, now.month, now.day),
-        periods: {StatsPeriod.month: month},
+        periods: {
+          for (final e in periods.entries)
+            e.key: PeriodStats(
+              period: e.value.period,
+              total: e.value.total,
+              previousTotal: e.value.previousTotal,
+              buckets: e.value.buckets,
+              topArtists: photos.apply(e.value.topArtists),
+              topSongs: e.value.topSongs,
+            ),
+        },
       );
     },
   );
