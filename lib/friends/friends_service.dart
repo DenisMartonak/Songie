@@ -170,6 +170,10 @@ class FriendsService {
     return token;
   }
 
+  /// How many pages watch closely right now.
+  @visibleForTesting
+  int get closeWatches => _watchers.length;
+
   void stopWatching(Object token) {
     _watchers.remove(token);
     if (_watchers.isEmpty) {
