@@ -22,6 +22,7 @@ import 'package:songies/ui/motion/motion.dart';
 import 'package:songies/ui/playlist/playlist_page.dart';
 import 'package:songies/ui/now_playing/now_playing_page.dart';
 import 'package:songies/ui/search/search_page.dart';
+import 'package:songies/ui/settings/settings_categories.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 import 'package:songies/ui/settings/themes/themes_page.dart';
@@ -159,6 +160,14 @@ void main() {
     router.go('/settings/themes');
     await tester.pumpAndSettle();
     expect(find.byType(ThemesPage), findsOneWidget);
+
+    // A category is its own address; themes keeps its own page.
+    router.go('/settings/about');
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<SettingsPage>(find.byType(SettingsPage)).category,
+      SettingsCategory.about,
+    );
   });
 
   testWidgets('/ytm/album/MPREb_x opens the album page inside the shell, and '

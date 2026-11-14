@@ -20,13 +20,9 @@ import '../update/update_dialog.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
 import '../shell/adaptive_shell.dart' show phoneBreakpoint;
-import 'downloads_settings.dart';
-import 'playback_settings.dart';
-import 'privacy_settings.dart';
 import 'storage_usage.dart';
-import 'youtube_settings.dart';
-import 'discord_settings.dart';
-import 'crash_reports_settings.dart';
+import 'discord_settings.dart' show discordSupportedProvider;
+import 'settings_categories.dart';
 
 export '../../core/app_version.dart';
 
@@ -47,60 +43,164 @@ final logSaverProvider = Provider<LogSaver>(
   },
 );
 
-/// Account, music folders, appearance, YouTube, downloads, sync, storage,
-/// the log and About.
+/// Settings: a list of categories, each with its own page at
+/// `/settings/<slug>`. Phones show the list at `/settings` and a category's
+/// page on its own; wide windows show the list beside the chosen category
+/// (Library at `/settings`).
 class SettingsPage extends ConsumerWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({this.category, super.key});
+
+  /// The category to show; null at plain `/settings`.
+  final SettingsCategory? category;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final visible = visibleSettingsCategories(
+      discordSupported: ref.watch(discordSupportedProvider),
+    );
+    // A category not listed here (Discord where it can't work) is Library.
+    final shown = category != null && visible.contains(category)
+        ? category
+        : (category == null ? null : SettingsCategory.library);
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final wide = MediaQuery.sizeOf(context).width >= phoneBreakpoint;
+
+    if (wide) {
+      final current = shown ?? SettingsCategory.library;
+      return SafeArea(
+        bottom: false,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ListView(
+                padding: EdgeInsets.only(bottom: bottom + 16),
+                children: [
+                  const _Header('Settings', back: false),
+                  for (final c in visible)
+                    _CategoryTile(
+                      c,
+                      selected: c == current,
+                      onTap: () => context.go('/settings/${c.slug}'),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                key: ValueKey(current),
+                padding: EdgeInsets.only(bottom: bottom + 16),
+                children: [
+                  _Header(current.title, back: false),
+                  ...current.sections,
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return SafeArea(
       bottom: false,
       child: ListView(
+        key: ValueKey(shown),
         padding: EdgeInsets.only(bottom: bottom + 16),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 16, 16, 0),
-            child: Row(
-              children: [
-                // Phones open Settings from Home's gear and need a way back;
-                // wide layouts reach it from the sidebar, which is the way
-                // back there.
-                if (context.canPop() &&
-                    MediaQuery.sizeOf(context).width < phoneBreakpoint)
-                  IconButton(
-                    tooltip: 'Back',
-                    color: colors.text,
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    onPressed: () => context.pop(),
-                  )
-                else
-                  const SizedBox(width: 8),
-                Text(
-                  'Settings',
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
+        children: shown == null
+            ? [
+                // Phones open Settings from Home's gear and need a way back.
+                _Header('Settings', back: context.canPop()),
+                for (final c in visible)
+                  _CategoryTile(
+                    c,
+                    onTap: () => context.push('/settings/${c.slug}'),
                   ),
-                ),
-              ],
+              ]
+            : [_Header(shown.title, back: true), ...shown.sections],
+      ),
+    );
+  }
+}
+
+/// A page title, with a Back arrow when [back]. Back pops, or goes to the
+/// category list when there's nothing to pop (the page was opened directly).
+class _Header extends StatelessWidget {
+  const _Header(this.title, {required this.back});
+
+  final String title;
+  final bool back;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 16, 16, 0),
+      child: Row(
+        children: [
+          if (back)
+            IconButton(
+              tooltip: 'Back',
+              color: colors.text,
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () =>
+                  context.canPop() ? context.pop() : context.go('/settings'),
+            )
+          else
+            const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-          const FoldersSection(),
-          const PlaybackSettingsSection(),
-          const PrivacySettingsSection(),
-          const AppearanceSection(),
-          const DiscordSettingsSection(),
-          const YouTubeSettingsSection(),
-          const DownloadsSettingsSection(),
-          const StorageSection(),
-          const CrashReportsSettingsSection(),
-          const LogsSection(),
-          const AboutSection(),
         ],
+      ),
+    );
+  }
+}
+
+/// One category in the list: icon, title and what's inside.
+class _CategoryTile extends StatelessWidget {
+  const _CategoryTile(this.category, {required this.onTap, this.selected});
+
+  final SettingsCategory category;
+  final VoidCallback onTap;
+
+  /// Null on phones, where the list has no current category.
+  final bool? selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final isSelected = selected ?? false;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: ListTile(
+        key: Key('settings.category.${category.slug}'),
+        selected: isSelected,
+        selectedTileColor: colors.text.withValues(alpha: 0.08),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        leading: Icon(category.icon, color: colors.text),
+        title: Text(
+          category.title,
+          style: TextStyle(
+            color: colors.text,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+        subtitle: Text(
+          category.line,
+          style: TextStyle(color: colors.mutedText, fontSize: 12),
+        ),
+        trailing: selected == null
+            ? Icon(Icons.chevron_right_rounded, color: colors.mutedText)
+            : null,
+        onTap: onTap,
       ),
     );
   }

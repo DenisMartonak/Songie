@@ -14,6 +14,7 @@ import 'package:songies/core/paths.dart';
 import 'package:songies/data/settings_repository.dart';
 import 'package:songies/providers.dart';
 import 'package:songies/ui/bug_report/bug_report_form.dart';
+import 'package:songies/ui/settings/settings_categories.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 
@@ -91,10 +92,14 @@ void main() {
             builder: (_, _) => nested
                 ? Navigator(
                     onGenerateRoute: (_) => MaterialPageRoute<void>(
-                      builder: (_) => const Scaffold(body: SettingsPage()),
+                      builder: (_) => const Scaffold(
+                        body: SettingsPage(category: SettingsCategory.about),
+                      ),
                     ),
                   )
-                : const Scaffold(body: SettingsPage()),
+                : const Scaffold(
+                    body: SettingsPage(category: SettingsCategory.about),
+                  ),
           ),
         ],
       ),

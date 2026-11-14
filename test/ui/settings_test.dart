@@ -16,6 +16,7 @@ import 'package:songies/providers.dart';
 import 'package:songies/theme/theme_repository.dart';
 import 'package:songies/ui/library/pickers.dart';
 import 'package:songies/ui/settings/discord_settings.dart';
+import 'package:songies/ui/settings/settings_categories.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 import 'package:songies/update/update_checker.dart';
@@ -57,13 +58,14 @@ void main() {
     LogSaver? logSaver,
     bool discordSupported = true,
     String discordClientId = '123',
+    String location = '/settings',
   }) async {
     tester.view.physicalSize = const Size(800, 1600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       h.app(
-        initialLocation: '/settings',
+        initialLocation: location,
         extraOverrides: [
           storageUsageProvider.overrideWith((ref) async => usage),
           if (logSaver != null) logSaverProvider.overrideWithValue(logSaver),
@@ -80,6 +82,17 @@ void main() {
                 builder: (_, _) => const Scaffold(body: Text('Themes page')),
               ),
             ],
+          ),
+          // As the app's router: a sibling, so categories don't stack.
+          GoRoute(
+            path: '/settings/:category',
+            builder: (_, s) => Scaffold(
+              body: SettingsPage(
+                category: settingsCategoryFromSlug(
+                  s.pathParameters['category'],
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -136,6 +149,100 @@ void main() {
       },
     );
   }
+
+  group('categories', () {
+    Finder tile(String slug) => find.byKey(Key('settings.category.$slug'));
+    const slugs = [
+      'library',
+      'playback',
+      'youtube',
+      'appearance',
+      'privacy',
+      'discord',
+      'about',
+    ];
+
+    Future<GoRouter> pumpAt(
+      WidgetTester tester,
+      Size size, {
+      String location = '/settings',
+    }) async {
+      await pumpSettings(tester, location: location);
+      tester.view.physicalSize = size;
+      await settle(tester);
+      return GoRouter.of(tester.element(find.byType(SettingsPage).first));
+    }
+
+    uiTest('a phone lists the categories; one opens its page and Back '
+        'returns', (tester) async {
+      final router = await pumpAt(tester, const Size(400, 900));
+      for (final slug in slugs) {
+        expect(tile(slug), findsOneWidget);
+      }
+      expect(find.byKey(const Key('settings.addFolder')), findsNothing);
+
+      await tester.tap(tile('about'));
+      await settle(tester);
+      expect(router.state.uri.path, '/settings/about');
+      expect(find.byKey(const Key('settings.checkForUpdates')), findsOneWidget);
+      expect(tile('library'), findsNothing);
+
+      await tester.tap(find.byTooltip('Back'));
+      await settle(tester);
+      expect(router.state.uri.path, '/settings');
+      expect(tile('about'), findsOneWidget);
+    });
+
+    uiTest('on a phone, Back from a category opened directly goes to the '
+        'list', (tester) async {
+      final router = await pumpAt(
+        tester,
+        const Size(400, 900),
+        location: '/settings/youtube',
+      );
+      expect(find.byKey(const Key('settings.ytReset')), findsOneWidget);
+      await tester.tap(find.byTooltip('Back'));
+      await settle(tester);
+      expect(router.state.uri.path, '/settings');
+      expect(tile('youtube'), findsOneWidget);
+    });
+
+    uiTest('wide shows the list beside Library; picking a category swaps '
+        'the page without stacking', (tester) async {
+      final router = await pumpAt(tester, const Size(1000, 900));
+      for (final slug in slugs) {
+        expect(tile(slug), findsOneWidget);
+      }
+      expect(find.byKey(const Key('settings.addFolder')), findsOneWidget);
+      final couldPop = router.canPop();
+
+      await tester.tap(tile('about'));
+      await settle(tester);
+      expect(router.state.uri.path, '/settings/about');
+      expect(find.byKey(const Key('settings.checkForUpdates')), findsOneWidget);
+      expect(find.byKey(const Key('settings.addFolder')), findsNothing);
+      expect(tile('library'), findsOneWidget);
+      expect(router.canPop(), couldPop);
+      expect(find.byTooltip('Back'), findsNothing);
+    });
+
+    uiTest('an unknown category shows Library', (tester) async {
+      await pumpAt(tester, const Size(1000, 900), location: '/settings/nope');
+      expect(find.byKey(const Key('settings.addFolder')), findsOneWidget);
+    });
+
+    uiTest('where Discord status cannot work, its category shows Library', (
+      tester,
+    ) async {
+      await pumpSettings(
+        tester,
+        location: '/settings/discord',
+        discordSupported: false,
+      );
+      expect(tile('discord'), findsNothing);
+      expect(find.byKey(const Key('settings.addFolder')), findsOneWidget);
+    });
+  });
 
   uiTest('Settings starts with Music folders; the account is on the profile', (
     tester,
@@ -385,6 +492,7 @@ void main() {
       Uint8List? saved;
       await pumpSettings(
         tester,
+        location: '/settings/about',
         logSaver: (name, bytes) async {
           savedName = name;
           saved = bytes;
@@ -407,6 +515,7 @@ void main() {
       Uint8List? saved;
       await pumpSettings(
         tester,
+        location: '/settings/about',
         logSaver: (name, bytes) async {
           saved = bytes;
           return true;
@@ -423,6 +532,7 @@ void main() {
       var asked = 0;
       await pumpSettings(
         tester,
+        location: '/settings/about',
         logSaver: (name, bytes) async {
           asked++;
           return true;
@@ -443,6 +553,7 @@ void main() {
       var fail = false;
       await pumpSettings(
         tester,
+        location: '/settings/about',
         logSaver: (name, bytes) async {
           if (fail) throw const FileSystemException('disk full');
           return false;
@@ -472,7 +583,7 @@ void main() {
             SettingsRepository(h.db)
                 .setString(kActiveThemeId, kTerminalThemeId),
       );
-      await pumpSettings(tester);
+      await pumpSettings(tester, location: '/settings/appearance');
       final row = find.byKey(const Key('settings.themes'));
       expect(
         find.descendant(of: row, matching: find.text('Terminal')),
@@ -487,7 +598,7 @@ void main() {
     uiTest('Reduce animations is off by default and saves the setting', (
       tester,
     ) async {
-      await pumpSettings(tester);
+      await pumpSettings(tester, location: '/settings/appearance');
       final toggle = find.byKey(const Key('settings.reduceMotion'));
       expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
 
@@ -509,8 +620,8 @@ void main() {
     final toggle = find.byKey(const Key('settings.discord'));
 
     uiTest('is off by default and saves the setting', (tester) async {
-      await pumpSettings(tester);
-      expect(find.text('Discord'), findsOneWidget);
+      await pumpSettings(tester, location: '/settings/discord');
+      expect(find.text("Show what I'm listening to"), findsOneWidget);
       expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
       await tester.ensureVisible(toggle);
       await tester.tap(toggle);
@@ -530,7 +641,11 @@ void main() {
     uiTest('without an application id it says so and cannot be turned on', (
       tester,
     ) async {
-      await pumpSettings(tester, discordClientId: '');
+      await pumpSettings(
+        tester,
+        location: '/settings/discord',
+        discordClientId: '',
+      );
       expect(tester.widget<SwitchListTile>(toggle).onChanged, isNull);
       expect(
         find.text('Not set up in this version of Songies yet'),
@@ -539,7 +654,11 @@ void main() {
     });
 
     uiTest('is hidden where Discord status cannot work', (tester) async {
-      await pumpSettings(tester, discordSupported: false);
+      await pumpSettings(
+        tester,
+        location: '/settings/discord',
+        discordSupported: false,
+      );
       expect(toggle, findsNothing);
       expect(find.text('Discord'), findsNothing);
     });
@@ -554,7 +673,7 @@ void main() {
     uiTest('Reset YouTube recommendations asks first; Cancel keeps all', (
       tester,
     ) async {
-      await pumpSettings(tester);
+      await pumpSettings(tester, location: '/settings/youtube');
       await tester.ensureVisible(reset());
       await tester.tap(reset());
       await settle(tester);
@@ -568,7 +687,7 @@ void main() {
     uiTest('confirming forgets the visitor id and reloads the feed', (
       tester,
     ) async {
-      await pumpSettings(tester);
+      await pumpSettings(tester, location: '/settings/youtube');
       await real(tester, () => container(tester).read(ytmHomeProvider.future));
       expect(h.ytm.homeCalls, hasLength(1));
 
@@ -589,7 +708,7 @@ void main() {
     uiTest('shows the version and the first 8 characters of the device id', (
       tester,
     ) async {
-      await pumpSettings(tester);
+      await pumpSettings(tester, location: '/settings/about');
       await reveal(tester, find.text(appVersion));
 
       expect(find.text(appVersion), findsOneWidget);
@@ -624,7 +743,9 @@ void main() {
             routes: [
               GoRoute(
                 path: '/settings',
-                builder: (_, _) => const Scaffold(body: SettingsPage()),
+                builder: (_, _) => const Scaffold(
+                  body: SettingsPage(category: SettingsCategory.about),
+                ),
               ),
             ],
           ),

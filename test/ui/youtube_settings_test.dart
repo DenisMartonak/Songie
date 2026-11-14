@@ -12,6 +12,7 @@ import 'package:songies/innertube/yt_session_store.dart';
 import 'package:songies/innertube/yt_sign_in.dart';
 import 'package:songies/innertube/ytm_models.dart';
 import 'package:songies/providers.dart';
+import 'package:songies/ui/settings/settings_categories.dart';
 import 'package:songies/ui/settings/settings_page.dart';
 import 'package:songies/ui/settings/storage_usage.dart';
 import 'package:songies/ui/settings/youtube_settings.dart';
@@ -99,13 +100,15 @@ void main() {
         routes: [
           GoRoute(
             path: '/settings',
-            builder: (_, _) => const Scaffold(body: SettingsPage()),
+            builder: (_, _) => const Scaffold(
+              body: SettingsPage(category: SettingsCategory.youtube),
+            ),
           ),
         ],
       ),
     );
     await settle(tester);
-    expect(find.text('YouTube'), findsOneWidget);
+    expect(find.byType(YouTubeSettingsSection), findsOneWidget);
     expect(find.text('yt-dlp version: 2026.10.21'), findsOneWidget);
   });
 

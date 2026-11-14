@@ -8,6 +8,7 @@ import 'ui/motion/motion.dart';
 import 'ui/playlist/playlist_page.dart';
 import 'ui/now_playing/now_playing_page.dart';
 import 'ui/search/search_page.dart';
+import 'ui/settings/settings_categories.dart';
 import 'ui/settings/settings_page.dart';
 import 'ui/settings/themes/theme_editor_page.dart';
 import 'ui/settings/themes/themes_page.dart';
@@ -120,6 +121,25 @@ GoRouter buildRouter({GlobalKey<NavigatorState>? navigatorKey}) => GoRouter(
                   ],
                 ),
               ],
+            ),
+            // A category of Settings, a sibling of /settings rather than its
+            // child: on wide windows picking another category replaces the
+            // page instead of stacking it, and without a slide, since the
+            // list beside it stays put. Phones push it over the list.
+            GoRoute(
+              path: '/settings/:category',
+              pageBuilder: (context, state) {
+                final page = PageSurface(
+                  child: SettingsPage(
+                    category: settingsCategoryFromSlug(
+                      state.pathParameters['category'],
+                    ),
+                  ),
+                );
+                return MediaQuery.sizeOf(context).width >= phoneBreakpoint
+                    ? NoTransitionPage<void>(key: state.pageKey, child: page)
+                    : sharedAxisPage(context, state, page);
+              },
             ),
           ],
         ),
