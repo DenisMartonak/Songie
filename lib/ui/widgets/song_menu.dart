@@ -20,6 +20,7 @@ import '../../room/room_protocol.dart' show RoomOp, roleAllows;
 import '../room/room_button.dart' show roomGuestRoleProvider;
 import '../ytm/artist_lookup.dart';
 import 'artist_link.dart' show firstArtistName;
+import 'profile_art.dart';
 import '../ytm/ytm_nav.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
@@ -290,9 +291,15 @@ Future<void> showSongMenu(
       ),
   ];
 
+  final panel = _SongMenuPanel(
+    song: song,
+    favorite: favorite,
+    entries: entries,
+    disabled: disabled,
+  );
   final chosen = anchor == null
-      ? await _sheet(context, song, entries, disabled)
-      : await _popup(context, anchor, entries, disabled);
+      ? await _sheet(context, panel)
+      : await _card(context, anchor, panel);
   // The row may be gone now (the list changed while the menu was open): the
   // actions that need its context check it; the others run regardless.
   if (chosen == null) return;
@@ -400,121 +407,377 @@ AnimationStyle _animation(BuildContext context) {
   );
 }
 
-Future<_Entry?> _sheet(
-  BuildContext context,
-  MenuSong song,
-  List<_Entry> entries,
-  Set<SongMenuAction> disabled,
-) {
+/// The entries shown as big tiles, in this order.
+const _tileActions = [
+  SongMenuAction.addToQueue,
+  SongMenuAction.addToPlaylist,
+  SongMenuAction.startRadio,
+];
+
+String _tileLabel(SongMenuAction a) => switch (a) {
+  SongMenuAction.addToQueue => 'Queue',
+  SongMenuAction.addToPlaylist => 'Playlist',
+  _ => 'Radio',
+};
+
+Future<_Entry?> _sheet(BuildContext context, _SongMenuPanel panel) {
   return showModalBottomSheet<_Entry>(
     context: context,
     useRootNavigator: true,
     useSafeArea: true,
+    showDragHandle: true,
     constraints: const BoxConstraints(maxWidth: 640),
     sheetAnimationStyle: _animation(context),
-    builder: (sheet) {
-      final colors = Theme.of(sheet).extension<SongiesColors>()!;
-      return SingleChildScrollView(
-        key: const Key('songMenu.sheet'),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    song.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (song.subtitle.trim().isNotEmpty)
-                    Text(
-                      song.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colors.mutedText, fontSize: 13),
-                    ),
-                ],
-              ),
-            ),
-            for (final e in entries)
-              ListTile(
-                key: _entryKey(e),
-                enabled: !disabled.contains(e.$1),
-                leading: Icon(e.$2, color: _entryColor(colors, e, disabled)),
-                title: Text(
-                  e.$3,
-                  style: TextStyle(color: _entryColor(colors, e, disabled)),
-                ),
-                onTap: () => Navigator.of(sheet).pop(e),
-              ),
-          ],
-        ),
-      );
-    },
+    builder: (sheet) => SingleChildScrollView(
+      key: const Key('songMenu.sheet'),
+      padding: const EdgeInsets.only(bottom: 8),
+      child: panel,
+    ),
   );
 }
 
-/// A greyed entry takes the muted colour.
-Color _entryColor(
-  SongiesColors colors,
-  _Entry e,
-  Set<SongMenuAction> disabled,
-) => disabled.contains(e.$1) ? colors.mutedText : colors.text;
-
-Future<_Entry?> _popup(
-  BuildContext context,
-  Rect anchor,
-  List<_Entry> entries,
-  Set<SongMenuAction> disabled,
-) {
-  final colors = Theme.of(context).extension<SongiesColors>()!;
-  final overlay =
-      Navigator.of(
-            context,
-            rootNavigator: true,
-          ).overlay!.context.findRenderObject()!
-          as RenderBox;
+/// The menu as a card at [anchor] (global coordinates), kept on screen.
+Future<_Entry?> _card(BuildContext context, Rect anchor, _SongMenuPanel panel) {
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final overlay = navigator.overlay!.context.findRenderObject()! as RenderBox;
   final local = Rect.fromPoints(
     overlay.globalToLocal(anchor.topLeft),
     overlay.globalToLocal(anchor.bottomRight),
   );
-  return showMenu<_Entry>(
-    context: context,
-    useRootNavigator: true,
-    position: RelativeRect.fromRect(local, Offset.zero & overlay.size),
-    color: colors.surface,
-    popUpAnimationStyle: _animation(context),
-    items: [
+  return navigator.push(
+    _CardRoute(
+      anchor: local,
+      style: _animation(context),
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      child: panel,
+    ),
+  );
+}
+
+class _CardRoute extends PopupRoute<_Entry> {
+  _CardRoute({
+    required this.anchor,
+    required this.style,
+    required this.child,
+    required this.barrierLabel,
+  });
+
+  final Rect anchor;
+  final AnimationStyle style;
+  final Widget child;
+
+  @override
+  final String barrierLabel;
+
+  @override
+  Color? get barrierColor => null;
+
+  @override
+  bool get barrierDismissible => true;
+
+  @override
+  Duration get transitionDuration => style.duration ?? Duration.zero;
+
+  @override
+  Duration get reverseTransitionDuration =>
+      style.reverseDuration ?? transitionDuration;
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return CustomSingleChildLayout(
+      delegate: _CardLayout(anchor),
+      child: Material(
+        key: const Key('songMenu.card'),
+        color: colors.surface,
+        elevation: 8,
+        clipBehavior: Clip.antiAlias,
+        borderRadius: BorderRadius.circular(16),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(top: 8, bottom: 8),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: style.curve ?? Curves.linear,
+    );
+    return FadeTransition(
+      opacity: curved,
+      child: ScaleTransition(
+        scale: Tween(begin: 0.96, end: 1.0).animate(curved),
+        alignment: Alignment.topLeft,
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Places the card at the anchor's bottom-left, flipped left or up when it
+/// would leave the screen, then kept [_margin] inside it.
+class _CardLayout extends SingleChildLayoutDelegate {
+  _CardLayout(this.anchor);
+
+  final Rect anchor;
+
+  static const double _margin = 8;
+  static const double _width = 360;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    final size = constraints.biggest;
+    return BoxConstraints(
+      maxWidth: (size.width - 2 * _margin).clamp(0, _width),
+      maxHeight: size.height * 0.8,
+    );
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size child) {
+    var x = anchor.left;
+    if (x + child.width > size.width - _margin) x = anchor.right - child.width;
+    var y = anchor.bottom;
+    if (y + child.height > size.height - _margin) y = anchor.top - child.height;
+    double fit(double v, double extent, double room) =>
+        v.clamp(_margin, (room - extent - _margin).clamp(_margin, room));
+    return Offset(
+      fit(x, child.width, size.width),
+      fit(y, child.height, size.height),
+    );
+  }
+
+  @override
+  bool shouldRelayout(_CardLayout old) => old.anchor != anchor;
+}
+
+/// The menu itself: the song's header with the Favorites star, the big
+/// tiles, the other entries as rows, and Remove from this playlist below a
+/// divider. Choosing pops the route with the entry.
+class _SongMenuPanel extends StatelessWidget {
+  const _SongMenuPanel({
+    required this.song,
+    required this.favorite,
+    required this.entries,
+    required this.disabled,
+  });
+
+  final MenuSong song;
+  final bool favorite;
+  final List<_Entry> entries;
+  final Set<SongMenuAction> disabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final error = Theme.of(context).colorScheme.error;
+    void choose(_Entry e) => Navigator.of(context).pop(e);
+    _Entry? find(SongMenuAction a) =>
+        entries.where((e) => e.$1 == a && e.$4 == null).firstOrNull;
+    final star = find(SongMenuAction.favorite);
+    final remove = find(SongMenuAction.removeFromPlaylist);
+    final tiles = [for (final a in _tileActions) ?find(a)];
+    final rows = [
       for (final e in entries)
-        PopupMenuItem(
-          key: _entryKey(e),
-          value: e,
-          enabled: !disabled.contains(e.$1),
+        if (!identical(e, star) &&
+            !identical(e, remove) &&
+            !tiles.any((t) => identical(t, e)))
+          e,
+    ];
+    final cover = song.ytm?.thumbnailUrl;
+    final seed = song.track?.id ?? song.ytm!.videoId;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 12, 12),
           child: Row(
             children: [
-              Icon(e.$2, size: 20, color: _entryColor(colors, e, disabled)),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  e.$3,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: _entryColor(colors, e, disabled)),
+              ProfileArt(
+                url: cover,
+                artworkRef: song.track?.artworkRef,
+                seed: seed,
+                size: 56,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      song.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (song.subtitle.trim().isNotEmpty)
+                      Text(
+                        song.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colors.mutedText, fontSize: 14),
+                      ),
+                  ],
+                ),
+              ),
+              if (star != null)
+                KeyedSubtree(
+                  key: const Key('songMenu.star'),
+                  child: IconButton.filledTonal(
+                    key: _entryKey(star),
+                    tooltip: star.$3,
+                    icon: Icon(
+                      favorite
+                          ? Icons.star_rounded
+                          : Icons.star_outline_rounded,
+                      color: favorite ? colors.accent : colors.text,
+                    ),
+                    onPressed: () => choose(star),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (tiles.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              children: [
+                for (final (i, t) in tiles.indexed) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: KeyedSubtree(
+                      key: Key('songMenu.tile.${t.$1.name}'),
+                      child: SongMenuTile(
+                        key: _entryKey(t),
+                        icon: t.$2,
+                        label: _tileLabel(t.$1),
+                        enabled: !disabled.contains(t.$1),
+                        onTap: () => choose(t),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        for (final e in rows)
+          _Row(
+            entry: e,
+            color: disabled.contains(e.$1) ? colors.mutedText : colors.text,
+            enabled: !disabled.contains(e.$1),
+            onTap: () => choose(e),
+          ),
+        if (remove != null) ...[
+          Divider(
+            indent: 16,
+            endIndent: 16,
+            color: colors.mutedText.withValues(alpha: 0.3),
+          ),
+          _Row(
+            entry: remove,
+            color: error,
+            enabled: true,
+            onTap: () => choose(remove),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// One of the menu's big tiles: an icon above a short label.
+class SongMenuTile extends StatelessWidget {
+  const SongMenuTile({
+    required this.icon,
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    final color = enabled ? colors.text : colors.mutedText;
+    return Material(
+      color: Color.alphaBlend(
+        colors.accent.withValues(alpha: 0.16),
+        colors.surface,
+      ),
+      borderRadius: BorderRadius.circular(colors.radius + 6),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
         ),
-    ],
-  );
+      ),
+    );
+  }
+}
+
+class _Row extends StatelessWidget {
+  const _Row({
+    required this.entry,
+    required this.color,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final _Entry entry;
+  final Color color;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      key: _entryKey(entry),
+      enabled: enabled,
+      leading: Icon(entry.$2, color: color),
+      title: Text(entry.$3, style: TextStyle(color: color)),
+      onTap: onTap,
+    );
+  }
 }

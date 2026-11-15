@@ -101,10 +101,10 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  PopupMenuItem<Object?>? addToQueue(WidgetTester tester) {
+  SongMenuTile? addToQueue(WidgetTester tester) {
     final f = find.byKey(const Key('songMenu.addToQueue'));
     if (f.evaluate().isEmpty) return null;
-    return tester.widget<PopupMenuItem<Object?>>(f);
+    return tester.widget<SongMenuTile>(f);
   }
 
   uiTest('tapping the artist opens the artist page', (tester) async {
@@ -276,7 +276,7 @@ void main() {
     await pump(tester);
     await rig.joinAs(tester, RoomRole.listener);
     await openPlayingSongMenu(tester);
-    expect(find.text('Add to playlist'), findsOneWidget);
+    expect(find.byKey(const Key('songMenu.addToPlaylist')), findsOneWidget);
     expect(addToQueue(tester), isNull);
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
@@ -399,7 +399,7 @@ void main() {
       await closeMenu(tester);
       expect(h.player.state.playing, isTrue);
       await openPlayingSongMenu(tester);
-      expect(find.text('Add to playlist'), findsOneWidget);
+      expect(find.byKey(const Key('songMenu.addToPlaylist')), findsOneWidget);
       expect(find.text('Play on Desk'), findsNothing);
       await closeMenu(tester);
       await rig.dispose(tester);

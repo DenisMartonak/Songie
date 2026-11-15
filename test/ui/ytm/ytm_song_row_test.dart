@@ -28,12 +28,13 @@ const _bare = YtmSong(
   album: 'Somewhere',
 );
 
+// The tiles' labels, then the rows'.
 const _menuItems = [
-  'Add to queue',
-  'Add to playlist',
+  'Queue',
+  'Playlist',
+  'Radio',
   'Go to artist',
   'Go to album',
-  'Start radio',
 ];
 
 void main() {
@@ -176,14 +177,14 @@ void main() {
     await openMenu(tester, _bare);
     expect(find.text('Go to artist'), findsNothing);
     expect(find.text('Go to album'), findsNothing);
-    expect(find.text('Add to queue'), findsOneWidget);
-    expect(find.text('Start radio'), findsOneWidget);
+    expect(find.text('Queue'), findsOneWidget);
+    expect(find.text('Radio'), findsOneWidget);
   });
 
   uiTest('Add to queue stores the song and queues it', (tester) async {
     await pumpRow(tester, _lucky);
     await openMenu(tester, _lucky);
-    await choose(tester, 'Add to queue');
+    await choose(tester, 'Queue');
     expect(h.ytStore.upserted, ['v1']);
     expect(queueTitles(), ['Get Lucky']);
     expect(h.radio.played, isEmpty);
@@ -200,7 +201,7 @@ void main() {
     });
     await pumpRow(tester, _lucky);
     await openMenu(tester, _lucky);
-    await choose(tester, 'Add to playlist');
+    await choose(tester, 'Playlist');
 
     expect(h.ytStore.upserted, ['v1']);
     expect(find.byKey(const Key('addToPlaylist.sheet')), findsOneWidget);
@@ -233,7 +234,7 @@ void main() {
   uiTest('Start radio plays the song with radio', (tester) async {
     await pumpRow(tester, _lucky);
     await openMenu(tester, _lucky);
-    await choose(tester, 'Start radio');
+    await choose(tester, 'Radio');
     expect([for (final s in h.radio.played) s.videoId], ['v1']);
   });
 }

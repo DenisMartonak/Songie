@@ -206,7 +206,7 @@ void main() {
     // Long-press on the queue row and right-click on the bar open nothing.
     await tester.longPress(find.byKey(const Key('queue.row.0')));
     await settle(tester);
-    expect(find.text('Add to playlist'), findsNothing);
+    expect(find.byKey(const Key('songMenu.addToPlaylist')), findsNothing);
     await tester.tap(
       find.descendant(
         of: find.byType(PlayerBar),
@@ -215,11 +215,11 @@ void main() {
       buttons: 2,
     );
     await settle(tester);
-    expect(find.text('Add to playlist'), findsNothing);
+    expect(find.byKey(const Key('songMenu.addToPlaylist')), findsNothing);
     // A known song still has its menu.
     await tester.longPress(find.byKey(const Key('queue.row.1')));
     await settle(tester);
-    expect(find.text('Add to playlist'), findsOneWidget);
+    expect(find.byKey(const Key('songMenu.addToPlaylist')), findsOneWidget);
   });
 
   uiTest("lyrics don't look up an unknown song", (tester) async {

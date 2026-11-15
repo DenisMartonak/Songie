@@ -248,7 +248,7 @@ void main() {
     await pump(tester, '/library/playlist/$mine');
     await tester.tap(find.byTooltip('Song options').first);
     await go(tester);
-    await tester.tap(find.text('Add to playlist'));
+    await tester.tap(find.byKey(const Key('songMenu.addToPlaylist')));
     await go(tester);
     expect(key('addToPlaylist.sheet'), findsOneWidget);
     expect(

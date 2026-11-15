@@ -62,7 +62,7 @@ void main() {
       buttons: kSecondaryButton,
     );
     await settle(tester);
-    expect(find.text('Add to playlist'), findsOneWidget);
+    expect(find.byKey(const Key('songMenu.addToPlaylist')), findsOneWidget);
   });
 
   uiTest('right-clicking the bar controls opens no menu', (tester) async {
@@ -72,6 +72,6 @@ void main() {
       buttons: kSecondaryButton,
     );
     await settle(tester);
-    expect(find.text('Add to playlist'), findsNothing);
+    expect(find.byKey(const Key('songMenu.addToPlaylist')), findsNothing);
   });
 }

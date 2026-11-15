@@ -243,7 +243,7 @@ void main() {
       await pumpPage(tester, pid);
       await tester.tap(find.byKey(Key('track.menu.$e1')));
       await settle(tester);
-      expect(find.text('Add to queue'), findsOneWidget);
+      expect(find.byKey(const Key('songMenu.addToQueue')), findsOneWidget);
       expect(find.text('Download'), findsNothing);
       expect(find.text('Remove download'), findsNothing);
     });
@@ -254,7 +254,7 @@ void main() {
       await pumpPage(tester, pid);
       await tester.tap(find.byKey(Key('track.menu.$e3')));
       await settle(tester);
-      expect(find.text('Add to queue'), findsOneWidget);
+      expect(find.byKey(const Key('songMenu.addToQueue')), findsOneWidget);
       expect(find.text('Download'), findsNothing);
     });
   });

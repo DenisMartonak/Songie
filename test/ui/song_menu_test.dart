@@ -51,7 +51,7 @@ void main() {
 
   Finder item(String action) => find.byKey(Key('songMenu.$action'));
   final sheet = find.byKey(const Key('songMenu.sheet'));
-  final popup = find.byWidgetPredicate((w) => w is PopupMenuItem);
+  final card = find.byKey(const Key('songMenu.card'));
 
   Future<void> longPress(WidgetTester tester, Finder row) async {
     await tester.longPress(row);
@@ -99,15 +99,15 @@ void main() {
 
     final at = await rightClick(tester, row);
     expect(sheet, findsNothing);
-    expect(popup, findsWidgets);
+    expect(card, findsOneWidget);
     expect(item('addToQueue'), findsOneWidget);
     expect(item('addToPlaylist'), findsOneWidget);
     // It opens at the pointer.
-    final top = tester.getTopLeft(item('addToQueue'));
+    final top = tester.getTopLeft(card);
     expect((top.dy - at.dy).abs(), lessThan(60));
     expect((top.dx - at.dx).abs(), lessThan(60));
     await dismiss(tester);
-    expect(popup, findsNothing);
+    expect(card, findsNothing);
   }
 
   List<String> queueIds() => [for (final t in h.player.state.queue) t.id];
@@ -345,6 +345,126 @@ void main() {
   });
 
   // --- a tap is unchanged ---------------------------------------------------
+
+  group('layout', () {
+    Finder tile(String action) => find.byKey(Key('songMenu.tile.$action'));
+
+    uiTest('a header with the title, artist and the star', (tester) async {
+      await recents(tester);
+      h.ytm.homeAnswer = const Ok(YtmHome([], null));
+      await pumpHome(tester);
+      await longPress(tester, recentRow);
+
+      expect(
+        find.descendant(of: sheet, matching: find.text('First')),
+        findsOneWidget,
+      );
+      final star = find.byKey(const Key('songMenu.star'));
+      expect(
+        find.descendant(
+          of: star,
+          matching: find.byIcon(Icons.star_outline_rounded),
+        ),
+        findsOneWidget,
+      );
+      await choose(tester, 'favorite');
+      expect(sheet, findsNothing);
+      await longPress(tester, recentRow);
+      expect(
+        find.descendant(of: star, matching: find.byIcon(Icons.star_rounded)),
+        findsOneWidget,
+      );
+    });
+
+    uiTest('Queue, Playlist and Radio tiles for a playable YouTube song', (
+      tester,
+    ) async {
+      final pid = await real(tester, () async {
+        await h.addTrack('t1');
+        await addYtTrack('y1');
+        return h.addPlaylist('Mix', ['t1', 'y1']);
+      });
+      await pumpPlaylist(tester, pid);
+
+      await longPress(tester, find.text('Song y1'));
+      expect(tile('addToQueue'), findsOneWidget);
+      expect(tile('addToPlaylist'), findsOneWidget);
+      expect(tile('startRadio'), findsOneWidget);
+      // The tiles sit in one row, above the list.
+      final queue = tester.getRect(tile('addToQueue'));
+      expect(tester.getRect(tile('startRadio')).top, closeTo(queue.top, 1));
+      expect(tester.getTopLeft(item('download')).dy, greaterThan(queue.bottom));
+      await dismiss(tester);
+
+      await longPress(tester, find.text('Song t1'));
+      expect(tile('addToQueue'), findsOneWidget);
+      expect(tile('addToPlaylist'), findsOneWidget);
+      expect(tile('startRadio'), findsNothing);
+    });
+
+    uiTest('Remove from this playlist sits below a divider, in the error '
+        'color', (tester) async {
+      final pid = await real(tester, () async {
+        await h.addTrack('t1');
+        return h.addPlaylist('Mix', ['t1']);
+      });
+      await pumpPlaylist(tester, pid);
+      await longPress(tester, find.text('Song t1'));
+
+      final remove = item('removeFromPlaylist');
+      final divider = find.descendant(
+        of: sheet,
+        matching: find.byType(Divider),
+      );
+      expect(divider, findsOneWidget);
+      expect(
+        tester.getTopLeft(remove).dy,
+        greaterThan(tester.getTopLeft(divider).dy),
+      );
+      final text = tester.widget<Text>(
+        find.descendant(
+          of: remove,
+          matching: find.text('Remove from this playlist'),
+        ),
+      );
+      final error = Theme.of(tester.element(remove)).colorScheme.error;
+      expect(text.style?.color, error);
+    });
+
+    uiTest('a right-click near the bottom-right corner keeps the card on '
+        'screen', (tester) async {
+      await recents(tester);
+      h.ytm.homeAnswer = const Ok(YtmHome([], null));
+      await pumpHome(tester);
+      // Point at the row's right end, at the screen's bottom edge.
+      final screen = tester.view.physicalSize;
+      await tester.tapAt(
+        Offset(screen.width - 4, tester.getCenter(recentRow).dy),
+        buttons: kSecondaryButton,
+        kind: PointerDeviceKind.mouse,
+      );
+      await settle(tester);
+      expect(card, findsOneWidget);
+      final rect = tester.getRect(card);
+      expect(rect.right, lessThanOrEqualTo(screen.width));
+      expect(rect.left, greaterThanOrEqualTo(0));
+      expect(rect.bottom, lessThanOrEqualTo(screen.height));
+    });
+
+    uiTest('a YouTube Music result that fails to store opens no sheet', (
+      tester,
+    ) async {
+      h.ytm.answer('lucky', YtmSearchKind.songs, [_lucky]);
+      h.ytStore.failUpsert = const Failure(FailureKind.io, 'locked');
+      await pumpSearch(tester, 'lucky');
+      await longPress(tester, find.byKey(const Key('ytm.song.v1')));
+      await tester.tap(tile('addToPlaylist'));
+      await settle(tester);
+
+      expect(find.text("Couldn't add that song"), findsOneWidget);
+      expect(find.byKey(const Key('addToPlaylist.sheet')), findsNothing);
+    });
+  });
 
   group('a tap still plays', () {
     uiTest('a Recents row plays through the list from it', (tester) async {
@@ -704,11 +824,23 @@ void main() {
       h.ytm.homeAnswer = const Ok(YtmHome([], null));
       await pumpHome(tester);
       await longPress(tester, recentRow);
-      expect(find.text('Add to Favorites'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: sheet,
+          matching: find.byTooltip('Add to Favorites'),
+        ),
+        findsOneWidget,
+      );
       await choose(tester, 'favorite');
       expect(await favIds(tester), {'t1'});
       await longPress(tester, recentRow);
-      expect(find.text('Remove from Favorites'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: sheet,
+          matching: find.byTooltip('Remove from Favorites'),
+        ),
+        findsOneWidget,
+      );
       await choose(tester, 'favorite');
       expect(await favIds(tester), isEmpty);
     });
