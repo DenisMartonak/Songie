@@ -436,8 +436,12 @@ void main() {
       await recents(tester);
       h.ytm.homeAnswer = const Ok(YtmHome([], null));
       await pumpHome(tester);
-      // Point at the row's right end, at the screen's bottom edge.
-      final screen = tester.view.physicalSize;
+      // The window ends just under the row: the card can't fit below or
+      // right of the pointer.
+      final rowBottom = tester.getRect(recentRow).bottom;
+      tester.view.physicalSize = Size(400, rowBottom + 4);
+      await settle(tester);
+      final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
       await tester.tapAt(
         Offset(screen.width - 4, tester.getCenter(recentRow).dy),
         buttons: kSecondaryButton,
@@ -448,7 +452,30 @@ void main() {
       final rect = tester.getRect(card);
       expect(rect.right, lessThanOrEqualTo(screen.width));
       expect(rect.left, greaterThanOrEqualTo(0));
+      expect(rect.top, greaterThanOrEqualTo(0));
       expect(rect.bottom, lessThanOrEqualTo(screen.height));
+    });
+
+    uiTest('the card is announced as a menu', (tester) async {
+      await recents(tester);
+      h.ytm.homeAnswer = const Ok(YtmHome([], null));
+      await pumpHome(tester);
+      await rightClick(tester, recentRow);
+      final label = MaterialLocalizations.of(tester.element(card))
+          .popupMenuLabel;
+      expect(
+        find.ancestor(
+          of: card,
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is Semantics &&
+                w.properties.scopesRoute == true &&
+                w.properties.namesRoute == true &&
+                w.properties.label == label,
+          ),
+        ),
+        findsOneWidget,
+      );
     });
 
     uiTest('a YouTube Music result that fails to store opens no sheet', (

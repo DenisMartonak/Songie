@@ -195,111 +195,118 @@ class _SheetState extends ConsumerState<_AddToPlaylistSheet> {
       for (final p in playlists)
         if (_matches(p.name)) p,
     ];
-    final count = _ticked.length;
+    // Only the boxes shown count (not a followed playlist that holds it).
+    final listed = {kFavoritesPlaylistId, for (final p in playlists) p.id};
+    final count = _ticked.where(listed.contains).length;
     final height = MediaQuery.sizeOf(context).height;
-    return ConstrainedBox(
-      key: const Key('addToPlaylist.sheet'),
-      constraints: BoxConstraints(maxHeight: height * 0.85),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _searching
-                      ? TextField(
-                          autofocus: true,
-                          onChanged: (v) => setState(() => _query = v.trim()),
-                          style: TextStyle(color: colors.text),
-                          decoration: const InputDecoration(
-                            hintText: 'Search playlists',
-                            border: InputBorder.none,
+    // The keyboard (search, on a phone) pushes the sheet up.
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: ConstrainedBox(
+        key: const Key('addToPlaylist.sheet'),
+        constraints: BoxConstraints(maxHeight: height * 0.85 - keyboard),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _searching
+                        ? TextField(
+                            autofocus: true,
+                            onChanged: (v) => setState(() => _query = v.trim()),
+                            style: TextStyle(color: colors.text),
+                            decoration: const InputDecoration(
+                              hintText: 'Search playlists',
+                              border: InputBorder.none,
+                            ),
+                          )
+                        : Text(
+                            'Add to playlist',
+                            style: TextStyle(
+                              color: colors.text,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        )
-                      : Text(
-                          'Add to playlist',
-                          style: TextStyle(
-                            color: colors.text,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                ),
-                IconButton(
-                  key: const Key('addToPlaylist.search'),
-                  tooltip: _searching ? 'Close search' : 'Search',
-                  color: colors.mutedText,
-                  icon: Icon(_searching ? Icons.close : Icons.search),
-                  onPressed: () => setState(() {
-                    _searching = !_searching;
-                    _query = '';
-                  }),
-                ),
-                const SizedBox(width: 4),
-                IconButton.filledTonal(
-                  key: const Key('addToPlaylist.new'),
-                  tooltip: 'New playlist',
-                  icon: const Icon(Icons.add),
-                  onPressed: _create,
-                ),
-              ],
+                  ),
+                  IconButton(
+                    key: const Key('addToPlaylist.search'),
+                    tooltip: _searching ? 'Close search' : 'Search',
+                    color: colors.mutedText,
+                    icon: Icon(_searching ? Icons.close : Icons.search),
+                    onPressed: () => setState(() {
+                      _searching = !_searching;
+                      _query = '';
+                    }),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton.filledTonal(
+                    key: const Key('addToPlaylist.new'),
+                    tooltip: 'New playlist',
+                    icon: const Icon(Icons.add),
+                    onPressed: _create,
+                  ),
+                ],
+              ),
             ),
-          ),
-          Flexible(
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              children: [
-                if (_matches(kFavoritesName))
-                  _Row(
-                    rowKey: const Key('addToPlaylist.favorites'),
-                    checkKey: const Key(
-                      'addToPlaylist.check.$kFavoritesPlaylistId',
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                children: [
+                  if (_matches(kFavoritesName))
+                    _Row(
+                      rowKey: const Key('addToPlaylist.favorites'),
+                      checkKey: const Key(
+                        'addToPlaylist.check.$kFavoritesPlaylistId',
+                      ),
+                      art: _FavoritesArt(colors: colors),
+                      name: kFavoritesName,
+                      checked: _ticked.contains(kFavoritesPlaylistId),
+                      onTap: () => _toggle(kFavoritesPlaylistId),
                     ),
-                    art: _FavoritesArt(colors: colors),
-                    name: kFavoritesName,
-                    checked: _ticked.contains(kFavoritesPlaylistId),
-                    onTap: () => _toggle(kFavoritesPlaylistId),
-                  ),
-                for (final p in shown)
-                  _Row(
-                    rowKey: Key('addToPlaylist.${p.id}'),
-                    checkKey: Key('addToPlaylist.check.${p.id}'),
-                    art: PlaylistArt(
-                      playlistId: p.id,
-                      coverRef: p.coverRef,
-                      size: 48,
+                  for (final p in shown)
+                    _Row(
+                      rowKey: Key('addToPlaylist.${p.id}'),
+                      checkKey: Key('addToPlaylist.check.${p.id}'),
+                      art: PlaylistArt(
+                        playlistId: p.id,
+                        coverRef: p.coverRef,
+                        size: 48,
+                      ),
+                      name: p.name,
+                      checked: _ticked.contains(p.id),
+                      onTap: () => _toggle(p.id),
                     ),
-                    name: p.name,
-                    checked: _ticked.contains(p.id),
-                    onTap: () => _toggle(p.id),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Divider(height: 1, color: colors.mutedText.withValues(alpha: 0.3)),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 16, 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    count == 0 ? 'None selected' : '$count selected',
-                    style: TextStyle(color: colors.mutedText),
+            Divider(height: 1, color: colors.mutedText.withValues(alpha: 0.3)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      count == 0 ? 'None selected' : '$count selected',
+                      style: TextStyle(color: colors.mutedText),
+                    ),
                   ),
-                ),
-                FilledButton(
-                  key: const Key('addToPlaylist.save'),
-                  onPressed: () => _save(playlists),
-                  child: const Text('Save'),
-                ),
-              ],
+                  FilledButton(
+                    key: const Key('addToPlaylist.save'),
+                    onPressed: () => _save(playlists),
+                    child: const Text('Save'),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

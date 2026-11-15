@@ -491,15 +491,22 @@ class _CardRoute extends PopupRoute<_Entry> {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     return CustomSingleChildLayout(
       delegate: _CardLayout(anchor),
-      child: Material(
-        key: const Key('songMenu.card'),
-        color: colors.surface,
-        elevation: 8,
-        clipBehavior: Clip.antiAlias,
-        borderRadius: BorderRadius.circular(16),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(top: 8, bottom: 8),
-          child: child,
+      // Announced as a menu, as the popup it replaced was.
+      child: Semantics(
+        scopesRoute: true,
+        namesRoute: true,
+        explicitChildNodes: true,
+        label: MaterialLocalizations.of(context).popupMenuLabel,
+        child: Material(
+          key: const Key('songMenu.card'),
+          color: colors.surface,
+          elevation: 8,
+          clipBehavior: Clip.antiAlias,
+          borderRadius: BorderRadius.circular(16),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
+            child: child,
+          ),
         ),
       ),
     );

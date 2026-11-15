@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:songies/core/result.dart';
 import 'package:songies/library/favorites.dart';
 import 'package:songies/ui/library/add_to_playlist_sheet.dart';
 
@@ -111,6 +112,49 @@ void main() {
     expect(_key('addToPlaylist.favorites'), findsOneWidget);
     expect(find.text('Favorites'), findsOneWidget);
     expect(find.text('None selected'), findsOneWidget);
+  });
+
+  uiTest('the count leaves out playlists that are not listed', (tester) async {
+    h = await real(tester, UiHarness.create);
+    addTearDown(h.dispose);
+    await real(tester, () async {
+      await h.addTrack('t1');
+      final f = (await h.repo.createFollowedPlaylist(
+        code: 'c',
+        name: 'Theirs',
+        owner: 'o',
+      ) as Ok<String>).value;
+      await h.repo.applySnapshot(
+        f,
+        name: 'Theirs',
+        trackIds: ['t1'],
+        updatedAt: DateTime.utc(2026),
+      );
+    });
+    await open(tester);
+
+    expect(find.text('None selected'), findsOneWidget);
+  });
+
+  uiTest('the keyboard does not cover the sheet while searching', (
+    tester,
+  ) async {
+    h = await real(tester, UiHarness.create);
+    addTearDown(h.dispose);
+    await real(tester, () async {
+      await h.addTrack('t1');
+      await h.addPlaylist('Rock', []);
+    });
+    await open(tester);
+    await tester.tap(_key('addToPlaylist.search'));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 400);
+    addTearDown(tester.view.resetViewInsets);
+    await settle(tester);
+
+    expect(
+      tester.getRect(_key('addToPlaylist.save')).bottom,
+      lessThanOrEqualTo(900 - 400),
+    );
   });
 
   uiTest('followed playlists are not listed', (tester) async {
