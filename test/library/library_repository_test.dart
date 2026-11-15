@@ -485,6 +485,64 @@ void main() {
     });
   });
 
+  group('playlistIdsContaining', () {
+    test('finds every live playlist holding the track', () async {
+      await insertTracks(['t1', 't2']);
+      final a = await newPlaylist('A');
+      final b = await newPlaylist('B');
+      final c = await newPlaylist('C');
+      final gone = await newPlaylist('Gone');
+      final removed = await newPlaylist('Removed');
+      await repo.addTracks(a, ['t1']);
+      await repo.addTracks(b, ['t2', 't1']);
+      await repo.addTracks(c, ['t2']);
+      await repo.addTracks(gone, ['t1']);
+      await repo.deletePlaylist(gone);
+      await repo.addTracks(removed, ['t1']);
+      await repo.removeEntry((await tracksOf(removed)).single.entryId);
+
+      expect(await repo.playlistIdsContaining('t1'), {a, b});
+      expect(await repo.playlistIdsContaining('nope'), isEmpty);
+    });
+  });
+
+  group('removeTrack', () {
+    test('removes every copy of the track and nothing else', () async {
+      await insertTracks(['t1', 't2']);
+      final p = await newPlaylist();
+      await repo.addTracks(p, ['t1', 't2', 't1']);
+
+      final result = await repo.removeTrack(p, 't1');
+
+      expect((result as Ok<int>).value, 2);
+      expect(await repo.trackIdsIn(p), {'t2'});
+    });
+
+    test('with nothing to remove is Ok(0)', () async {
+      await insertTracks(['t1']);
+      final p = await newPlaylist();
+      expect((await repo.removeTrack(p, 't1') as Ok<int>).value, 0);
+    });
+
+    test('refuses a followed playlist', () async {
+      await insertTracks(['t1']);
+      final f = ok(
+        await repo.createFollowedPlaylist(code: 'c', name: 'F', owner: 'o'),
+      );
+      await repo.applySnapshot(
+        f,
+        name: 'F',
+        trackIds: ['t1'],
+        updatedAt: DateTime.utc(2026),
+      );
+
+      final result = await repo.removeTrack(f, 't1');
+
+      expect(result, isA<Err<int>>());
+      expect(await repo.trackIdsIn(f), {'t1'});
+    });
+  });
+
   group('removeEntry', () {
     test('tombstones the row and hides it', () async {
       await insertTracks(['t1', 't2', 't3']);

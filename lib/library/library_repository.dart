@@ -436,6 +436,31 @@ class LibraryRepository {
     });
   }
 
+  /// Removes every copy of [trackId] from [playlistId]; how many were
+  /// removed (0 when it held none). A followed playlist is read-only.
+  Future<Result<int>> removeTrack(String playlistId, String trackId) {
+    return guardDb(_db, () async {
+      if (await _livePlaylist(playlistId) == null) {
+        return _notFound('playlist $playlistId');
+      }
+      if (await _followed(playlistId)) return _readOnly<int>();
+      final ids =
+          await (_db.selectOnly(_db.playlistEntries)
+                ..addColumns([_db.playlistEntries.id])
+                ..where(
+                  _db.playlistEntries.playlistId.equals(playlistId) &
+                      _db.playlistEntries.trackId.equals(trackId) &
+                      _db.playlistEntries.deleted.equals(false),
+                ))
+              .map((r) => r.read(_db.playlistEntries.id)!)
+              .get();
+      for (final id in ids) {
+        await _tombstoneEntry(id);
+      }
+      return Ok(ids.length);
+    });
+  }
+
   Future<Result<void>> removeEntry(String entryId) {
     return guardDb(_db, () async {
       if (await _liveEntry(entryId) == null) return _notFound('entry $entryId');
@@ -782,6 +807,26 @@ class LibraryRepository {
       }
       return Ok(flagged.length);
     });
+  }
+
+  /// The ids of the live playlists that hold [trackId] now (Favorites
+  /// included when it is starred).
+  Future<Set<String>> playlistIdsContaining(String trackId) async {
+    final e = _db.playlistEntries;
+    final p = _db.playlists;
+    final rows =
+        await (_db.selectOnly(e).join([
+                innerJoin(p, p.id.equalsExp(e.playlistId)),
+              ])
+              ..addColumns([e.playlistId])
+              ..where(
+                e.trackId.equals(trackId) &
+                    e.deleted.equals(false) &
+                    p.deleted.equals(false),
+              ))
+            .map((r) => r.read(e.playlistId)!)
+            .get();
+    return rows.toSet();
   }
 
   /// The ids of the tracks [playlistId] holds now (removed entries left out).
