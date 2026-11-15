@@ -337,7 +337,7 @@ Future<void> showSongMenu(
     case SongMenuAction.addToPlaylist:
       final t = await track();
       if (t != null && context.mounted) {
-        await showAddToPlaylistSheet(context, ref, [t.id]);
+        await showAddToPlaylistSheet(context, ref, t.id);
       }
     case SongMenuAction.favorite:
       if (await track() case final t?) await favorites.toggle(t.id);

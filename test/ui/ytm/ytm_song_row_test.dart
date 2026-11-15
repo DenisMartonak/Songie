@@ -206,6 +206,7 @@ void main() {
     expect(find.byKey(const Key('addToPlaylist.sheet')), findsOneWidget);
     expect(find.text('Chill'), findsOneWidget);
     await tester.tap(find.text('Gym'));
+    await tester.tap(find.byKey(const Key('addToPlaylist.save')));
     await settle(tester);
 
     expect(find.byKey(const Key('addToPlaylist.sheet')), findsNothing);

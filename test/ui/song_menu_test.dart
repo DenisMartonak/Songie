@@ -75,6 +75,12 @@ void main() {
     await settle(tester);
   }
 
+  /// Saves the open Add to playlist sheet.
+  Future<void> save(WidgetTester tester) async {
+    await tester.tap(find.byKey(const Key('addToPlaylist.save')));
+    await settle(tester);
+  }
+
   /// Closes an open sheet or popup menu.
   Future<void> dismiss(WidgetTester tester) async {
     await tester.tapAt(const Offset(5, 5));
@@ -290,7 +296,7 @@ void main() {
 
       await choose(tester, 'addToPlaylist');
       await tester.tap(find.text('Gym'));
-      await settle(tester);
+      await save(tester);
       expect(find.text('Added to Gym'), findsOneWidget);
     });
 
@@ -392,13 +398,13 @@ void main() {
       await longPress(tester, recentRow);
       await choose(tester, 'addToPlaylist');
       await tester.tap(find.byKey(Key('addToPlaylist.$gym')));
-      await settle(tester);
+      await save(tester);
 
       expect(find.text('Added to Gym'), findsOneWidget);
       expect(await real(tester, () => h.orderOf(gym)), ['t1']);
     });
 
-    uiTest('a song already in the playlist is not added twice', (tester) async {
+    uiTest('a playlist that holds the song starts ticked', (tester) async {
       late String gym;
       await recents(tester);
       await real(tester, () async => gym = await h.addPlaylist('Gym', ['t1']));
@@ -406,10 +412,14 @@ void main() {
 
       await longPress(tester, recentRow);
       await choose(tester, 'addToPlaylist');
-      await tester.tap(find.byKey(Key('addToPlaylist.$gym')));
-      await settle(tester);
+      expect(
+        tester
+            .widget<Checkbox>(find.byKey(Key('addToPlaylist.check.$gym')))
+            .value,
+        isTrue,
+      );
+      await save(tester);
 
-      expect(find.text('Already in Gym'), findsOneWidget);
       expect(find.text('Added to Gym'), findsNothing);
       expect(await real(tester, () => h.orderOf(gym)), ['t1']);
     });
@@ -592,9 +602,10 @@ void main() {
       await pumpPlaylist(tester, gym);
       await longPress(tester, find.text('Song t2'));
       await choose(tester, 'addToPlaylist');
+      // Unread, nothing starts ticked; ticking adds (a duplicate here)
+      // rather than failing.
       await tester.tap(find.byKey(Key('addToPlaylist.$gym')));
-      await settle(tester);
-      // Without the check it adds (a duplicate here) rather than failing.
+      await save(tester);
       expect(find.text('Added to Gym'), findsOneWidget);
       expect(await real(tester, () => h.orderOf(gym)), ['t2', 't2']);
     });
@@ -909,6 +920,6 @@ class _FailingTrackIdsIn extends LibraryRepository {
   _FailingTrackIdsIn(super.db, super.stamp);
 
   @override
-  Future<Set<String>> trackIdsIn(String playlistId) =>
+  Future<Set<String>> playlistIdsContaining(String trackId) =>
       Future.error(StateError('database is locked'));
 }

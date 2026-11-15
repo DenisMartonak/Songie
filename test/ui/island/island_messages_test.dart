@@ -152,7 +152,7 @@ void main() {
                 builder: (context, ref, _) => TextButton(
                   onPressed: () {
                     islands = Islands.of(context);
-                    showAddToPlaylistSheet(context, ref, ['t1']);
+                    showAddToPlaylistSheet(context, ref, 't1');
                   },
                   child: const Text('Open'),
                 ),
@@ -181,7 +181,7 @@ void main() {
     await settle(tester);
     await tester.enterText(find.byType(TextField), 'Gym');
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Save').last);
     await settle(tester);
     expect(find.text("Couldn't create playlist"), findsOneWidget);
     expect(_island, findsOneWidget);

@@ -3,169 +3,368 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/log.dart';
 import '../../core/result.dart';
+import '../../library/favorites.dart';
 import '../../library/library_repository.dart';
 import '../../providers.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/contrast.dart';
 import '../motion/pressable.dart';
 import '../widgets/name_dialog.dart';
 import '../island/island_controller.dart';
 import '../island/island_host.dart';
 import '../widgets/playlist_art.dart';
 
-/// Lets the user pick a playlist (or make a new one) and appends [trackIds]
-/// to it, saying so on the island. Songs the
-/// playlist already holds are left out; when that is all of them it says
-/// "Already in" the playlist and adds nothing.
+/// At least this wide, the sheet is a centered dialog.
+const double _wideWidth = 840;
+
+/// The island after Save: "Added to Rock", "Added to 3 playlists",
+/// "Removed from …", both joined with " · "; null when nothing changed.
+String? playlistSaveMessage({
+  required List<String> added,
+  required List<String> removed,
+}) {
+  String part(String verb, List<String> names) => names.length == 1
+      ? '$verb ${names.single}'
+      : '$verb ${names.length} playlists';
+  final parts = [
+    if (added.isNotEmpty) part('Added to', added),
+    if (removed.isNotEmpty) part('Removed from', removed),
+  ];
+  return parts.isEmpty ? null : parts.join(' · ');
+}
+
+/// Shows where song [trackId] is (Favorites first, then the user's own
+/// playlists, each ticked when it holds the song) and, on Save, adds it to
+/// the newly ticked ones and removes it from the unticked ones. Closing
+/// without Save changes nothing. A phone gets a bottom sheet, a wide window
+/// a dialog.
 Future<void> showAddToPlaylistSheet(
   BuildContext context,
   WidgetRef ref,
-  List<String> trackIds,
+  String trackId,
 ) async {
   final islands = Islands.of(context);
-  final choice = await showModalBottomSheet<_Choice>(
-    context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
-    useSafeArea: true,
-    constraints: const BoxConstraints(maxWidth: 640),
-    builder: (_) => const _AddToPlaylistSheet(),
-  );
-  if (choice == null || !context.mounted) return;
   final repo = ref.read(libraryRepositoryProvider);
+  final favorites = ref.read(favoritesRepositoryProvider);
+  // Unknown, nothing starts ticked: Save can then only add (never remove
+  // what it couldn't see).
+  var initial = const <String>{};
+  try {
+    initial = await repo.playlistIdsContaining(trackId);
+  } catch (e, s) {
+    AppLog.w('Reading where $trackId is failed', e, s);
+  }
+  if (!context.mounted) return;
+  final sheet = _AddToPlaylistSheet(initial: initial, islands: islands);
+  final wide = MediaQuery.sizeOf(context).width >= _wideWidth;
+  final _Changes? changes;
+  if (wide) {
+    changes = await showDialog<_Changes>(
+      context: context,
+      useRootNavigator: true,
+      builder: (_) => Dialog(
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: sheet,
+        ),
+      ),
+    );
+  } else {
+    changes = await showModalBottomSheet<_Changes>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      constraints: const BoxConstraints(maxWidth: 640),
+      builder: (_) => sheet,
+    );
+  }
+  if (changes == null) return;
 
-  var id = choice.playlist?.id;
-  var name = choice.playlist?.name;
-  if (choice.isNew) {
-    name = await showPlaylistNameDialog(
+  final added = <String>[];
+  final removed = <String>[];
+  String? failed;
+  for (final (id, name) in changes.add) {
+    final Result<Object?> r = id == kFavoritesPlaylistId
+        ? await favorites.star(trackId)
+        : await repo.addTracks(id, [trackId]);
+    if (r is Ok) {
+      added.add(name);
+    } else {
+      failed ??= name;
+    }
+  }
+  for (final (id, name) in changes.remove) {
+    final Result<Object?> r = id == kFavoritesPlaylistId
+        ? await favorites.unstar(trackId)
+        : await repo.removeTrack(id, trackId);
+    if (r is Ok) {
+      removed.add(name);
+    } else {
+      failed ??= name;
+    }
+  }
+  if (failed != null) {
+    islands.show("Couldn't save to $failed", kind: IslandKind.failure);
+    return;
+  }
+  final message = playlistSaveMessage(added: added, removed: removed);
+  if (message != null) islands.show(message, kind: IslandKind.success);
+}
+
+/// What Save asks for: (playlist id, name) to add to and to remove from.
+class _Changes {
+  const _Changes(this.add, this.remove);
+
+  final List<(String, String)> add;
+  final List<(String, String)> remove;
+}
+
+class _AddToPlaylistSheet extends ConsumerStatefulWidget {
+  const _AddToPlaylistSheet({required this.initial, required this.islands});
+
+  final Set<String> initial;
+  final Islands islands;
+
+  @override
+  ConsumerState<_AddToPlaylistSheet> createState() => _SheetState();
+}
+
+class _SheetState extends ConsumerState<_AddToPlaylistSheet> {
+  late final Set<String> _ticked = {...widget.initial};
+  bool _searching = false;
+  String _query = '';
+
+  bool _matches(String name) =>
+      _query.isEmpty || name.toLowerCase().contains(_query.toLowerCase());
+
+  void _toggle(String id) => setState(() {
+    if (!_ticked.remove(id)) _ticked.add(id);
+  });
+
+  Future<void> _create() async {
+    final name = await showPlaylistNameDialog(
       context,
       title: 'New playlist',
       confirmLabel: 'Save',
     );
-    if (name == null) return;
-    switch (await repo.createPlaylist(name)) {
+    if (name == null || !mounted) return;
+    switch (await ref.read(libraryRepositoryProvider).createPlaylist(name)) {
       case Ok(:final value):
-        id = value;
+        if (mounted) setState(() => _ticked.add(value));
       case Err():
-        islands.show("Couldn't create playlist", kind: IslandKind.failure);
-        return;
+        widget.islands.show(
+          "Couldn't create playlist",
+          kind: IslandKind.failure,
+        );
     }
   }
-  // Songs the playlist already holds are not added again.
-  var present = const <String>{};
-  if (!choice.isNew) {
-    try {
-      present = await repo.trackIdsIn(id!);
-    } catch (e, s) {
-      // Add anyway rather than not at all.
-      AppLog.w('Reading playlist $id before adding failed', e, s);
-    }
-  }
-  final fresh = [
-    for (final t in trackIds)
-      if (!present.contains(t)) t,
-  ];
-  if (fresh.isEmpty) {
-    islands.show('Already in $name');
-    return;
-  }
-  final added = await repo.addTracks(id!, fresh);
-  if (added is Ok<void>) {
-    islands.show('Added to $name', kind: IslandKind.success);
-  } else {
-    islands.show("Couldn't add to $name", kind: IslandKind.failure);
-  }
-}
 
-class _Choice {
-  const _Choice.playlist(PlaylistSummary this.playlist) : isNew = false;
-  const _Choice.create() : playlist = null, isNew = true;
-
-  final PlaylistSummary? playlist;
-  final bool isNew;
-}
-
-class _AddToPlaylistSheet extends ConsumerWidget {
-  const _AddToPlaylistSheet();
+  void _save(List<PlaylistSummary> playlists) {
+    String nameOf(String id) => id == kFavoritesPlaylistId
+        ? kFavoritesName
+        : playlists.firstWhere((p) => p.id == id).name;
+    final known = {kFavoritesPlaylistId, for (final p in playlists) p.id};
+    Navigator.of(context).pop(
+      _Changes(
+        [
+          for (final id in _ticked)
+            if (!widget.initial.contains(id) && known.contains(id))
+              (id, nameOf(id)),
+        ],
+        [
+          for (final id in widget.initial)
+            if (!_ticked.contains(id) && known.contains(id)) (id, nameOf(id)),
+        ],
+      ),
+    );
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<SongiesColors>()!;
     // Followed playlists change only from their owner's: not offered.
-    final playlists = [
+    // Favorites is the pinned row, not one of the list's.
+    final playlists = <PlaylistSummary>[
       for (final p in ref.watch(playlistsProvider).value ?? const [])
-        if (!p.followed) p,
+        if (!p.followed && p.id != kFavoritesPlaylistId) p,
     ];
+    final shown = [
+      for (final p in playlists)
+        if (_matches(p.name)) p,
+    ];
+    final count = _ticked.length;
     final height = MediaQuery.sizeOf(context).height;
     return ConstrainedBox(
       key: const Key('addToPlaylist.sheet'),
-      constraints: BoxConstraints(maxHeight: height * 0.7),
+      constraints: BoxConstraints(maxHeight: height * 0.85),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              'Add to playlist',
-              style: TextStyle(
-                color: colors.text,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+            padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _searching
+                      ? TextField(
+                          autofocus: true,
+                          onChanged: (v) => setState(() => _query = v.trim()),
+                          style: TextStyle(color: colors.text),
+                          decoration: const InputDecoration(
+                            hintText: 'Search playlists',
+                            border: InputBorder.none,
+                          ),
+                        )
+                      : Text(
+                          'Add to playlist',
+                          style: TextStyle(
+                            color: colors.text,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+                IconButton(
+                  key: const Key('addToPlaylist.search'),
+                  tooltip: _searching ? 'Close search' : 'Search',
+                  color: colors.mutedText,
+                  icon: Icon(_searching ? Icons.close : Icons.search),
+                  onPressed: () => setState(() {
+                    _searching = !_searching;
+                    _query = '';
+                  }),
+                ),
+                const SizedBox(width: 4),
+                IconButton.filledTonal(
+                  key: const Key('addToPlaylist.new'),
+                  tooltip: 'New playlist',
+                  icon: const Icon(Icons.add),
+                  onPressed: _create,
+                ),
+              ],
             ),
           ),
           Flexible(
             child: ListView(
               shrinkWrap: true,
-              padding: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               children: [
-                ListTile(
-                  key: const Key('addToPlaylist.new'),
-                  leading: Icon(Icons.add, color: colors.text),
-                  title: Text(
-                    'New playlist',
-                    style: TextStyle(color: colors.text),
-                  ),
-                  onTap: () =>
-                      Navigator.of(context).pop(const _Choice.create()),
-                ),
-                for (final p in playlists)
-                  Pressable(
-                    key: Key('addToPlaylist.${p.id}'),
-                    onTap: () => Navigator.of(context).pop(_Choice.playlist(p)),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
-                      child: Row(
-                        children: [
-                          PlaylistArt(
-                            playlistId: p.id,
-                            coverRef: p.coverRef,
-                            size: 40,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              p.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: colors.text,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                if (_matches(kFavoritesName))
+                  _Row(
+                    rowKey: const Key('addToPlaylist.favorites'),
+                    checkKey: const Key(
+                      'addToPlaylist.check.$kFavoritesPlaylistId',
                     ),
+                    art: _FavoritesArt(colors: colors),
+                    name: kFavoritesName,
+                    checked: _ticked.contains(kFavoritesPlaylistId),
+                    onTap: () => _toggle(kFavoritesPlaylistId),
+                  ),
+                for (final p in shown)
+                  _Row(
+                    rowKey: Key('addToPlaylist.${p.id}'),
+                    checkKey: Key('addToPlaylist.check.${p.id}'),
+                    art: PlaylistArt(
+                      playlistId: p.id,
+                      coverRef: p.coverRef,
+                      size: 48,
+                    ),
+                    name: p.name,
+                    checked: _ticked.contains(p.id),
+                    onTap: () => _toggle(p.id),
                   ),
               ],
             ),
           ),
+          Divider(height: 1, color: colors.mutedText.withValues(alpha: 0.3)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 16, 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    count == 0 ? 'None selected' : '$count selected',
+                    style: TextStyle(color: colors.mutedText),
+                  ),
+                ),
+                FilledButton(
+                  key: const Key('addToPlaylist.save'),
+                  onPressed: () => _save(playlists),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Favorites' square: the accent with a star.
+class _FavoritesArt extends StatelessWidget {
+  const _FavoritesArt({required this.colors});
+
+  final SongiesColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: colors.accent,
+        borderRadius: BorderRadius.circular(colors.radius),
+      ),
+      child: Icon(Icons.star_rounded, color: readableOn(colors.accent)),
+    );
+  }
+}
+
+class _Row extends StatelessWidget {
+  const _Row({
+    required this.rowKey,
+    required this.checkKey,
+    required this.art,
+    required this.name,
+    required this.checked,
+    required this.onTap,
+  });
+
+  final Key rowKey;
+  final Key checkKey;
+  final Widget art;
+  final String name;
+  final bool checked;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SongiesColors>()!;
+    return Pressable(
+      key: rowKey,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        child: Row(
+          children: [
+            art,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: colors.text, fontSize: 16),
+              ),
+            ),
+            Checkbox(key: checkKey, value: checked, onChanged: (_) => onTap()),
+          ],
+        ),
       ),
     );
   }
